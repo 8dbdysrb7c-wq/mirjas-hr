@@ -1,0 +1,2979 @@
+[
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/EMP-0001",
+    "fields": {
+      "hasSettingsAccess": {
+        "booleanValue": true
+      },
+      "hasEmployeesAccess": {
+        "booleanValue": false
+      },
+      "sickLeaveBalance": {
+        "integerValue": "0"
+      },
+      "hasDeliveryAccess": {
+        "booleanValue": false
+      },
+      "directManager": {
+        "stringValue": "أماني يونس صالح وادي"
+      },
+      "hasProductionTasksAccess": {
+        "booleanValue": true
+      },
+      "password": {
+        "stringValue": "12345"
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "مغادرة خاصة"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            },
+            {
+              "stringValue": "بدل عمل إضافي"
+            }
+          ]
+        }
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "dateOfBirth": {
+        "stringValue": "1980-01-01"
+      },
+      "hasStockAccess": {
+        "booleanValue": false
+      },
+      "joinDate": {
+        "stringValue": "2023-12-01"
+      },
+      "hasOverviewAccess": {
+        "booleanValue": false
+      },
+      "allowedMissingPunches": {
+        "integerValue": "3"
+      },
+      "hasProductionAccess": {
+        "booleanValue": true
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "evaluations": {
+              "booleanValue": true
+            },
+            "orders": {
+              "booleanValue": true
+            },
+            "attendance": {
+              "booleanValue": true
+            }
+          }
+        }
+      },
+      "hasLogsAccess": {
+        "booleanValue": false
+      },
+      "basicSalary": {
+        "stringValue": "350"
+      },
+      "jobTitle": {
+        "stringValue": "مدير قسم الخياطة"
+      },
+      "transportationAllowance": {
+        "stringValue": "26"
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": true
+      },
+      "name": {
+        "stringValue": "رائدة عيسى سعد العبود"
+      },
+      "vacationBalance": {
+        "integerValue": "0"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الاولى"
+      },
+      "shiftStart": {
+        "stringValue": "07:30"
+      },
+      "level": {
+        "stringValue": "مشرف"
+      },
+      "hasSalesAccess": {
+        "booleanValue": true
+      },
+      "shiftEnd": {
+        "stringValue": "16:30"
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": true
+      },
+      "id": {
+        "stringValue": "EMP-0001"
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": false
+      },
+      "workLocationId": {
+        "stringValue": "1781177286778"
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "hasReportsAccess": {
+        "booleanValue": false
+      },
+      "hasCustomersAccess": {
+        "booleanValue": false
+      },
+      "phone": {
+        "stringValue": "00962795043115"
+      },
+      "hasLiveAccess": {
+        "booleanValue": true
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "packaging"
+            },
+            {
+              "stringValue": "CUTTING"
+            },
+            {
+              "stringValue": "logistics"
+            },
+            {
+              "stringValue": "sewing"
+            },
+            {
+              "stringValue": "القص والخياطة"
+            }
+          ]
+        }
+      },
+      "role": {
+        "stringValue": "packaging"
+      },
+      "assignedEmployees": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "EMP-0002"
+            },
+            {
+              "stringValue": "EMP-0003"
+            },
+            {
+              "stringValue": "EMP-0004"
+            },
+            {
+              "stringValue": "EMP-0005"
+            },
+            {
+              "stringValue": "EMP-0009"
+            },
+            {
+              "stringValue": "EMP-0010"
+            },
+            {
+              "stringValue": "EMP-0011"
+            },
+            {
+              "stringValue": "EMP-0014"
+            }
+          ]
+        }
+      },
+      "department": {
+        "stringValue": "القص والخياطة"
+      }
+    },
+    "createTime": "2026-06-14T11:24:53.281965Z",
+    "updateTime": "2026-06-19T23:40:33.839030Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/EMP-0002",
+    "fields": {
+      "id": {
+        "stringValue": "EMP-0002"
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": false
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "hasReportsAccess": {
+        "booleanValue": false
+      },
+      "workLocationId": {
+        "stringValue": "1781177286778"
+      },
+      "name": {
+        "stringValue": "سحر صلاح الدين الملاح"
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": false
+      },
+      "shiftStart": {
+        "stringValue": "07:30"
+      },
+      "vacationBalance": {
+        "integerValue": "0"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الاولى"
+      },
+      "level": {
+        "stringValue": "موظف إنتاج"
+      },
+      "shiftEnd": {
+        "stringValue": "16:30"
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": false
+      },
+      "hasSalesAccess": {
+        "booleanValue": false
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "logistics"
+            },
+            {
+              "stringValue": "sewing"
+            },
+            {
+              "stringValue": "packaging"
+            },
+            {
+              "stringValue": "CUTTING"
+            },
+            {
+              "stringValue": "القص والخياطة"
+            }
+          ]
+        }
+      },
+      "role": {
+        "stringValue": "logistics"
+      },
+      "assignedEmployees": {
+        "arrayValue": {}
+      },
+      "department": {
+        "stringValue": "القص والخياطة"
+      },
+      "hasCustomersAccess": {
+        "booleanValue": false
+      },
+      "hasLiveAccess": {
+        "booleanValue": false
+      },
+      "phone": {
+        "stringValue": "00962799212545"
+      },
+      "directManager": {
+        "stringValue": "رائدة عيسى سعد العبود"
+      },
+      "hasProductionTasksAccess": {
+        "booleanValue": false
+      },
+      "password": {
+        "stringValue": "12345"
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "مغادرة خاصة"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            },
+            {
+              "stringValue": "بدل عمل إضافي"
+            }
+          ]
+        }
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "hasEmployeesAccess": {
+        "booleanValue": false
+      },
+      "hasSettingsAccess": {
+        "booleanValue": false
+      },
+      "sickLeaveBalance": {
+        "integerValue": "0"
+      },
+      "hasDeliveryAccess": {
+        "booleanValue": false
+      },
+      "hasProductionAccess": {
+        "booleanValue": false
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "orders": {
+              "booleanValue": true
+            },
+            "attendance": {
+              "booleanValue": true
+            },
+            "evaluations": {
+              "booleanValue": true
+            }
+          }
+        }
+      },
+      "hasLogsAccess": {
+        "booleanValue": false
+      },
+      "basicSalary": {
+        "stringValue": "300"
+      },
+      "jobTitle": {
+        "stringValue": "فني خياطة"
+      },
+      "joinDate": {
+        "stringValue": "2025-10-06"
+      },
+      "dateOfBirth": {
+        "stringValue": "1970-08-13"
+      },
+      "hasStockAccess": {
+        "booleanValue": false
+      },
+      "hasOverviewAccess": {
+        "booleanValue": false
+      },
+      "allowedMissingPunches": {
+        "integerValue": "3"
+      }
+    },
+    "createTime": "2026-06-14T11:24:53.508930Z",
+    "updateTime": "2026-06-16T12:42:55.420829Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/EMP-0003",
+    "fields": {
+      "hasProductionAccess": {
+        "booleanValue": false
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "orders": {
+              "booleanValue": true
+            },
+            "attendance": {
+              "booleanValue": true
+            },
+            "evaluations": {
+              "booleanValue": true
+            }
+          }
+        }
+      },
+      "jobTitle": {
+        "stringValue": "فني خياطة"
+      },
+      "hasLogsAccess": {
+        "booleanValue": false
+      },
+      "basicSalary": {
+        "stringValue": "290"
+      },
+      "joinDate": {
+        "stringValue": "2026-04-01"
+      },
+      "hasStockAccess": {
+        "booleanValue": false
+      },
+      "dateOfBirth": {
+        "stringValue": "1970-09-08"
+      },
+      "hasOverviewAccess": {
+        "booleanValue": false
+      },
+      "allowedMissingPunches": {
+        "integerValue": "3"
+      },
+      "directManager": {
+        "stringValue": "رائدة عيسى سعد العبود"
+      },
+      "hasProductionTasksAccess": {
+        "booleanValue": false
+      },
+      "password": {
+        "stringValue": "12345"
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "مغادرة خاصة"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            },
+            {
+              "stringValue": "بدل عمل إضافي"
+            }
+          ]
+        }
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "hasEmployeesAccess": {
+        "booleanValue": false
+      },
+      "hasSettingsAccess": {
+        "booleanValue": false
+      },
+      "sickLeaveBalance": {
+        "integerValue": "0"
+      },
+      "hasDeliveryAccess": {
+        "booleanValue": false
+      },
+      "role": {
+        "stringValue": "sewing"
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "sewing"
+            },
+            {
+              "stringValue": "CUTTING"
+            },
+            {
+              "stringValue": "packaging"
+            },
+            {
+              "stringValue": "logistics"
+            },
+            {
+              "stringValue": "القص والخياطة"
+            }
+          ]
+        }
+      },
+      "assignedEmployees": {
+        "arrayValue": {}
+      },
+      "department": {
+        "stringValue": "القص والخياطة"
+      },
+      "hasCustomersAccess": {
+        "booleanValue": false
+      },
+      "hasLiveAccess": {
+        "booleanValue": false
+      },
+      "phone": {
+        "stringValue": "00962799597630"
+      },
+      "id": {
+        "stringValue": "EMP-0003"
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": false
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "hasReportsAccess": {
+        "booleanValue": false
+      },
+      "workLocationId": {
+        "stringValue": "1781177286778"
+      },
+      "name": {
+        "stringValue": "فاطمة حسونة علي حسين حليمة"
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": false
+      },
+      "shiftStart": {
+        "stringValue": "08:00"
+      },
+      "vacationBalance": {
+        "integerValue": "0"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الثانية"
+      },
+      "level": {
+        "stringValue": "موظف إنتاج"
+      },
+      "shiftEnd": {
+        "stringValue": "17:00"
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": false
+      },
+      "hasSalesAccess": {
+        "booleanValue": false
+      }
+    },
+    "createTime": "2026-06-14T11:24:53.713603Z",
+    "updateTime": "2026-06-18T09:42:45.909522Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/EMP-0004",
+    "fields": {
+      "allowedMissingPunches": {
+        "integerValue": "3"
+      },
+      "dateOfBirth": {
+        "stringValue": "1971-06-29"
+      },
+      "hasStockAccess": {
+        "booleanValue": false
+      },
+      "joinDate": {
+        "stringValue": "2025-10-20"
+      },
+      "hasOverviewAccess": {
+        "booleanValue": false
+      },
+      "jobTitle": {
+        "stringValue": "فني خياطة"
+      },
+      "basicSalary": {
+        "stringValue": "300"
+      },
+      "hasLogsAccess": {
+        "booleanValue": false
+      },
+      "hasProductionAccess": {
+        "booleanValue": false
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "evaluations": {
+              "booleanValue": false
+            },
+            "attendance": {
+              "booleanValue": false
+            },
+            "orders": {
+              "booleanValue": false
+            }
+          }
+        }
+      },
+      "hasDeliveryAccess": {
+        "booleanValue": false
+      },
+      "hasSettingsAccess": {
+        "booleanValue": false
+      },
+      "hasEmployeesAccess": {
+        "booleanValue": false
+      },
+      "sickLeaveBalance": {
+        "integerValue": "0"
+      },
+      "password": {
+        "stringValue": "12345"
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "مغادرة خاصة"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            },
+            {
+              "stringValue": "بدل عمل إضافي"
+            }
+          ]
+        }
+      },
+      "directManager": {
+        "stringValue": "رائدة عيسى سعد العبود"
+      },
+      "hasProductionTasksAccess": {
+        "booleanValue": false
+      },
+      "hasCustomersAccess": {
+        "booleanValue": false
+      },
+      "phone": {
+        "stringValue": "00962787173885"
+      },
+      "hasLiveAccess": {
+        "booleanValue": false
+      },
+      "department": {
+        "stringValue": "القص والخياطة"
+      },
+      "role": {
+        "stringValue": "logistics"
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "logistics"
+            },
+            {
+              "stringValue": "sewing"
+            },
+            {
+              "stringValue": "packaging"
+            },
+            {
+              "stringValue": "CUTTING"
+            },
+            {
+              "stringValue": "القص والخياطة"
+            }
+          ]
+        }
+      },
+      "assignedEmployees": {
+        "arrayValue": {}
+      },
+      "level": {
+        "stringValue": "موظف إنتاج"
+      },
+      "hasSalesAccess": {
+        "booleanValue": false
+      },
+      "shiftEnd": {
+        "stringValue": "16:30"
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": false
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": false
+      },
+      "name": {
+        "stringValue": "مها احمد محمود عبد النبي"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الاولى"
+      },
+      "vacationBalance": {
+        "integerValue": "0"
+      },
+      "shiftStart": {
+        "stringValue": "07:30"
+      },
+      "workLocationId": {
+        "stringValue": "1781177286778"
+      },
+      "hasReportsAccess": {
+        "booleanValue": false
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": false
+      },
+      "id": {
+        "stringValue": "EMP-0004"
+      }
+    },
+    "createTime": "2026-06-14T11:24:53.920909Z",
+    "updateTime": "2026-06-16T11:47:17.289134Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/EMP-0005",
+    "fields": {
+      "id": {
+        "stringValue": "EMP-0005"
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": false
+      },
+      "hasReportsAccess": {
+        "booleanValue": false
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "workLocationId": {
+        "stringValue": ""
+      },
+      "name": {
+        "stringValue": "البراء محمد سمير علي لعبود"
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": false
+      },
+      "transportationAllowance": {
+        "stringValue": "24"
+      },
+      "shiftStart": {
+        "stringValue": "07:30"
+      },
+      "vacationBalance": {
+        "integerValue": "0"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الاولى"
+      },
+      "level": {
+        "stringValue": "موظف إنتاج"
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": false
+      },
+      "shiftEnd": {
+        "stringValue": "16:30"
+      },
+      "hasSalesAccess": {
+        "booleanValue": false
+      },
+      "role": {
+        "stringValue": "packaging"
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "packaging"
+            },
+            {
+              "stringValue": "CUTTING"
+            },
+            {
+              "stringValue": "logistics"
+            },
+            {
+              "stringValue": "sewing"
+            },
+            {
+              "stringValue": "القص والخياطة"
+            }
+          ]
+        }
+      },
+      "assignedEmployees": {
+        "arrayValue": {}
+      },
+      "department": {
+        "stringValue": "القص والخياطة"
+      },
+      "hasCustomersAccess": {
+        "booleanValue": false
+      },
+      "hasLiveAccess": {
+        "booleanValue": false
+      },
+      "phone": {
+        "stringValue": "00962796479897"
+      },
+      "directManager": {
+        "stringValue": "رائدة عيسى سعد العبود"
+      },
+      "hasProductionTasksAccess": {
+        "booleanValue": false
+      },
+      "password": {
+        "stringValue": "12345"
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "مغادرة خاصة"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            },
+            {
+              "stringValue": "بدل عمل إضافي"
+            }
+          ]
+        }
+      },
+      "hasEmployeesAccess": {
+        "booleanValue": false
+      },
+      "hasSettingsAccess": {
+        "booleanValue": false
+      },
+      "sickLeaveBalance": {
+        "integerValue": "0"
+      },
+      "hasDeliveryAccess": {
+        "booleanValue": false
+      },
+      "hasProductionAccess": {
+        "booleanValue": false
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "evaluations": {
+              "booleanValue": true
+            },
+            "attendance": {
+              "booleanValue": true
+            },
+            "orders": {
+              "booleanValue": true
+            }
+          }
+        }
+      },
+      "jobTitle": {
+        "stringValue": "فني خياطة"
+      },
+      "basicSalary": {
+        "stringValue": "275"
+      },
+      "hasLogsAccess": {
+        "booleanValue": false
+      },
+      "joinDate": {
+        "stringValue": "2024-08-01"
+      },
+      "dateOfBirth": {
+        "stringValue": "2003-01-01"
+      },
+      "hasStockAccess": {
+        "booleanValue": false
+      },
+      "hasOverviewAccess": {
+        "booleanValue": false
+      },
+      "allowedMissingPunches": {
+        "integerValue": "3"
+      }
+    },
+    "createTime": "2026-06-14T11:24:54.107372Z",
+    "updateTime": "2026-06-19T23:41:05.170614Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/EMP-0006",
+    "fields": {
+      "department": {
+        "stringValue": "الدع�� اللوجستي"
+      },
+      "role": {
+        "stringValue": "packaging"
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "packaging"
+            },
+            {
+              "stringValue": "CUTTING"
+            },
+            {
+              "stringValue": "logistics"
+            },
+            {
+              "stringValue": "sewing"
+            },
+            {
+              "stringValue": "الدعم اللوجستي"
+            }
+          ]
+        }
+      },
+      "assignedEmployees": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "EMP-0008"
+            },
+            {
+              "stringValue": "EMP-0012"
+            },
+            {
+              "stringValue": "EMP-0016"
+            }
+          ]
+        }
+      },
+      "hasCustomersAccess": {
+        "booleanValue": true
+      },
+      "hasLiveAccess": {
+        "booleanValue": true
+      },
+      "socialSecuritySalary": {
+        "integerValue": "375"
+      },
+      "phone": {
+        "stringValue": "00962775548158"
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "hasReportsAccess": {
+        "booleanValue": true
+      },
+      "workLocationId": {
+        "stringValue": "1781177286778"
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": true
+      },
+      "id": {
+        "stringValue": "EMP-0006"
+      },
+      "level": {
+        "stringValue": "مشرف"
+      },
+      "shiftEnd": {
+        "stringValue": "17:00"
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": true
+      },
+      "hasSalesAccess": {
+        "booleanValue": true
+      },
+      "name": {
+        "stringValue": "عبد الله يعقوب ايوب غيث"
+      },
+      "transportationAllowance": {
+        "stringValue": ""
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": true
+      },
+      "shiftStart": {
+        "stringValue": "08:00"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الثانية"
+      },
+      "vacationBalance": {
+        "integerValue": "0"
+      },
+      "jobTitle": {
+        "stringValue": "فني دعم لوجستي"
+      },
+      "basicSalary": {
+        "stringValue": "375"
+      },
+      "hasLogsAccess": {
+        "booleanValue": false
+      },
+      "hasProductionAccess": {
+        "booleanValue": true
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "attendance": {
+              "booleanValue": true
+            },
+            "orders": {
+              "booleanValue": true
+            },
+            "evaluations": {
+              "booleanValue": true
+            }
+          }
+        }
+      },
+      "allowedMissingPunches": {
+        "integerValue": "2"
+      },
+      "joinDate": {
+        "stringValue": "2023-01-22"
+      },
+      "dateOfBirth": {
+        "stringValue": "0003-12-20"
+      },
+      "hasStockAccess": {
+        "booleanValue": true
+      },
+      "hasOverviewAccess": {
+        "booleanValue": true
+      },
+      "password": {
+        "stringValue": "12345"
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "إجازة مرضية"
+            },
+            {
+              "stringValue": "مغادرة خاصة"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            },
+            {
+              "stringValue": "بدل عمل إضافي"
+            }
+          ]
+        }
+      },
+      "directManager": {
+        "stringValue": "المدير العام"
+      },
+      "hasProductionTasksAccess": {
+        "booleanValue": true
+      },
+      "hasDeliveryAccess": {
+        "booleanValue": true
+      },
+      "hasSocialSecurity": {
+        "booleanValue": true
+      },
+      "hasEmployeesAccess": {
+        "booleanValue": true
+      },
+      "isHazardousProfession": {
+        "booleanValue": false
+      },
+      "hasSettingsAccess": {
+        "booleanValue": true
+      },
+      "sickLeaveBalance": {
+        "integerValue": "0"
+      }
+    },
+    "createTime": "2026-06-14T11:24:54.306096Z",
+    "updateTime": "2026-06-19T23:52:48.172037Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/EMP-0007",
+    "fields": {
+      "hasProductionAccess": {
+        "booleanValue": true
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "evaluations": {
+              "booleanValue": true
+            },
+            "attendance": {
+              "booleanValue": true
+            },
+            "orders": {
+              "booleanValue": true
+            }
+          }
+        }
+      },
+      "hasLogsAccess": {
+        "booleanValue": true
+      },
+      "basicSalary": {
+        "stringValue": "450"
+      },
+      "jobTitle": {
+        "stringValue": "مدير المبيعات"
+      },
+      "hasStockAccess": {
+        "booleanValue": true
+      },
+      "dateOfBirth": {
+        "stringValue": "1992-06-27"
+      },
+      "joinDate": {
+        "stringValue": "2026-01-01"
+      },
+      "hasOverviewAccess": {
+        "booleanValue": false
+      },
+      "allowedMissingPunches": {
+        "integerValue": "3"
+      },
+      "directManager": {
+        "stringValue": "المدير العام"
+      },
+      "hasProductionTasksAccess": {
+        "booleanValue": false
+      },
+      "password": {
+        "stringValue": "12345"
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "إجازة مرضية"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            },
+            {
+              "stringValue": "بدل عمل إضافي"
+            }
+          ]
+        }
+      },
+      "hasSettingsAccess": {
+        "booleanValue": false
+      },
+      "isHazardousProfession": {
+        "booleanValue": false
+      },
+      "hasSocialSecurity": {
+        "booleanValue": true
+      },
+      "hasEmployeesAccess": {
+        "booleanValue": true
+      },
+      "sickLeaveBalance": {
+        "integerValue": "0"
+      },
+      "hasDeliveryAccess": {
+        "booleanValue": true
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "packaging"
+            },
+            {
+              "stringValue": "CUTTING"
+            },
+            {
+              "stringValue": "logistics"
+            },
+            {
+              "stringValue": "sewing"
+            },
+            {
+              "stringValue": "المبيعات"
+            }
+          ]
+        }
+      },
+      "role": {
+        "stringValue": "packaging"
+      },
+      "assignedEmployees": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "EMP-0001"
+            },
+            {
+              "stringValue": "EMP-0002"
+            },
+            {
+              "stringValue": "EMP-0003"
+            },
+            {
+              "stringValue": "EMP-0004"
+            },
+            {
+              "stringValue": "EMP-0005"
+            },
+            {
+              "stringValue": "EMP-0006"
+            },
+            {
+              "stringValue": "EMP-0008"
+            },
+            {
+              "stringValue": "EMP-0009"
+            },
+            {
+              "stringValue": "EMP-0010"
+            },
+            {
+              "stringValue": "EMP-0011"
+            },
+            {
+              "stringValue": "EMP-0012"
+            },
+            {
+              "stringValue": "EMP-0014"
+            },
+            {
+              "stringValue": "EMP-0016"
+            }
+          ]
+        }
+      },
+      "department": {
+        "stringValue": "المبيعات"
+      },
+      "hasCustomersAccess": {
+        "booleanValue": true
+      },
+      "phone": {
+        "stringValue": "00962795661846"
+      },
+      "socialSecuritySalary": {
+        "integerValue": "450"
+      },
+      "hasLiveAccess": {
+        "booleanValue": true
+      },
+      "id": {
+        "stringValue": "EMP-0007"
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": false
+      },
+      "workLocationId": {
+        "stringValue": "1781177286778"
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "hasReportsAccess": {
+        "booleanValue": true
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": false
+      },
+      "transportationAllowance": {
+        "stringValue": ""
+      },
+      "name": {
+        "stringValue": "جهاد بركات فلاح المهيرات"
+      },
+      "vacationBalance": {
+        "integerValue": "0"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الثالثة"
+      },
+      "shiftStart": {
+        "stringValue": "08:00"
+      },
+      "level": {
+        "stringValue": "مشرف"
+      },
+      "hasSalesAccess": {
+        "booleanValue": true
+      },
+      "shiftEnd": {
+        "stringValue": "16:30"
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": true
+      }
+    },
+    "createTime": "2026-06-14T11:24:54.504043Z",
+    "updateTime": "2026-06-19T23:53:25.729145Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/EMP-0008",
+    "fields": {
+      "allowedMissingPunches": {
+        "integerValue": "3"
+      },
+      "joinDate": {
+        "stringValue": "2026-04-19"
+      },
+      "dateOfBirth": {
+        "stringValue": "1967-02-09"
+      },
+      "hasStockAccess": {
+        "booleanValue": false
+      },
+      "hasOverviewAccess": {
+        "booleanValue": false
+      },
+      "jobTitle": {
+        "stringValue": "فني دعم لوجستي"
+      },
+      "basicSalary": {
+        "stringValue": "260"
+      },
+      "hasLogsAccess": {
+        "booleanValue": false
+      },
+      "hasProductionAccess": {
+        "booleanValue": false
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "orders": {
+              "booleanValue": false
+            },
+            "attendance": {
+              "booleanValue": false
+            },
+            "evaluations": {
+              "booleanValue": false
+            }
+          }
+        }
+      },
+      "hasDeliveryAccess": {
+        "booleanValue": false
+      },
+      "hasEmployeesAccess": {
+        "booleanValue": false
+      },
+      "hasSettingsAccess": {
+        "booleanValue": false
+      },
+      "sickLeaveBalance": {
+        "integerValue": "0"
+      },
+      "password": {
+        "stringValue": "12345"
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "مغادرة خاصة"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            },
+            {
+              "stringValue": "بدل عمل إضافي"
+            }
+          ]
+        }
+      },
+      "directManager": {
+        "stringValue": "عبد الله يعقوب ايوب غيث"
+      },
+      "hasProductionTasksAccess": {
+        "booleanValue": false
+      },
+      "hasCustomersAccess": {
+        "booleanValue": false
+      },
+      "hasLiveAccess": {
+        "booleanValue": false
+      },
+      "phone": {
+        "stringValue": "0096282599780"
+      },
+      "department": {
+        "stringValue": "الدعم اللوجستي"
+      },
+      "role": {
+        "stringValue": "logistics"
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "logistics"
+            },
+            {
+              "stringValue": "packaging"
+            },
+            {
+              "stringValue": "الدعم اللوجستي"
+            }
+          ]
+        }
+      },
+      "assignedEmployees": {
+        "arrayValue": {}
+      },
+      "level": {
+        "stringValue": "موظف إنتاج"
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": false
+      },
+      "shiftEnd": {
+        "stringValue": "16:30"
+      },
+      "hasSalesAccess": {
+        "booleanValue": false
+      },
+      "name": {
+        "stringValue": "محمد سمير علي محمد العبود"
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": false
+      },
+      "shiftStart": {
+        "stringValue": "07:30"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الاولى"
+      },
+      "vacationBalance": {
+        "integerValue": "0"
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "hasReportsAccess": {
+        "booleanValue": false
+      },
+      "workLocationId": {
+        "stringValue": "1781177286778"
+      },
+      "id": {
+        "stringValue": "EMP-0008"
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": false
+      }
+    },
+    "createTime": "2026-06-14T11:24:54.702208Z",
+    "updateTime": "2026-06-16T11:39:16.613805Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/EMP-0009",
+    "fields": {
+      "hasEmployeesAccess": {
+        "booleanValue": false
+      },
+      "hasSettingsAccess": {
+        "booleanValue": false
+      },
+      "sickLeaveBalance": {
+        "integerValue": "0"
+      },
+      "hasDeliveryAccess": {
+        "booleanValue": false
+      },
+      "directManager": {
+        "stringValue": "رائدة عيسى سعد العبود"
+      },
+      "hasProductionTasksAccess": {
+        "booleanValue": false
+      },
+      "password": {
+        "stringValue": "12345"
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "مغادرة خاصة"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            },
+            {
+              "stringValue": "بدل عمل إضافي"
+            }
+          ]
+        }
+      },
+      "joinDate": {
+        "stringValue": "2026-02-01"
+      },
+      "dateOfBirth": {
+        "stringValue": "2006-01-01"
+      },
+      "hasStockAccess": {
+        "booleanValue": false
+      },
+      "hasOverviewAccess": {
+        "booleanValue": false
+      },
+      "allowedMissingPunches": {
+        "integerValue": "3"
+      },
+      "hasProductionAccess": {
+        "booleanValue": false
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "attendance": {
+              "booleanValue": true
+            },
+            "orders": {
+              "booleanValue": true
+            },
+            "evaluations": {
+              "booleanValue": true
+            }
+          }
+        }
+      },
+      "jobTitle": {
+        "stringValue": "فني تغليف وتشطيب"
+      },
+      "basicSalary": {
+        "stringValue": "150"
+      },
+      "hasLogsAccess": {
+        "booleanValue": false
+      },
+      "name": {
+        "stringValue": "سلسبيل خالد سليم ابو مساعد"
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": false
+      },
+      "shiftStart": {
+        "stringValue": "07:30"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الاولى"
+      },
+      "vacationBalance": {
+        "integerValue": "0"
+      },
+      "level": {
+        "stringValue": "موظف إنتاج"
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": false
+      },
+      "shiftEnd": {
+        "stringValue": "16:30"
+      },
+      "hasSalesAccess": {
+        "booleanValue": false
+      },
+      "id": {
+        "stringValue": "EMP-0009"
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": false
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "hasReportsAccess": {
+        "booleanValue": false
+      },
+      "workLocationId": {
+        "stringValue": "1781177286778"
+      },
+      "hasCustomersAccess": {
+        "booleanValue": false
+      },
+      "hasLiveAccess": {
+        "booleanValue": false
+      },
+      "phone": {
+        "stringValue": "00962787173885"
+      },
+      "role": {
+        "stringValue": "CUTTING"
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "CUTTING"
+            },
+            {
+              "stringValue": "packaging"
+            },
+            {
+              "stringValue": "logistics"
+            },
+            {
+              "stringValue": "تغليف وتشطيب"
+            }
+          ]
+        }
+      },
+      "assignedEmployees": {
+        "arrayValue": {}
+      },
+      "department": {
+        "stringValue": "تغليف وتشطيب"
+      }
+    },
+    "createTime": "2026-06-14T11:24:54.896922Z",
+    "updateTime": "2026-06-18T09:42:53.703671Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/EMP-0010",
+    "fields": {
+      "hasDeliveryAccess": {
+        "booleanValue": false
+      },
+      "hasEmployeesAccess": {
+        "booleanValue": false
+      },
+      "hasSettingsAccess": {
+        "booleanValue": false
+      },
+      "sickLeaveBalance": {
+        "integerValue": "0"
+      },
+      "password": {
+        "stringValue": "12345"
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "مغادرة خاصة"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            },
+            {
+              "stringValue": "بدل عمل إضافي"
+            }
+          ]
+        }
+      },
+      "directManager": {
+        "stringValue": "رائدة عيسى سعد العبود"
+      },
+      "hasProductionTasksAccess": {
+        "booleanValue": false
+      },
+      "allowedMissingPunches": {
+        "integerValue": "3"
+      },
+      "joinDate": {
+        "stringValue": "2026-02-01"
+      },
+      "dateOfBirth": {
+        "stringValue": "2012-05-12"
+      },
+      "hasStockAccess": {
+        "booleanValue": false
+      },
+      "hasOverviewAccess": {
+        "booleanValue": false
+      },
+      "jobTitle": {
+        "stringValue": "فني تغليف وتشطيب"
+      },
+      "basicSalary": {
+        "stringValue": "150"
+      },
+      "hasLogsAccess": {
+        "booleanValue": false
+      },
+      "hasProductionAccess": {
+        "booleanValue": false
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "orders": {
+              "booleanValue": true
+            },
+            "attendance": {
+              "booleanValue": true
+            },
+            "evaluations": {
+              "booleanValue": true
+            }
+          }
+        }
+      },
+      "level": {
+        "stringValue": "موظف إنتاج"
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": false
+      },
+      "shiftEnd": {
+        "stringValue": "16:30"
+      },
+      "hasSalesAccess": {
+        "booleanValue": false
+      },
+      "name": {
+        "stringValue": "نعمة خالد سالم ابو مساعد"
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": false
+      },
+      "shiftStart": {
+        "stringValue": "07:30"
+      },
+      "vacationBalance": {
+        "integerValue": "0"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الاولى"
+      },
+      "hasReportsAccess": {
+        "booleanValue": false
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "workLocationId": {
+        "stringValue": "1781177286778"
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": false
+      },
+      "id": {
+        "stringValue": "EMP-0010"
+      },
+      "hasCustomersAccess": {
+        "booleanValue": false
+      },
+      "hasLiveAccess": {
+        "booleanValue": false
+      },
+      "phone": {
+        "stringValue": "00962787173885"
+      },
+      "department": {
+        "stringValue": "تغليف وتشطيب"
+      },
+      "role": {
+        "stringValue": "packaging"
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "packaging"
+            },
+            {
+              "stringValue": "تغليف وتشطيب"
+            }
+          ]
+        }
+      },
+      "assignedEmployees": {
+        "arrayValue": {}
+      }
+    },
+    "createTime": "2026-06-14T11:24:55.085316Z",
+    "updateTime": "2026-06-17T09:10:17.596271Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/EMP-0011",
+    "fields": {
+      "allowedMissingPunches": {
+        "integerValue": "3"
+      },
+      "hasOverviewAccess": {
+        "booleanValue": false
+      },
+      "joinDate": {
+        "stringValue": "2025-12-02"
+      },
+      "dateOfBirth": {
+        "stringValue": "1997-08-10"
+      },
+      "hasStockAccess": {
+        "booleanValue": false
+      },
+      "hasLogsAccess": {
+        "booleanValue": false
+      },
+      "basicSalary": {
+        "stringValue": "475"
+      },
+      "jobTitle": {
+        "stringValue": "فني قص وخياطة"
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "orders": {
+              "booleanValue": true
+            },
+            "attendance": {
+              "booleanValue": true
+            },
+            "evaluations": {
+              "booleanValue": true
+            }
+          }
+        }
+      },
+      "hasProductionAccess": {
+        "booleanValue": false
+      },
+      "hasDeliveryAccess": {
+        "booleanValue": false
+      },
+      "sickLeaveBalance": {
+        "integerValue": "0"
+      },
+      "hasEmployeesAccess": {
+        "booleanValue": false
+      },
+      "hasSocialSecurity": {
+        "booleanValue": true
+      },
+      "hasSettingsAccess": {
+        "booleanValue": false
+      },
+      "isHazardousProfession": {
+        "booleanValue": true
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "إجازة مرضية"
+            },
+            {
+              "stringValue": "مغادرة خاصة"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            },
+            {
+              "stringValue": "بدل عمل إضافي"
+            }
+          ]
+        }
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "password": {
+        "stringValue": "12345"
+      },
+      "hasProductionTasksAccess": {
+        "booleanValue": false
+      },
+      "directManager": {
+        "stringValue": "رائدة عيسى سعد العبود"
+      },
+      "hasLiveAccess": {
+        "booleanValue": false
+      },
+      "phone": {
+        "stringValue": "00962788205397"
+      },
+      "socialSecuritySalary": {
+        "integerValue": "475"
+      },
+      "hasCustomersAccess": {
+        "booleanValue": false
+      },
+      "department": {
+        "stringValue": "القص والخياطة"
+      },
+      "assignedEmployees": {
+        "arrayValue": {}
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "packaging"
+            },
+            {
+              "stringValue": "CUTTING"
+            },
+            {
+              "stringValue": "logistics"
+            },
+            {
+              "stringValue": "sewing"
+            },
+            {
+              "stringValue": "القص والخياطة"
+            }
+          ]
+        }
+      },
+      "role": {
+        "stringValue": "packaging"
+      },
+      "shiftEnd": {
+        "stringValue": "17:00"
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": false
+      },
+      "hasSalesAccess": {
+        "booleanValue": false
+      },
+      "level": {
+        "stringValue": "موظف إنتاج"
+      },
+      "shiftStart": {
+        "stringValue": "08:00"
+      },
+      "vacationBalance": {
+        "integerValue": "0"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الثانية"
+      },
+      "name": {
+        "stringValue": "اسماعيل مصباح صبحي شرف"
+      },
+      "transportationAllowance": {
+        "stringValue": ""
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": false
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "hasReportsAccess": {
+        "booleanValue": false
+      },
+      "workLocationId": {
+        "stringValue": "1781177286778"
+      },
+      "id": {
+        "stringValue": "EMP-0011"
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": false
+      }
+    },
+    "createTime": "2026-06-14T11:24:55.279659Z",
+    "updateTime": "2026-06-19T23:52:02.736906Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/EMP-0012",
+    "fields": {
+      "hasProductionTasksAccess": {
+        "booleanValue": false
+      },
+      "directManager": {
+        "stringValue": "عبد الله يعقوب ايوب غيث"
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "مغادرة خاصة"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            },
+            {
+              "stringValue": "بدل عمل إضافي"
+            }
+          ]
+        }
+      },
+      "password": {
+        "stringValue": "12345"
+      },
+      "sickLeaveBalance": {
+        "integerValue": "0"
+      },
+      "hasEmployeesAccess": {
+        "booleanValue": false
+      },
+      "hasSettingsAccess": {
+        "booleanValue": false
+      },
+      "hasDeliveryAccess": {
+        "booleanValue": false
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "evaluations": {
+              "booleanValue": false
+            },
+            "orders": {
+              "booleanValue": false
+            },
+            "attendance": {
+              "booleanValue": false
+            }
+          }
+        }
+      },
+      "hasProductionAccess": {
+        "booleanValue": false
+      },
+      "jobTitle": {
+        "stringValue": "فني دعم لوجستي"
+      },
+      "basicSalary": {
+        "stringValue": "260"
+      },
+      "hasLogsAccess": {
+        "booleanValue": false
+      },
+      "hasOverviewAccess": {
+        "booleanValue": false
+      },
+      "joinDate": {
+        "stringValue": "2025-04-14"
+      },
+      "hasStockAccess": {
+        "booleanValue": false
+      },
+      "dateOfBirth": {
+        "stringValue": "2005-03-18"
+      },
+      "allowedMissingPunches": {
+        "integerValue": "3"
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": false
+      },
+      "id": {
+        "stringValue": "EMP-0012"
+      },
+      "hasReportsAccess": {
+        "booleanValue": false
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "workLocationId": {
+        "stringValue": "1781177286778"
+      },
+      "shiftStart": {
+        "stringValue": "07:30"
+      },
+      "vacationBalance": {
+        "integerValue": "0"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الاولى"
+      },
+      "name": {
+        "stringValue": "ايهاب رامي محمد راغب الشرباتي"
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": false
+      },
+      "shiftEnd": {
+        "stringValue": "16:30"
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": false
+      },
+      "hasSalesAccess": {
+        "booleanValue": false
+      },
+      "level": {
+        "stringValue": "موظف إنتاج"
+      },
+      "assignedEmployees": {
+        "arrayValue": {}
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "logistics"
+            },
+            {
+              "stringValue": "packaging"
+            },
+            {
+              "stringValue": "CUTTING"
+            },
+            {
+              "stringValue": "الدعم اللوجستي"
+            }
+          ]
+        }
+      },
+      "role": {
+        "stringValue": "logistics"
+      },
+      "department": {
+        "stringValue": "الدعم اللوجستي"
+      },
+      "hasLiveAccess": {
+        "booleanValue": false
+      },
+      "phone": {
+        "stringValue": "00962792360665"
+      },
+      "hasCustomersAccess": {
+        "booleanValue": false
+      }
+    },
+    "createTime": "2026-06-14T11:24:55.475665Z",
+    "updateTime": "2026-06-16T11:43:25.529598Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/EMP-0013",
+    "fields": {
+      "phone": {
+        "stringValue": "00962798333280"
+      },
+      "hasLiveAccess": {
+        "booleanValue": true
+      },
+      "hasCustomersAccess": {
+        "booleanValue": true
+      },
+      "department": {
+        "stringValue": "الادارة"
+      },
+      "assignedEmployees": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "EMP-0001"
+            },
+            {
+              "stringValue": "EMP-0002"
+            },
+            {
+              "stringValue": "EMP-0003"
+            },
+            {
+              "stringValue": "EMP-0004"
+            },
+            {
+              "stringValue": "EMP-0005"
+            },
+            {
+              "stringValue": "EMP-0006"
+            },
+            {
+              "stringValue": "EMP-0008"
+            },
+            {
+              "stringValue": "EMP-0009"
+            },
+            {
+              "stringValue": "EMP-0010"
+            },
+            {
+              "stringValue": "EMP-0011"
+            },
+            {
+              "stringValue": "EMP-0012"
+            },
+            {
+              "stringValue": "EMP-0014"
+            }
+          ]
+        }
+      },
+      "role": {
+        "stringValue": "CUTTING"
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "CUTTING"
+            },
+            {
+              "stringValue": "sewing"
+            },
+            {
+              "stringValue": "logistics"
+            },
+            {
+              "stringValue": "packaging"
+            },
+            {
+              "stringValue": "الادارة"
+            }
+          ]
+        }
+      },
+      "hasSalesAccess": {
+        "booleanValue": true
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": true
+      },
+      "shiftEnd": {
+        "stringValue": "15:00"
+      },
+      "level": {
+        "stringValue": "مشرف"
+      },
+      "vacationBalance": {
+        "integerValue": "0"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الرابعة"
+      },
+      "shiftStart": {
+        "stringValue": "09:00"
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": true
+      },
+      "name": {
+        "stringValue": "أماني يونس صالح وادي"
+      },
+      "workLocationId": {
+        "stringValue": "1781177286778"
+      },
+      "hasReportsAccess": {
+        "booleanValue": true
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "id": {
+        "stringValue": "EMP-0013"
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": true
+      },
+      "allowedMissingPunches": {
+        "integerValue": "3"
+      },
+      "hasOverviewAccess": {
+        "booleanValue": true
+      },
+      "dateOfBirth": {
+        "stringValue": "1984-08-26"
+      },
+      "hasStockAccess": {
+        "booleanValue": true
+      },
+      "joinDate": {
+        "stringValue": "2024-05-14"
+      },
+      "jobTitle": {
+        "stringValue": "المدير التنفيذي"
+      },
+      "basicSalary": {
+        "stringValue": "350"
+      },
+      "hasLogsAccess": {
+        "booleanValue": true
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "evaluations": {
+              "booleanValue": true
+            },
+            "attendance": {
+              "booleanValue": true
+            },
+            "orders": {
+              "booleanValue": true
+            }
+          }
+        }
+      },
+      "hasProductionAccess": {
+        "booleanValue": true
+      },
+      "hasDeliveryAccess": {
+        "booleanValue": true
+      },
+      "sickLeaveBalance": {
+        "integerValue": "0"
+      },
+      "hasSettingsAccess": {
+        "booleanValue": true
+      },
+      "hasEmployeesAccess": {
+        "booleanValue": true
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "إجازة مرضية"
+            },
+            {
+              "stringValue": "مغادرة خاصة"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            },
+            {
+              "stringValue": "بدل عمل إضافي"
+            }
+          ]
+        }
+      },
+      "password": {
+        "stringValue": "1984"
+      },
+      "hasProductionTasksAccess": {
+        "booleanValue": true
+      },
+      "directManager": {
+        "stringValue": "المدير العام"
+      }
+    },
+    "createTime": "2026-06-14T11:24:55.688Z",
+    "updateTime": "2026-06-16T22:08:12.821564Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/EMP-0014",
+    "fields": {
+      "shiftStart": {
+        "stringValue": "08:00"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الثانية"
+      },
+      "vacationBalance": {
+        "integerValue": "0"
+      },
+      "name": {
+        "stringValue": "هبة ربيع محفوظ ابو طالب"
+      },
+      "transportationAllowance": {
+        "stringValue": "20"
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": false
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": false
+      },
+      "shiftEnd": {
+        "stringValue": "17:00"
+      },
+      "hasSalesAccess": {
+        "booleanValue": false
+      },
+      "level": {
+        "stringValue": "موظف إنتاج"
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": false
+      },
+      "id": {
+        "stringValue": "EMP-0014"
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "hasReportsAccess": {
+        "booleanValue": false
+      },
+      "workLocationId": {
+        "stringValue": "1781177286778"
+      },
+      "hasLiveAccess": {
+        "booleanValue": false
+      },
+      "phone": {
+        "stringValue": "00962798966779"
+      },
+      "hasCustomersAccess": {
+        "booleanValue": false
+      },
+      "assignedEmployees": {
+        "arrayValue": {}
+      },
+      "role": {
+        "stringValue": "packaging"
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "packaging"
+            },
+            {
+              "stringValue": "CUTTING"
+            },
+            {
+              "stringValue": "logistics"
+            },
+            {
+              "stringValue": "sewing"
+            },
+            {
+              "stringValue": "القص والخياطة"
+            }
+          ]
+        }
+      },
+      "department": {
+        "stringValue": "القص والخياطة"
+      },
+      "sickLeaveBalance": {
+        "integerValue": "0"
+      },
+      "hasEmployeesAccess": {
+        "booleanValue": false
+      },
+      "hasSettingsAccess": {
+        "booleanValue": false
+      },
+      "hasDeliveryAccess": {
+        "booleanValue": false
+      },
+      "hasProductionTasksAccess": {
+        "booleanValue": false
+      },
+      "directManager": {
+        "stringValue": "رائدة عيسى سعد العبود"
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "مغادرة خاصة"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            },
+            {
+              "stringValue": "بدل عمل إضافي"
+            }
+          ]
+        }
+      },
+      "password": {
+        "stringValue": "12345"
+      },
+      "hasOverviewAccess": {
+        "booleanValue": false
+      },
+      "joinDate": {
+        "stringValue": "2024-06-01"
+      },
+      "dateOfBirth": {
+        "stringValue": "1992-01-01"
+      },
+      "hasStockAccess": {
+        "booleanValue": false
+      },
+      "allowedMissingPunches": {
+        "integerValue": "3"
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "attendance": {
+              "booleanValue": true
+            },
+            "orders": {
+              "booleanValue": true
+            },
+            "evaluations": {
+              "booleanValue": true
+            }
+          }
+        }
+      },
+      "hasProductionAccess": {
+        "booleanValue": false
+      },
+      "jobTitle": {
+        "stringValue": "فني خياطة"
+      },
+      "basicSalary": {
+        "stringValue": "305"
+      },
+      "hasLogsAccess": {
+        "booleanValue": false
+      }
+    },
+    "createTime": "2026-06-14T11:24:55.885452Z",
+    "updateTime": "2026-06-19T23:40:49.511074Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/EMP-0017",
+    "fields": {
+      "password": {
+        "stringValue": "123"
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "مغادرة خاصة"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            }
+          ]
+        }
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "directManager": {
+        "stringValue": "عبد الله غيث"
+      },
+      "hasProductionTasksAccess": {
+        "booleanValue": false
+      },
+      "hasDeliveryAccess": {
+        "booleanValue": false
+      },
+      "hasSettingsAccess": {
+        "booleanValue": false
+      },
+      "hasEmployeesAccess": {
+        "booleanValue": false
+      },
+      "sickLeaveBalance": {
+        "integerValue": "14"
+      },
+      "hasLogsAccess": {
+        "booleanValue": false
+      },
+      "basicSalary": {
+        "stringValue": ""
+      },
+      "jobTitle": {
+        "stringValue": "فني خياطة"
+      },
+      "hasProductionAccess": {
+        "booleanValue": false
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "evaluations": {
+              "booleanValue": true
+            },
+            "attendance": {
+              "booleanValue": true
+            },
+            "orders": {
+              "booleanValue": true
+            }
+          }
+        }
+      },
+      "dateOfBirth": {
+        "stringValue": "1990-12-22"
+      },
+      "hasStockAccess": {
+        "booleanValue": false
+      },
+      "joinDate": {
+        "stringValue": "2026-06-14"
+      },
+      "hasOverviewAccess": {
+        "booleanValue": false
+      },
+      "workLocationId": {
+        "stringValue": "1781177286778"
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "hasReportsAccess": {
+        "booleanValue": false
+      },
+      "id": {
+        "stringValue": "EMP-0017"
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": false
+      },
+      "level": {
+        "stringValue": "موظف إنتاج"
+      },
+      "hasSalesAccess": {
+        "booleanValue": false
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": false
+      },
+      "shiftEnd": {
+        "stringValue": "16:30"
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": false
+      },
+      "name": {
+        "stringValue": "test"
+      },
+      "vacationBalance": {
+        "integerValue": "14"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الاولى"
+      },
+      "shiftStart": {
+        "stringValue": "07:30"
+      },
+      "department": {
+        "stringValue": "المبيعات"
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "packaging"
+            },
+            {
+              "stringValue": "logistics"
+            },
+            {
+              "stringValue": "sewing"
+            },
+            {
+              "stringValue": "CUTTING"
+            },
+            {
+              "stringValue": "المبيعات"
+            }
+          ]
+        }
+      },
+      "role": {
+        "stringValue": "packaging"
+      },
+      "assignedEmployees": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "EMP-0001"
+            },
+            {
+              "stringValue": "EMP-0002"
+            },
+            {
+              "stringValue": "EMP-0003"
+            },
+            {
+              "stringValue": "EMP-0004"
+            },
+            {
+              "stringValue": "EMP-0005"
+            },
+            {
+              "stringValue": "EMP-0006"
+            },
+            {
+              "stringValue": "EMP-0010"
+            },
+            {
+              "stringValue": "EMP-0011"
+            },
+            {
+              "stringValue": "EMP-0012"
+            },
+            {
+              "stringValue": "EMP-0014"
+            },
+            {
+              "stringValue": "EMP-0015"
+            },
+            {
+              "stringValue": "EMP-0016"
+            }
+          ]
+        }
+      },
+      "hasCustomersAccess": {
+        "booleanValue": false
+      },
+      "phone": {
+        "stringValue": "00962791006920"
+      },
+      "hasLiveAccess": {
+        "booleanValue": false
+      }
+    },
+    "createTime": "2026-06-14T22:27:09.225683Z",
+    "updateTime": "2026-06-14T23:04:12.886804Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/employees/admin",
+    "fields": {
+      "dateOfBirth": {
+        "stringValue": "1990-12-22"
+      },
+      "hasStockAccess": {
+        "booleanValue": false
+      },
+      "joinDate": {
+        "stringValue": "2023-11-04"
+      },
+      "hasOverviewAccess": {
+        "booleanValue": false
+      },
+      "allowedMissingPunches": {
+        "integerValue": "0"
+      },
+      "hasProductionAccess": {
+        "booleanValue": false
+      },
+      "supervisorPermissions": {
+        "mapValue": {
+          "fields": {
+            "attendance": {
+              "booleanValue": true
+            },
+            "orders": {
+              "booleanValue": true
+            },
+            "evaluations": {
+              "booleanValue": true
+            }
+          }
+        }
+      },
+      "hasLogsAccess": {
+        "booleanValue": false
+      },
+      "basicSalary": {
+        "stringValue": "800"
+      },
+      "jobTitle": {
+        "stringValue": ""
+      },
+      "hasSettingsAccess": {
+        "booleanValue": false
+      },
+      "hasEmployeesAccess": {
+        "booleanValue": false
+      },
+      "sickLeaveBalance": {
+        "integerValue": "0"
+      },
+      "hasDeliveryAccess": {
+        "booleanValue": false
+      },
+      "directManager": {
+        "stringValue": "المدير العام"
+      },
+      "hasProductionTasksAccess": {
+        "booleanValue": false
+      },
+      "password": {
+        "stringValue": "admin"
+      },
+      "allowedLeaveTypes": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "إجازة سنوية"
+            },
+            {
+              "stringValue": "إجازة مرضية"
+            },
+            {
+              "stringValue": "مغادرة خاصة"
+            },
+            {
+              "stringValue": "مغادرة عمل"
+            },
+            {
+              "stringValue": "إجازة غير مدفوعة"
+            },
+            {
+              "stringValue": "بدل عمل إضافي"
+            }
+          ]
+        }
+      },
+      "employmentStatus": {
+        "stringValue": "فعال"
+      },
+      "hasCustomersAccess": {
+        "booleanValue": false
+      },
+      "phone": {
+        "stringValue": "00962798228332"
+      },
+      "hasLiveAccess": {
+        "booleanValue": false
+      },
+      "roles": {
+        "arrayValue": {
+          "values": [
+            {
+              "stringValue": "الادارة"
+            }
+          ]
+        }
+      },
+      "role": {
+        "stringValue": "admin"
+      },
+      "assignedEmployees": {
+        "arrayValue": {}
+      },
+      "department": {
+        "stringValue": "الادارة"
+      },
+      "hasSupervisorTasksAccess": {
+        "booleanValue": false
+      },
+      "name": {
+        "stringValue": "المدير العام"
+      },
+      "vacationBalance": {
+        "integerValue": "0"
+      },
+      "workShiftName": {
+        "stringValue": "فترة الدوام الثانية"
+      },
+      "shiftStart": {
+        "stringValue": "08:00"
+      },
+      "level": {
+        "stringValue": "إدارة"
+      },
+      "hasSalesAccess": {
+        "booleanValue": false
+      },
+      "shiftEnd": {
+        "stringValue": "17:00"
+      },
+      "hasSupervisorReportsAccess": {
+        "booleanValue": false
+      },
+      "id": {
+        "stringValue": "admin"
+      },
+      "hasSiteSettingsAccess": {
+        "booleanValue": false
+      },
+      "workLocationId": {
+        "stringValue": "1781177286778"
+      },
+      "hrNotes": {
+        "stringValue": ""
+      },
+      "hasReportsAccess": {
+        "booleanValue": false
+      }
+    },
+    "createTime": "2026-05-03T00:48:56.616535Z",
+    "updateTime": "2026-06-19T02:22:39.955855Z"
+  }
+]

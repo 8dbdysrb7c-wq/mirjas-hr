@@ -1,0 +1,27 @@
+[36mvite v8.0.10 [32mbuilding client environment for production...[36m[39m
+[2Ktransforming...✓ 2738 modules transformed.
+[31m✗[39m Build failed in 331ms
+[31merror during build:
+[31mBuild failed with 1 error:
+
+[31m[builtin:vite-transform] Error:[0m Expected `,` or `}` but found `Identifier`
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/admin/AdminEmployees.jsx:113:27 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m 75 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mM[0m[38;5;249my[0m[38;5;249mS[0m[38;5;249mw[0m[38;5;249ma[0m[38;5;249ml[0m[38;5;249m.[0m[38;5;249mf[0m[38;5;249mi[0m[38;5;249mr[0m[38;5;249me[0m[38;5;249m([0m{
+ [38;5;240m    │[0m                 ┬  
+ [38;5;240m    │[0m                 ╰── Opened here
+ [38;5;240m    │[0m 
+ [38;5;246m113 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m[38;5;249mo[0m[38;5;249mp[0m[38;5;249mt[0m[38;5;249mi[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249m [0mvalue[38;5;249m=[0m[38;5;249m"[0m[38;5;249m$[0m[38;5;249m{[0m[38;5;249mt[0m[38;5;249my[0m[38;5;249mp[0m[38;5;249me[0m[38;5;249m}[0m[38;5;249m"[0m[38;5;249m [0m[38;5;249m$[0m[38;5;249m{[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mi[0m[38;5;249mt[0m[38;5;249mi[0m[38;5;249ma[0m[38;5;249ml[0m[38;5;249mD[0m[38;5;249ma[0m[38;5;249mt[0m[38;5;249ma[0m[38;5;249m.[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249mv[0m[38;5;249me[0m[38;5;249ml[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m=[0m[38;5;249m=[0m[38;5;249m [0m[38;5;249mt[0m[38;5;249my[0m[38;5;249mp[0m[38;5;249me[0m[38;5;249m [0m[38;5;249m?[0m[38;5;249m [0m[38;5;249m'[0m[38;5;249ms[0m[38;5;249me[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249mc[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249md[0m[38;5;249m'[0m[38;5;249m [0m[38;5;249m:[0m[38;5;249m [0m[38;5;249m'[0m[38;5;249m'[0m[38;5;249m}[0m[38;5;249m>[0m[38;5;249m$[0m[38;5;249m{[0m[38;5;249mt[0m[38;5;249my[0m[38;5;249mp[0m[38;5;249me[0m[38;5;249m}[0m[38;5;249m<[0m[38;5;249m/[0m[38;5;249mo[0m[38;5;249mp[0m[38;5;249mt[0m[38;5;249mi[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249m>[0m
+ [38;5;240m    │[0m                           ──┬──  
+ [38;5;240m    │[0m                             ╰──── `,` or `}` expected
+[38;5;246m─────╯[0m
+[31m
+    at aggregateBindingErrorsIntoJsError (file:///C:/Users/m.awwad/.gemini/antigravity/scratch/mirjas-hr/node_modules/rolldown/dist/shared/error-DL-e8-oE.mjs:48:18)
+    at unwrapBindingResult (file:///C:/Users/m.awwad/.gemini/antigravity/scratch/mirjas-hr/node_modules/rolldown/dist/shared/error-DL-e8-oE.mjs:18:128)
+    at #build (file:///C:/Users/m.awwad/.gemini/antigravity/scratch/mirjas-hr/node_modules/rolldown/dist/shared/rolldown-build-DSxL8qiP.mjs:3317:34)
+    at async buildEnvironment (file:///C:/Users/m.awwad/.gemini/antigravity/scratch/mirjas-hr/node_modules/vite/dist/node/chunks/node.js:33018:64)
+    at async Object.build (file:///C:/Users/m.awwad/.gemini/antigravity/scratch/mirjas-hr/node_modules/vite/dist/node/chunks/node.js:33440:19)
+    at async Object.buildApp (file:///C:/Users/m.awwad/.gemini/antigravity/scratch/mirjas-hr/node_modules/vite/dist/node/chunks/node.js:33437:153)
+    at async CAC.<anonymous> (file:///C:/Users/m.awwad/.gemini/antigravity/scratch/mirjas-hr/node_modules/vite/dist/node/cli.js:778:3) {
+  errors: [Getter/Setter]
+}[39m

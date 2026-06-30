@@ -1,0 +1,65 @@
+    activeReportTab === 'employees' ? filteredEmployeesReports.length :
+    activeReportTab === 'sales' ? filteredSalesOrders.length :
+    activeReportTab === 'production' ? filteredProductionOrders.length :
+    activeReportTab === 'delivery' ? filteredDeliveryMissions.length :
+    activeReportTab === 'stock' ? filteredStockItems.length :
+    activeReportTab === 'hr' ? filteredHR.length :
+    activeReportTab === 'missingpunches' ? filteredMissingPunches.length :
+    activeReportTab === 'tasks' ? filteredTasks.length :
+    activeReportTab === 'supervisors' ? filteredSupervisorReports.length :
+    activeReportTab === 'customers' ? filteredCustomersReports.length : 0;
+
+  const currentReportTitle =
+    activeReportTab === 'employees' ? 'تقارير الموظفين اليومية' :
+    activeReportTab === 'sales' ? 'تقارير طلبيات العملاء' :
+    activeReportTab === 'production' ? 'تقارير الإنتاج' :
+    activeReportTab === 'delivery' ? 'تقارير التوصيل' :
+    activeReportTab === 'stock' ? 'تقارير المخزون' :
+    activeReportTab === 'hr' ? 'تقارير الموارد البشرية' :
+    activeReportTab === 'missingpunches' ? 'تقارير الختمات الناقصة' :
+    activeReportTab === 'tasks' ? 'تقارير إدارة المهام' :
+    activeReportTab === 'supervisors' ? 'تقارير المشرفين' :
+    activeReportTab === 'customers' ? 'تقارير العملاء' : 'التقارير';
+
+  const currentReportSubtitle =
+    activeReportTab === 'employees' ? 'عرض التقارير اليومية وتقييم الأداء بنفس تنسيق الجداول في الأقسام.' :
+    activeReportTab === 'sales' ? 'متابعة طلبيات العملاء داخل جدول واضح وسهل القراءة.' :
+    activeReportTab === 'production' ? 'متابعة أوامر الإنتاج وحالتها ضمن عرض منظم ومباشر.' :
+    activeReportTab === 'delivery' ? 'متابعة مهمات التوصيل والجهات والحالات ضمن جدول واضح.' :
+    activeReportTab === 'stock' ? 'متابعة حركة المخزون وحالة الأصناف ضمن عرض منظم ومباشر.' :
+    activeReportTab === 'hr' ? 'متابعة الحضور والمخالفات للموظفين.' :
+    activeReportTab === 'missingpunches' ? 'متابعة طلبات الختمات الناقصة والموافقة عليها.' :
+    activeReportTab === 'tasks' ? 'متابعة المهام الموكلة للمشرفين.' :
+    activeReportTab === 'supervisors' ? 'تقارير أداء المشرفين اليومية.' :
+    activeReportTab === 'customers' ? 'قائمة العملاء وأرصدتهم.' : '';
+
+  const emptyResultsColSpan =
+    activeReportTab === 'employees'
+      ? (selectedEmployee ? 7 : 8)
+      : activeReportTab === 'sales'
+        ? 6
+        : activeReportTab === 'production'
+          ? 7
+          : activeReportTab === 'delivery'
+            ? 6
+            : activeReportTab === 'stock'
+              ? 9
+              : activeReportTab === 'customers'
+                ? 6
+                : 8;
+
+  const printColumnDefinitions = {
+    employees: [
+      { key: 'date', label: 'التاريخ', render: (report) => report.date || '---' },
+      !selectedEmployee ? { key: 'userName', label: 'اسم الموظف', render: (report) => report.userName || '---' } : null,
+      !selectedEmployee ? { key: 'employeeId', label: 'الرقم الوظيفي', render: (report) => {
+        const emp = employees.find(e => e.id === report.employeeId || e.name === report.userName);
+        return emp ? emp.id : '---';
+      } } : null,
+      { key: 'department', label: 'القسم', render: (report) => report.department || '---' },
+      { key: 'timeIn', label: 'الدخول', render: (report) => report.timeIn || '---' },
+      { key: 'timeOut', label: 'الخروج', render: (report) => report.timeOut || '---' },
+      { key: 'phoneUsages', label: 'الهاتف', render: (report) => report.phoneUsages || 0 },
+      { key: 'tasksCount', label: 'عدد المهام', render: (report) => report.tasks?.length || 0 },
+      { key: 'finalScore', label: 'التقييم', render: (report) => `${Math.round(report.finalScore || 0)}%` }
+    ].filter(Boolean),

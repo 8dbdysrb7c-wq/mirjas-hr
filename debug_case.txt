@@ -1,0 +1,38 @@
+--- MATCH AT 34251 ---
+nches}</span>
+              </button>
+            </div>
+
+          </motion.div>
+        );
+
+      case 'hr_requests':
+        return (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="animate-fade-in space-y-6">
+            <div className="section-title mb-4 flex items-center gap-2">
+              <FileText size={20} className="text-primary" />
+              <span>سجل الطلبات والتقارير المقدمة</span>
+            </div>
+            
+            <div className="bg-white rounded-[16px] shadow-sm border border-slate-100 overflow-hidden">
+              <div class
+
+--- MATCH AT 60770 ---
+  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 'hr_requests':
+        return (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+
+            {/* GPS Live Attendance Card */}
+            <div className="mb-8 rounded-2xl shadow-lg border border-slate-200 overflow-hidden relative" style={{ background: 'linear-gradient(135deg, #0f4c81, #1a8d9b)' }}>
+              <div className="absolute top-0 right-0 p-4 opacity-10">
+                <Globe size={100} />
+              </div>
+              <div c
+

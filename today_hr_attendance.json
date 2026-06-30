@@ -1,0 +1,355 @@
+[
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/hr_attendance/E5bAixXuVAJRUHJdg3Zz",
+    "fields": {
+      "employeeName": {
+        "stringValue": "سحر صلاح الدين الملاح"
+      },
+      "date": {
+        "stringValue": "2026-06-20"
+      },
+      "timeIn": {
+        "stringValue": "07:32"
+      },
+      "notes": {
+        "stringValue": "دخول جغرافي معتمد (مصنع البياضات) | خروج جغرافي (مصنع البياضات)"
+      },
+      "id": {
+        "stringValue": "E5bAixXuVAJRUHJdg3Zz"
+      },
+      "employeeId": {
+        "stringValue": "3"
+      },
+      "locationConfirmed": {
+        "booleanValue": true
+      },
+      "updatedAt": {
+        "stringValue": "2026-06-20T13:35:04.618Z"
+      },
+      "timeOut": {
+        "stringValue": "16:35"
+      },
+      "status": {
+        "stringValue": "مداوم"
+      }
+    },
+    "createTime": "2026-06-20T04:32:02.174865Z",
+    "updateTime": "2026-06-20T13:35:04.563820Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/hr_attendance/I7wvNnovDnJhkcsNixoK",
+    "fields": {
+      "status": {
+        "stringValue": "مداوم"
+      },
+      "notes": {
+        "stringValue": "دخول جغرافي معتمد (مصنع البياضات)"
+      },
+      "timeIn": {
+        "stringValue": "08:16"
+      },
+      "updatedAt": {
+        "stringValue": "2026-06-20T05:16:10.061Z"
+      },
+      "locationConfirmed": {
+        "booleanValue": true
+      },
+      "date": {
+        "stringValue": "2026-06-20"
+      },
+      "employeeId": {
+        "stringValue": "EMP-0011"
+      },
+      "employeeName": {
+        "stringValue": "اسماعيل مصباح صبحي شرف"
+      }
+    },
+    "createTime": "2026-06-20T05:16:11.506212Z",
+    "updateTime": "2026-06-20T05:16:11.506212Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/hr_attendance/K972yirOTc8GeJuwDRIj",
+    "fields": {
+      "date": {
+        "stringValue": "2026-06-20"
+      },
+      "locationConfirmed": {
+        "booleanValue": true
+      },
+      "employeeName": {
+        "stringValue": "مها احمد محمود عبد النبي"
+      },
+      "employeeId": {
+        "stringValue": "5"
+      },
+      "notes": {
+        "stringValue": "دخول جغرافي معتمد (مصنع البياضات)"
+      },
+      "timeIn": {
+        "stringValue": "07:15"
+      },
+      "status": {
+        "stringValue": "مداوم"
+      },
+      "updatedAt": {
+        "stringValue": "2026-06-20T04:15:25.867Z"
+      }
+    },
+    "createTime": "2026-06-20T04:16:13.667556Z",
+    "updateTime": "2026-06-20T04:16:13.667556Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/hr_attendance/Oa8kiq7YJsLkKk0MTnKt",
+    "fields": {
+      "employeeId": {
+        "stringValue": "12"
+      },
+      "locationConfirmed": {
+        "booleanValue": true
+      },
+      "updatedAt": {
+        "stringValue": "2026-06-20T13:47:09.217Z"
+      },
+      "status": {
+        "stringValue": "مداوم"
+      },
+      "timeOut": {
+        "stringValue": "16:47"
+      },
+      "employeeName": {
+        "stringValue": "نعمة خالد سالم ابو مساعد"
+      },
+      "date": {
+        "stringValue": "2026-06-20"
+      },
+      "id": {
+        "stringValue": "Oa8kiq7YJsLkKk0MTnKt"
+      },
+      "notes": {
+        "stringValue": "دخول جغرافي معتمد (مصنع البياضات) | خروج جغرافي (مصنع البياضات)"
+      },
+      "timeIn": {
+        "stringValue": "16:47"
+      }
+    },
+    "createTime": "2026-06-20T13:47:05.848021Z",
+    "updateTime": "2026-06-20T13:47:10.446238Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/hr_attendance/XTcLXAl5Er7e2LfxDnii",
+    "fields": {
+      "status": {
+        "stringValue": "مداوم"
+      },
+      "notes": {
+        "stringValue": "دخول جغرافي معتمد (مصنع البياضات)"
+      },
+      "timeIn": {
+        "stringValue": "07:21"
+      },
+      "updatedAt": {
+        "stringValue": "2026-06-20T04:21:43.815Z"
+      },
+      "locationConfirmed": {
+        "booleanValue": true
+      },
+      "date": {
+        "stringValue": "2026-06-20"
+      },
+      "employeeId": {
+        "stringValue": "EMP-0005"
+      },
+      "employeeName": {
+        "stringValue": "البراء محمد سمير علي لعبود"
+      }
+    },
+    "createTime": "2026-06-20T04:21:46.039762Z",
+    "updateTime": "2026-06-20T04:21:46.039762Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/hr_attendance/XgAxb5JT2Kk0HLKLaFkb",
+    "fields": {
+      "timeIn": {
+        "stringValue": "08:11"
+      },
+      "notes": {
+        "stringValue": "دخول جغرافي معتمد (مصنع البياضات)"
+      },
+      "status": {
+        "stringValue": "مداوم"
+      },
+      "updatedAt": {
+        "stringValue": "2026-06-20T05:11:30.545Z"
+      },
+      "date": {
+        "stringValue": "2026-06-20"
+      },
+      "locationConfirmed": {
+        "booleanValue": true
+      },
+      "employeeName": {
+        "stringValue": "هبة ربيع محفوظ ابو طالب"
+      },
+      "employeeId": {
+        "stringValue": "EMP-0014"
+      }
+    },
+    "createTime": "2026-06-20T05:11:31.283880Z",
+    "updateTime": "2026-06-20T05:11:31.283880Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/hr_attendance/awnVrHA6wXoukmfjC4ZK",
+    "fields": {
+      "locationConfirmed": {
+        "booleanValue": true
+      },
+      "date": {
+        "stringValue": "2026-06-20"
+      },
+      "employeeId": {
+        "stringValue": "12"
+      },
+      "employeeName": {
+        "stringValue": "نعمة خالد سالم ابو مساعد"
+      },
+      "status": {
+        "stringValue": "مداوم"
+      },
+      "notes": {
+        "stringValue": "دخول جغرافي معتمد (مصنع البياضات)"
+      },
+      "timeIn": {
+        "stringValue": "07:32"
+      },
+      "updatedAt": {
+        "stringValue": "2026-06-20T04:32:33.161Z"
+      }
+    },
+    "createTime": "2026-06-20T04:32:32.252145Z",
+    "updateTime": "2026-06-20T04:32:32.252145Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/hr_attendance/hjDuNSOgHvdtc6iv4J5U",
+    "fields": {
+      "updatedAt": {
+        "stringValue": "2026-06-20T04:19:31.001Z"
+      },
+      "status": {
+        "stringValue": "مداوم"
+      },
+      "notes": {
+        "stringValue": "دخول جغرافي معتمد (مصنع البياضات)"
+      },
+      "timeIn": {
+        "stringValue": "07:19"
+      },
+      "employeeId": {
+        "stringValue": "10"
+      },
+      "employeeName": {
+        "stringValue": "ابو البراء"
+      },
+      "locationConfirmed": {
+        "booleanValue": true
+      },
+      "date": {
+        "stringValue": "2026-06-20"
+      }
+    },
+    "createTime": "2026-06-20T04:19:32.763718Z",
+    "updateTime": "2026-06-20T04:19:32.763718Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/hr_attendance/vfOkQuUwbU1ClEnS9xgX",
+    "fields": {
+      "status": {
+        "stringValue": "مداوم"
+      },
+      "notes": {
+        "stringValue": "دخول جغرافي معتمد (مصنع البياضات)"
+      },
+      "timeIn": {
+        "stringValue": "07:52"
+      },
+      "updatedAt": {
+        "stringValue": "2026-06-20T04:52:30.674Z"
+      },
+      "date": {
+        "stringValue": "2026-06-20"
+      },
+      "locationConfirmed": {
+        "booleanValue": true
+      },
+      "employeeId": {
+        "stringValue": "EMP-0003"
+      },
+      "employeeName": {
+        "stringValue": "فاطمة حسونة علي حسين حليمة"
+      }
+    },
+    "createTime": "2026-06-20T04:52:32.016093Z",
+    "updateTime": "2026-06-20T04:52:32.016093Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/hr_attendance/vkOB6KoLKDU93TRt1Pnj",
+    "fields": {
+      "updatedAt": {
+        "stringValue": "2026-06-20T04:32:08.468Z"
+      },
+      "status": {
+        "stringValue": "مداوم"
+      },
+      "notes": {
+        "stringValue": "دخول جغرافي معتمد (مصنع البياضات)"
+      },
+      "timeIn": {
+        "stringValue": "07:32"
+      },
+      "employeeId": {
+        "stringValue": "EMP-0009"
+      },
+      "employeeName": {
+        "stringValue": "سلسبيل خالد سليم ابو مساعد"
+      },
+      "locationConfirmed": {
+        "booleanValue": true
+      },
+      "date": {
+        "stringValue": "2026-06-20"
+      }
+    },
+    "createTime": "2026-06-20T04:32:09.176078Z",
+    "updateTime": "2026-06-20T04:32:09.176078Z"
+  },
+  {
+    "name": "projects/mirjaswork/databases/(default)/documents/hr_attendance/zTqOEXvvgnEK2DR1AMZI",
+    "fields": {
+      "status": {
+        "stringValue": "مداوم"
+      },
+      "notes": {
+        "stringValue": "دخول جغرافي معتمد (مصنع البياضات)"
+      },
+      "timeIn": {
+        "stringValue": "07:18"
+      },
+      "updatedAt": {
+        "stringValue": "2026-06-20T04:18:32.096Z"
+      },
+      "locationConfirmed": {
+        "booleanValue": true
+      },
+      "date": {
+        "stringValue": "2026-06-20"
+      },
+      "employeeId": {
+        "stringValue": "EMP-0001"
+      },
+      "employeeName": {
+        "stringValue": "رائدة عيسى سعد العبود"
+      }
+    },
+    "createTime": "2026-06-20T04:19:28.769341Z",
+    "updateTime": "2026-06-20T04:19:28.769341Z"
+  }
+]
