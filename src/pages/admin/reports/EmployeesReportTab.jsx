@@ -13,8 +13,21 @@ export const EmployeesReportTab = ({
   getScoreTone,
   handleViewReportDetails,
   handleEditEmployeeReport,
-  handleDeleteEmployeeReport
+  handleDeleteEmployeeReport,
+  allReports
 }) => {
+  
+  const getOverallAverage = (empId, empName) => {
+    if (!allReports || allReports.length === 0) return 0;
+    const empReports = allReports.filter(r => {
+      const matchId = String(r.userId || r.employeeId || '').trim() === String(empId || '').trim();
+      const matchName = String(r.userName || '').trim() === String(empName || '').trim();
+      return matchId || matchName;
+    });
+    if (empReports.length === 0) return 0;
+    const sum = empReports.reduce((acc, curr) => acc + (Number(curr.finalScore) || 0), 0);
+    return sum / empReports.length;
+  };
   
   // Inline safe sorting strictly for Employee Reports
   const sorted = [...filteredEmployeesReports].sort((a, b) => {
@@ -81,7 +94,10 @@ export const EmployeesReportTab = ({
             <div className="flex items-center justify-center gap-1">المهام {getEmpSortIcon('tasksCount')}</div>
           </th>
           <th onClick={() => handleEmpSort('finalScore')} className="cursor-pointer hover:text-primary transition-colors p-4">
-            <div className="flex items-center justify-center gap-1">التقييم {getEmpSortIcon('finalScore')}</div>
+            <div className="flex items-center justify-center gap-1">التقييم اليومي {getEmpSortIcon('finalScore')}</div>
+          </th>
+          <th className="p-4">
+            <div className="flex items-center justify-center gap-1">متوسط التقييم الإجمالي</div>
           </th>
           <th className="no-print p-4" style={{ textAlign: 'center' }}>إجراءات</th>
         </tr>
@@ -129,6 +145,18 @@ export const EmployeesReportTab = ({
               <span className={`report-score-badge ${getScoreTone(report.finalScore)}`}>
                 {Math.round(report.finalScore)}%
               </span>
+            </td>
+            <td>
+              {(() => {
+                const emp = employees.find(e => String(e.id).trim() === String(report.userId || report.employeeId || '').trim() || String(e.name).trim() === String(report.userName || '').trim());
+                const empId = emp ? (emp.employeeId || emp.id) : (report.userId || report.employeeId);
+                const avg = getOverallAverage(empId, report.userName);
+                return (
+                  <span className={`report-score-badge ${getScoreTone(avg)}`} title="متوسط التقييم خلال الفترة المحددة">
+                    {Math.round(avg)}%
+                  </span>
+                );
+              })()}
             </td>
 
             <td className="no-print">

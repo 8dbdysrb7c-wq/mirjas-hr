@@ -16,7 +16,7 @@ import EmployeeProfile from './EmployeeProfile';
 import HRSettlement from './HRSettlement';
 import './hr.css';
 
-const AdminHR = ({ user }) => {
+const AdminHR = ({ user, notificationTarget }) => {
   const [activeTab, setActiveTab] = useState('attendance');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
@@ -26,6 +26,12 @@ const AdminHR = ({ user }) => {
     'missing-punches': 0,
     advances: 0
   });
+
+  useEffect(() => {
+    if (notificationTarget && notificationTarget.tab === 'hr' && notificationTarget.subTab) {
+      setActiveTab(notificationTarget.subTab);
+    }
+  }, [notificationTarget]);
 
   const fetchCounts = async () => {
     const [leaves, mps, advances, emps, attendance] = await Promise.all([getHRLeaves(), getMissingPunches(), getHRAdvances(), getEmployees(), getHRAttendance()]);

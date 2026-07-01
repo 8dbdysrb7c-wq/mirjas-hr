@@ -756,7 +756,7 @@ const AdminReports = ({ user, notificationTarget }) => {
     activeReportTab === 'customers' ? filteredCustomersReports.length : 0;
 
   const currentReportTitle =
-    activeReportTab === 'employees' ? 'تقارير الموظفين اليومية' :
+    activeReportTab === 'employees' ? 'تقارير الموظفين' :
     activeReportTab === 'sales' ? 'تقارير طلبيات العملاء' :
     activeReportTab === 'production' ? 'تقارير الإنتاج' :
     activeReportTab === 'delivery' ? 'تقارير التوصيل' :
@@ -927,6 +927,56 @@ const AdminReports = ({ user, notificationTarget }) => {
     if (score >= 75) return 'good';
     if (score >= 60) return 'fair';
     return 'low';
+  };
+
+  const handleResetCurrentReport = () => {
+    Swal.fire({
+      title: 'تأكيد التصفير',
+      text: `هل أنت متأكد من تصفير ${currentReportTitle} بالكامل؟ هذا الإجراء يمسح كافة السجلات ولا يمكن التراجع عنه.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'نعم، قم بالتصفير',
+      cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        Swal.fire({
+          title: 'جاري التصفير...',
+          allowOutsideClick: false,
+          didOpen: () => Swal.showLoading()
+        });
+        try {
+          const { resetCollection } = await import('../../services/data_management');
+          let collectionsToReset = [];
+          switch (activeReportTab) {
+            case 'employees': collectionsToReset = ['reports']; break;
+            case 'sales': collectionsToReset = ['sales_orders']; break;
+            case 'production': collectionsToReset = ['orders', 'production_logs', 'productionBatches', 'productionTasks']; break;
+            case 'delivery': collectionsToReset = ['deliveryTrips', 'deliveryManifests', 'missions']; break;
+            case 'stock': collectionsToReset = ['stock_vouchers', 'stocktakes']; break;
+            case 'hr': collectionsToReset = ['hr_attendance', 'hr_leaves', 'hr_violations']; break;
+            case 'missingpunches': collectionsToReset = ['missing_punches']; break;
+            case 'tasks': collectionsToReset = ['supervisor_tasks']; break;
+            case 'supervisors': collectionsToReset = ['supervisor_reports']; break;
+            case 'customers': collectionsToReset = ['customers']; break;
+          }
+          
+          if (collectionsToReset.length > 0) {
+            for (const col of collectionsToReset) {
+              await resetCollection(col);
+            }
+          }
+          
+          Swal.fire('تم التصفير!', `تم تصفير ${currentReportTitle} بنجاح.`, 'success').then(() => {
+            window.location.reload();
+          });
+        } catch (error) {
+          console.error(error);
+          Swal.fire('خطأ', 'حدث خطأ أثناء محاولة التصفير.', 'error');
+        }
+      }
+    });
   };
 
   const openPrintConfig = (action = 'print') => {
@@ -1425,7 +1475,7 @@ const AdminReports = ({ user, notificationTarget }) => {
           direction: 'rtl'
         }}>
           {[
-            { id: 'employees', label: 'تقارير الموظفين اليومية', desc: 'عدد الموظفين، الغياب، التأخير، ساعات العمل', icon: Users },
+            { id: 'employees', label: 'تقارير الموظفين', desc: 'عدد الموظفين، الغياب، التأخير، ساعات العمل', icon: Users },
             { id: 'sales', label: 'طلبيات العملاء', desc: 'طلبيات العملاء، المبيعات، المرتجعات', icon: ShoppingCart },
             { id: 'production', label: 'تقارير الإنتاج', desc: 'الإنتاج اليومي، الإنجاز، المتأخرات، جودة الإنتاج', icon: SewingMachineIcon },
             { id: 'delivery', label: 'تقارير التوصيل', desc: 'قيد التوصيل، المكتمل، المرتجع، مناطق التوصيل', icon: Truck },
@@ -1739,6 +1789,27 @@ const AdminReports = ({ user, notificationTarget }) => {
 
           {/* Action Buttons Group */}
           <div className="flex items-center gap-3 flex-wrap">
+            {/* Reset Button */}
+            <button 
+              className="btn flex items-center gap-2"
+              onClick={handleResetCurrentReport}
+              style={{
+                borderRadius: '12px',
+                padding: '10px 16px',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: '#fee2e2',
+                color: '#dc2626',
+                border: '1px solid #fca5a5'
+              }}
+              title={`تصفير ${currentReportTitle}`}
+            >
+              <Trash2 size={18} />
+              <span className="hidden sm:inline">تصفير</span>
+            </button>
+
             {/* Filter Button */}
             <button 
               className="btn btn-primary flex items-center gap-2"
@@ -2293,6 +2364,7 @@ const AdminReports = ({ user, notificationTarget }) => {
                 employees={employees}
                 hrAttendance={hrAttendance}
                 filteredEmployeesReports={filteredEmployeesReports}
+                allReports={reports}
                 selectedEmployee={selectedEmployee}
                 empSortKey={empSortKey}
                 empSortDir={empSortDir}

@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { getEmployees, getOrders, getSalesOrders, getMissions, getSupervisorReports, getSmokingLogs, isAdmin, getAttendanceLogs, getReports, getHRLeaves, getHRAdvances, getMissingPunches } from '../../store';
 import { ChevronLeft, UserCheck, UserX, Clock, ClipboardList, TrendingUp, CheckCircle2, ShieldCheck, Activity, FileText, Users, CalendarPlus, LogOut, DollarSign, Fingerprint, Search } from 'lucide-react';
+import Swal from 'sweetalert2';
+import withReactContent from 'sweetalert2-react-content';
 import OrderTrackerModal from '../../components/OrderTrackerModal';
+
+const MySwal = withReactContent(Swal);
 import './AdminOverview.css';
 
 const toLocalDateKey = (value = new Date()) => {
@@ -141,16 +145,28 @@ const AdminOverview = ({ onNavigate }) => {
       let presentCount = 0;
       let totalRating = 0;
       let ratingCount = 0;
+      
+      let presentList = [];
+      let absentList = [];
+      let lateList = [];
 
       // Count direct attendance logs first
       normalEmps.forEach(emp => {
          const empLog = todayLogs.find(l => l.employeeId === emp.id);
          if (empLog) {
-            if (empLog.status === 'غياب') absentCount++;
-            else if (empLog.status === 'حضور') presentCount++;
+            if (empLog.status === 'غياب') {
+               absentCount++;
+               absentList.push(emp.name);
+            }
+            else if (empLog.status === 'حضور') {
+               presentCount++;
+               presentList.push(emp.name);
+            }
             else if (empLog.status === 'تأخير' || empLog.status === 'حاضر متأخر') {
                presentCount++; // because they are present!
                lateCount++;
+               presentList.push(emp.name);
+               lateList.push(emp.name);
             }
          }
       });
@@ -182,15 +198,22 @@ const AdminOverview = ({ onNavigate }) => {
       const supervisorsTotal = allSupervisors.length > 0 ? allSupervisors.length : 1; 
 
       let supervisorsPresentCount = 0;
+      let supervisorsPresentList = [];
       allSupervisors.forEach(sup => {
           const supLog = todayLogs.find(l => l.employeeId === sup.id);
           if (supLog && (supLog.status === 'حضور' || supLog.status === 'حاضر متأخر' || supLog.status === 'تأخير')) {
               supervisorsPresentCount++;
+              supervisorsPresentList.push(sup.name);
           }
       });
 
       const uniqueSupervisorsReported = new Set(todayReports.map(r => r.supervisorId)).size;
       const finalSupervisorsPresent = Math.max(supervisorsPresentCount, uniqueSupervisorsReported);
+      // Fallback if we have reports but no attendance logs for supervisors
+      if (supervisorsPresentList.length === 0 && todayReports.length > 0) {
+        const supIds = [...new Set(todayReports.map(r => r.supervisorId))];
+        supervisorsPresentList = supIds.map(id => allSupervisors.find(s => s.id === id)?.name || 'مشرف غير معروف');
+      }
 
       const smokingLogsToday = sLogs.filter(log => toLocalDateKey(log.timestamp) === todayKey);
       smokingLogsToday.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -207,14 +230,28 @@ const AdminOverview = ({ onNavigate }) => {
       const pendingAdvances = advances ? advances.filter(a => a.status === 'معلق').length : 0;
       const pendingMissingPunches = missingPunches ? missingPunches.filter(p => p.status === 'معلق' || p.status === 'قيد المراجعة').length : 0;
 
+      const regularEmpsCount = normalEmps.filter(e => !allSupervisors.some(s => s.id === e.id)).length;
+
       setData({
         production: { active: activeProd.length, delayed: delayedProd, todayCompleted: todayCompletedProd },
         delivery: { active: activeMissions.length, delayed: delayedMissions },
         sales: { active: activeSales.length, delayed: delayedSales, todayCompleted: todayCompletedSales },
-        employees: { total: normalEmps.length, present: presentCount, absent: absentCount, late: lateCount },
-        supervisors: { present: finalSupervisorsPresent, total: supervisorsTotal },
+        employees: { 
+          total: normalEmps.length, 
+          present: presentCount, 
+          absent: absentCount, 
+          late: lateCount,
+          presentList,
+          absentList,
+          lateList
+        },
+        supervisors: { 
+          present: finalSupervisorsPresent, 
+          total: expectedReports,
+          presentList: supervisorsPresentList
+        },
         reports: { submitted: submittedReports, required: expectedReports },
-        employeeReports: { submitted: todayEmpReports.length, required: normalEmps.length },
+        employeeReports: { submitted: todayEmpReports.length, required: regularEmpsCount },
         smokingArea: { status: smokingStatus },
         quality: qualityScore,
         hrPending: { leaves: pendingLeaves, missions: pendingMissions, overtime: pendingOvertime, advances: pendingAdvances, missingPunches: pendingMissingPunches }
@@ -230,6 +267,29 @@ const AdminOverview = ({ onNavigate }) => {
       window.clearInterval(intervalId);
     };
   }, []);
+
+  const handleShowListModal = (title, list) => {
+    if (!list || list.length === 0) {
+      MySwal.fire({
+        icon: 'info',
+        title: 'لا يوجد بيانات',
+        text: 'لا توجد أسماء لعرضها في هذه القائمة حالياً.',
+        confirmButtonText: 'حسناً',
+        confirmButtonColor: '#10b981'
+      });
+      return;
+    }
+
+    const htmlList = list.map(name => `<div style="padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #1e293b; font-weight: 500;">${name}</div>`).join('');
+    
+    MySwal.fire({
+      title: title,
+      html: `<div style="max-height: 300px; overflow-y: auto; text-align: right;">${htmlList}</div>`,
+      confirmButtonText: 'إغلاق',
+      confirmButtonColor: '#10b981',
+      width: '400px'
+    });
+  };
 
   if (loading) {
     return (
@@ -319,7 +379,7 @@ const AdminOverview = ({ onNavigate }) => {
           <h3 className="stat-title">المشرفون المتواجدون</h3>
           <div className="stat-number"><AnimatedNumber value={data.supervisors.present} /></div>
           <div className="stat-pill">من أصل {data.supervisors.total}</div>
-          <button className="card-button" onClick={() => onNavigate && onNavigate('employees')}>
+          <button className="card-button" onClick={() => handleShowListModal('المشرفون المتواجدون', data.supervisors.presentList)}>
             <span>عرض التفاصيل</span>
             <ChevronLeft size={16} />
           </button>
@@ -335,10 +395,7 @@ const AdminOverview = ({ onNavigate }) => {
             {data.smokingArea.status === 'bad' ? 'مخالف' : (data.smokingArea.status === 'good' ? 'مثالي' : 'غير محدد')}
           </div>
           <div className="stat-pill">حالة اليوم</div>
-          <button className="card-button" onClick={() => onNavigate && onNavigate('live-tracking')}>
-            <span>عرض التفاصيل</span>
-            <ChevronLeft size={16} />
-          </button>
+
         </div>
 
         {/* 7 */}
@@ -365,7 +422,7 @@ const AdminOverview = ({ onNavigate }) => {
           <h3 className="stat-title">الموظفون المتواجدون</h3>
           <div className="stat-number"><AnimatedNumber value={data.employees.present} /></div>
           <div className="stat-pill">من أصل {data.employees.total}</div>
-          <button className="card-button" onClick={() => onNavigate && onNavigate('employees')}>
+          <button className="card-button" onClick={() => handleShowListModal('الموظفون المتواجدون', data.employees.presentList)}>
             <span>عرض التفاصيل</span>
             <ChevronLeft size={16} />
           </button>
@@ -379,7 +436,7 @@ const AdminOverview = ({ onNavigate }) => {
           <h3 className="stat-title">الموظفون الغائبون</h3>
           <div className="stat-number"><AnimatedNumber value={data.employees.absent} /></div>
           <div className="stat-pill">اليوم</div>
-          <button className="card-button" onClick={() => onNavigate && onNavigate('supervisor-reports')}>
+          <button className="card-button" onClick={() => handleShowListModal('الموظفون الغائبون', data.employees.absentList)}>
             <span>عرض التفاصيل</span>
             <ChevronLeft size={16} />
           </button>
@@ -393,7 +450,7 @@ const AdminOverview = ({ onNavigate }) => {
           <h3 className="stat-title">الموظفون المتأخرون</h3>
           <div className="stat-number"><AnimatedNumber value={data.employees.late} /></div>
           <div className="stat-pill">اليوم</div>
-          <button className="card-button" onClick={() => onNavigate && onNavigate('supervisor-reports')}>
+          <button className="card-button" onClick={() => handleShowListModal('الموظفون المتأخرون', data.employees.lateList)}>
             <span>عرض التفاصيل</span>
             <ChevronLeft size={16} />
           </button>
@@ -423,7 +480,7 @@ const AdminOverview = ({ onNavigate }) => {
           <h3 className="stat-title">الإجازات</h3>
           <div className="stat-number"><AnimatedNumber value={data.hrPending.leaves} /></div>
           <div className="stat-pill">طلبات معلقة</div>
-          <button className="card-button" onClick={() => onNavigate && onNavigate('hr')}>
+          <button className="card-button" onClick={() => onNavigate && onNavigate({ tab: 'hr', subTab: 'leaves' })}>
             <span>عرض الطلبات</span>
             <ChevronLeft size={16} />
           </button>
@@ -437,7 +494,7 @@ const AdminOverview = ({ onNavigate }) => {
           <h3 className="stat-title">المغادرات</h3>
           <div className="stat-number"><AnimatedNumber value={data.hrPending.missions} /></div>
           <div className="stat-pill">طلبات معلقة</div>
-          <button className="card-button" onClick={() => onNavigate && onNavigate('hr')}>
+          <button className="card-button" onClick={() => onNavigate && onNavigate({ tab: 'hr', subTab: 'leaves' })}>
             <span>عرض الطلبات</span>
             <ChevronLeft size={16} />
           </button>
@@ -451,7 +508,7 @@ const AdminOverview = ({ onNavigate }) => {
           <h3 className="stat-title">عمل إضافي</h3>
           <div className="stat-number"><AnimatedNumber value={data.hrPending.overtime} /></div>
           <div className="stat-pill">طلبات معلقة</div>
-          <button className="card-button" onClick={() => onNavigate && onNavigate('hr')}>
+          <button className="card-button" onClick={() => onNavigate && onNavigate({ tab: 'hr', subTab: 'overtime' })}>
             <span>عرض الطلبات</span>
             <ChevronLeft size={16} />
           </button>
@@ -465,7 +522,7 @@ const AdminOverview = ({ onNavigate }) => {
           <h3 className="stat-title">السلفة</h3>
           <div className="stat-number"><AnimatedNumber value={data.hrPending.advances} /></div>
           <div className="stat-pill">طلبات معلقة</div>
-          <button className="card-button" onClick={() => onNavigate && onNavigate('hr')}>
+          <button className="card-button" onClick={() => onNavigate && onNavigate({ tab: 'hr', subTab: 'advances' })}>
             <span>عرض الطلبات</span>
             <ChevronLeft size={16} />
           </button>
@@ -479,7 +536,7 @@ const AdminOverview = ({ onNavigate }) => {
           <h3 className="stat-title">ختمة ناقصة</h3>
           <div className="stat-number"><AnimatedNumber value={data.hrPending.missingPunches} /></div>
           <div className="stat-pill">طلبات معلقة</div>
-          <button className="card-button" onClick={() => onNavigate && onNavigate('hr')}>
+          <button className="card-button" onClick={() => onNavigate && onNavigate({ tab: 'hr', subTab: 'missing-punches' })}>
             <span>عرض الطلبات</span>
             <ChevronLeft size={16} />
           </button>

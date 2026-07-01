@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { getLogs, isAdmin } from '../../store';
-import { getWhatsAppLogs } from '../../utils/whatsappService';
+import { getLogs, getLogsByDateRange, isAdmin } from '../../store';
+import { getWhatsAppLogs, getWhatsAppLogsByDateRange } from '../../utils/whatsappService';
+import Flatpickr from 'react-flatpickr';
+import { Arabic } from 'flatpickr/dist/l10n/ar.js';
+import 'flatpickr/dist/flatpickr.min.css';
 import { 
   ClipboardList, Search, Calendar, User, 
   ArrowUpDown, Filter, Trash2, Shield, 
@@ -17,18 +20,33 @@ const AdminLogs = ({ user }) => {
   const [actionFilter, setActionFilter] = useState('الكل');
   const [waStatusFilter, setWaStatusFilter] = useState('الكل');
   const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'desc' });
+  const [dateRange, setDateRange] = useState([
+    new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // Last 5 days default
+    new Date()
+  ]);
 
   useEffect(() => {
     fetchData();
-  }, [activeTab]);
+  }, [activeTab, dateRange]);
 
   const fetchData = async () => {
     setLoading(true);
+    let from = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    let to = new Date();
+    
+    if (dateRange && dateRange.length === 2) {
+      from = dateRange[0];
+      to = dateRange[1];
+    } else if (dateRange && dateRange.length === 1) {
+      from = dateRange[0];
+      to = dateRange[0];
+    }
+
     if (activeTab === 'system') {
-      const data = await getLogs();
+      const data = await getLogsByDateRange(from, to);
       setLogs(data);
     } else {
-      const data = await getWhatsAppLogs();
+      const data = await getWhatsAppLogsByDateRange(from, to);
       setWaLogs(data);
     }
     setLoading(false);
@@ -116,9 +134,27 @@ const AdminLogs = ({ user }) => {
           </h2>
           <p className="text-muted m-0 mt-1">تتبع كافة التحركات والتغييرات في النظام</p>
         </div>
-        <button className="btn btn-primary flex items-center gap-2" onClick={fetchData}>
-          <RefreshCw size={18} /> تحديث البيانات
-        </button>
+        <div className="flex gap-2 items-center">
+          <div className="relative">
+             <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <Calendar className="text-muted" size={16} />
+             </div>
+             <Flatpickr
+                options={{
+                   mode: 'range',
+                   dateFormat: 'Y-m-d',
+                   locale: Arabic
+                }}
+                className="input-field pl-3 pr-10 py-2 w-64 m-0"
+                placeholder="اختر فترة زمنية..."
+                value={dateRange}
+                onChange={(dates) => setDateRange(dates)}
+             />
+          </div>
+          <button className="btn btn-primary flex items-center gap-2" onClick={fetchData}>
+            <RefreshCw size={18} /> تحديث البيانات
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -284,7 +320,7 @@ const AdminLogs = ({ user }) => {
                   <tr key={log.id}>
                     <td>
                       <div className="text-sm font-bold">
-                        {log.createdAt ? new Date(log.createdAt?.seconds * 1000).toLocaleString('ar-EG') : 'غير متوفر'}
+                        {log.createdAt ? new Date(log.createdAt.seconds ? log.createdAt.seconds * 1000 : log.createdAt).toLocaleString('ar-EG') : 'غير متوفر'}
                       </div>
                     </td>
                     <td>

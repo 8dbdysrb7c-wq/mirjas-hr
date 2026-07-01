@@ -226,7 +226,8 @@ export const calculateSalaries = ({
       if (l.startDate && l.endDate) return l.startDate <= cycle.end && l.endDate >= cycle.start;
       return false;
     });
-    let rawOvertimeMins = 0;
+    let rawNormalOvertimeMins = 0;
+    let rawWeekendOvertimeMins = 0;
     let overtimeRequestsCount = 0;
     
     overtimeReqs.forEach(req => {
@@ -242,19 +243,42 @@ export const calculateSalaries = ({
            if (mins > maxMins) mins = maxMins;
         }
         
-        rawOvertimeMins += mins;
+        const reqDateStr = req.date || req.startDate;
+        let isWeekendOrHoliday = false;
+        
+        if (reqDateStr) {
+          const d = new Date(reqDateStr);
+          const dayName = arabicDays[d.getDay()];
+          const isWeekend = weekends.includes(dayName);
+          const isHoliday = isDateInHoliday(reqDateStr);
+          if (isWeekend || isHoliday) {
+            isWeekendOrHoliday = true;
+          }
+        }
+        
+        if (isWeekendOrHoliday) {
+          rawWeekendOvertimeMins += mins;
+        } else {
+          rawNormalOvertimeMins += mins;
+        }
       }
     });
     
-    const roundedOvertimeMins = roundMinutes(rawOvertimeMins, hrSettings.timeRounding);
-    const totalOvertimeHours = roundedOvertimeMins / 60;
+    const roundedNormalOvertimeMins = roundMinutes(rawNormalOvertimeMins, hrSettings.timeRounding);
+    const roundedWeekendOvertimeMins = roundMinutes(rawWeekendOvertimeMins, hrSettings.timeRounding);
+    const totalNormalOvertimeHours = roundedNormalOvertimeMins / 60;
+    const totalWeekendOvertimeHours = roundedWeekendOvertimeMins / 60;
 
     // Additions (Overtime)
     let overtimePay = 0;
     if (hrSettings.overtimeCalculationMethod === 'fixed_amount') {
        overtimePay = overtimeRequestsCount * (hrSettings.overtimeFixedAmount || 10);
     } else {
-       overtimePay = totalOvertimeHours * hourlyRate * (hrSettings.overtimeMultiplier || 1); 
+       const normalMult = hrSettings.overtimeMultiplier || 1.25;
+       const weekendMult = hrSettings.overtimeWeekendMultiplier || 1.50;
+       
+       overtimePay = (totalNormalOvertimeHours * hourlyRate * normalMult) + 
+                     (totalWeekendOvertimeHours * hourlyRate * weekendMult);
     }
 
     // Holiday Compensation
@@ -277,10 +301,10 @@ export const calculateSalaries = ({
             holidayPay += dailyRate * 1.25;
           } else if (comp === 'overtime') {
             // Legacy fallback
-            holidayPay += dailyRate * (hrSettings.overtimeMultiplier || 1.5);
+            holidayPay += dailyRate * (hrSettings.overtimeWeekendMultiplier || 1.5);
           } else if (comp === 'alternative_day_and_overtime') {
             // Legacy fallback
-            holidayPay += dailyRate * (hrSettings.overtimeMultiplier || 1.5);
+            holidayPay += dailyRate * (hrSettings.overtimeWeekendMultiplier || 1.5);
           }
         }
       }

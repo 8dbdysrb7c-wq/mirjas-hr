@@ -1185,11 +1185,18 @@ const HRAssets = ({ user }) => {
                                 if (cat === 'الأصول') return c.includes('أصول') || c.includes('اصول') || c === 'الأصول';
                                 if (cat === 'مستهلكات الخياطة') return c.includes('خياطة') || c.includes('مستهلكات');
                                 return c === cat;
-                              }).map(s => s.name)}
-                              value={item.name}
+                              }).map(s => `${s.name} (متوفر: ${s.quantity})`)}
+                              value={
+                                (() => {
+                                  if (!item.name) return '';
+                                  const stockItem = stockItems.find(s => s.name === item.name);
+                                  return stockItem ? `${stockItem.name} (متوفر: ${stockItem.quantity})` : item.name;
+                                })()
+                              }
                               onChange={(val) => {
+                                const actualName = val.split(' (متوفر:')[0];
                                 const newItems = [...formData.items];
-                                newItems[index].name = val;
+                                newItems[index].name = actualName;
                                 setFormData({...formData, items: newItems});
                               }}
                               onBlur={() => {}}

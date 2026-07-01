@@ -751,7 +751,6 @@ const AdminEmployees = ({ user }) => {
       }
     });
   };
-
   const handleSort = (key) => {
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {

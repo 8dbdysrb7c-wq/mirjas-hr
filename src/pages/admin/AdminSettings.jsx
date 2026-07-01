@@ -1105,15 +1105,17 @@ return (
                   />
                 </div>
 
-                <div className="input-group">
-                  <label className="font-bold">رصيد المغادرات والتأخير الشهري المسموح (بالدقائق)</label>
-                  <p className="text-xs text-slate-500 mb-1">الرصيد المتاح قبل أن يبدأ النظام بخصم المبالغ المالية.</p>
-                  <input 
-                    type="number" min="0" className="input-field" 
-                    value={settings.hrSettings.monthlyMissionBalanceMinutes || 0} 
-                    onChange={(e) => setSettings({...settings, hrSettings: {...settings.hrSettings, monthlyMissionBalanceMinutes: Number(e.target.value)}})}
-                  />
-                </div>
+                {settings.hrSettings.latenessHandling !== 'financial_deduction' && (
+                  <div className="input-group">
+                    <label className="font-bold">رصيد المغادرات والتأخير الشهري المسموح (بالدقائق)</label>
+                    <p className="text-xs text-slate-500 mb-1">الرصيد المتاح قبل أن يبدأ النظام بخصم المبالغ المالية.</p>
+                    <input 
+                      type="number" min="0" className="input-field" 
+                      value={settings.hrSettings.monthlyMissionBalanceMinutes || 0} 
+                      onChange={(e) => setSettings({...settings, hrSettings: {...settings.hrSettings, monthlyMissionBalanceMinutes: Number(e.target.value)}})}
+                    />
+                  </div>
+                )}
 
                 <div className="input-group">
                   <label className="font-bold">طريقة احتساب التأخير / المغادرات</label>
@@ -1163,6 +1165,29 @@ return (
                   </select>
                 </div>
               </div>
+
+              {settings.hrSettings.overtimeCalculationMethod !== 'fixed_amount' && (
+                <div className="grid grid-cols-2 gap-6 mb-4">
+                  <div className="input-group">
+                    <label className="font-bold">مُضاعف العمل الإضافي (الأيام العادية)</label>
+                    <p className="text-xs text-slate-500 mb-2">حسب القانون 1.25 (أي زيادة 25% على أجر الساعة).</p>
+                    <input 
+                      type="number" step="0.05" min="1" className="input-field" 
+                      value={settings.hrSettings.overtimeMultiplier || 1.25} 
+                      onChange={(e) => setSettings({...settings, hrSettings: {...settings.hrSettings, overtimeMultiplier: Number(e.target.value)}})}
+                    />
+                  </div>
+                  <div className="input-group">
+                    <label className="font-bold">مُضاعف العمل الإضافي (العطل الرسمية)</label>
+                    <p className="text-xs text-slate-500 mb-2">حسب القانون 1.50 (أي زيادة 50% على أجر الساعة).</p>
+                    <input 
+                      type="number" step="0.05" min="1" className="input-field" 
+                      value={settings.hrSettings.overtimeWeekendMultiplier || 1.50} 
+                      onChange={(e) => setSettings({...settings, hrSettings: {...settings.hrSettings, overtimeWeekendMultiplier: Number(e.target.value)}})}
+                    />
+                  </div>
+                </div>
+              )}
 
               {settings.hrSettings.overtimeCalculationMethod === 'fixed_amount' && (
                 <div className="input-group w-1/2">
@@ -1371,7 +1396,7 @@ return (
                   <label className="font-bold text-slate-800">حضور الموظف في العطلة يستحق:</label>
                   <select 
                     className="input-field mt-1"
-                    value={settings.hrSettings.holidayDefaults?.attendanceCompensation || 'alternative_day_and_overtime'}
+                    value={settings.hrSettings.holidayDefaults?.attendanceCompensation || 'overtime_1_5'}
                     onChange={(e) => setSettings({...settings, hrSettings: {...settings.hrSettings, holidayDefaults: {...(settings.hrSettings.holidayDefaults || {}), attendanceCompensation: e.target.value}}})}
                   >
                     <option value="none">لا شيء</option>

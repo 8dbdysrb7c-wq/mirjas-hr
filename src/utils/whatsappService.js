@@ -24,11 +24,33 @@ export const sendWhatsAppNotification = async (phone, message) => {
 
 export const getWhatsAppLogs = async () => {
   try {
-    const q = query(collection(db, 'whatsapp_queue'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'whatsapp_queue'), orderBy('createdAt', 'desc'), limit(500));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.error('Error fetching WhatsApp logs:', error);
+    return [];
+  }
+};
+
+export const getWhatsAppLogsByDateRange = async (dateFrom, dateTo) => {
+  try {
+    const fromDate = new Date(dateFrom);
+    fromDate.setHours(0, 0, 0, 0);
+    const toDate = new Date(dateTo);
+    toDate.setHours(23, 59, 59, 999);
+    
+    // Firestore serverTimestamp requires Date objects for comparison
+    const q = query(
+      collection(db, 'whatsapp_queue'), 
+      where('createdAt', '>=', fromDate),
+      where('createdAt', '<=', toDate),
+      orderBy('createdAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error('Error fetching WhatsApp logs by date:', error);
     return [];
   }
 };

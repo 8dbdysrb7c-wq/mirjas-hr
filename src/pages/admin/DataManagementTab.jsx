@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Database, Download, Upload } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { exportDatabase, importDatabase, resetCollection } from '../../services/data_management';
-import { Trash2, ShoppingCart, Package, Truck, ArrowUpDown, Users, CheckSquare, ClipboardList, Users2, Clock, Wallet, CalendarOff, Award, ShieldAlert, FileKey, Calendar } from 'lucide-react';
+import { Trash2, ShoppingCart, Package, Truck, ArrowUpDown, Users, CheckSquare, ClipboardList, Users2, Clock, Wallet, CalendarOff, Award, ShieldAlert, FileKey, Calendar, Activity, MessageCircle } from 'lucide-react';
 
 const DataManagementTab = () => {
   const [isExporting, setIsExporting] = useState(false);
@@ -261,6 +261,22 @@ const DataManagementTab = () => {
           >
             <Users size={14} /> العملاء والموردين
           </button>
+
+          <button 
+            onClick={() => handleSafeReset('سجل النظام (العمليات)', ['operations_log'])}
+            className="btn flex items-center justify-center gap-2 text-xs py-2 px-3 flex-grow md:flex-grow-0"
+            style={{ backgroundColor: '#334155', color: 'white', border: '1px solid #1e293b' }}
+          >
+            <Activity size={14} /> سجل النظام
+          </button>
+
+          <button 
+            onClick={() => handleSafeReset('سجل إشعارات الواتساب', ['whatsapp_queue'])}
+            className="btn flex items-center justify-center gap-2 text-xs py-2 px-3 flex-grow md:flex-grow-0"
+            style={{ backgroundColor: '#22c55e', color: 'white', border: '1px solid #16a34a' }}
+          >
+            <MessageCircle size={14} /> سجل إشعارات الواتساب
+          </button>
         </div>
       </div>
 
@@ -283,6 +299,22 @@ const DataManagementTab = () => {
             style={{ backgroundColor: '#8b5cf6', color: 'white', border: '1px solid #5b21b6' }}
           >
             <Clock size={14} /> الحضور والانصراف
+          </button>
+
+          <button 
+            onClick={() => handleSafeReset('تقارير الموظفين', ['employee_daily_reports', 'reports'])}
+            className="btn flex items-center justify-center gap-2 text-xs py-2 px-3 flex-grow md:flex-grow-0"
+            style={{ backgroundColor: '#8b5cf6', color: 'white', border: '1px solid #5b21b6' }}
+          >
+            <Users size={14} /> تقارير الموظفين
+          </button>
+
+          <button 
+            onClick={() => handleSafeReset('العمل الإضافي', ['hr_overtime'])}
+            className="btn flex items-center justify-center gap-2 text-xs py-2 px-3 flex-grow md:flex-grow-0"
+            style={{ backgroundColor: '#8b5cf6', color: 'white', border: '1px solid #5b21b6' }}
+          >
+            <Clock size={14} /> العمل الإضافي
           </button>
 
           <button 

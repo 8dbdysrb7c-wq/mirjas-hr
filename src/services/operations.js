@@ -194,6 +194,27 @@ export const getLogs = async () => {
   }
 };
 
+export const getLogsByDateRange = async (dateFrom, dateTo) => {
+  try {
+    const fromISO = new Date(dateFrom).toISOString();
+    const toDate = new Date(dateTo);
+    toDate.setHours(23, 59, 59, 999);
+    const toISO = toDate.toISOString();
+    
+    const q = query(
+      collection(db, 'operations_log'), 
+      where('timestamp', '>=', fromISO),
+      where('timestamp', '<=', toISO),
+      orderBy('timestamp', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    console.error("Error in getLogsByDateRange:", error);
+    return [];
+  }
+};
+
 export const getSmokingLogs = async () => {
   try {
     const q = query(collection(db, 'smoking_logs'), orderBy('timestamp', 'desc'), limit(100));

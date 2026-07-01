@@ -207,27 +207,28 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
 
   const handleNotificationNavigate = (target) => {
     if (!target) return;
-    const nextTab = target.tab || 'overview';
+    const targetObj = typeof target === 'string' ? { tab: target } : target;
+    const nextTab = targetObj.tab || 'overview';
     setProductionOpen(nextTab.startsWith('production-'));
     setSettingsOpen(['site-settings', 'scoring', 'employees', 'logs'].includes(nextTab));
     setActiveTab(nextTab);
     setIsSidebarOpen(false);
     setNotificationTarget({
-      ...target,
+      ...targetObj,
       nonce: Date.now()
     });
   };
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'overview': return <AdminOverview onNavigate={setActiveTab} />;
+      case 'overview': return <AdminOverview onNavigate={handleNotificationNavigate} />;
       case 'live': return <AdminLive user={user} />;
       case 'employees': return <AdminEmployees user={user} />;
       case 'production-orders': return <AdminProduction user={user} />;
       case 'production-tasks': return <AdminTasks user={user} />;
       case 'sales': return <AdminSales user={user} />;
       case 'delivery': return <AdminDelivery user={user} notificationTarget={notificationTarget} />;
-      case 'hr': return <AdminHR user={user} />;
+      case 'hr': return <AdminHR user={user} notificationTarget={notificationTarget} />;
       case 'reports': return <AdminReports user={user} notificationTarget={notificationTarget} />;
       case 'supervisor-tasks': return <AdminSupervisorTasks user={user} />;
       case 'supervisor-reports': return <AdminSupervisorReports user={user} />;
@@ -236,7 +237,7 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
       case 'site-settings': return <AdminSettings user={user} />;
 
       case 'logs': return <AdminLogs user={user} />;
-      default: return <AdminOverview onNavigate={setActiveTab} />;
+      default: return <AdminOverview onNavigate={handleNotificationNavigate} />;
     }
   };
 
