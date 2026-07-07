@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Clock, Check, X, Search, Filter, Fingerprint, Undo2, Trash2, ArrowUpDown, ArrowUp, ArrowDown, MessageCircle, Plus, Eye, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
+import { Clock, Check, X, Search, Filter, Fingerprint, Undo2, Trash2, User, ArrowUpDown, ArrowUp, ArrowDown, MessageCircle, Plus, Eye, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { getMissingPunches, updateMissingPunchStatus, deleteMissingPunch, saveHRAuditLog, getEmployees, saveHRViolation, saveMissingPunch, getHRAttendance, saveHRAttendance, saveEmployee, getHRLeaves } from '../../store';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
@@ -7,6 +7,134 @@ import Select from 'react-select';
 import Flatpickr from 'react-flatpickr';
 import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import 'flatpickr/dist/themes/light.css';
+const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [year, setYear] = useState(() => parseInt(selectedMonth.split('-')[0]) || new Date().getFullYear());
+  
+  const arabicMonths = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  const getLabel = () => {
+    const [y, m] = selectedMonth.split('-');
+    const idx = parseInt(m, 10) - 1;
+    return `${arabicMonths[idx] || ''} ${y}`;
+  };
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (!e.target.closest('.custom-month-picker-container')) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, []);
+
+  return (
+    <div className="custom-month-picker-container" style={{ position: 'relative', direction: 'rtl' }}>
+      <div 
+        onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
+          background: '#fff',
+          border: '1px solid #e2e8f0',
+          borderRadius: '10px',
+          padding: '9px 14px',
+          cursor: 'pointer',
+          minWidth: '130px',
+          height: '44px',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+          fontSize: '13px',
+          fontWeight: '700',
+          color: '#1e293b'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Calendar size={16} style={{ color: '#0ea5e9' }} />
+          <span>{getLabel()}</span>
+        </div>
+        <ChevronDown size={14} style={{ color: '#64748b' }} />
+      </div>
+
+      {isOpen && (
+        <div 
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            right: 0,
+            width: '260px',
+            backgroundColor: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: '14px',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+            zIndex: 99999,
+            padding: '12px'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+            <button 
+              type="button"
+              onClick={() => setYear(y => y - 1)}
+              style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748b', fontWeight: 'bold' }}
+            >
+              &lt;
+            </button>
+            <span style={{ fontWeight: '800', color: '#1e293b', fontSize: '15px' }}>{year}</span>
+            <button 
+              type="button"
+              onClick={() => setYear(y => y + 1)}
+              disabled={year >= currentYear}
+              style={{ border: 'none', background: 'transparent', cursor: year >= currentYear ? 'not-allowed' : 'pointer', color: year >= currentYear ? '#cbd5e1' : '#64748b', fontWeight: 'bold' }}
+            >
+              &gt;
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+            {arabicMonths.map((m, idx) => {
+              const monthStr = `${year}-${String(idx + 1).padStart(2, '0')}`;
+              const isSelected = selectedMonth === monthStr;
+              const isCurrent = currentYear === year && (idx + 1) === currentMonth;
+              const isFuture = year > currentYear || (year === currentYear && (idx + 1) > currentMonth);
+
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  disabled={isFuture}
+                  onClick={() => {
+                    setSelectedMonth(monthStr);
+                    setIsOpen(false);
+                  }}
+                  style={{
+                    padding: '8px 4px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    backgroundColor: isSelected ? '#e0f2fe' : 'transparent',
+                    color: isSelected ? '#0284c7' : isFuture ? '#cbd5e1' : '#475569',
+                    fontWeight: isSelected ? 'bold' : 'normal',
+                    cursor: isFuture ? 'not-allowed' : 'pointer',
+                    fontSize: '12px',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  {m}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const HRMissingPunches = ({ user, refreshCounts }) => {
   const [punches, setPunches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,13 +158,42 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
   const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
   const [inlineTimes, setInlineTimes] = useState({});
 
+  // 1. Add dateMode filter states for the redesign
+  const [dateMode, setDateMode] = useState('month');
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [selectedDate, setSelectedDate] = useState(() => getLocalDateStr(new Date()));
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return getLocalDateStr(d);
+  });
+  const [endDate, setEndDate] = useState(() => getLocalDateStr(new Date()));
+
+  // 2. Sync dateFrom and dateTo based on dateMode
+  useEffect(() => {
+    if (dateMode === 'day') {
+      setDateFrom(selectedDate);
+      setDateTo(selectedDate);
+    } else if (dateMode === 'month') {
+      const parts = selectedMonth.split('-');
+      const y = parseInt(parts[0]) || new Date().getFullYear();
+      const m = parseInt(parts[1]) - 1;
+      const firstDay = getLocalDateStr(new Date(y, m, 1));
+      const lastDay = getLocalDateStr(new Date(y, m + 1, 0));
+      setDateFrom(firstDay);
+      setDateTo(lastDay);
+    } else if (dateMode === 'range') {
+      setDateFrom(startDate);
+      setDateTo(endDate);
+    }
+  }, [dateMode, selectedMonth, selectedDate, startDate, endDate]);
+
   const handleInlineTimeChange = (punchId, val) => {
     setInlineTimes(prev => ({ ...prev, [punchId]: val }));
   };
-
-  const employeeOptions = useMemo(() => {
-    return employees.map(emp => ({ value: emp.id, label: emp.name }));
-  }, [employees]);
 
   const handleSort = (key) => {
     setSortConfig(prev => ({
@@ -72,6 +229,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
       if (dateStr > todayStr) continue; // Skip future dates
 
       // Assuming Friday is weekend for now to avoid spam
+
       const isWeekend = d.getDay() === 5;
       if (isWeekend) continue;
 
@@ -196,7 +354,6 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
         try {
           const adminName = user?.name || 'الإدارة';
           const adminId = user?.id || 'admin';
-          // Save note in the request if provided
           const updatedPunchData = { ...punch, adminNote: adminNote || '' };
           await updateMissingPunchStatus(punch.id, newStatus, adminName, updatedPunchData);
           await saveHRAuditLog({
@@ -218,7 +375,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
             if (selectedEmp && selectedEmp.phone) {
               const statusMsg = newStatus === 'موافق عليه' ? 'الموافقة على ✅' : 'رفض ❌';
               const msg = `مرحباً ${selectedEmp.name}،\nنعلمك بأنه تم ${statusMsg} طلب الختمة الناقصة الخاص بك (${punch.type}) لتاريخ ${punch.date}.${adminNote ? '\nملاحظة الإدارة: ' + adminNote : ''}`;
-              await sendWhatsAppNotification(selectedEmp.phone, msg);
+              await sendWhatsAppNotification(selectedEmp.phone, msg, 'missing_punches');
             }
           } catch (err) {
             console.error("Failed to send WhatsApp message:", err);
@@ -262,7 +419,6 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
     let violationAmount = 0;
     const outTimeIn = inlineTimes[`${punch.id}_in`];
     const outTimeOut = inlineTimes[`${punch.id}_out`];
-
     if (action === 'time') {
       if (punch.reason === 'بصمة دخول وخروج') {
         if (!outTimeIn && !outTimeOut) {
@@ -590,7 +746,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
     }
     const emp = employees.find(e => String(e.id || '').trim() === String(newPunch.employeeId || '').trim());
 
-    const isDuplicate = punches.some(p => String(p.employeeId || '').trim() === String(newPunch.employeeId || '').trim() && p.date === newPunch.date && p.type === newPunch.type);
+    const isDuplicate = punches.some(p => String(p.employeeId || '').trim() === String(newPunch.employeeId || '').trim() && p.date === newPunch.date && p.type === newPunch.type && p.status !== 'مرفوض');
     if (isDuplicate) {
       return Swal.fire('خطأ', 'يوجد طلب ختمة ناقصة مسبقاً لهذا الموظف في نفس التاريخ ونفس النوع!', 'error');
     }
@@ -725,338 +881,426 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
   const rejectedCount = statsPunches.filter(p => p.status === 'مرفوض' || ['غياب غير مبرر', 'مغادرة مبكرة', 'إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'].includes(p.status)).length;
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
-          <h2 className="text-2xl font-bold flex items-center gap-2 shrink-0">
-            <Fingerprint className="text-primary" /> طلبات الختمات الناقصة
-          </h2>
-            <div className="flex flex-wrap gap-3 items-center flex-1 w-full justify-between">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 shadow-sm shrink-0">
-                  <span className="text-slate-600 font-bold px-2 text-sm">من</span>
-              <Flatpickr
-                value={dateFrom}
-                onChange={([d]) => setDateFrom(getLocalDateStr(d))}
-                options={{ locale: Arabic, dateFormat: 'Y-m-d' }}
-                className="input-field w-[130px] text-center bg-white font-mono text-sm shadow-sm hover:border-primary transition-colors cursor-pointer"
-                style={{ borderRadius: '8px', padding: '8px', letterSpacing: '1px' }}
-                placeholder="من تاريخ"
-              />
-              <span className="text-slate-600 font-bold px-2 text-sm">إلى</span>
-              <Flatpickr
-                value={dateTo}
-                onChange={([d]) => setDateTo(getLocalDateStr(d))}
-                options={{ locale: Arabic, dateFormat: 'Y-m-d', maxDate: 'today' }}
-                className="input-field w-[130px] text-center bg-white font-mono text-sm shadow-sm hover:border-primary transition-colors cursor-pointer"
-                style={{ borderRadius: '8px', padding: '8px', letterSpacing: '1px' }}
-                placeholder="إلى تاريخ"
-              />
-            </div>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="input-field shrink-0"
-              style={{ width: '160px', height: '42px', fontSize: '0.9rem' }}
-            >
-              <option value="معلق">الطلبات المعلقة</option>
-              <option value="موافق عليه">الموافق عليها</option>
-              <option value="مرفوض">المرفوضة</option>
-              <option value="الكل">الكل</option>
-            </select>
-
-            <div className="w-[140px] shrink-0">
-              <Select
-                options={employeeIdOptions}
-                value={employeeIdOptions.find(opt => opt.value === searchTerm) || null}
-                onChange={(selected) => setSearchTerm(selected ? selected.value : '')}
-                styles={customSelectStyles}
-                placeholder="رقم الموظف..."
-                isSearchable={true}
-                isClearable={true}
-                menuPosition="fixed"
-                menuPortalTarget={document.body}
-                noOptionsMessage={() => "لا يوجد رقم"}
-              />
-            </div>
-
-            <div className="w-[400px] xl:w-[600px] shrink-0">
-              <Select
-                options={employeeNameOptions}
-                value={employeeNameOptions.find(opt => opt.value === searchTerm) || null}
-                onChange={(selected) => setSearchTerm(selected ? selected.value : '')}
-                styles={customSelectStyles}
-                placeholder="اسم الموظف..."
-                isSearchable={true}
-                isClearable={true}
-                menuPosition="fixed"
-                menuPortalTarget={document.body}
-                noOptionsMessage={() => "لا يوجد موظف"}
-              />
-            </div>
-
-              </div>
-
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="premium-add-btn flex items-center gap-2 whitespace-nowrap h-[42px] shrink-0 mr-auto xl:mr-0"
-              style={{ paddingLeft: '24px', paddingRight: '24px' }}
-            >
-              <Plus size={20} strokeWidth={2.5} /> تقديم طلب جديد
-            </button>
-          </div>
-        </div>
+    <div style={{ fontFamily: 'Rubik, Tajawal, sans-serif', padding: '24px', backgroundColor: '#f8fafc', minHeight: '100vh', direction: 'rtl' }}>
+      
+      {/* Title Row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', justifyContent: 'flex-start' }}>
+        <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#1e293b', margin: 0 }}>طلبات الختمات الناقصة</h2>
+        <Fingerprint className="text-[#0ea5e9]" size={24} strokeWidth={2} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-        <div className="glass-card flex items-center justify-between hover:-translate-y-1 transition-transform duration-300">
-          <div>
-            <p className="text-sm text-slate-500 font-bold mb-1">إجمالي الطلبات</p>
-            <h3 className="text-2xl font-bold text-slate-800">{totalCount}</h3>
+      {/* Filters Row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+        
+        {/* Right Side: Filters Group */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          
+          {/* 1. Mode Toggle */}
+          <div style={{ display: 'flex', backgroundColor: '#ffffff', borderRadius: '10px', padding: '4px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', height: '44px', alignItems: 'center', gap: '4px' }}>
+             <button
+                type="button"
+                onClick={() => setDateMode('day')}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: '13px',
+                  fontWeight: 'bold',
+                  borderRadius: '8px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: dateMode === 'day' ? '#e0f2fe' : 'transparent',
+                  color: dateMode === 'day' ? '#0284c7' : '#64748b',
+                  transition: 'all 0.2s'
+                }}
+             >
+                يومي
+             </button>
+             <button
+                type="button"
+                onClick={() => setDateMode('month')}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: '13px',
+                  fontWeight: 'bold',
+                  borderRadius: '8px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: dateMode === 'month' ? '#e0f2fe' : 'transparent',
+                  color: dateMode === 'month' ? '#0284c7' : '#64748b',
+                  transition: 'all 0.2s'
+                }}
+             >
+                شهري
+             </button>
+             <button
+                type="button"
+                onClick={() => setDateMode('range')}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: '13px',
+                  fontWeight: 'bold',
+                  borderRadius: '8px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: dateMode === 'range' ? '#e0f2fe' : 'transparent',
+                  color: dateMode === 'range' ? '#0284c7' : '#64748b',
+                  transition: 'all 0.2s'
+                }}
+             >
+                فترة
+             </button>
           </div>
-          <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center shadow-sm">
-            <Fingerprint size={24} />
+
+          {/* 2. Month/Date Picker */}
+          {dateMode === 'month' && (
+             <MonthPicker selectedMonth={selectedMonth} setSelectedMonth={setSelectedMonth} />
+          )}
+          {dateMode === 'day' && (
+             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0 12px', height: '44px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                <Calendar size={16} style={{ color: '#0ea5e9' }} />
+                <Flatpickr 
+                  value={selectedDate}
+                  onChange={(dates, dateStr) => setSelectedDate(dateStr)}
+                  options={{ dateFormat: 'Y-m-d' }}
+                  placeholder="اختر التاريخ"
+                  style={{ border: 'none', outline: 'none', width: '100px', fontSize: '13px', fontWeight: '700', color: '#334155', backgroundColor: 'transparent' }}
+                />
+             </div>
+          )}
+          {dateMode === 'range' && (
+             <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0 12px', height: '44px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8' }}>من</span>
+                  <Flatpickr 
+                    value={startDate}
+                    onChange={(dates, dateStr) => setStartDate(dateStr)}
+                    options={{ dateFormat: 'Y-m-d' }}
+                    style={{ width: '85px', border: 'none', outline: 'none', fontWeight: '700', fontSize: '12px', textAlign: 'center', color: '#334155' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', borderRight: '1px solid #f1f5f9', paddingRight: '8px', marginRight: '8px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8' }}>إلى</span>
+                  <Flatpickr 
+                    value={endDate}
+                    onChange={(dates, dateStr) => setEndDate(dateStr)}
+                    options={{ dateFormat: 'Y-m-d' }}
+                    style={{ width: '85px', border: 'none', outline: 'none', fontWeight: '700', fontSize: '12px', textAlign: 'center', color: '#334155' }}
+                  />
+                </div>
+             </div>
+          )}
+
+          {/* 3. Status */}
+          <div style={{ position: 'relative' }}>
+             <select
+               value={filterStatus}
+               onChange={(e) => setFilterStatus(e.target.value)}
+               style={{
+                 height: '44px',
+                 minWidth: '150px',
+                 fontSize: '13px',
+                 fontWeight: 'bold',
+                 backgroundColor: '#ffffff',
+                 border: '1px solid #e2e8f0',
+                 borderRadius: '10px',
+                 paddingRight: '14px',
+                 paddingLeft: '32px',
+                 appearance: 'none',
+                 outline: 'none',
+                 cursor: 'pointer',
+                 color: '#334155',
+                 boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+               }}
+             >
+               <option value="الكل">كل الطلبات</option>
+               <option value="معلق">الطلبات المعلقة</option>
+               <option value="موافق عليه">الموافق عليها</option>
+               <option value="مرفوض">المرفوضة</option>
+             </select>
+             <ChevronDown size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
           </div>
+
+          {/* 4. Employee ID */}
+          <div style={{ width: '200px' }}>
+               <Select
+                 options={employeeIdOptions}
+                 value={employeeIdOptions.find(opt => opt.value === searchTerm) || null}
+                 onChange={(selected) => setSearchTerm(selected ? selected.value : '')}
+                 styles={{...customSelectStyles, control: (base) => ({...base, height: '44px', minHeight: '44px', borderRadius: '10px', border: '1px solid #e2e8f0'})}}
+                 placeholder="رقم الموظف..."
+                 isSearchable={true}
+                 isClearable={true}
+               />
+          </div>
+
+          {/* 5. Employee Name */}
+          <div style={{ width: '280px', position: 'relative' }}>
+               <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, color: '#94a3b8', pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
+                 <User size={16} />
+               </div>
+               <Select
+                 options={employeeNameOptions}
+                 value={employeeNameOptions.find(opt => opt.value === searchTerm) || null}
+                 onChange={(selected) => setSearchTerm(selected ? selected.value : '')}
+                 styles={{...customSelectStyles, control: (base) => ({...base, height: '44px', minHeight: '44px', borderRadius: '10px', border: '1px solid #e2e8f0', paddingLeft: '24px'})}}
+                 placeholder="اسم الموظف..."
+                 isSearchable={true}
+                 isClearable={true}
+               />
+          </div>
+
         </div>
-        <div className="glass-card flex items-center justify-between hover:-translate-y-1 transition-transform duration-300">
-          <div>
-            <p className="text-sm text-slate-500 font-bold mb-1">طلبات معلقة</p>
-            <h3 className="text-2xl font-bold text-yellow-600">{pendingCount}</h3>
-          </div>
-          <div className="w-12 h-12 bg-yellow-50 text-yellow-600 rounded-full flex items-center justify-center shadow-sm">
-            <Clock size={24} />
-          </div>
-        </div>
-        <div className="glass-card flex items-center justify-between hover:-translate-y-1 transition-transform duration-300">
-          <div>
-            <p className="text-sm text-slate-500 font-bold mb-1">طلبات موافق عليها</p>
-            <h3 className="text-2xl font-bold text-emerald-600">{approvedCount}</h3>
-          </div>
-          <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center shadow-sm">
-            <Check size={24} />
-          </div>
-        </div>
-        <div className="glass-card flex items-center justify-between hover:-translate-y-1 transition-transform duration-300">
-          <div>
-            <p className="text-sm text-slate-500 font-bold mb-1">طلبات مرفوضة / معالجة</p>
-            <h3 className="text-2xl font-bold text-red-600">{rejectedCount}</h3>
-          </div>
-          <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center shadow-sm">
-            <X size={24} />
-          </div>
-        </div>
+
+        {/* Left Side: Submit Button */}
+        <button
+          onClick={() => setShowAddModal(true)}
+          style={{
+            backgroundColor: '#0f766e',
+            height: '44px',
+            padding: '0 20px',
+            color: '#ffffff',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            borderRadius: '10px',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            boxShadow: '0 4px 12px rgba(15, 118, 110, 0.2)',
+            transition: 'opacity 0.2s'
+          }}
+        >
+          <span>تقديم طلب جديد</span>
+          <Plus size={18} strokeWidth={2.5} />
+        </button>
+
       </div>
 
-      <div className="glass-card overflow-hidden" style={{ padding: 0 }}>
+      {/* Stats Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '24px' }}>
+        
+        {/* Total (Rightmost) */}
+        <div onClick={() => setFilterStatus('الكل')} style={{ cursor: 'pointer', opacity: filterStatus === 'الكل' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'الكل' ? '2px solid #3b82f6' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>إجمالي الطلبات</p>
+            <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{totalCount}</h3>
+            <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
+          </div>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#eff6ff', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Fingerprint size={28} strokeWidth={2} />
+          </div>
+        </div>
+
+        {/* Pending */}
+        <div onClick={() => setFilterStatus('معلق')} style={{ cursor: 'pointer', opacity: filterStatus === 'معلق' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'معلق' ? '2px solid #d97706' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>طلبات معلقة</p>
+            <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{pendingCount}</h3>
+            <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
+          </div>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#fffbeb', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Clock size={28} strokeWidth={2} />
+          </div>
+        </div>
+
+        {/* Approved */}
+        <div onClick={() => setFilterStatus('موافق عليه')} style={{ cursor: 'pointer', opacity: filterStatus === 'موافق عليه' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'موافق عليه' ? '2px solid #10b981' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>طلبات موافق عليها</p>
+            <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{approvedCount}</h3>
+            <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
+          </div>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#ecfdf5', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Check size={28} strokeWidth={2.5} />
+          </div>
+        </div>
+
+        {/* Rejected (Leftmost) */}
+        <div onClick={() => setFilterStatus('مرفوض')} style={{ cursor: 'pointer', opacity: filterStatus === 'مرفوض' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'مرفوض' ? '2px solid #ef4444' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>طلبات مرفوضة</p>
+            <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{rejectedCount}</h3>
+            <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
+          </div>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#fef2f2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <X size={28} strokeWidth={2.5} />
+          </div>
+        </div>
+
+      </div>
+
+      {/* Table Section */}
+      <div className="glass-card" style={{ padding: 0, overflow: 'hidden', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', boxShadow: '0 4px 20px -5px rgba(0,0,0,0.05)' }}>
         <div className="overflow-x-auto">
-          <table className="w-full text-right border-collapse">
+          <table className="w-full text-right border-collapse" dir="rtl">
             <thead>
-              <tr className="bg-slate-50 text-slate-700 border-b border-slate-200 text-sm">
-                <th className="p-4 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors text-center" onClick={() => handleSort('employeeId')}>
-                  <div className="flex items-center justify-center gap-1">الرقم الوظيفي <SortIcon col="employeeId" /></div>
+              <tr className="bg-white text-slate-900 border-b border-slate-200 text-sm">
+                <th className="p-5 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-50 text-right" style={{ minWidth: '120px' }} onClick={() => handleSort('employeeId')}>
+                  <div className="flex items-center gap-1 justify-start">الرقم الوظيفي <SortIcon col="employeeId" /></div>
                 </th>
-                <th className="p-4 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors" style={{ minWidth: '10cm' }} onClick={() => handleSort('employeeName')}>
-                  <div className="flex items-center gap-1">اسم الموظف <SortIcon col="employeeName" /></div>
+                <th className="p-5 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-50 text-right" style={{ minWidth: '250px' }} onClick={() => handleSort('employeeName')}>
+                  <div className="flex items-center gap-1 justify-start">اسم الموظف <SortIcon col="employeeName" /></div>
                 </th>
-                <th className="p-4 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors text-center" onClick={() => handleSort('date')}>
+                <th className="p-5 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-50 text-center" onClick={() => handleSort('date')}>
                   <div className="flex items-center justify-center gap-1">التاريخ <SortIcon col="date" /></div>
                 </th>
-                <th className="p-4 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors text-center" onClick={() => handleSort('type')}>
+                <th className="p-5 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-50 text-center" onClick={() => handleSort('type')}>
                   <div className="flex items-center justify-center gap-1">النوع <SortIcon col="type" /></div>
                 </th>
-                <th className="p-4 font-bold whitespace-nowrap text-center">
-                  <div className="flex items-center justify-center gap-1">وقت الدخول</div>
+                <th className="p-5 font-bold whitespace-nowrap text-center">وقت الدخول</th>
+                <th className="p-5 font-bold whitespace-nowrap text-center">وقت الخروج</th>
+                <th className="p-5 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-50 text-center" onClick={() => handleSort('reason')}>
+                  <div className="flex items-center justify-center gap-1">السبب <SortIcon col="reason" /></div>
                 </th>
-                <th className="p-4 font-bold whitespace-nowrap text-center">
-                  <div className="flex items-center justify-center gap-1">وقت الخروج</div>
-                </th>
-                <th className="p-4 font-bold w-1/4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort('reason')}>
-                  <div className="flex items-center gap-1">السبب <SortIcon col="reason" /></div>
-                </th>
-                <th className="p-4 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors text-center" onClick={() => handleSort('status')}>
+                <th className="p-5 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-50 text-center" onClick={() => handleSort('status')}>
                   <div className="flex items-center justify-center gap-1">الحالة <SortIcon col="status" /></div>
                 </th>
-                <th className="p-4 font-bold whitespace-nowrap text-center">الإجراء</th>
+                <th className="p-5 font-bold whitespace-nowrap text-center">الإجراء</th>
               </tr>
             </thead>
             <tbody>
               {filteredPunches.length === 0 ? (
-                <tr><td colSpan="8" className="p-8 text-center text-slate-500">لا توجد طلبات مطابقة</td></tr>
+                <tr><td colSpan="9" className="p-8 text-center text-slate-500 font-bold">لا توجد طلبات مطابقة</td></tr>
               ) : filteredPunches.map(p => {
                 const emp = employees.find(e => String(e.id || '').trim() === String(p.employeeId || '').trim() || String(e.name || '').trim() === String(p.employeeName || '').trim());
-                const allowedPunches = emp?.allowedMissingPunches ?? 3;
-
                 const pDate = new Date(p.date || p.createdAt);
-                const pMonth = pDate.getMonth();
-                const pYear = pDate.getFullYear();
-
+                const currentMonthStr = `${pDate.getFullYear()}-${String(pDate.getMonth() + 1).padStart(2, '0')}`;
+                const bonusPunches = emp?.bonusMissingPunches?.[currentMonthStr] || 0;
+                const allowedPunches = (emp?.allowedMissingPunches ?? 3) + bonusPunches;
                 const monthCount = punches.filter(empPunch => {
                   if (String(empPunch.employeeId || '').trim() !== String(p.employeeId || '').trim()) return false;
                   const empDate = new Date(empPunch.date || empPunch.createdAt);
-                  return empDate.getMonth() === pMonth && empDate.getFullYear() === pYear;
+                  return empDate.getMonth() === pDate.getMonth() && empDate.getFullYear() === pDate.getFullYear();
                 }).length;
-
                 const isExhausted = monthCount > allowedPunches;
 
+                // Status styling based on Image 2
+                let dotClass = "bg-slate-400";
+                let textClass = "text-slate-600";
+                if (p.status === 'معلق' || p.status === 'قيد المراجعة') {
+                  dotClass = "bg-amber-400";
+                  textClass = "text-[#0f766e]"; // Greenish text for pending as in image
+                } else if (p.status === 'موافق عليه' || p.status === 'موافق' || p.status === 'مكتمل الدوام') {
+                  dotClass = "bg-emerald-400";
+                  textClass = "text-emerald-700";
+                } else if (p.status === 'مرفوض') {
+                  dotClass = "bg-red-400";
+                  textClass = "text-red-700";
+                }
+
                 return (
-                  <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="p-4 text-slate-500 font-mono text-sm whitespace-nowrap text-center" dir="ltr">
+                  <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+                    <td className="p-5 text-teal-700 font-bold text-sm whitespace-nowrap text-right">
                       {p.employeeId}
                     </td>
-                    <td className="p-4 font-bold text-slate-800 whitespace-nowrap">
+                    <td className="p-5 font-bold text-slate-800 whitespace-nowrap text-right">
                       {p.employeeName}
                     </td>
-                    <td className="p-4 whitespace-nowrap text-slate-600 font-medium text-center">{p.date}</td>
-                    <td className="p-4 whitespace-nowrap text-center">
-                      <div className="flex flex-col items-center justify-center">
-                        {p.isVirtual ? (
-                          <span className="px-2 py-1 text-xs font-bold bg-slate-100 text-slate-600 rounded flex items-center justify-center w-fit gap-1 border border-slate-200">
-                            آلي
-                          </span>
-                        ) : (
-                          <span className="px-2 py-1 text-xs font-bold rounded flex items-center justify-center w-fit gap-1 bg-slate-100 text-slate-700 border border-slate-200">
-                            يدوي
-                          </span>
-                        )}
-                      </div>
+                    <td className="p-5 whitespace-nowrap text-slate-800 font-bold text-sm text-center">
+                       <div className="flex items-center justify-center gap-2">
+                         <span>{p.date}</span>
+                         <Calendar size={14} className="text-[#0f766e]" />
+                       </div>
                     </td>
-
-                    {/* Check-in Time */}
-                    <td className="p-4 font-bold whitespace-nowrap text-center" dir="ltr">
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <td className="p-5 whitespace-nowrap text-center text-sm font-bold text-slate-800">
+                      {p.isVirtual ? 'الي' : 'يدوي'}
+                    </td>
+                    <td className="p-5 font-bold whitespace-nowrap text-center text-sm">
+                      <div className="flex items-center justify-center gap-2">
                         {(p.type === 'دخول' || p.reason === 'بصمة دخول وخروج') && p.isVirtual && (p.status === 'معلق' || p.status === 'قيد المراجعة') ? (
                           <>
-                            <input
-                              type="time"
-                              className="premium-time-input"
-                              style={{ width: 85, height: 28, fontSize: 13 }}
-                              value={inlineTimes[`${p.id}_in`] || ''}
-                              onChange={(e) => handleInlineTimeChange(`${p.id}_in`, e.target.value)}
-                            />
-                            <Clock size={14} style={{ color: '#3b82f6', flexShrink: 0 }} />
+                            <input type="time" className="premium-time-input" style={{ width: 75, height: 28, fontSize: 13 }} value={inlineTimes[`${p.id}_in`] || ''} onChange={(e) => handleInlineTimeChange(`${p.id}_in`, e.target.value)} />
+                            <Clock size={14} className="text-slate-400" />
                           </>
                         ) : (p.type === 'دخول' && !p.isVirtual) ? (
                           <>
-                            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 13, textAlign: 'center', width: 50, padding: 0 }}>{p.time}</div>
-                            <Clock size={14} style={{ color: '#3b82f6', flexShrink: 0 }} />
+                            <span className="text-slate-800">{p.time}</span>
+                            <Clock size={14} className="text-slate-400" />
                           </>
                         ) : (
                           <>
-                            <div style={{ fontWeight: 700, color: p.attendanceRecord?.timeIn ? '#0f172a' : '#cbd5e1', fontSize: 13, textAlign: 'center', width: 50, padding: 0 }}>{p.attendanceRecord?.timeIn || '--:--'}</div>
-                            <Clock size={14} style={{ color: p.attendanceRecord?.timeIn ? '#3b82f6' : '#e2e8f0', flexShrink: 0 }} />
+                            <span className={p.attendanceRecord?.timeIn ? 'text-slate-800' : 'text-slate-400'}>{p.attendanceRecord?.timeIn || '--:--'}</span>
+                            <Clock size={14} className="text-slate-400" />
                           </>
                         )}
                       </div>
                     </td>
-
-                    {/* Check-out Time */}
-                    <td className="p-4 font-bold whitespace-nowrap text-center" dir="ltr">
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <td className="p-5 font-bold whitespace-nowrap text-center text-sm">
+                      <div className="flex items-center justify-center gap-2">
                         {(p.type === 'خروج' || p.reason === 'بصمة دخول وخروج') && p.isVirtual && (p.status === 'معلق' || p.status === 'قيد المراجعة') ? (
                           <>
-                            <input
-                              type="time"
-                              className="premium-time-input"
-                              style={{ width: 85, height: 28, fontSize: 13 }}
-                              value={inlineTimes[`${p.id}_out`] || ''}
-                              onChange={(e) => handleInlineTimeChange(`${p.id}_out`, e.target.value)}
-                            />
-                            <Clock size={14} style={{ color: '#3b82f6', flexShrink: 0 }} />
+                            <input type="time" className="premium-time-input" style={{ width: 75, height: 28, fontSize: 13 }} value={inlineTimes[`${p.id}_out`] || ''} onChange={(e) => handleInlineTimeChange(`${p.id}_out`, e.target.value)} />
+                            <Clock size={14} className="text-slate-400" />
                           </>
                         ) : (p.type === 'خروج' && !p.isVirtual) ? (
                           <>
-                            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 13, textAlign: 'center', width: 50, padding: 0 }}>{p.time}</div>
-                            <Clock size={14} style={{ color: '#3b82f6', flexShrink: 0 }} />
+                            <span className="text-slate-800">{p.time}</span>
+                            <Clock size={14} className="text-slate-400" />
                           </>
                         ) : (
                           <>
-                            <div style={{ fontWeight: 700, color: p.attendanceRecord?.timeOut ? '#0f172a' : '#cbd5e1', fontSize: 13, textAlign: 'center', width: 50, padding: 0 }}>{p.attendanceRecord?.timeOut || '--:--'}</div>
-                            <Clock size={14} style={{ color: p.attendanceRecord?.timeOut ? '#3b82f6' : '#e2e8f0', flexShrink: 0 }} />
+                            <span className={p.attendanceRecord?.timeOut ? 'text-slate-800' : 'text-slate-400'}>{p.attendanceRecord?.timeOut || '--:--'}</span>
+                            <Clock size={14} className="text-slate-400" />
                           </>
                         )}
                       </div>
                     </td>
-                    <td className="p-4 text-sm text-slate-600">{p.reason}</td>
-                    <td className="p-4 text-center">
-                      <div className="flex justify-center">
-                        <span className={`px-3 py-1 text-xs font-bold rounded-full ${p.status === 'موافق عليه' ? 'bg-green-100 text-green-700' :
-                            p.status === 'مرفوض' ? 'bg-red-100 text-red-700' :
-                              'bg-amber-100 text-amber-700'
-                          }`}>
-                          {p.status}
-                        </span>
+                    <td className="p-5 text-sm text-slate-800 font-bold text-center">{p.reason}</td>
+                    <td className="p-5 text-center">
+                      <div className="flex justify-center items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${dotClass}`}></span>
+                        <span className={`text-xs font-bold ${textClass}`}>{p.status}</span>
                       </div>
                     </td>
-                    <td className="p-4">
-                      <div className="flex gap-2 justify-center items-center flex-nowrap">
-                        <button onClick={() => handlePreviewPunch(p)} className="icon-btn shrink-0" style={{ color: '#0ea5e9', background: '#f0f9ff', borderColor: '#bae6fd' }} title="معاينة الطلب">
-                          <Eye size={18} strokeWidth={2} />
-                        </button>
+                    <td className="p-5">
+                      <div className="flex justify-center items-center gap-3">
                         {p.status === 'معلق' || p.status === 'قيد المراجعة' ? (
                           p.isVirtual ? (
-                            <div className="flex items-center gap-2 flex-nowrap">
+                            <>
+                              {/* Save Button */}
                               <button
                                 onClick={() => handleDropdownAction(p, 'time')}
-                                className="btn btn-primary shrink-0"
-                                style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '8px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                className="flex items-center justify-center text-white text-xs font-bold shadow-sm hover:opacity-90 transition-opacity"
+                                style={{ backgroundColor: '#0f766e', height: '36px', borderRadius: '8px', width: '130px', flexShrink: 0, color: '#ffffff' }}
                               >
-                                <Check size={14} /> حفظ الدوام
+                                <span>حفظ الدوام</span>
                               </button>
-                              <select
-                                className="text-xs font-bold border border-slate-200 bg-white text-slate-700 focus:outline-none cursor-pointer shadow-sm transition-all shrink-0"
-                                style={{ padding: '7px 12px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.04)', width: '180px' }}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  e.target.value = "";
-                                  handleDropdownAction(p, val);
-                                }}
-                                defaultValue=""
-                              >
-                                <option value="" disabled>-- إجراءات أخرى --</option>
-                                {p.type === 'خروج' && <option value="early">تسجيل كمغادرة مبكرة</option>}
 
-                                {(emp?.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي']).includes('إجازة سنوية') && (
-                                  <option value="vacation">خصم إجازة سنوية (الرصيد: {emp?.vacationBalance ?? 14})</option>
-                                )}
-
-                                {(emp?.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي']).includes('إجازة مرضية') && (
-                                  <option value="sick">خصم إجازة مرضية (الرصيد: {emp?.sickLeaveBalance ?? 14})</option>
-                                )}
-
-                                {(emp?.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي']).includes('إجازة غير مدفوعة') && (
-                                  <option value="unpaid">إجازة غير مدفوعة</option>
-                                )}
-
-                                <option value="violation">تسجيل مخالفة مالية</option>
-                              </select>
-                            </div>
+                              {/* Dropdown */}
+                              <div style={{ position: 'relative', width: '130px', flexShrink: 0 }}>
+                                <select
+                                  className="text-xs font-bold bg-white text-slate-700 focus:outline-none cursor-pointer shadow-sm transition-all"
+                                  style={{ height: '36px', padding: '0 12px 0 28px', borderRadius: '8px', border: '1px solid #e2e8f0', width: '100%', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none' }}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    e.target.value = "";
+                                    handleDropdownAction(p, val);
+                                  }}
+                                  defaultValue=""
+                                >
+                                  <option value="" disabled>إجراءات أخرى</option>
+                                  {p.type === 'خروج' && <option value="early">تسجيل كمغادرة مبكرة</option>}
+                                  {(emp?.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي']).includes('إجازة سنوية') && <option value="vacation">خصم إجازة سنوية</option>}
+                                  {(emp?.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي']).includes('إجازة مرضية') && <option value="sick">خصم إجازة مرضية</option>}
+                                  {(emp?.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي']).includes('إجازة غير مدفوعة') && <option value="unpaid">إجازة غير مدفوعة</option>}
+                                  <option value="violation">تسجيل مخالفة مالية</option>
+                                </select>
+                                <ChevronDown size={14} className="pointer-events-none" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#000000', zIndex: 10 }} />
+                              </div>
+                            </>
                           ) : (
-                            <div className="flex items-center gap-2 flex-nowrap">
-                              <button onClick={() => handleUpdateStatus(p, 'موافق عليه')} className="icon-btn icon-btn-success shrink-0" title="موافقة">
-                                <Check size={18} strokeWidth={2.5} />
-                              </button>
-                              <button onClick={() => handleUpdateStatus(p, 'مرفوض')} className="icon-btn icon-btn-delete shrink-0" title="رفض">
-                                <X size={18} strokeWidth={2.5} />
-                              </button>
-                              <button onClick={() => handleDelete(p.id)} className="icon-btn icon-btn-delete shrink-0" title="حذف الطلب">
-                                <Trash2 size={18} strokeWidth={2.5} />
-                              </button>
-                              {isExhausted && (
-                                <button onClick={() => handleRegisterViolation(p)} className="shrink-0" style={{ background: '#1a8d9b', color: 'white', padding: '6px 16px', borderRadius: '50px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', whiteSpace: 'nowrap' }} title="تحويل لمخالفة مالية (تجاوز الحد المسموح)">
-                                  تسجيل مخالفة
-                                </button>
-                              )}
-                            </div>
+                            <>
+                              <button onClick={() => handleUpdateStatus(p, 'موافق عليه')} className="icon-btn icon-btn-success shrink-0" title="موافقة"><Check size={18} strokeWidth={2.5} /></button>
+                              <button onClick={() => handleUpdateStatus(p, 'مرفوض')} className="icon-btn icon-btn-delete shrink-0" title="رفض"><X size={18} strokeWidth={2.5} /></button>
+                              <button onClick={() => handleDelete(p.id)} className="icon-btn icon-btn-delete shrink-0" title="حذف الطلب"><Trash2 size={18} strokeWidth={2.5} /></button>
+                              {isExhausted && <button onClick={() => handleRegisterViolation(p)} className="shrink-0" style={{ background: '#0f766e', color: 'white', padding: '6px 16px', borderRadius: '6px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px' }}>تسجيل مخالفة</button>}
+                            </>
                           )
                         ) : (
-                          <div className="flex items-center gap-2 flex-nowrap">
-                            <span className="text-xs text-slate-400 whitespace-nowrap">({p.approvedBy || '-'})</span>
-                            {!p.isVirtual && (
-                              <button onClick={() => handleUpdateStatus(p, 'معلق')} className="icon-btn icon-btn-warning shrink-0" title="تراجع عن القرار">
-                                <Undo2 size={16} strokeWidth={2.5} />
-                              </button>
-                            )}
-                          </div>
+                          <>
+                            <span className="text-xs text-slate-400 font-bold whitespace-nowrap">({p.approvedBy || '-'})</span>
+                            {!p.isVirtual && <button onClick={() => handleUpdateStatus(p, 'معلق')} className="icon-btn icon-btn-warning shrink-0" title="تراجع عن القرار"><Undo2 size={16} strokeWidth={2.5} /></button>}
+                          </>
                         )}
                       </div>
                     </td>
@@ -1066,6 +1310,32 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Section */}
+        {filteredPunches.length > 0 && (
+           <div className="flex items-center p-5 border-t border-slate-100 bg-white justify-between">
+             {/* Right Side: Page size */}
+             <div className="flex items-center gap-2">
+               <span className="text-sm font-bold text-slate-500">عرض</span>
+               <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-1.5 bg-white cursor-pointer hover:border-slate-300 transition-colors">
+                 <span className="text-sm font-bold text-slate-700">10</span>
+                 <ChevronDown size={14} className="text-slate-400" />
+               </div>
+             </div>
+
+             {/* Middle: Info */}
+             <div className="text-sm font-bold text-slate-500">
+               من 1 إلى {filteredPunches.length} من أصل {filteredPunches.length} طلب
+             </div>
+
+             {/* Left Side: Buttons */}
+             <div className="flex items-center gap-2">
+               <button className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors font-bold">&laquo;</button>
+               <button className="w-8 h-8 flex items-center justify-center rounded border text-white font-bold shadow-sm" style={{ backgroundColor: '#0f766e', borderColor: '#0f766e' }}>1</button>
+               <button className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors font-bold">&raquo;</button>
+             </div>
+           </div>
+        )}
       </div>
 
       {/* Add Missing Punch Modal */}
@@ -1076,7 +1346,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
         <div className="modal-content animate-fade-in" style={{ maxWidth: '500px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', direction: 'rtl' }}>
           <div className="flex justify-between items-center p-5 border-b border-gray-100 shrink-0">
             <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-              <Fingerprint className="text-primary" size={20} /> طلب ختمة ناقصة
+              <Fingerprint className="text-[#0ea5e9]" size={20} /> طلب ختمة ناقصة
             </h3>
             <button type="button" onClick={() => setShowAddModal(false)} className="icon-btn hover:bg-gray-100 rounded-full p-2 transition-colors">
               <X size={20} className="text-gray-500" />
@@ -1127,12 +1397,36 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
                 </div>
                 <div className="input-group">
                   <label>الوقت</label>
-                  <Flatpickr
+                  <input
+                    type="time"
                     className="input-field w-full bg-white"
-                    value={newPunch.time}
-                    onChange={([d]) => setNewPunch({ ...newPunch, time: d ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '' })}
-                    options={{ enableTime: true, noCalendar: true, dateFormat: "h:i K", locale: Arabic, disableMobile: true }}
-                    placeholder="اختر الوقت"
+                    value={(() => {
+                      if (!newPunch.time) return '';
+                      const timeStr = String(newPunch.time);
+                      if (!timeStr.includes('ص') && !timeStr.includes('م') && !timeStr.includes('AM') && !timeStr.includes('PM')) {
+                        return timeStr;
+                      }
+                      const isPM = timeStr.includes('م') || timeStr.includes('PM');
+                      const cleanTime = timeStr.replace(/[صمAMPM\s]/g, '').trim();
+                      const parts = cleanTime.split(':');
+                      if (parts.length < 2) return '';
+                      let h = parseInt(parts[0], 10);
+                      if (isPM && h < 12) h += 12;
+                      if (!isPM && h === 12) h = 0;
+                      return `${String(h).padStart(2, '0')}:${String(parts[1]).padStart(2, '0')}`;
+                    })()}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) {
+                        setNewPunch({ ...newPunch, time: '' });
+                        return;
+                      }
+                      const [hoursStr, minutesStr] = val.split(':');
+                      let hours = parseInt(hoursStr, 10);
+                      const ampm = hours >= 12 ? 'م' : 'ص';
+                      hours = hours % 12 || 12;
+                      setNewPunch({ ...newPunch, time: `${hours}:${minutesStr} ${ampm}` });
+                    }}
                     required
                   />
                 </div>
@@ -1152,7 +1446,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
 
               <div className="flex justify-end gap-3 pt-4 mt-2 border-t border-gray-100">
                 <button type="button" onClick={() => setShowAddModal(false)} className="btn btn-outline">إلغاء</button>
-                <button type="submit" className="btn btn-primary">إرسال الطلب</button>
+                <button type="submit" className="btn text-white px-6 font-bold rounded-lg shadow-sm" style={{ backgroundColor: '#0f766e' }}>إرسال الطلب</button>
               </div>
             </form>
           </div>
@@ -1160,6 +1454,6 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
       </div>
     </div>
   );
-};
+}
 
 export default HRMissingPunches;

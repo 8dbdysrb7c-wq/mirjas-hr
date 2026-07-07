@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getHRLeaves, getMissingPunches, getHRAdvances, getEmployees, getHRAttendance } from '../../store';
+import { getHRLeaves, getMissingPunches, getHRAdvances, getEmployees, getHRAttendance, getHRAssets } from '../../store';
 import { Users, Clock, Calendar, AlertTriangle, FileText, Settings, Shield, Menu, X, Fingerprint, History, DollarSign, Gift, Bell, BarChart2, ArrowUpDown, Package } from 'lucide-react';
 import HRDashboard from './HRDashboard';
 import HRAttendance from './HRAttendance';
@@ -9,6 +9,7 @@ import HRBonusesAndViolations from './HRBonusesAndViolations';
 import HRSalaries from './HRSalaries';
 import HRSalaryReports from './HRSalaryReports';
 import HRMissingPunches from './HRMissingPunches';
+import HRAttendanceAlerts from './HRAttendanceAlerts';
 import HRAuditLog from './HRAuditLog';
 import HRAdvances from './HRAdvances';
 import HRAssets from './HRAssets';
@@ -24,7 +25,8 @@ const AdminHR = ({ user, notificationTarget }) => {
     leaves: 0,
     overtime: 0,
     'missing-punches': 0,
-    advances: 0
+    advances: 0,
+    assets: 0
   });
 
   useEffect(() => {
@@ -34,11 +36,12 @@ const AdminHR = ({ user, notificationTarget }) => {
   }, [notificationTarget]);
 
   const fetchCounts = async () => {
-    const [leaves, mps, advances, emps, attendance] = await Promise.all([getHRLeaves(), getMissingPunches(), getHRAdvances(), getEmployees(), getHRAttendance()]);
+    const [leaves, mps, advances, emps, attendance, assetsData] = await Promise.all([getHRLeaves(), getMissingPunches(), getHRAdvances(), getEmployees(), getHRAttendance(), getHRAssets()]);
     
     const pendingLeaves = leaves.filter(l => l.type !== 'بدل عمل إضافي' && l.status === 'معلق').length;
     const pendingOvertime = leaves.filter(l => l.type === 'بدل عمل إضافي' && l.status === 'معلق').length;
     const pendingAdvances = advances.filter(a => a.status === 'معلق').length;
+    const activeAssets = assetsData.filter(a => a.status === 'نشطة').length;
 
     // Calculate missing punches (manual + virtual) for the current month
     const todayStr = new Date().toLocaleDateString('en-CA');
@@ -94,7 +97,8 @@ const AdminHR = ({ user, notificationTarget }) => {
       leaves: pendingLeaves,
       overtime: pendingOvertime,
       'missing-punches': pendingMpsCount,
-      advances: pendingAdvances
+      advances: pendingAdvances,
+      assets: activeAssets
     });
   };
 
@@ -116,6 +120,7 @@ const AdminHR = ({ user, notificationTarget }) => {
       case 'leaves': return <HRLeaves user={user} refreshCounts={fetchCounts} />;
       case 'advances': return <HRAdvances user={user} refreshCounts={fetchCounts} />;
       case 'missing-punches': return <HRMissingPunches user={user} refreshCounts={fetchCounts} />;
+      case 'attendance-alerts': return <HRAttendanceAlerts user={user} />;
       case 'overtime': return <HROvertime user={user} refreshCounts={fetchCounts} />;
       case 'bonuses-violations': return <HRBonusesAndViolations user={user} />;
       case 'salaries': return <HRSalaries user={user} />;
@@ -128,11 +133,12 @@ const AdminHR = ({ user, notificationTarget }) => {
 
   const navItems = [
     { id: 'attendance', label: 'الحضور والانصراف', icon: <Clock />, color: '#14b8a6', bgLight: '#ccfbf1', customBadge: 'اليوم' },
+    { id: 'attendance-alerts', label: 'تنبيهات الحضور والانصراف', icon: <AlertTriangle />, color: '#f43f5e', bgLight: '#ffe4e6', customBadge: 'تنبيهات' },
     { id: 'missing-punches', label: 'الختمات الناقصة', icon: <Fingerprint />, color: '#8b5cf6', bgLight: '#f3e8ff', badgeNum: pendingCounts['missing-punches'] || 0 },
     { id: 'overtime', label: 'العمل الإضافي', icon: <Clock />, color: '#f59e0b', bgLight: '#fef3c7', badgeNum: pendingCounts['overtime'] || 0 },
     { id: 'advances', label: 'السلف', icon: <DollarSign />, color: '#10b981', bgLight: '#d1fae5', badgeNum: pendingCounts['advances'] || 0 },
     { id: 'leaves', label: 'الإجازات والمغادرات', icon: <Calendar />, color: '#3b82f6', bgLight: '#dbeafe', badgeNum: pendingCounts['leaves'] || 0 },
-    { id: 'assets', label: 'العهد والأصول', icon: <Package />, color: '#0ea5e9', bgLight: '#e0f2fe', badgeNum: 0 },
+    { id: 'assets', label: 'العهدة', icon: <Package />, color: '#0ea5e9', bgLight: '#e0f2fe', badgeNum: pendingCounts['assets'] || 0 },
     { id: 'bonuses-violations', label: 'المكافآت والمخالفات', icon: <ArrowUpDown />, color: '#a855f7', bgLight: '#f3e8ff', badgeNum: 0 },
     { id: 'salaries', label: 'الرواتب', icon: <FileText />, color: '#6366f1', bgLight: '#e0e7ff', badgeNum: 0 },
     { id: 'salary-reports', label: 'مركز التقارير', icon: <BarChart2 />, color: '#2563eb', bgLight: '#dbeafe', customBadge: 'التقارير' },
@@ -148,7 +154,7 @@ const AdminHR = ({ user, notificationTarget }) => {
     <div className="hr-layout">
       
       <div className="overflow-x-auto no-print mb-6 pb-2" style={{ direction: 'rtl' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '12px', minWidth: '1450px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(11, 1fr)', gap: '12px', minWidth: '1600px' }}>
           {navItems.map(item => {
             const isActive = activeTab === item.id;
             return (

@@ -868,12 +868,12 @@ export const processDailyAbsences = async (dateFrom, dateTo, userContext) => {
         if (empHolidays.length > 0) continue;
 
         // Check if employee has attendance
-        const hasAtt = attendances.some(a => a.employeeId === emp.id && a.date === dateStr);
+        const hasAtt = attendances.some(a => (String(a.employeeId || '').trim() === String(emp.id || '').trim() || String(a.employeeName || '').trim() === String(emp.name || '').trim()) && a.date === dateStr);
         if (hasAtt) continue;
 
         // Check if employee has leave
         const hasLeave = leaves.some(l => 
-          l.employeeId === emp.id && 
+          (String(l.employeeId || '').trim() === String(emp.id || '').trim() || String(l.employeeName || '').trim() === String(emp.name || '').trim()) && 
           ((l.date && l.date === dateStr) || (l.startDate && l.startDate <= dateStr && l.endDate >= dateStr))
         );
         if (hasLeave) continue;

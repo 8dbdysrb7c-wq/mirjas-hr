@@ -8,6 +8,7 @@ const MySwal = withReactContent(Swal);
 export const MissingPunchesTab = ({ 
   remainingPunches, 
   userMissingPunchQuota, 
+  bonusPunches,
   currentMonthPunchesCount, 
   setShowMissingPunchModal, 
   myMissingPunches 
@@ -34,7 +35,12 @@ export const MissingPunchesTab = ({
 
       <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 mb-6 flex justify-between items-center">
         <div>
-          <p className="text-slate-500 text-sm">الرصيد المسموح به شهرياً: <b>{userMissingPunchQuota}</b></p>
+          <p className="text-slate-500 text-sm">
+            الرصيد المسموح به شهرياً: <b>{userMissingPunchQuota - bonusPunches}</b>
+            {bonusPunches > 0 && (
+              <span className="text-emerald-600 font-bold mr-1.5" style={{ color: '#059669' }}> (+ {bonusPunches} بونص ميزة)</span>
+            )}
+          </p>
           <p className="text-slate-500 text-sm mt-1">الطلبات المقدمة هذا الشهر: <b>{currentMonthPunchesCount}</b></p>
         </div>
         <div className="text-center">

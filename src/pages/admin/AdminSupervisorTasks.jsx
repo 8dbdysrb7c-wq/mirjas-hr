@@ -439,7 +439,7 @@ const AdminSupervisorTasks = ({ user }) => {
                   const employee = Object.values(employeesList).find(e => e.id === empId);
                   if (employee && employee.phone) {
                     const msg = `مرحباً ${employee.name}،\nتم تكليفك بمهمة جديدة:\n📌 العنوان: ${name}\n📝 التفاصيل: ${description}\n⏰ تاريخ التسليم: ${dueDate}\n-- الإدارة`;
-                    await sendWhatsAppNotification(employee.phone, msg);
+                    await sendWhatsAppNotification(employee.phone, msg, 'daily_report');
                   }
                 }
               }

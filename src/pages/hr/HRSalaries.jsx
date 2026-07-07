@@ -6,6 +6,14 @@ import Swal from 'sweetalert2';
 import { updateDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
+const formatVal = (val, showZeroAsDash = true) => {
+  if (val === undefined || val === null || val === '') return '-';
+  const num = Number(val);
+  if (isNaN(num)) return val;
+  if (num === 0) return showZeroAsDash ? '-' : '0.00';
+  return num.toFixed(2);
+};
+
 const HRSalaries = ({ user }) => {
   const [employees, setEmployees] = useState([]);
   const [violations, setViolations] = useState([]);
@@ -460,17 +468,17 @@ const HRSalaries = ({ user }) => {
               <tr key={emp.id} className="hover:bg-gray-50/50 transition-colors">
                 <td className="text-muted text-center">{emp.id}</td>
                 <td className="font-semibold text-right pr-4">{emp.name}</td>
-                <td className="text-muted text-center">{emp.basic}</td>
-                <td className="py-3 px-2 font-bold text-indigo-600 text-center">{emp.transportAllowanceAddition > 0 ? emp.transportAllowanceAddition.toLocaleString() : '-'}</td>
-                <td className="py-3 px-2 font-bold text-emerald-600 text-center">{emp.overtimePay > 0 ? emp.overtimePay.toLocaleString() : '-'}</td>
-                <td className="py-3 px-2 font-bold text-emerald-600 text-center">{emp.bonusAddition > 0 ? emp.bonusAddition.toLocaleString() : '-'}</td>
-                <td className="py-3 px-2 font-bold text-rose-600 text-center">{emp.manualDeductions > 0 ? emp.manualDeductions.toLocaleString() : '-'}</td>
-                <td className="text-rose-500 font-medium text-center">{emp.lateDeduction > 0 ? emp.lateDeduction : '-'}</td>
-                <td className="text-rose-500 font-medium text-center">{(emp.unpaidLeaveDeduction + (emp.unexcusedAbsenceDeduction || 0)) > 0 ? (emp.unpaidLeaveDeduction + (emp.unexcusedAbsenceDeduction || 0)) : '-'}</td>
-                <td className="text-rose-500 font-medium text-center">{emp.advanceDeduction > 0 ? emp.advanceDeduction : '-'}</td>
-                <td className="py-3 px-2 font-bold text-rose-600 text-center">{emp.totalDeductions > 0 ? emp.totalDeductions.toLocaleString() : '-'}</td>
-                <td className="py-3 px-2 font-medium text-blue-500 text-center">{emp.socialSecurityEmployeeDeduction > 0 ? emp.socialSecurityEmployeeDeduction.toLocaleString() : '-'}</td>
-                <td className="font-bold text-lg bg-slate-50 text-center">{emp.netSalary} د.أ</td>
+                <td className="text-muted text-center">{formatVal(emp.basic, false)}</td>
+                <td className="py-3 px-2 font-bold text-indigo-600 text-center">{formatVal(emp.transportAllowanceAddition)}</td>
+                <td className="py-3 px-2 font-bold text-emerald-600 text-center">{formatVal(emp.overtimePay)}</td>
+                <td className="py-3 px-2 font-bold text-emerald-600 text-center">{formatVal(emp.bonusAddition)}</td>
+                <td className="py-3 px-2 font-bold text-rose-600 text-center">{formatVal(emp.manualDeductions)}</td>
+                <td className="text-rose-500 font-medium text-center">{formatVal(emp.lateDeduction)}</td>
+                <td className="text-rose-500 font-medium text-center">{formatVal(emp.unpaidLeaveDeduction + (emp.unexcusedAbsenceDeduction || 0))}</td>
+                <td className="text-rose-500 font-medium text-center">{formatVal(emp.advanceDeduction)}</td>
+                <td className="py-3 px-2 font-bold text-rose-600 text-center">{formatVal(emp.totalDeductions)}</td>
+                <td className="py-3 px-2 font-medium text-blue-500 text-center">{formatVal(emp.socialSecurityEmployeeDeduction)}</td>
+                <td className="font-bold text-lg bg-slate-50 text-center">{formatVal(emp.netSalary, false)} د.أ</td>
               </tr>
             ))}
             {salaryData.length === 0 && (

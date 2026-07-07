@@ -3,15 +3,18 @@ import Flatpickr from 'react-flatpickr';
 import Select from 'react-select';
 import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import 'flatpickr/dist/themes/airbnb.css';
-import { Package, Plus, Search, Edit2, Trash2, Layers, AlertTriangle, ArrowUpDown, Filter, X, Save, History, User, MapPin, Box, Copy, ChevronDown, ChevronRight, Printer, FileText, Download, Upload, Calendar, ClipboardList, Eye } from 'lucide-react';
+import { Package, Plus, Search, Edit2, Trash2, Layers, AlertTriangle, ArrowUpDown, Filter, X, Save, History, User, MapPin, Box, Copy, ChevronDown, ChevronRight, Printer, FileText, Download, Upload, Calendar, ClipboardList, Eye, Palette } from 'lucide-react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
-import { getStock, saveStockItem, deleteStockItem, deleteMultipleStockItems, getGlobalSettings, isAdmin, canPerformAction, addLog, getStockVouchers, saveStockVoucher, deleteStockVoucher, getCustomers, saveCustomer, getEmployees, getSalesOrders, getMissions, canPerformStockAction, saveSalesOrder, getStocktakes, saveStocktake, approveStocktake, deleteStocktakeAndRevert, approveAuditVouchers, deleteDraftVouchers, revertAuditVouchers } from '../../store';
+import { getStock, saveStockItem, deleteStockItem, deleteMultipleStockItems, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStockVouchers, saveStockVoucher, deleteStockVoucher, getCustomers, saveCustomer, getEmployees, getSalesOrders, getMissions, canPerformStockAction, saveSalesOrder, getStocktakes, saveStocktake, approveStocktake, deleteStocktakeAndRevert, approveAuditVouchers, deleteDraftVouchers, revertAuditVouchers, getHRAssets } from '../../store';
 
 const MySwal = withReactContent(Swal);
 
 const AdminStock = ({ user, notificationTarget }) => {
   const [stock, setStock] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [showLocationsModal, setShowLocationsModal] = useState(false);
+  const [selectedItemForLocations, setSelectedItemForLocations] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'itemNumber', direction: 'asc' });
@@ -365,7 +368,7 @@ const AdminStock = ({ user, notificationTarget }) => {
   const [auditOrder, setAuditOrder] = useState(null);
   const [auditItems, setAuditItems] = useState([]);
 
-  const JORDANIAN_CITIES = ['عمان', 'الزرقاء', 'إربد', 'المفرق', 'عجلون', 'جرش', 'البلقاء', 'مأدبا', 'الكرك', 'الطفيلة', 'معان', 'العقبة'];
+  const JORDANIAN_CITIES = ['عمان', 'الزرقاء', 'إربد', 'العقبة', 'السلط', 'مادبا', 'الكرك', 'الطفيلة', 'معان', 'جرش', 'عجلون', 'المفرق'];
 
   useEffect(() => {
     fetchData();
@@ -409,9 +412,9 @@ const AdminStock = ({ user, notificationTarget }) => {
     }
   }, [notificationTarget]);
 
-  const fetchData = async () => {
+    const fetchData = async () => {
     setLoading(true);
-    const [stockData, settingsData, vouchersData, customersData, employeesData, salesData, missionsData, stocktakesData] = await Promise.all([
+    const [stockData, settingsData, vouchersData, customersData, employeesData, salesData, missionsData, stocktakesData, assetsData] = await Promise.all([
       getStock(),
       getGlobalSettings(),
       getStockVouchers(),
@@ -419,8 +422,34 @@ const AdminStock = ({ user, notificationTarget }) => {
       getEmployees(),
       getSalesOrders(),
       getMissions(),
-      getStocktakes()
+      getStocktakes(),
+      getHRAssets()
     ]);
+
+    // Auto-sync locations
+    const allExistingLocs = [...new Set([
+      ...stockData.flatMap(s => (s.location || '').split(/[,، -]/).filter(Boolean)),
+      ...assetsData.flatMap(a => (a.items || []).flatMap(i => (i.location || '').split(/[,، -]/).filter(Boolean)))
+    ])];
+    
+    let needsUpdate = false;
+    const currentLocs = settingsData.stockLocations || [];
+    allExistingLocs.forEach(l => {
+      if (!currentLocs.includes(l)) {
+        currentLocs.push(l);
+        needsUpdate = true;
+      }
+    });
+    
+    if (needsUpdate) {
+       settingsData.stockLocations = currentLocs;
+       try {
+         await saveGlobalSettings(settingsData);
+       } catch (e) {
+         console.error("Failed to auto-sync locations", e);
+       }
+    }
+
     setStock(stockData);
     setGlobalSettings(settingsData);
     setVouchers(vouchersData || []);
@@ -429,6 +458,7 @@ const AdminStock = ({ user, notificationTarget }) => {
     setSalesOrders(salesData || []);
     setMissions(missionsData || []);
     setStocktakes(stocktakesData || []);
+    setAssets(assetsData || []);
     setLoading(false);
   };
 
@@ -1170,14 +1200,22 @@ const AdminStock = ({ user, notificationTarget }) => {
 
 
   const handleAddCustomerModal = () => {
-    let maxNum = 0;
-    customers.forEach(c => {
-      if (c.customerNumber && c.customerNumber.startsWith('CLI-')) {
-        const num = parseInt(c.customerNumber.replace('CLI-', ''), 10);
-        if (!isNaN(num) && num > maxNum) maxNum = num;
-      }
-    });
-    const customerNumber = `CLI-${String(maxNum + 1).padStart(4, '0')}`;
+    const defaultType = voucherType === 'إدخال' ? 'مورد' : 'عميل';
+    
+    const getNextCustNumber = (type) => {
+      const prefix = type === 'مورد' ? 'SUP-' : 'CLI-';
+      let maxNum = 0;
+      customers.forEach(c => {
+        if (c.customerNumber && c.customerNumber.startsWith(prefix)) {
+          const num = parseInt(c.customerNumber.replace(prefix, ''), 10);
+          if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+      });
+      return `${prefix}${String(maxNum + 1).padStart(4, '0')}`;
+    };
+
+    const cities = (globalSettings.jordanianCities && globalSettings.jordanianCities.length > 0) ? globalSettings.jordanianCities : JORDANIAN_CITIES;
+    const customerNumber = getNextCustNumber(defaultType);
 
     MySwal.fire({
       customClass: {
@@ -1200,6 +1238,16 @@ const AdminStock = ({ user, notificationTarget }) => {
           </div>
         </div>
         <div class="premium-form">
+          <div class="premium-form-group">
+            <label>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-tag text-muted"><path d="M12 2H2v10l9.29 9.29c.39.39 1.02.39 1.41 0l8.59-8.59c.39-.39.39-1.02 0-1.41z"/><line x1="7" x2="7.01" y1="7" y2="7"/></svg>
+              النوع (عميل / مورد) *
+            </label>
+            <select id="swal-type" class="premium-input">
+              <option value="عميل" ${defaultType === 'عميل' ? 'selected' : ''}>عميل</option>
+              <option value="مورد" ${defaultType === 'مورد' ? 'selected' : ''}>مورد</option>
+            </select>
+          </div>
           <div class="premium-form-group">
             <label>
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-hash text-muted"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>
@@ -1229,15 +1277,11 @@ const AdminStock = ({ user, notificationTarget }) => {
               </label>
               <select id="swal-city" class="premium-input">
                 <option value="">اختر المدينة...</option>
-                ${JORDANIAN_CITIES.map(city => `<option value="${city}">${city}</option>`).join('')}
+                ${cities.map(city => `<option value="${city}">${city}</option>`).join('')}
               </select>
             </div>
-            <div class="premium-form-group" style="margin-bottom: 0;">
-              <label>
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin text-muted"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                المنطقة
-              </label>
-              <input id="swal-location" class="premium-input" placeholder="مثال: خلدا، شارع المدينة...">
+            <div class="premium-form-group" style="margin-bottom: 0;" id="swal-location-container">
+              <!-- Dynamically populated -->
             </div>
           </div>
           <div class="premium-form-group">
@@ -1250,30 +1294,124 @@ const AdminStock = ({ user, notificationTarget }) => {
               ${(globalSettings.customerSectors || []).map(s => `<option value="${s}">${s}</option>`).join('')}
             </select>
           </div>
+          <div class="premium-form-group" id="swal-salesRep-group">
+            <label>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user text-muted"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              البائع (مندوب المبيعات) *
+            </label>
+            <select id="swal-salesRep" class="premium-input">
+              <option value="زبائن الشركة" selected>زبائن الشركة</option>
+              ${(globalSettings.salesReps || []).filter(rep => rep !== 'زبائن الشركة').map(rep => `<option value="${rep}">${rep}</option>`).join('')}
+            </select>
+          </div>
         </div>
       `,
       showCancelButton: true,
-      confirmButtonText: 'حفظ العميل/المورد',
+      confirmButtonText: 'حفظ البيانات',
       cancelButtonText: 'إلغاء',
       focusConfirm: false,
+      didOpen: () => {
+        const typeSelect = document.getElementById('swal-type');
+        const numberInput = document.getElementById('swal-customerNumber');
+        const salesRepGroup = document.getElementById('swal-salesRep-group');
+        const salesRepSelect = document.getElementById('swal-salesRep');
+
+        const toggleSalesRep = (type) => {
+          if (salesRepGroup && salesRepSelect) {
+            if (type === 'مورد') {
+              salesRepGroup.style.display = 'none';
+              salesRepSelect.value = '';
+            } else {
+              salesRepGroup.style.display = 'block';
+            }
+          }
+        };
+
+        if (typeSelect) {
+          toggleSalesRep(typeSelect.value);
+          typeSelect.addEventListener('change', (e) => {
+            const selectedType = e.target.value;
+            toggleSalesRep(selectedType);
+            if (numberInput) {
+              numberInput.value = getNextCustNumber(selectedType);
+            }
+          });
+        }
+
+        const citySelect = document.getElementById('swal-city');
+        const locationContainer = document.getElementById('swal-location-container');
+
+        const updateLocationField = (selectedCity, currentVal) => {
+          if (!locationContainer) return;
+          if (selectedCity === 'عمان') {
+            const areas = (globalSettings.ammanAreas && globalSettings.ammanAreas.length > 0) ? globalSettings.ammanAreas : [
+              'عبدون', 'دير غبار', 'أم أذينة', 'الرابية', 'الشميساني', 'الصويفية', 'الجندويل', 
+              'خلدا', 'تلاع العلي', 'أم السماق', 'ضاحية الرشيد', 'ضاحية الحسين', 'مرج الحمام', 
+              'الجبيهة', 'شفا بدران', 'أبو نصير', 'طبربور', 'الهاشمي الشمالي', 'الهاشمي الجنوبي', 
+              'جبل الحسين', 'جبل عمان', 'جبل اللويبدة', 'الأشرفية', 'الوحدات', 'رأس العين', 
+              'وسط البلد', 'النصر', 'القويسمة', 'أبو علندا', 'خريبة السوق', 'المقابلين', 
+              'الجويدة', 'سحاب', 'الموقر', 'ماركا الشمالية', 'ماركا الجنوبية', 'طارق', 
+              'بسمان', 'البيادر', 'وادي السير', 'اليادودة', 'حسبان', 'البنيات'
+            ];
+            locationContainer.innerHTML = `
+              <label>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin text-muted"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                المنطقة *
+              </label>
+              <select id="swal-location" class="premium-input">
+                <option value="">اختر المنطقة...</option>
+                ${areas.map(area => `<option value="${area}" ${currentVal === area ? 'selected' : ''}>${area}</option>`).join('')}
+              </select>
+            `;
+          } else {
+            locationContainer.innerHTML = `
+              <label>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin text-muted"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                المنطقة
+              </label>
+              <input id="swal-location" class="premium-input" placeholder="مثال: وسط المدينة..." value="${selectedCity ? currentVal : ''}">
+            `;
+          }
+        };
+
+        if (citySelect) {
+          updateLocationField(citySelect.value, '');
+          citySelect.addEventListener('change', (e) => {
+            updateLocationField(e.target.value, '');
+          });
+        }
+      },
       preConfirm: () => {
+        const type = document.getElementById('swal-type').value;
         const name = document.getElementById('swal-name').value;
         const phone = document.getElementById('swal-phone').value;
         const location = document.getElementById('swal-location').value;
         const city = document.getElementById('swal-city').value;
         const sector = document.getElementById('swal-sector').value;
+        const salesRep = document.getElementById('swal-salesRep').value;
+
+        if (!type) { Swal.showValidationMessage('يرجى اختيار النوع (عميل / مورد)'); return false; }
         if (!name) { Swal.showValidationMessage('يرجى ملء الاسم'); return false; }
         if (!phone || phone.trim().length !== 10 || isNaN(phone.trim())) { Swal.showValidationMessage('يرجى إدخال رقم هاتف يتكون من 10 أرقام'); return false; }
         if (!city) { Swal.showValidationMessage('يرجى اختيار المدينة'); return false; }
-        if (!location) { Swal.showValidationMessage('يرجى إدخال المنطقة'); return false; }
+        if (city === 'عمان' && !location) {
+          Swal.showValidationMessage('يرجى اختيار المنطقة لمدينة عمان');
+          return false;
+        }
         if (!sector) { Swal.showValidationMessage('يرجى اختيار القطاع'); return false; }
-        return { name, phone: phone.trim(), city, location, sector, status: 'نشط', customerNumber };
+        if (type === 'عميل' && (globalSettings.salesReps || []).length > 0 && !salesRep) {
+          Swal.showValidationMessage('يرجى اختيار البائع (مندوب المبيعات)');
+          return false;
+        }
+
+        return { type, name, phone: phone.trim(), city, location, sector, status: 'نشط', salesRep: type === 'عميل' ? salesRep : '', customerNumber: document.getElementById('swal-customerNumber').value };
       }
     }).then(async (result) => {
       if (result.isConfirmed) {
         const res = await saveCustomer(result.value);
         if (res) {
-          await addLog({ userName: user.name, userId: user.id, module: 'العملاء', action: 'إضافة', details: `إضافة عميل/مورد من المخزون: ${result.value.name}` });
+          const logTypeLabel = result.value.type === 'مورد' ? 'مورد' : 'عميل';
+          await addLog({ userName: user.name, userId: user.id, module: 'العملاء', action: 'إضافة', details: `إضافة ${logTypeLabel} من المخزون: ${result.value.name}` });
           Swal.fire({ title: 'تمت الإضافة بنجاح', icon: 'success', timer: 1500, showConfirmButton: false });
           const updatedCustomers = await getCustomers();
           setCustomers(updatedCustomers || []);
@@ -1317,6 +1455,13 @@ const AdminStock = ({ user, notificationTarget }) => {
     if (isEdit) title = 'تعديل صنف';
     else if (isCopy) title = 'إضافة لون/موقع آخر لنفس الصنف';
 
+    const custodyItemLocs = item ? assets.flatMap(a => (a.items || []).filter(i => i.name === item.name).flatMap(i => (i.location || '').split(/[,، -]/).filter(Boolean))) : [];
+    const allItemLocations = item ? stock.filter(s => s.itemNumber === item.itemNumber).flatMap(s => (s.location || '').split(/[,، -]/).filter(Boolean)) : [];
+    const uniqueItemLocations = [...new Set([...allItemLocations, ...custodyItemLocs])];
+    
+    const custodyAllLocs = assets.flatMap(a => (a.items || []).flatMap(i => (i.location || '').split(/[,، -]/).filter(Boolean)));
+    const allSystemLocations = [...new Set([...(globalSettings.stockLocations || []), ...stock.flatMap(s => (s.location || '').split(/[,، -]/).filter(Boolean)), ...custodyAllLocs])].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+
     MySwal.fire({
       customClass: {
         container: 'premium-modal-container',
@@ -1335,6 +1480,31 @@ const AdminStock = ({ user, notificationTarget }) => {
             itemNumberInput.value = generateNextID(e.target.value);
           });
         }
+        
+        const addLocBtn = document.getElementById('add-new-location-btn');
+        const locSelect = document.getElementById('swal-location');
+        const newLocInput = document.getElementById('swal-new-location-input');
+        if (addLocBtn && locSelect && newLocInput) {
+          let isInputMode = false;
+          addLocBtn.addEventListener('click', () => {
+            isInputMode = !isInputMode;
+            if (isInputMode) {
+              locSelect.style.setProperty('display', 'none', 'important');
+              newLocInput.style.setProperty('display', 'block', 'important');
+              newLocInput.focus();
+              addLocBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/></svg>';
+              addLocBtn.title = "إلغاء الإضافة";
+              addLocBtn.style.backgroundColor = '#ef4444';
+            } else {
+              locSelect.style.setProperty('display', 'block', 'important');
+              newLocInput.style.setProperty('display', 'none', 'important');
+              newLocInput.value = '';
+              addLocBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>';
+              addLocBtn.title = "إضافة موقع جديد";
+              addLocBtn.style.backgroundColor = '#13898f';
+            }
+          });
+        }
       },
       html: `
         <div class="premium-modal-header">
@@ -1347,20 +1517,17 @@ const AdminStock = ({ user, notificationTarget }) => {
           </div>
         </div>
         <div class="premium-form">
-          <div class="grid grid-cols-12 gap-x-8 gap-y-8">
-            <div class="premium-form-group col-span-12 md:col-span-3">
+          <div class="grid grid-cols-12 gap-x-8 gap-y-6">
+            
+            <div class="premium-form-group col-span-12 md:col-span-4">
               <label>رقم الصنف (ID)</label>
               <input id="swal-itemNumber" class="premium-input" placeholder="SKU-0001" value="${initialData.itemNumber}" disabled style="background: var(--surface); cursor: not-allowed; font-weight: bold; color: var(--primary-dark); text-align: center;">
             </div>
-            <div class="premium-form-group col-span-12 md:col-span-3">
-              <label>رمز الصنف</label>
-              <input id="swal-itemCode" class="premium-input" placeholder="" value="${initialData.itemCode || ''}">
-            </div>
-            <div class="premium-form-group col-span-12 md:col-span-3">
+            <div class="premium-form-group col-span-12 md:col-span-4">
               <label>اسم الصنف</label>
               <input id="swal-name" class="premium-input" placeholder="مثال: قماش أبيض تركي" value="${initialData.name}">
             </div>
-            <div class="premium-form-group col-span-12 md:col-span-3">
+            <div class="premium-form-group col-span-12 md:col-span-4">
               <label>التصنيف</label>
               <select id="swal-category" class="premium-input">
                 <option value="" disabled>اختر التصنيف</option>
@@ -1369,16 +1536,41 @@ const AdminStock = ({ user, notificationTarget }) => {
             </div>
 
             <div class="premium-form-group col-span-12 md:col-span-4">
+              <label>رمز الصنف</label>
+              <input id="swal-itemCode" class="premium-input" placeholder="" value="${initialData.itemCode || ''}">
+            </div>
+            <div class="premium-form-group col-span-12 md:col-span-4">
               <label>المخزن</label>
               <select id="swal-warehouse" class="premium-input">
                 <option value="" disabled>اختر المخزن</option>
                 ${globalSettings.warehouses?.map(w => `<option value="${w}" ${initialData.warehouse === w ? 'selected' : ''}>${w}</option>`).join('')}
               </select>
             </div>
+
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label>الموقع (داخل المخزن)</label>
-              <input id="swal-location" class="premium-input" placeholder="مثال: رف 5، قسم B" value="${initialData.location}">
+              <div class="flex gap-2">
+                <select id="swal-location" class="premium-input" style="flex: 1; margin-bottom: 0;">
+                  <option value="">-- بدون موقع --</option>
+                  ${allSystemLocations.map(loc => `<option value="${loc}" ${initialData.location === loc ? 'selected' : ''}>${loc}</option>`).join('')}
+                  ${initialData.location && !allSystemLocations.includes(initialData.location) ? `<option value="${initialData.location}" selected>${initialData.location}</option>` : ''}
+                </select>
+                <input id="swal-new-location-input" class="premium-input" style="flex: 1; margin-bottom: 0; display: none !important;" placeholder="اسم الرف الجديد">
+                <button id="add-new-location-btn" type="button" class="btn" style="background-color: #13898f; color: white; padding: 0 1rem; border-radius: 8px; flex-shrink: 0;" title="إضافة موقع جديد">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                </button>
+              </div>
             </div>
+
+            ${uniqueItemLocations.length > 0 ? `
+            <div class="premium-form-group col-span-12 md:col-span-8">
+               <label>أماكن تواجد الصنف الحالية</label>
+               <div class="flex gap-1 flex-wrap" style="padding-top: 12px;">
+                  ${uniqueItemLocations.map(loc => `<span style="border: 1.5px solid #10b981; color: #059669; background-color: #ecfdf5; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: bold;">${loc}</span>`).join('')}
+               </div>
+            </div>
+            ` : '<div class="col-span-12 md:col-span-8"></div>'}
+
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label>اللون / المواصفة</label>
               <select id="swal-spec" class="premium-input">
@@ -1386,40 +1578,41 @@ const AdminStock = ({ user, notificationTarget }) => {
                 ${globalSettings.stockColors?.map(c => `<option value="${c}" ${initialData.spec === c ? 'selected' : ''}>${c}</option>`).join('')}
               </select>
             </div>
-
             <div class="premium-form-group col-span-12 md:col-span-4">
-              <label class="text-primary">الكمية الحالية</label>
+              <label>الكمية الحالية</label>
               <div class="flex gap-2">
-                <input id="swal-quantity" type="number" class="premium-input" style="flex: 2;" value="${initialData.quantity}">
-                <select id="swal-unit" class="premium-input" style="flex: 1;">
+                <input id="swal-quantity" type="number" class="premium-input" style="flex: 2; margin-bottom: 0;" value="${initialData.quantity}">
+                <select id="swal-unit" class="premium-input" style="flex: 1; margin-bottom: 0;">
                   ${globalSettings.stockUnits?.map(u => `<option value="${u}" ${initialData.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
                 </select>
               </div>
             </div>
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label>الحد الأدنى (تنبيه)</label>
-              <input id="swal-minLimit" type="number" class="premium-input" value="${initialData.minLimit}">
+              <input id="swal-minLimit" type="number" class="premium-input" value="${initialData.minLimit || 0}">
             </div>
+
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label>آخر حركة</label>
               <select id="swal-lastMovement" class="premium-input">
                 <option value="إدخال" ${initialData.lastMovement === 'إدخال' ? 'selected' : ''}>إدخال</option>
                 <option value="إخراج" ${initialData.lastMovement === 'إخراج' ? 'selected' : ''}>إخراج</option>
-                <option value="تحويل" ${initialData.lastMovement === 'تحويل' ? 'selected' : ''}>تحويل</option>
+                <option value="إتلاف" ${initialData.lastMovement === 'إتلاف' ? 'selected' : ''}>إتلاف</option>
+                <option value="جرد وتسوية" ${initialData.lastMovement === 'جرد وتسوية' ? 'selected' : ''}>جرد وتسوية</option>
               </select>
             </div>
-
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label>تاريخ آخر حركة</label>
               <input id="swal-lastMovementDate" type="date" class="premium-input" value="${initialData.lastMovementDate}">
             </div>
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label>آخر مستلم / مسؤول</label>
-              <input id="swal-lastRecipient" class="premium-input" placeholder="اسم الشخص" value="${initialData.lastRecipient}">
+              <input id="swal-lastRecipient" class="premium-input" placeholder="اسم الشخص" value="${initialData.lastRecipient || ''}">
             </div>
-            <div class="premium-form-group col-span-12 md:col-span-4">
+
+            <div class="premium-form-group col-span-12 md:col-span-8">
               <label>ملاحظات</label>
-              <input id="swal-notes" class="premium-input" placeholder="أي ملاحظات..." value="${initialData.notes}">
+              <textarea id="swal-notes" class="premium-input" placeholder="أي ملاحظات..." style="min-height: 80px;">${initialData.notes || ''}</textarea>
             </div>
           </div>
         </div>
@@ -2255,6 +2448,7 @@ const AdminStock = ({ user, notificationTarget }) => {
                   </th>
                   <th className="text-center">التصنيف</th>
                   <th className="text-center">المخزن</th>
+                  <th className="text-center">الموقع</th>
                   <th className="text-center">المواصفة</th>
                   <th className="text-center">الكمية</th>
                   <th className="text-center">الوحدة</th>
@@ -2294,6 +2488,20 @@ const AdminStock = ({ user, notificationTarget }) => {
                             {group.locations.length} {group.locations.length === 1 ? 'موقع' : 'مواقع'}
                           </div>
                         </td>
+                        <td className="text-sm text-center">
+                          <div className="flex items-center justify-center gap-1 flex-wrap">
+                            {(() => {
+                              const custodyItemLocs = assets.flatMap(a => (a.items || []).filter(i => i.name === group.name).flatMap(i => (i.location || '').split(/[,، -]/).filter(Boolean)));
+                              const locs = [...new Set([...group.locations.flatMap(loc => (loc.location || '').split(/[,، -]/).filter(Boolean)), ...custodyItemLocs])];
+                              if (locs.length === 0) return <span className="text-muted">-</span>;
+                              return locs.map((locStr, idx) => (
+                                <span key={idx} style={{ border: '1.5px solid #10b981', color: '#059669', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
+                                  {locStr}
+                                </span>
+                              ));
+                            })()}
+                          </div>
+                        </td>
                         <td className="text-sm text-center">{displaySpec}</td>
                         <td className="text-center" onClick={(e) => {
                           if (group.locations.length === 1 && canPerformAction(user, 'EDIT', 'STOCK', globalSettings)) {
@@ -2319,6 +2527,10 @@ const AdminStock = ({ user, notificationTarget }) => {
                         </td>
                         <td onClick={e => e.stopPropagation()} className="text-center">
                           <div className="flex justify-center gap-2">
+                            <button className="icon-btn" style={{ color: '#13898f', background: '#e0f2fe' }} title="معاينة أماكن التواجد"
+                              onClick={() => { setSelectedItemForLocations(group); setShowLocationsModal(true); }}>
+                              <Eye size={16} strokeWidth={2} />
+                            </button>
                             {canPerformAction(user, 'ADD', 'STOCK', globalSettings) && (
                               <button className="icon-btn icon-btn-add" title="إضافة لون/موقع آخر لنفس الصنف"
                                 onClick={() => handleOpenModal(group.locations[0], true)}>
@@ -2348,8 +2560,9 @@ const AdminStock = ({ user, notificationTarget }) => {
                             <td className="text-center"><span className="badge badge-info opacity-70">{loc.category}</span></td>
                             <td className="text-sm text-center">
                               <div className="flex items-center justify-center gap-1"><MapPin size={12} className="text-primary" /> {loc.warehouse}</div>
-                              <div className="text-[10px] text-muted">{loc.location}</div>
+                              
                             </td>
+                            <td className="text-sm text-muted text-center">-</td>
                             <td className="text-sm text-muted text-center">{loc.spec}</td>
                             <td className="text-center" onClick={(e) => {
                               if (canPerformAction(user, 'EDIT', 'STOCK', globalSettings)) {
@@ -3230,7 +3443,9 @@ const AdminStock = ({ user, notificationTarget }) => {
                       options={
                         voucherType === 'إتلاف'
                           ? employees.filter(e => e.status !== 'موقوف').map(e => ({ value: e.name, label: e.name }))
-                          : customers.filter(c => c.status !== 'موقوف').map(c => ({ value: c.name, label: c.name }))
+                          : voucherType === 'إدخال'
+                            ? customers.filter(c => (c.type || 'عميل') === 'مورد' && c.status !== 'موقوف').map(c => ({ value: c.name, label: c.name }))
+                            : customers.filter(c => (c.type || 'عميل') === 'عميل' && c.status !== 'موقوف').map(c => ({ value: c.name, label: c.name }))
                       }
                       value={voucherForm.recipient ? { value: voucherForm.recipient, label: voucherForm.recipient } : null}
                       onChange={selected => setVoucherForm(prev => ({ ...prev, recipient: selected ? selected.value : '' }))}
@@ -3663,6 +3878,123 @@ const AdminStock = ({ user, notificationTarget }) => {
           </div>
         </div>
       )}
+      {/* Locations Modal */}
+      {showLocationsModal && selectedItemForLocations && (
+        <div className="modal-overlay" style={{ zIndex: 9999 }}>
+          <div className="animate-fade-in" style={{ backgroundColor: '#ffffff', borderRadius: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', position: 'relative', overflow: 'hidden', maxWidth: '750px', width: '95%', direction: 'rtl', fontFamily: '"Cairo", sans-serif' }}>
+            
+            {/* Header Background Graphic */}
+            <div style={{ position: 'absolute', top: '-100px', left: '-100px', width: '300px', height: '300px', background: 'radial-gradient(circle, rgba(19,137,143,0.08) 0%, rgba(255,255,255,0) 70%)', borderRadius: '50%', zIndex: 0 }} />
+            <div style={{ position: 'absolute', top: '-50px', left: '100px', width: '200px', height: '200px', background: 'radial-gradient(circle, rgba(19,137,143,0.05) 0%, rgba(255,255,255,0) 70%)', borderRadius: '50%', zIndex: 0 }} />
+            
+            <div style={{ padding: '1.75rem', position: 'relative', zIndex: 10 }}>
+              {/* Header Section */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ backgroundColor: '#13898f', width: '48px', height: '48px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', flexShrink: 0, boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+                    <Box size={24} color="#ffffff" />
+                  </div>
+                  <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>
+                    أماكن تواجد الصنف: <span style={{ color: '#0f172a' }}>{selectedItemForLocations.name}</span>
+                  </h2>
+                </div>
+                <button 
+                  onClick={() => setShowLocationsModal(false)}
+                  style={{ width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', color: '#64748b', cursor: 'pointer', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Info Box */}
+              <div style={{ borderRadius: '12px', border: '1px solid #f1f5f9', backgroundColor: 'rgba(248, 250, 252, 0.7)', padding: '1.25rem', marginBottom: '1.5rem', textAlign: 'right', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '1.5rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 'bold', fontSize: '1.125rem' }}>
+                  <div>الرقم: <span style={{ color: '#13898f' }}>{selectedItemForLocations.itemNumber}</span></div>
+                  {selectedItemForLocations.category && (
+                    <>
+                      <div style={{ width: '1px', height: '24px', backgroundColor: '#e2e8f0' }}></div>
+                      <div>التصنيف: <span style={{ color: '#334155' }}>{selectedItemForLocations.category}</span></div>
+                    </>
+                  )}
+                </div>
+                <div style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '1.125rem' }}>
+                  إجمالي الكمية المتوفرة: <span style={{ color: '#13898f' }}>{selectedItemForLocations.totalQuantity} {selectedItemForLocations.unit || 'عدد'}</span>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div style={{ borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: '1.5rem', backgroundColor: '#ffffff', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+                <table style={{ width: '100%', textAlign: 'right', borderCollapse: 'collapse', display: 'table', borderRadius: '0', border: 'none', boxShadow: 'none' }}>
+                  <thead style={{ display: 'table-header-group' }}>
+                    <tr>
+                      <th style={{ padding: '1rem', fontWeight: 'bold', textAlign: 'right', width: '50%', backgroundColor: '#13898f', color: '#ffffff', borderBottom: 'none' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '0.5rem' }}>
+                          <MapPin size={18} color="#ffffff" /> الرف / الموقع
+                        </div>
+                      </th>
+                      <th style={{ padding: '1rem', fontWeight: 'bold', textAlign: 'center', width: '50%', backgroundColor: '#13898f', color: '#ffffff', borderBottom: 'none' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                          <Box size={18} color="#ffffff" /> الكمية الموجودة
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody style={{ display: 'table-row-group' }}>
+                    {(() => {
+                      const stockLocs = selectedItemForLocations.locations.map(loc => ({
+                        id: loc.id,
+                        location: loc.location || '-',
+                        quantity: loc.quantity,
+                        isCustody: false
+                      }));
+                      
+                      const custodyLocs = assets.flatMap(a => 
+                        (a.items || []).filter(i => i.name === selectedItemForLocations.name).map((i, idx) => ({
+                          id: `asset-${a.id}-${idx}`,
+                          location: i.location ? `${i.location} (عهدة ${a.employeeName})` : `عهدة ${a.employeeName}`,
+                          quantity: i.quantity || 1,
+                          isCustody: true
+                        }))
+                      );
+                      
+                      const allLocs = [...stockLocs, ...custodyLocs];
+
+                      return allLocs.map((loc, idx) => (
+                        <tr key={loc.id} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc', display: 'table-row', border: 'none', borderRadius: '0', boxShadow: 'none', margin: '0' }}>
+                          <td style={{ padding: '1rem', textAlign: 'right', borderBottom: idx !== allLocs.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '0.5rem' }}>
+                              {loc.location !== '-' && <MapPin size={18} color={loc.isCustody ? '#10b981' : '#94a3b8'} />}
+                              <span style={{ fontWeight: 'bold', color: loc.isCustody ? '#059669' : '#1e293b', fontSize: '1.125rem' }}>{loc.location}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 'bold', fontSize: '1.5rem', color: '#1e293b', borderBottom: idx !== allLocs.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                            {loc.quantity}
+                          </td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Footer */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button 
+                  onClick={() => setShowLocationsModal(false)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 1.5rem', borderRadius: '12px', backgroundColor: '#f1f5f9', color: '#1e293b', fontWeight: 'bold', border: 'none', cursor: 'pointer', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}
+                >
+                  <div style={{ backgroundColor: '#1e293b', color: '#ffffff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px' }}>
+                    <X size={14} color="#ffffff" strokeWidth={3} />
+                  </div>
+                  إغلاق
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

@@ -59,6 +59,7 @@ export const defaultGlobalSettings = {
   salesStatuses: ["جديد", "قيد التجهيز", "جاهز للتوصيل", "تم تسليمها للتوصيل", "تم التوصيل", "ملغي", "مرفوض"],
   salesItemStatuses: ["جديد", "قيد التجهيز", "جاهز للتسليم", "تم التسليم", "مرتجع"],
   customerSectors: ["المستشفيات", "شركات خاصة", "شخصي", "مول", "اثاث مكتبي", "اثاث منزلي ومفروشات", "أطفال وبيبي", "ستائر", "مستلزمات طبية", "الحرامات", "الأدوات المنزلية", "الفنادق", "الشقق الفندقية", "بياضات", "الفرشات", "جمعيات ومنظمات", "حكومي", "جهة عسكرية", "الجامعات والمدارس"],
+  stockLocations: Array.from({ length: 45 }, (_, i) => `A${i + 1}`),
   userTypes: [
     { name: "إدارة", color: "#6366f1", permissions: { canAdd: true, canEdit: true, canDelete: true, isFullAdmin: true } },
     { name: "مشرف قسم", color: "#f59e0b", permissions: { canAdd: true, canEdit: true, canDelete: false, isFullAdmin: false } },
@@ -345,10 +346,17 @@ export const createNotification = async (notification) => {
         const employeesRef = await getDocs(collection(db, 'employees'));
         const allEmployees = employeesRef.docs.map(d => ({ id: d.id, ...d.data() }));
         
+        const sentPhones = new Set();
         for (const emp of allEmployees) {
           if (emp.phone && notificationMatchesUser(payload, emp, globalSettings)) {
-            let waMsg = `*إشعار من مرجاس*\n${notification.title}\n${notification.message}`;
-            await sendWhatsAppNotification(emp.phone, waMsg);
+            let cleanPhone = String(emp.phone).replace(/[^0-9]/g, '');
+            if (sentPhones.has(cleanPhone)) continue;
+            sentPhones.add(cleanPhone);
+
+            let waMsg = `*إشعار :*\n${notification.title}\n${notification.message}`;
+            const eventTypeMap = { dailyReport: 'daily_report', employeeRequest: 'leave_requests' };
+            const evType = eventTypeMap[notification.settingKey] || notification.settingKey;
+            await sendWhatsAppNotification(emp.phone, waMsg, evType);
           }
         }
       } catch (err) {

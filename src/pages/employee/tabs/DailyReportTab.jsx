@@ -32,6 +32,8 @@ export const DailyReportTab = ({
   setPhoneSafe,
   phoneUsages,
   setPhoneUsages,
+  notes,
+  setNotes,
   tasks,
   tasksData,
   updateTask,
@@ -165,7 +167,7 @@ export const DailyReportTab = ({
                 </select>
               </div>
             )}
-            <div className={`input-group mb-0 ${isMultiRole ? 'md:col-span-3' : 'md:col-span-4'}`}>
+            <div className={`input-group mb-0 ${isMultiRole ? 'md:col-span-4' : 'md:col-span-5'}`}>
               <label className="text-xs font-bold text-slate-700">الصنف</label>
               {taskDeptTasks.length > 0 ? (
                 <select
@@ -183,7 +185,7 @@ export const DailyReportTab = ({
                 </div>
               )}
             </div>
-            <div className={`input-group mb-0 ${isMultiRole ? 'md:col-span-2' : 'md:col-span-3'}`}>
+            <div className={`input-group mb-0 ${isMultiRole ? 'md:col-span-3' : 'md:col-span-4'}`}>
               <label className="text-xs font-bold text-slate-700">العملية</label>
               <select
                 className="input-field h-11 text-base font-bold text-slate-900 bg-white border-2 border-slate-200 focus:border-primary"
@@ -207,16 +209,6 @@ export const DailyReportTab = ({
                 min="1"
               />
             </div>
-            <div className={`input-group mb-0 ${isMultiRole ? 'md:col-span-2' : 'md:col-span-2'}`}>
-              <label className="text-xs font-bold text-slate-700">ملاحظات (اختياري)</label>
-              <input
-                type="text"
-                className="input-field h-11 text-base font-bold text-slate-900 bg-white border-2 border-slate-200 focus:border-primary"
-                value={task.notes || ''}
-                onChange={(e) => updateTask(task.id, { notes: e.target.value })}
-                placeholder="ملاحظات"
-              />
-            </div>
             <button type="button" className="btn btn-outline text-danger h-11 w-full col-span-full md:col-span-1" onClick={() => removeTaskRow(task.id)} style={{ borderColor: '#fee2e2' }}><Trash2 size={16} /> <span className="md:hidden">حذف</span></button>
           </div>
         );
@@ -229,6 +221,18 @@ export const DailyReportTab = ({
       >
         <Plus size={16} /> إضافة عمل إضافي
       </button>
+
+      <div className="input-group mb-6">
+        <label className="text-sm font-bold text-slate-700">ملاحظات عامة حول عمل اليوم (اختياري)</label>
+        <textarea
+          className="input-field w-full text-base font-bold text-slate-900 bg-white border-2 border-slate-200 focus:border-primary p-3 rounded-xl"
+          style={{ minHeight: '100px', resize: 'vertical' }}
+          value={notes || ''}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="اكتب أي ملاحظات تود إضافتها للتقرير العام..."
+        ></textarea>
+      </div>
+
       <button type="submit" className="btn btn-primary w-full h-11 text-base"><Save size={18} /> حفظ التقرير</button>
     </motion.form>
   );

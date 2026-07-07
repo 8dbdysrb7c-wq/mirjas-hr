@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Home, Users, Settings, FileText, ShoppingBag, ShoppingCart, UserCheck, Target, Plus, MoreHorizontal, X, Truck, ClipboardList, SunMoon, Layers, ChevronDown, ChevronUp, Palette, Package, Moon, Activity, RefreshCw } from 'lucide-react';
+import { LogOut, Home, Users, Settings, FileText, ShoppingBag, ShoppingCart, UserCheck, Target, Plus, MoreHorizontal, X, Truck, ClipboardList, SunMoon, Layers, ChevronDown, ChevronUp, Palette, Package, Moon, Activity, RefreshCw, MapPin } from 'lucide-react';
 import AdminOverview from './admin/AdminOverview';
 import AdminEmployees from './admin/AdminEmployees';
 import AdminProduction from './admin/AdminProduction';
@@ -15,6 +15,7 @@ import AdminReports from './admin/AdminReports';
 import AdminSupervisorReports from './admin/AdminSupervisorReports';
 import AdminSupervisorTasks from './admin/AdminSupervisorTasks';
 import AdminLive from './admin/AdminLive';
+import AdminRepVisits from './admin/AdminRepVisits';
 import { useAttendanceReminders } from '../hooks/useAttendanceReminders';
 import { getGlobalSettings, isAdmin, saveEmployee } from '../store';
 import NotificationCenter from '../components/NotificationCenter';
@@ -234,6 +235,7 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
       case 'supervisor-reports': return <AdminSupervisorReports user={user} />;
       case 'stock': return <AdminStock user={user} notificationTarget={notificationTarget} />;
       case 'customers': return <AdminCustomers user={user} />;
+      case 'rep-visits': return <AdminRepVisits />;
       case 'site-settings': return <AdminSettings user={user} />;
 
       case 'logs': return <AdminLogs user={user} />;
@@ -427,6 +429,11 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
             {(isAdmin(user) || user.hasCustomersAccess) && (
               <div className={`admin-sidebar-item ${activeTab === 'customers' ? 'active' : ''}`} onClick={() => handleTabChange('customers')}>
                 <UserCheck size={22} /> <span>العملاء والموردين</span>
+              </div>
+            )}
+            {(isAdmin(user) || user.hasSalesAccess || user.hasCustomersAccess) && (
+              <div className={`admin-sidebar-item ${activeTab === 'rep-visits' ? 'active' : ''}`} onClick={() => handleTabChange('rep-visits')}>
+                <MapPin size={22} /> <span>زيارات المندوبين</span>
               </div>
             )}
 

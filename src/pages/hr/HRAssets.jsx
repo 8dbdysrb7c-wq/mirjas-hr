@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getHRAssets, saveHRAsset, deleteHRAsset, getEmployees, getGlobalSettings, getStock, saveStockItem } from '../../store';
-import { Package, Plus, Search, Filter, AlertTriangle, CheckCircle, XCircle, ArrowRightLeft, Edit2, Trash2, Calendar, FileText, User, RefreshCw, BarChart2, Eye, X, Activity, ArrowUp, ArrowDown, Printer, FileDown } from 'lucide-react';
+import { getHRAssets, saveHRAsset, deleteHRAsset, getEmployees, getGlobalSettings, saveGlobalSettings, getStock, saveStockItem } from '../../store';
+import { Package, Plus, Search, Filter, AlertTriangle, CheckCircle, XCircle, ArrowRightLeft, Edit2, Trash2, Calendar, FileText, User, RefreshCw, BarChart2, Eye, X, Activity, ArrowUp, ArrowDown, Printer, FileDown, Layers, ArrowUpDown } from 'lucide-react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import SearchableDropdown from '../../components/SearchableDropdown';
@@ -35,6 +35,7 @@ const HRAssets = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('جميع الحالات');
   const [filterEmployee, setFilterEmployee] = useState('');
+  const [filterLocation, setFilterLocation] = useState('');
 
   const [view, setView] = useState('list'); // 'list' or 'form'
   const [editingAsset, setEditingAsset] = useState(null);
@@ -118,17 +119,38 @@ const HRAssets = ({ user }) => {
     setView('form');
   };
 
+  const generateNextID = (category) => {
+    let prefix = 'UNK';
+    if (!category) prefix = 'UNK';
+    else if (category === 'بضاعة جاهزة' || category.includes('بضاعة')) prefix = 'FG';
+    else if (category === 'أقمشة' || category.includes('قماش')) prefix = 'FAB';
+    else if (category === 'تغليف' || category.includes('كرتون')) prefix = 'PKG';
+    else if (category === 'مستهلكات' || category.includes('مستهلك')) prefix = 'CON';
+    else if (category === 'أصول' || category.includes('أصل')) prefix = 'AST';
+
+    const categoryItems = stockItems.filter(item => item.itemNumber && item.itemNumber.startsWith(prefix + '-'));
+    
+    if (categoryItems.length === 0) return `${prefix}-00001`;
+    
+    const ids = categoryItems.map(item => {
+      const parts = item.itemNumber.split('-');
+      if (parts.length > 1) {
+        return parseInt(parts[1], 10) || 0;
+      }
+      return 0;
+    });
+    
+    const maxID = Math.max(...ids, 0);
+    return `${prefix}-${String(maxID + 1).padStart(5, '0')}`;
+  };
+
   const handleAddStockItem = async () => {
+    const categories = globalSettings?.stockCategories || ['الأصول', 'مستهلكات الخياطة'];
+    const defaultCategory = categories[0] || 'الأصول';
     const initialData = {
-      itemNumber: `SKU-${String(
-        stockItems.reduce((max, s) => {
-          if (s.itemNumber && s.itemNumber.startsWith('SKU-')) {
-            const num = parseInt(s.itemNumber.replace('SKU-', ''), 10);
-            return !isNaN(num) && num > max ? num : max;
-          }
-          return max;
-        }, 0) + 1
-      ).padStart(4, '0')}`,
+      itemNumber: generateNextID(defaultCategory),
+      category: defaultCategory,
+      warehouse: globalSettings?.warehouses?.[0] || 'المستودع الرئيسي',
       lastMovementDate: getLocalDateStr(new Date()),
       lastRecipient: user?.name || ''
     };
@@ -143,6 +165,52 @@ const HRAssets = ({ user }) => {
       },
       buttonsStyling: false,
       showCloseButton: false,
+      didOpen: () => {
+        const categorySelect = document.getElementById('swal-category');
+        const itemNumberInput = document.getElementById('swal-itemNumber');
+        if (categorySelect && itemNumberInput) {
+          categorySelect.addEventListener('change', (e) => {
+            itemNumberInput.value = generateNextID(e.target.value);
+          });
+        }
+
+        // Location select management
+        const locationSelect = document.getElementById('swal-location');
+        const addBtn = document.getElementById('swal-add-location-btn');
+        if (addBtn && locationSelect) {
+          addBtn.addEventListener('click', async () => {
+            const { value: newLoc } = await Swal.fire({
+              title: 'إضافة رف جديد',
+              input: 'text',
+              inputPlaceholder: 'مثال: رف 6',
+              showCancelButton: true,
+              confirmButtonText: 'إضافة',
+              cancelButtonText: 'إلغاء'
+            });
+            if (newLoc && newLoc.trim()) {
+              const name = newLoc.trim();
+              const optionExists = Array.from(locationSelect.options).some(opt => opt.value === name);
+              if (!optionExists) {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                locationSelect.appendChild(opt);
+              }
+              locationSelect.value = name;
+
+              const updatedLocations = [...(globalSettings.stockLocations || [])];
+              if (!updatedLocations.includes(name)) {
+                updatedLocations.push(name);
+                await saveGlobalSettings({
+                  ...globalSettings,
+                  stockLocations: updatedLocations
+                });
+                globalSettings.stockLocations = updatedLocations;
+              }
+            }
+          });
+        }
+      },
       html: `
         <div class="premium-modal-header">
           <div class="premium-modal-title">
@@ -155,37 +223,49 @@ const HRAssets = ({ user }) => {
         </div>
         <div class="premium-form text-right" style="direction: rtl;">
           <div class="grid grid-cols-12 gap-x-8 gap-y-8">
+            <!-- Row 1: Item Number, Name, Category -->
             <div class="premium-form-group col-span-12 md:col-span-3">
               <label>رقم الصنف (ID)</label>
               <input id="swal-itemNumber" class="premium-input" value="${initialData.itemNumber}" disabled style="background: var(--surface); cursor: not-allowed; font-weight: bold; color: var(--primary-dark); text-align: center;">
             </div>
-            <div class="premium-form-group col-span-12 md:col-span-3">
-              <label>رمز الصنف</label>
-              <input id="swal-itemCode" class="premium-input" placeholder="" value="">
-            </div>
-            <div class="premium-form-group col-span-12 md:col-span-3">
+            <div class="premium-form-group col-span-12 md:col-span-6">
               <label>اسم الصنف</label>
               <input id="swal-name" class="premium-input" placeholder="مثال: قماش أبيض تركي" value="">
             </div>
             <div class="premium-form-group col-span-12 md:col-span-3">
               <label>التصنيف</label>
               <select id="swal-category" class="premium-input">
-                <option value="" disabled selected>اختر التصنيف</option>
-                ${(globalSettings?.stockCategories || ['الأصول', 'مستهلكات الخياطة']).map(c => `<option value="${c}">${c}</option>`).join('')}
+                <option value="" disabled>اختر التصنيف</option>
+                ${categories.map(c => `<option value="${c}" ${initialData.category === c ? 'selected' : ''}>${c}</option>`).join('')}
               </select>
             </div>
 
+            <!-- Row 2: Item Code, Warehouse -->
+            <div class="premium-form-group col-span-12 md:col-span-3">
+              <label>رمز الصنف</label>
+              <input id="swal-itemCode" class="premium-input" placeholder="" value="">
+            </div>
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label>المخزن</label>
               <select id="swal-warehouse" class="premium-input">
-                <option value="" disabled selected>اختر المخزن</option>
-                ${(globalSettings?.warehouses || ['المستودع الرئيسي']).map(w => `<option value="${w}">${w}</option>`).join('')}
+                <option value="" disabled>اختر المخزن</option>
+                ${(globalSettings?.warehouses || ['المستودع الرئيسي']).map(w => `<option value="${w}" ${initialData.warehouse === w ? 'selected' : ''}>${w}</option>`).join('')}
               </select>
             </div>
-            <div class="premium-form-group col-span-12 md:col-span-4">
+
+            <!-- Row 3: Location (Full Width Dropdown + Add Button) -->
+            <div class="premium-form-group col-span-12" id="swal-location-container">
               <label>الموقع (داخل المخزن)</label>
-              <input id="swal-location" class="premium-input" placeholder="مثال: رف 5، قسم B" value="">
+              <div class="flex gap-2">
+                <select id="swal-location" class="premium-input" style="flex: 1;">
+                  <option value="">-- اختر الرف --</option>
+                  ${(globalSettings.stockLocations || []).map(l => `<option value="${l}" ${initialData.location === l ? 'selected' : ''}>${l}</option>`).join('')}
+                </select>
+                <button type="button" id="swal-add-location-btn" style="width: 42px; height: 42px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 0;">+</button>
+              </div>
             </div>
+
+            <!-- Row 4: Spec, Quantity, MinLimit -->
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label>اللون / المواصفة</label>
               <select id="swal-spec" class="premium-input">
@@ -253,17 +333,23 @@ const HRAssets = ({ user }) => {
           notes: document.getElementById('swal-notes').value
         };
 
-        if (!data.name || !data.warehouse || !data.category) {
-          Swal.showValidationMessage('يرجى ملء الاسم والتصنيف والمخزن');
+        if (!data.itemNumber || !data.name || !data.warehouse || !data.category) {
+          Swal.showValidationMessage('يرجى ملء الاسم والتصنيف ورقم الصنف والمخزن');
+          return false;
+        }
+
+        if (data.itemCode && data.itemCode.trim().length !== 13) {
+          Swal.showValidationMessage('يجب أن يتكون رمز الصنف من 13 خانة بالضبط');
           return false;
         }
 
         const existingInWarehouse = stockItems.find(s => 
           s.itemNumber === data.itemNumber && 
-          s.warehouse === data.warehouse
+          s.warehouse === data.warehouse &&
+          s.spec === data.spec
         );
         if (existingInWarehouse) {
-          Swal.showValidationMessage(`عذراً، يوجد بضاعة من هذا الصنف مسبقاً في المستودع المختار (${data.warehouse})!`);
+          Swal.showValidationMessage(`عذراً، يوجد بضاعة من هذا الصنف بنفس المواصفة/اللون مسبقاً في المستودع المختار (${data.warehouse})!`);
           return false;
         }
 
@@ -376,6 +462,19 @@ const HRAssets = ({ user }) => {
 
     const saved = await saveHRAsset(dataToSave, user);
     if (saved) {
+      for (const item of dataToSave.items) {
+        if (item.name && item.location) {
+          const sItem = stockItems.find(s => s.name === item.name);
+          if (sItem) {
+            let sLocations = sItem.locations || [];
+            if (!sLocations.includes(item.location)) {
+              const updatedItem = { ...sItem, locations: [...sLocations, item.location] };
+              await saveStockItem(updatedItem);
+            }
+          }
+        }
+      }
+
       Swal.fire({
         title: 'تم الحفظ',
         text: 'تم حفظ بيانات العهدة بنجاح',
@@ -723,7 +822,12 @@ const HRAssets = ({ user }) => {
                      <td class="p-3 font-bold text-primary">${item.name} <span class="text-xs text-slate-400 font-normal">(${item.category})</span></td>
                      <td class="p-3 text-center font-bold text-slate-600">${(() => {
                         const stockItem = stockItems.find(s => s.name === item.name);
-                        return stockItem?.location || '-';
+                        const locStr = item.location || stockItem?.location || '';
+                        if (!locStr) return '-';
+                        const locs = locStr.split(/[,، -]/).filter(Boolean);
+                        return '<div class="flex items-center justify-center gap-1 flex-wrap">' + 
+                               locs.map(l => '<span style="border: 1.5px solid #10b981; color: #059669; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold;">' + l + '</span>').join('') +
+                               '</div>';
                      })()}</td>
                      <td class="p-3 text-center font-bold">${item.quantity}</td>
                      <td class="p-3 text-center">
@@ -755,6 +859,399 @@ const HRAssets = ({ user }) => {
     });
   };
 
+  const handleShowLocationDetails = (locName) => {
+    if (!locName) return;
+
+    const stockOnShelf = stockItems.filter(s => {
+      const locs = [];
+      if (s.locations) locs.push(...s.locations);
+      if (s.location) locs.push(...String(s.location).split(/[,،-]/).map(x => x.trim()).filter(Boolean));
+      return locs.includes(locName);
+    });
+
+    const custodyOnShelf = [];
+    assets.forEach(asset => {
+      if (asset.status !== 'نشطة') return;
+      (asset.items || []).forEach(item => {
+        if (item.location === locName) {
+          custodyOnShelf.push({
+            itemName: item.name,
+            category: item.category,
+            assetName: asset.name,
+            employeeName: asset.employeeName,
+            quantity: item.quantity,
+            status: item.status
+          });
+        }
+      });
+    });
+
+    let htmlContent = `
+      <div class="text-right" style="direction: rtl;">
+        <h4 class="font-bold text-slate-800 mb-3 pb-2 border-b border-slate-100 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-package text-primary"><path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>
+          الأصناف المتواجدة في المخزن (المستودع) على الرف (${locName})
+        </h4>
+    `;
+
+    if (stockOnShelf.length > 0) {
+      htmlContent += `
+        <div class="overflow-hidden rounded-lg border border-slate-200 mb-6 shadow-sm">
+          <table class="w-full text-right border-collapse text-xs bg-white">
+            <thead class="bg-slate-100 border-b border-slate-200">
+              <tr>
+                <th class="p-2.5 font-bold text-slate-700">رقم الصنف</th>
+                <th class="p-2.5 font-bold text-slate-700">اسم الصنف</th>
+                <th class="p-2.5 font-bold text-slate-700">المخزن</th>
+                <th class="p-2.5 font-bold text-slate-700 text-center">الكمية المتوفرة</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${stockOnShelf.map(s => `
+                <tr class="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                  <td class="p-2.5 font-mono font-bold text-slate-600">${s.itemNumber}</td>
+                  <td class="p-2.5 font-bold text-primary">${s.name}</td>
+                  <td class="p-2.5 text-slate-500">${s.warehouse}</td>
+                  <td class="p-2.5 text-center font-bold text-emerald-700">${s.quantity} ${s.unit || 'عدد'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } else {
+      htmlContent += `<p class="text-slate-400 text-center p-4 bg-slate-50 rounded-lg text-xs mb-6 border border-dashed border-slate-200">لا توجد أصناف في مخزون المستودعات على هذا الرف.</p>`;
+    }
+
+    htmlContent += `
+        <h4 class="font-bold text-slate-800 mb-3 pb-2 border-b border-slate-100 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users text-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          الأصناف الموزعة كعهدة والمسجلة على الرف (${locName})
+        </h4>
+    `;
+
+    if (custodyOnShelf.length > 0) {
+      htmlContent += `
+        <div class="overflow-hidden rounded-lg border border-slate-200 shadow-sm">
+          <table class="w-full text-right border-collapse text-xs bg-white">
+            <thead class="bg-slate-100 border-b border-slate-200">
+              <tr>
+                <th class="p-2.5 font-bold text-slate-700">الصنف</th>
+                <th class="p-2.5 font-bold text-slate-700">اسم العهدة</th>
+                <th class="p-2.5 font-bold text-slate-700">الموظف المسؤول</th>
+                <th class="p-2.5 font-bold text-slate-700 text-center">الكمية</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${custodyOnShelf.map(c => `
+                <tr class="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                  <td class="p-2.5 font-bold text-primary">${c.itemName}</td>
+                  <td class="p-2.5 text-slate-600">${c.assetName}</td>
+                  <td class="p-2.5 text-slate-500">${c.employeeName}</td>
+                  <td class="p-2.5 text-center font-bold text-orange-700">${c.quantity}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } else {
+      htmlContent += `<p class="text-slate-400 text-center p-4 bg-slate-50 rounded-lg text-xs border border-dashed border-slate-200">لا توجد عهد مسجلة على هذا الرف.</p>`;
+    }
+
+    htmlContent += `</div>`;
+
+    MySwal.fire({
+      title: `محتويات الخزانة / الرف: ${locName}`,
+      html: htmlContent,
+      showConfirmButton: true,
+      confirmButtonText: 'إغلاق',
+      customClass: {
+        container: 'premium-modal-container',
+        popup: 'premium-modal-popup premium-modal-wide',
+        confirmButton: 'btn-premium-save',
+      },
+      buttonsStyling: false
+    });
+  };
+
+  const handleSewingInventory = () => {
+    const initialItems = stockItems
+      .filter(s => s.category?.includes('خياط') || s.itemNumber?.startsWith('CON-'))
+      .map(s => {
+        const spent = assets.reduce((total, asset) => {
+          if (asset.status !== 'نشطة') return total;
+          const match = asset.items?.find(i => 
+            (i.itemNumber && s.itemNumber && i.itemNumber === s.itemNumber) || 
+            (String(i.name).trim() === String(s.name).trim())
+          );
+          if (match) return total + (Number(match.quantity) || 1);
+          return total;
+        }, 0);
+        const remaining = Number(s.quantity || 0) - spent;
+        return { ...s, spent, remaining };
+      });
+
+    const ModalContent = () => {
+      const [data, setData] = useState(initialItems);
+      const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+      const [locationSearch, setLocationSearch] = useState('');
+
+      const displayedData = data.filter(s => {
+        if (!locationSearch.trim()) return true;
+        const locString = s.locations && s.locations.length > 0 ? s.locations.join(' ') : (s.location || '');
+        return locString.toLowerCase().includes(locationSearch.trim().toLowerCase());
+      });
+
+      const requestSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+          direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+
+        const sortedData = [...data].sort((a, b) => {
+          let aValue = a[key];
+          let bValue = b[key];
+          
+          if (key === 'quantity' || key === 'spent' || key === 'remaining') {
+             aValue = Number(aValue || 0);
+             bValue = Number(bValue || 0);
+          } else if (key === 'location') {
+             aValue = a.locations && a.locations.length > 0 ? a.locations.join(',') : (a.location || '');
+             bValue = b.locations && b.locations.length > 0 ? b.locations.join(',') : (b.location || '');
+          } else {
+             aValue = String(aValue || '');
+             bValue = String(bValue || '');
+          }
+
+          if (aValue < bValue) {
+            return direction === 'asc' ? -1 : 1;
+          }
+          if (aValue > bValue) {
+            return direction === 'asc' ? 1 : -1;
+          }
+          return 0;
+        });
+        setData(sortedData);
+      };
+
+      const exportToExcel = () => {
+        const header = ["رقم الصنف", "اسم الصنف", "الموقع", "الكمية الكلية", "المصروف (العهد)", "المتبقي"];
+        const rows = displayedData.map(s => [
+          s.itemNumber || '-',
+          s.name,
+          s.locations && s.locations.length > 0 ? s.locations.join(' - ') : (s.location || '-'),
+          s.quantity || 0,
+          s.spent,
+          s.remaining
+        ]);
+        
+        let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+        csvContent += header.join(",") + "\n";
+        rows.forEach(rowArray => {
+          const row = rowArray.map(item => `"${String(item).replace(/"/g, '""')}"`).join(",");
+          csvContent += row + "\n";
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "جرد_مستهلكات_الخياطة.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
+
+      const handlePrint = () => {
+        const printWindow = window.open('', '_blank');
+        const html = `
+          <html dir="rtl">
+            <head>
+              <meta charset="utf-8">
+              <title>تقرير جرد مستهلكات الخياطة</title>
+              <style>
+                * { box-sizing: border-box; }
+                @media print {
+                  @page { size: A4 portrait; margin: 1.5cm; }
+                  body { -webkit-print-color-adjust: exact; padding: 0 !important; margin: 0 !important; }
+                  table { page-break-inside: auto; }
+                  tr { page-break-inside: avoid; page-break-after: auto; }
+                  thead { display: table-header-group; }
+                }
+                body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; padding: 20px; direction: rtl; background-color: #fff; }
+                h2 { text-align: center; color: #1e293b; font-size: 22px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+                table { width: 100%; max-width: 100%; border-collapse: collapse; text-align: center; font-size: 13px; table-layout: fixed; }
+                th, td { border: 1px solid #cbd5e1; padding: 10px; word-wrap: break-word; }
+                th { background-color: #f1f5f9; font-weight: bold; color: #334155; }
+                th:nth-child(4), td:nth-child(4) { color: #dc2626; font-weight: bold; }
+                th:nth-child(5), td:nth-child(5) { color: #059669; font-weight: bold; }
+              </style>
+            </head>
+            <body>
+              <h2>تقرير جرد مستهلكات الخياطة</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 15%">رقم الصنف</th>
+                    <th style="width: 25%">اسم الصنف</th>
+                    <th style="width: 20%">الموقع</th>
+                    <th style="width: 13%">الكمية الكلية</th>
+                    <th style="width: 13%">المصروف (العهد)</th>
+                    <th style="width: 14%">المتبقي</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${displayedData.map(s => `
+                    <tr>
+                      <td>${s.itemNumber || '-'}</td>
+                      <td>${s.name}</td>
+                      <td>
+                        ${s.locations && s.locations.length > 0 
+                          ? s.locations.map(l => `<span style="display: inline-block; border: 1.5px solid #059669; color: #047857; background: #ffffff; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; margin: 2px;">${l}</span>`).join(' ')
+                          : `<span style="color: #64748b; font-weight: bold;">${s.location || '-'}</span>`
+                        }
+                      </td>
+                      <td>${s.quantity || 0}</td>
+                      <td>${s.spent}</td>
+                      <td>${s.remaining}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+              <script>
+                window.onload = () => { window.print(); window.close(); }
+              </script>
+            </body>
+          </html>
+        `;
+        printWindow.document.write(html);
+        printWindow.document.close();
+      };
+
+      const SortIcon = () => (
+        <div style={{ backgroundColor: '#3b82f6', color: '#ffffff', borderRadius: '3px', padding: '1px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <ArrowUpDown size={10} strokeWidth={3} />
+        </div>
+      );
+
+      return (
+        <div style={{ direction: 'rtl', fontFamily: 'inherit', padding: '5px 0' }}>
+          <h2 style={{ textAlign: 'center', fontSize: '1.5rem', fontWeight: '900', color: '#1e293b', marginBottom: '24px' }}>
+            تقرير جرد مستهلكات الخياطة
+          </h2>
+          
+          <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center' }}>
+            <input 
+              type="text" 
+              placeholder="🔍 ابحث عن موقع أو كود الرف (مثال: A14)..." 
+              value={locationSearch} 
+              onChange={(e) => setLocationSearch(e.target.value)}
+              style={{ width: '100%', maxWidth: '400px', padding: '10px 16px', borderRadius: '8px', border: '2px solid #e2e8f0', fontSize: '15px', outline: 'none', transition: 'border-color 0.2s', color: '#334155', fontWeight: 'bold' }}
+              onFocus={(e) => e.target.style.borderColor = '#0ea5e9'}
+              onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+            />
+          </div>
+
+          <div style={{ maxHeight: '65vh', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '15px', textAlign: 'center' }}>
+              <thead style={{ backgroundColor: '#ffffff', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                <tr>
+                  <th onClick={() => requestSort('itemNumber')} style={{ padding: '16px 14px', border: '1px solid #e2e8f0', color: '#0ea5e9', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <SortIcon />
+                      رقم الصنف
+                    </div>
+                  </th>
+                  <th onClick={() => requestSort('name')} style={{ padding: '16px 14px', border: '1px solid #e2e8f0', color: '#0ea5e9', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <SortIcon />
+                      اسم الصنف
+                    </div>
+                  </th>
+                  <th onClick={() => requestSort('location')} style={{ padding: '16px 14px', border: '1px solid #e2e8f0', color: '#0ea5e9', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <SortIcon />
+                      الموقع
+                    </div>
+                  </th>
+                  <th onClick={() => requestSort('quantity')} style={{ padding: '16px 14px', border: '1px solid #e2e8f0', color: '#0ea5e9', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <SortIcon />
+                      الكمية الكلية
+                    </div>
+                  </th>
+                  <th onClick={() => requestSort('spent')} style={{ padding: '16px 14px', border: '1px solid #e2e8f0', color: '#ef4444', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <SortIcon />
+                      المصروف (العهد)
+                    </div>
+                  </th>
+                  <th onClick={() => requestSort('remaining')} style={{ padding: '16px 14px', border: '1px solid #e2e8f0', color: '#10b981', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <SortIcon />
+                      المتبقي
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayedData.length > 0 ? displayedData.map(s => (
+                  <tr key={s.id || s.itemNumber} style={{ backgroundColor: '#ffffff', transition: 'background-color 0.2s' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}>
+                    <td style={{ padding: '16px 14px', border: '1px solid #e2e8f0', fontWeight: 'bold', color: '#64748b', whiteSpace: 'nowrap' }}>{s.itemNumber || '-'}</td>
+                    <td style={{ padding: '16px 14px', border: '1px solid #e2e8f0', fontWeight: 'bold', color: '#64748b' }}>{s.name}</td>
+                    <td style={{ padding: '16px 14px', border: '1px solid #e2e8f0' }}>
+                      {s.locations && s.locations.length > 0 ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', justifyContent: 'center' }}>
+                          {s.locations.map((l, i) => (
+                            <span key={i} style={{ display: 'inline-block', border: '1.5px solid #059669', color: '#047857', background: '#ffffff', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px' }}>{l}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span style={{ fontWeight: 'bold', color: '#64748b' }}>{s.location || '-'}</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '16px 14px', border: '1px solid #e2e8f0', fontWeight: 'bold', color: '#64748b' }}>{s.quantity || 0}</td>
+                    <td style={{ padding: '16px 14px', border: '1px solid #e2e8f0', fontWeight: 'bold', color: '#ef4444' }}>{s.spent}</td>
+                    <td style={{ padding: '16px 14px', border: '1px solid #e2e8f0', fontWeight: 'bold', color: '#10b981' }}>{s.remaining}</td>
+                  </tr>
+                )) : (
+                  <tr key="empty-inventory">
+                    <td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontWeight: 'bold', fontSize: '16px' }}>لا توجد أصناف خياطة متوفرة</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          
+          <div style={{ display: 'flex', justifyContent: 'flex-start', gap: '12px', marginTop: '20px' }}>
+            <button onClick={() => Swal.close()} style={{ padding: '10px 24px', backgroundColor: '#7c3aed', color: 'white', borderRadius: '6px', border: '3px solid #c4b5fd', fontWeight: 'bold', cursor: 'pointer', outline: 'none', fontSize: '15px', transition: 'all 0.2s' }}>
+              إغلاق
+            </button>
+            <button onClick={handlePrint} style={{ padding: '10px 24px', backgroundColor: '#0ea5e9', color: 'white', borderRadius: '6px', border: 'none', fontWeight: 'bold', cursor: 'pointer', outline: 'none', fontSize: '15px', transition: 'all 0.2s' }}>
+              طباعة / تصدير PDF
+            </button>
+            <button onClick={exportToExcel} style={{ padding: '10px 24px', backgroundColor: '#10b981', color: 'white', borderRadius: '6px', border: 'none', fontWeight: 'bold', cursor: 'pointer', outline: 'none', fontSize: '15px', transition: 'all 0.2s' }}>
+              تصدير إكسل
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    MySwal.fire({
+      html: <ModalContent />,
+      width: '1000px',
+      showConfirmButton: false,
+      showCloseButton: true,
+      customClass: {
+        container: 'premium-modal-container',
+        popup: 'premium-modal-popup premium-modal-wide',
+        closeButton: 'text-slate-500 hover:text-slate-700'
+      }
+    });
+  };
+
   // Filter logic
   const filteredAssets = assets.filter(a => {
     const matchSearch = searchTerm ? 
@@ -762,8 +1259,12 @@ const HRAssets = ({ user }) => {
         a.assetNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         a.employeeName?.toLowerCase().includes(searchTerm.toLowerCase())) : true;
     const matchStatus = filterStatus !== 'جميع الحالات' ? a.status === filterStatus : true;
-    const matchEmp = filterEmployee ? a.employeeId === filterEmployee : true;
-    return matchSearch && matchStatus && matchEmp;
+    
+    const empObj = filterEmployee ? employees.find(e => String(e.id || '').trim() === String(filterEmployee).trim()) : null;
+    const matchEmp = filterEmployee ? (String(a.employeeId || '').trim() === String(filterEmployee).trim() || (empObj && String(a.employeeName || '').trim() === String(empObj.name || '').trim())) : true;
+    
+    const matchLoc = filterLocation ? (a.items && a.items.some(item => item.location === filterLocation)) : true;
+    return matchSearch && matchStatus && matchEmp && matchLoc;
   });
 
   // Stats
@@ -788,7 +1289,7 @@ const HRAssets = ({ user }) => {
             <div>
               <h2 style={{ fontSize: '24px', fontWeight: '900', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '12px', margin: 0 }}>
                 <Package color="#0ea5e9" size={28} />
-                العهد والأصول
+                العهدة
               </h2>
               <p style={{ color: '#64748b', marginTop: '4px', fontSize: '14px', marginBottom: 0 }}>إدارة ممتلكات الشركة المسلمة للموظفين وتتبع حالتها</p>
             </div>
@@ -861,6 +1362,76 @@ const HRAssets = ({ user }) => {
                 <option value="">الموظف: الكل</option>
                 {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
               </select>
+
+              <select 
+                style={{ 
+                  backgroundColor: '#f8fafc', 
+                  border: 'none', 
+                  borderRadius: '12px', 
+                  fontSize: '13px', 
+                  padding: '8px 16px', 
+                  fontWeight: 'bold', 
+                  color: '#475569',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+                value={filterLocation}
+                onChange={e => setFilterLocation(e.target.value)}
+              >
+                <option value="">الموقع: الكل</option>
+                {(globalSettings?.stockLocations || []).map(loc => <option key={loc} value={loc}>{loc}</option>)}
+              </select>
+
+              {filterLocation && (
+                <button
+                  type="button"
+                  style={{
+                    backgroundColor: '#0284c7',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    padding: '8px 14px',
+                    borderRadius: '12px',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    boxShadow: '0 4px 12px rgba(2, 132, 199, 0.25)',
+                    transition: 'all 0.2s'
+                  }}
+                  onClick={() => handleShowLocationDetails(filterLocation)}
+                  onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                  onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                  <Eye size={15} />
+                  <span>محتويات {filterLocation}</span>
+                </button>
+              )}
+
+              <button 
+                style={{ 
+                  backgroundColor: '#10b981', 
+                  color: '#ffffff', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: '8px', 
+                  padding: '8px 20px', 
+                  borderRadius: '14px', 
+                  fontWeight: 'bold', 
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                }}
+                onClick={() => handleSewingInventory()}
+                onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <Layers size={20} strokeWidth={3} />
+                <span style={{ fontSize: '14px' }}>جرد مستهلكات الخياطة</span>
+              </button>
 
               <button 
                 style={{ 
@@ -1146,7 +1717,7 @@ const HRAssets = ({ user }) => {
                   </div>
                 </div>
                 
-                <div className="modal-table-container rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                <div className="modal-table-container rounded-xl border border-slate-200 shadow-sm" style={{ overflow: 'visible' }}>
                   <table className="modal-table w-full">
                     <thead className="bg-slate-100 text-slate-700">
                       <tr>
@@ -1197,18 +1768,56 @@ const HRAssets = ({ user }) => {
                                 const actualName = val.split(' (متوفر:')[0];
                                 const newItems = [...formData.items];
                                 newItems[index].name = actualName;
+                                
+                                const sameItems = stockItems.filter(s => s.name === actualName);
+                                const availableLocations = [];
+                                sameItems.forEach(s => {
+                                  if (s.locations && s.locations.length > 0) availableLocations.push(...s.locations);
+                                  if (s.location) availableLocations.push(...String(s.location).split(/[,،-]/).map(x => x.trim()).filter(Boolean));
+                                });
+                                const uniqueLocations = [...new Set(availableLocations)];
+                                if (uniqueLocations.length > 0) {
+                                  newItems[index].location = uniqueLocations[0];
+                                } else {
+                                  newItems[index].location = '';
+                                }
+
                                 setFormData({...formData, items: newItems});
                               }}
                               onBlur={() => {}}
                             />
                           </td>
                           <td className="p-2 text-center align-middle">
-                            <div className="w-full border border-slate-200 rounded-lg px-2 bg-slate-50 text-slate-600 font-bold flex items-center justify-center mx-auto" style={{ height: '38px', fontSize: '0.85rem' }}>
-                              {(() => {
-                                const stockItem = stockItems.find(s => s.name === item.name);
-                                return stockItem?.location || '-';
-                              })()}
-                            </div>
+                            {(() => {
+                              const sameItems = stockItems.filter(s => s.name === item.name);
+                              const availableLocations = [];
+                              sameItems.forEach(s => {
+                                if (s.locations && s.locations.length > 0) availableLocations.push(...s.locations);
+                                if (s.location) availableLocations.push(...String(s.location).split(/[,،-]/).map(x => x.trim()).filter(Boolean));
+                              });
+                              if (item.location && !availableLocations.includes(item.location)) {
+                                availableLocations.push(item.location);
+                              }
+                              const allSystemLocations = globalSettings.stockLocations || [];
+                              const uniqueLocations = [...new Set([...allSystemLocations, ...availableLocations])];
+                              return (
+                                <select 
+                                  className="w-full border border-slate-200 rounded-lg px-2 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-center mx-auto" 
+                                  style={{ height: '38px', fontSize: '0.85rem' }} 
+                                  value={item.location || ''} 
+                                  onChange={(e) => {
+                                    const newItems = [...formData.items];
+                                    newItems[index].location = e.target.value;
+                                    setFormData({...formData, items: newItems});
+                                  }}
+                                >
+                                  <option value="" disabled>اختر الموقع</option>
+                                  {uniqueLocations.map((loc, i) => (
+                                    <option key={i} value={loc}>{loc}</option>
+                                  ))}
+                                </select>
+                              );
+                            })()}
                           </td>
                           <td className="p-2 text-center align-middle">
                             <input 

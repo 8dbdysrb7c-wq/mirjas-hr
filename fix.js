@@ -1,206 +1,275 @@
 const fs = require('fs');
-const file = 'c:\\Users\\a.awwad\\.gemini\\antigravity\\mirjas-hr\\src\\pages\\EmployeeDashboard.jsx';
-let content = fs.readFileSync(file, 'utf8');
+const cp = require('child_process');
 
-// I know that the component ends around line 2000.
-// Let's grab the content up to `<div className="input-group">\n                  <label>سبب عدم تسجيل الختمة</label>`
-// and then just append the rest of the file correctly.
-
-const splitPoint = '                  <label>سبب عدم تسجيل الختمة</label>';
-const parts = content.split(splitPoint);
-
-if (parts.length > 1) {
-  const top = parts[0] + splitPoint;
-  
-  // The rest of the missing punch modal:
-  const missingPunchRest = `
-                  <textarea rows={2} className="input-field" required placeholder="اذكر السبب بوضوح..." value={missingPunchForm.reason} onChange={e => setMissingPunchForm({...missingPunchForm, reason: e.target.value})}></textarea>
-                </div>
-                <div className="flex justify-end gap-3 pt-4 mt-2 border-t border-gray-100">
-                  <button type="button" onClick={() => setShowMissingPunchModal(false)} className="btn btn-outline">إلغاء</button>
-                  <button type="submit" disabled={isRequestSubmitting} className="btn btn-primary">{isRequestSubmitting ? 'جاري الإرسال...' : 'إرسال الطلب'}</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Leave Request Modal */}
-      {showLeaveModal && (
-        <div className="modal-overlay" style={{ zIndex: 10500 }}>
-          <div className="modal-content" style={{ maxWidth: '500px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-            <div className="flex justify-between items-center p-5 border-b border-gray-100 shrink-0">
-              <h3 className="font-bold text-lg text-slate-800">
-                {['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'].includes(leaveFormData.type) ? 'تقديم طلب إجازة' : 
-                 leaveFormData.type === 'بدل عمل إضافي' ? 'تقديم بدل عمل إضافي' : 'تقديم طلب مغادرة'}
-              </h3>
-              <button type="button" onClick={() => setShowLeaveModal(false)} className="icon-btn hover:bg-gray-100 rounded-full p-2 transition-colors">
-                <X size={20} className="text-gray-500" />
-              </button>
-            </div>
-            <div className="p-5 overflow-y-auto">
-              <form onSubmit={handleSaveLeaveRequest} className="space-y-4">
-              
-              {/* Balances Display */}
-              {['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'].includes(leaveFormData.type) && (
-                <>
-                  <div className="flex gap-3 mb-4">
-                    {leaveFormData.type === 'إجازة سنوية' && allowedLeaveTypes.includes('إجازة سنوية') && (
-                      <div className="flex-1 bg-blue-50 border border-blue-100 rounded-xl p-3 text-center shadow-sm">
-                        <div className="text-xs text-blue-600 mb-1 font-bold">رصيد الإجازة السنوية</div>
-                        <div className="text-xl font-black text-blue-800">{calculatedVacationBalance} <span className="text-sm font-normal">يوم</span></div>
-                      </div>
-                    )}
-                    {leaveFormData.type === 'إجازة مرضية' && allowedLeaveTypes.includes('إجازة مرضية') && (
-                      <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center shadow-sm">
-                        <div className="text-xs text-emerald-600 mb-1 font-bold">رصيد الإجازة المرضية</div>
-                        <div className="text-xl font-black text-emerald-800">{calculatedSickBalance} <span className="text-sm font-normal">يوم</span></div>
-                      </div>
-                    )}
-                  </div>
-                  {leaveFormData.type === 'إجازة غير مدفوعة' && (
-                    <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl mb-4 text-sm flex gap-2 items-center">
-                      <Info size={16} className="text-amber-600 shrink-0" />
-                      ملاحظة: الإجازة غير المدفوعة سوف تُخصم من راتبك القادم.
-                    </div>
-                  )}
-                </>
-              )}
-                {leaveFormData.type !== 'بدل عمل إضافي' && (
-                <div className="input-group">
-                  <label>نوع الطلب</label>
-                  <select value={leaveFormData.type} onChange={e=>setLeaveFormData({...leaveFormData, type: e.target.value})} className="input-field" required>
-                    {['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر'].includes(leaveFormData.type) ? (
-                      allowedLeaveTypes.filter(t => ['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر'].includes(t)).map(type => (
-                        <option key={type} value={type}>{type}</option>
-                      ))
-                    ) : (
-                      allowedLeaveTypes.filter(t => ['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'].includes(t)).map(type => (
-                        <option key={type} value={type}>{type}</option>
-                      ))
-                    )}
-                  </select>
-                </div>
-                )}
-                
-                {leaveFormData.type === 'مغادرة خاصة' && (
-                  <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl mb-4 text-sm flex gap-2 items-center">
-                    <Info size={16} className="text-amber-600 shrink-0" />
-                    ملاحظة: المغادرة الخاصة سوف تُخصم من راتبك القادم.
-                  </div>
-                )}
-                {leaveFormData.type === 'بدل عمل إضافي' && (
-                  <div className="bg-blue-50 border border-blue-200 text-blue-800 p-3 rounded-xl mb-4 text-sm flex gap-2 items-center">
-                    <Info size={16} className="text-blue-600 shrink-0" />
-                    ملاحظة: العمل الإضافي يجب أن يكون حصراً خارج أوقات الدوام الرسمي.
-                  </div>
-                )}
-                {['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر', 'بدل عمل إضافي'].includes(leaveFormData.type) ? (
-                  <div className="space-y-4">
-                    <div className="input-group">
-                      <label>{leaveFormData.type === 'بدل عمل إضافي' ? 'تاريخ العمل الإضافي' : 'تاريخ المغادرة'}</label>
-                      <Flatpickr 
-                        value={leaveFormData.date} 
-                        onChange={(dates, dateStr) => setLeaveFormData({...leaveFormData, date: dateStr})} 
-                        className="input-field w-full bg-white" 
-                        options={{ 
-                          ...defaultDatePickerOptions,
-                          minDate: new Date(new Date().setDate(new Date().getDate() - 2)),
-                          maxDate: leaveFormData.type === 'بدل عمل إضافي' ? 'today' : new Date(new Date().setDate(new Date().getDate() + 7))
-                        }}
-                        placeholder="اختر التاريخ"
-                        required
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="input-group">
-                        <label>من الساعة</label>
-                        <input 
-                          type="time"
-                          className="input-field w-full bg-white text-slate-800" 
-                          value={leaveFormData.startTime || ''} 
-                          onChange={(e) => setLeaveFormData({...leaveFormData, startTime: e.target.value})} 
-                          required 
-                        />
-                      </div>
-                      <div className="input-group">
-                        <label>إلى الساعة</label>
-                        <input 
-                          type="time"
-                          className="input-field w-full bg-white text-slate-800" 
-                          value={leaveFormData.endTime || ''} 
-                          onChange={(e) => setLeaveFormData({...leaveFormData, endTime: e.target.value})} 
-                          required 
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="input-group">
-                      <label>من تاريخ</label>
-                      <Flatpickr 
-                        value={leaveFormData.startDate} 
-                        onChange={(dates, dateStr) => setLeaveFormData({...leaveFormData, startDate: dateStr})} 
-                        className="input-field w-full bg-white" 
-                        options={{ ...defaultDatePickerOptions }}
-                        placeholder="اختر التاريخ"
-                        required
-                      />
-                    </div>
-                    <div className="input-group">
-                      <label>إلى تاريخ</label>
-                      <Flatpickr 
-                        value={leaveFormData.endDate} 
-                        onChange={(dates, dateStr) => setLeaveFormData({...leaveFormData, endDate: dateStr})} 
-                        className="input-field w-full bg-white" 
-                        options={{ ...defaultDatePickerOptions }}
-                        placeholder="اختر التاريخ"
-                        required
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <div className="input-group">
-                  <label>ملاحظات / السبب</label>
-                  <textarea rows={2} value={leaveFormData.notes} onChange={e=>setLeaveFormData({...leaveFormData, notes: e.target.value})} className="input-field" required></textarea>
-                </div>
-                <div className="flex justify-end gap-3 pt-4 mt-2 border-t border-gray-100">
-                  <button type="button" onClick={() => setShowLeaveModal(false)} className="btn btn-outline">إلغاء</button>
-                  <button type="submit" disabled={isRequestSubmitting} className="btn btn-primary">{isRequestSubmitting ? 'جاري الحفظ...' : 'حفظ الطلب'}</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-`;
-
-  // Find where to resume the file. We need to skip the mangled part.
-  const regex = /<label>ملاحظات \/ السبب<\/label>[\s\S]*?<\/div>\n\s*\} \/\* End of render \*\/ \n/m;
-  const bottomPartSplit = parts[1].split('<label>ملاحظات / السبب</label>');
-  
-  let restOfFile = '';
-  if (bottomPartSplit.length > 1) {
-     // Wait, the bottom part starts with `                  <textarea rows={2}...` which we already included in our missingPunchRest.
-     // The bottomPartSplit[1] would contain the textarea of leave modal.
-     // But wait, there are two instances of `<label>ملاحظات / السبب</label>` in EmployeeDashboard? Wait, there might be one for advance and one for leave.
-     // The best is to find the Advance Modal and resume from there.
-     
-     const advanceModalSplit = content.split('{/* Advance Request Modal */}');
-     if (advanceModalSplit.length > 1) {
-         restOfFile = '\\n      {/* Advance Request Modal */}' + advanceModalSplit[1];
-         fs.writeFileSync(file, top + missingPunchRest + restOfFile);
-         console.log('Fixed file.');
-     } else {
-         console.log('Could not find advance modal split.');
-     }
-  } else {
-     console.log('Could not find split.');
-  }
-
-} else {
-  console.log('Split point not found');
+try {
+  console.log("Restoring AdminStock.jsx from git...");
+  cp.execSync('git checkout src/pages/admin/AdminStock.jsx');
+  console.log("Restored successfully!");
+} catch (e) {
+  console.error("Failed to restore from git:", e.message);
+  process.exit(1);
 }
+
+let content = fs.readFileSync('src/pages/admin/AdminStock.jsx', 'utf8');
+
+console.log("Applying Eye icon and Search layout...");
+
+// 1. Fix the Search and Filter Layout
+const searchTarget = `              {/* Search */}
+              <div className="relative">
+                <Search className="absolute right-3 top-2.5 text-slate-400" size={20} />
+                <input
+                  type="text"
+                  placeholder="ابحث عن صنف..."
+                  className="pl-4 pr-10 py-2 border rounded-lg focus:outline-none focus:border-primary w-64 transition-all"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <select
+                className="border rounded-lg px-4 py-2 focus:outline-none focus:border-primary bg-white text-slate-700"
+                value={selectedWarehouse}
+                onChange={(e) => setSelectedWarehouse(e.target.value)}
+              >
+                <option value="الكل">كل المستودعات</option>
+                {globalSettings.warehouses?.map(w => (
+                  <option key={w} value={w}>{w}</option>
+                ))}
+              </select>
+
+              <select
+                className="border rounded-lg px-4 py-2 focus:outline-none focus:border-primary bg-white text-slate-700"
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+              >
+                <option value="الكل">كل التصنيفات</option>
+                {globalSettings.categories?.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              
+              <div className="relative">
+                <Filter className="absolute right-3 top-2.5 text-slate-400" size={20} />
+                <input
+                  type="text"
+                  placeholder="تصفية حسب الرف..."
+                  className="pl-4 pr-10 py-2 border rounded-lg focus:outline-none focus:border-primary w-48"
+                  value={filterLocation}
+                  onChange={(e) => setFilterLocation(e.target.value)}
+                />
+              </div>`;
+
+const searchReplacement = `              {/* Search */}
+              <div className="relative">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <input
+                  type="text"
+                  placeholder="ابحث عن صنف..."
+                  className="pl-4 pr-10 py-2 border rounded-lg focus:outline-none focus:border-primary transition-all w-[350px]"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+
+              {/* Location Filter moved next to Search */}
+              <div className="relative">
+                <Filter className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <input
+                  type="text"
+                  placeholder="تصفية حسب الرف..."
+                  className="pl-4 pr-10 py-2 border rounded-lg focus:outline-none focus:border-primary w-48 transition-all"
+                  value={filterLocation}
+                  onChange={(e) => setFilterLocation(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <select
+                className="border rounded-lg px-4 py-2 focus:outline-none focus:border-primary bg-white text-slate-700"
+                value={selectedWarehouse}
+                onChange={(e) => setSelectedWarehouse(e.target.value)}
+              >
+                <option value="الكل">كل المستودعات</option>
+                {globalSettings.warehouses?.map(w => (
+                  <option key={w} value={w}>{w}</option>
+                ))}
+              </select>
+
+              <select
+                className="border rounded-lg px-4 py-2 focus:outline-none focus:border-primary bg-white text-slate-700"
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+              >
+                <option value="الكل">كل التصنيفات</option>
+                {globalSettings.categories?.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>`;
+
+content = content.replace(searchTarget, searchReplacement);
+
+
+// 2. Add Eye Icon 
+const eyeTarget = `                          <button
+                            onClick={() => {
+                              setSelectedItem(item);
+                              setShowModal(true);
+                            }}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="تعديل"
+                          >
+                            <Edit size={18} />
+                          </button>`;
+
+const eyeReplacement = `                          <button
+                            onClick={() => {
+                              setSelectedItemForLocations(item);
+                              setShowLocationsModal(true);
+                            }}
+                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="عرض أماكن التواجد"
+                          >
+                            <Eye size={18} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedItem(item);
+                              setShowModal(true);
+                            }}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="تعديل"
+                          >
+                            <Edit size={18} />
+                          </button>`;
+
+content = content.replace(eyeTarget, eyeReplacement);
+
+
+// 3. Replace the Locations Modal at the bottom
+const locationsModalTargetRegex = /\{\/\* Locations Modal \*\/\}[\s\S]+?\}\)[\s\S]+?<\/div>[\s\S]+?\);[\s\S]+?};[\s\S]+?export default AdminStock;/;
+
+const newLocationsModal = `      {/* Locations Modal */}
+      {showLocationsModal && selectedItemForLocations && (
+        <div className="modal-overlay" style={{ zIndex: 9999 }}>
+          <div className="bg-white rounded-[24px] shadow-2xl relative overflow-hidden animate-fade-in" style={{ maxWidth: '750px', width: '95%', direction: 'rtl', fontFamily: '"Cairo", sans-serif' }}>
+            
+            {/* Header Background Graphic */}
+            <div style={{ position: 'absolute', top: '-100px', left: '-100px', width: '300px', height: '300px', background: 'radial-gradient(circle, rgba(19,137,143,0.08) 0%, rgba(255,255,255,0) 70%)', borderRadius: '50%', zIndex: 0 }} />
+            <div style={{ position: 'absolute', top: '-50px', left: '100px', width: '200px', height: '200px', background: 'radial-gradient(circle, rgba(19,137,143,0.05) 0%, rgba(255,255,255,0) 70%)', borderRadius: '50%', zIndex: 0 }} />
+            
+            <div className="p-7 relative z-10">
+              {/* Header Section */}
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: '#13898f' }}>
+                    <Box size={24} />
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-800 m-0">
+                    أماكن تواجد الصنف: <span className="text-slate-900">{selectedItemForLocations.name}</span>
+                  </h2>
+                </div>
+                <button 
+                  onClick={() => setShowLocationsModal(false)}
+                  className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors bg-white shadow-sm"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Info Box */}
+              <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-5 mb-6 text-center shadow-sm">
+                <div className="flex items-center justify-center gap-6 mb-4 text-slate-800 font-bold text-lg">
+                  <div>الرقم: <span style={{ color: '#13898f' }}>{selectedItemForLocations.itemNumber}</span></div>
+                  {selectedItemForLocations.category && (
+                    <>
+                      <div className="w-px h-6 bg-slate-200"></div>
+                      <div>التصنيف: <span className="text-slate-700">{selectedItemForLocations.category}</span></div>
+                    </>
+                  )}
+                </div>
+                <div className="font-bold text-slate-800 text-lg">
+                  إجمالي الكمية المتوفرة: <span style={{ color: '#13898f' }}>{selectedItemForLocations.totalQuantity} {selectedItemForLocations.unit || 'عدد'}</span>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="rounded-xl border border-slate-200 overflow-hidden mb-6 bg-white shadow-sm">
+                <table className="w-full text-right border-collapse">
+                  <thead style={{ backgroundColor: '#13898f', color: 'white' }}>
+                    <tr>
+                      <th className="p-4 font-bold text-center border-l border-white/20 w-1/3">
+                        <div className="flex items-center justify-center gap-2">
+                          <MapPin size={18} /> الرف / الموقع
+                        </div>
+                      </th>
+                      <th className="p-4 font-bold text-center border-l border-white/20 w-1/3">
+                        <div className="flex items-center justify-center gap-2">
+                          <Palette size={18} /> المواصفة / اللون
+                        </div>
+                      </th>
+                      <th className="p-4 font-bold text-center w-1/3">
+                        <div className="flex items-center justify-center gap-2">
+                          <Box size={18} /> الكمية الموجودة
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedItemForLocations.locations.map((loc, idx) => (
+                      <tr key={loc.id} className={idx !== selectedItemForLocations.locations.length - 1 ? "border-b border-slate-100" : ""} style={{ backgroundColor: idx % 2 === 0 ? 'white' : '#f8fafc' }}>
+                        <td className="p-4 text-center border-l border-slate-100">
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="font-bold text-slate-800 text-lg">{loc.location || '-'}</span>
+                            {loc.location && <MapPin size={18} className="text-slate-400" />}
+                          </div>
+                        </td>
+                        <td className="p-4 text-center text-slate-700 font-bold border-l border-slate-100 text-lg">
+                          {loc.spec || '-'}
+                        </td>
+                        <td className="p-4 text-center font-bold text-2xl text-slate-800">
+                          {loc.quantity}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Footer */}
+              <div className="flex justify-start">
+                <button 
+                  onClick={() => setShowLocationsModal(false)}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-slate-100 text-slate-800 font-bold hover:bg-slate-200 transition-colors shadow-sm"
+                >
+                  <div className="bg-slate-800 text-white rounded-full flex items-center justify-center p-0.5" style={{ width: '22px', height: '22px' }}>
+                    <X size={14} strokeWidth={3} />
+                  </div>
+                  إغلاق
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};
+
+export default AdminStock;`;
+
+content = content.replace(locationsModalTargetRegex, newLocationsModal);
+
+// Import Eye if not there
+if (!content.includes('Eye,')) {
+  content = content.replace('import { Search, Plus, Upload, Download, RefreshCw, X, Box, Filter, AlertTriangle, User, History, Image as ImageIcon, MapPin, Printer, ShieldAlert, FileText, CheckCircle, Save, Calendar, Trash2, ArrowRight, ArrowLeft, MoreVertical, Edit, FileDigit, BarChart2 }',
+  'import { Search, Plus, Upload, Download, RefreshCw, X, Box, Filter, AlertTriangle, User, History, Image as ImageIcon, MapPin, Printer, ShieldAlert, FileText, CheckCircle, Save, Calendar, Trash2, ArrowRight, ArrowLeft, MoreVertical, Edit, FileDigit, BarChart2, Eye, Palette }');
+}
+
+fs.writeFileSync('src/pages/admin/AdminStock.jsx', content);
+console.log("AdminStock.jsx has been fixed and fully updated!");

@@ -10,7 +10,7 @@ export const TableContainer = ({ children, className = '' }) => {
   );
 };
 
-export const TableHead = ({ children }) => <thead><tr>{children}</tr></thead>;
+export const TableHead = ({ children }) => <thead>{children}</thead>;
 
 export const TableHeader = ({ children, className = '', ...props }) => (
   <th className={className} {...props}>{children}</th>

@@ -152,7 +152,7 @@ const AdminOverview = ({ onNavigate }) => {
 
       // Count direct attendance logs first
       normalEmps.forEach(emp => {
-         const empLog = todayLogs.find(l => l.employeeId === emp.id);
+         const empLog = todayLogs.find(l => String(l.employeeId || '').trim() === String(emp.id || '').trim() || String(l.employeeName || '').trim() === String(emp.name || '').trim());
          if (empLog) {
             if (empLog.status === 'غياب') {
                absentCount++;
@@ -200,7 +200,7 @@ const AdminOverview = ({ onNavigate }) => {
       let supervisorsPresentCount = 0;
       let supervisorsPresentList = [];
       allSupervisors.forEach(sup => {
-          const supLog = todayLogs.find(l => l.employeeId === sup.id);
+          const supLog = todayLogs.find(l => String(l.employeeId || '').trim() === String(sup.id || '').trim() || String(l.employeeName || '').trim() === String(sup.name || '').trim());
           if (supLog && (supLog.status === 'حضور' || supLog.status === 'حاضر متأخر' || supLog.status === 'تأخير')) {
               supervisorsPresentCount++;
               supervisorsPresentList.push(sup.name);

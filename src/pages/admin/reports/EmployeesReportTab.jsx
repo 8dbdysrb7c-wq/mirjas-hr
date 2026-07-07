@@ -103,38 +103,59 @@ export const EmployeesReportTab = ({
         </tr>
       </thead>
       <tbody>
-        {sorted.map(report => (
-          <tr key={report.id}>
+        {(() => {
+          const uniqueReports = [];
+          const seenKeys = new Set();
+          sorted.forEach(report => {
+            const empId = String(report.userId || report.employeeId || '').trim();
+            const date = String(report.date || '').trim();
+            const key = `${empId}_${date}`;
+            if (!seenKeys.has(key)) {
+              seenKeys.add(key);
+              uniqueReports.push(report);
+            }
+          });
+          const empIdMap = new Map();
+          const empNameMap = new Map();
+          employees.forEach(e => {
+            if (e.id) empIdMap.set(String(e.id).trim(), e);
+            if (e.name) empNameMap.set(String(e.name).trim(), e);
+          });
+
+          const hrAttMap = new Map();
+          hrAttendance.forEach(a => {
+            const id = String(a.employeeId || '').trim();
+            const name = String(a.employeeName || '').trim();
+            const date = String(a.date).trim();
+            if (id) hrAttMap.set(`${id}_${date}`, a);
+            if (name) hrAttMap.set(`${name}_${date}`, a);
+          });
+
+          return uniqueReports.map(report => {
+            const repUserId = String(report.userId || report.employeeId || '').trim();
+            const repUserName = String(report.userName || '').trim();
+            const repDate = String(report.date || '').trim();
+            
+            const emp = empIdMap.get(repUserId) || empNameMap.get(repUserName);
+            const resolvedEmpId = emp ? (emp.employeeId || emp.id) : (repUserId || '---');
+            
+            const att = hrAttMap.get(`${emp?.id || repUserId}_${repDate}`) || hrAttMap.get(`${repUserName || emp?.name}_${repDate}`);
+
+            return (
+            <tr key={report.id}>
             {!selectedEmployee && (
               <td className="text-right font-mono text-slate-500 font-bold" dir="ltr">
-                {(() => {
-                  const emp = employees.find(e => String(e.id).trim() === String(report.userId || report.employeeId || '').trim() || String(e.name).trim() === String(report.userName || '').trim());
-                  return emp ? (emp.employeeId || emp.id) : (report.userId || report.employeeId || '---');
-                })()}
+                {resolvedEmpId}
               </td>
             )}
             {!selectedEmployee && <td className="text-right font-bold">{report.userName}</td>}
             <td style={{ fontWeight: 'bold' }}>{report.date}</td>
             <td>{(() => {
-              const emp = employees.find(e => String(e.id).trim() === String(report.userId || report.employeeId || '').trim() || String(e.name).trim() === String(report.userName || '').trim());
-              const att = hrAttendance.find(a => {
-                const matchId = String(a.employeeId || '').trim() === String(emp?.id || report.userId || report.employeeId || '').trim();
-                const matchName = String(a.employeeName || '').trim() === String(report.userName || emp?.name || '').trim();
-                const matchDate = String(a.date).trim() === String(report.date).trim();
-                return (matchId || matchName) && matchDate;
-              });
-              const tIn = (att?.timeIn || '').trim() || (report.timeIn || '').trim();
+              const tIn = String(att?.timeIn || '').trim() || String(report.timeIn || '').trim();
               return tIn || '---';
             })()}</td>
             <td>{(() => {
-              const emp = employees.find(e => String(e.id).trim() === String(report.userId || report.employeeId || '').trim() || String(e.name).trim() === String(report.userName || '').trim());
-              const att = hrAttendance.find(a => {
-                const matchId = String(a.employeeId || '').trim() === String(emp?.id || report.userId || report.employeeId || '').trim();
-                const matchName = String(a.employeeName || '').trim() === String(report.userName || emp?.name || '').trim();
-                const matchDate = String(a.date).trim() === String(report.date).trim();
-                return (matchId || matchName) && matchDate;
-              });
-              const tOut = (att?.timeOut || '').trim() || (report.timeOut || '').trim();
+              const tOut = String(att?.timeOut || '').trim() || String(report.timeOut || '').trim();
               return tOut || '---';
             })()}</td>
             <td>{report.phoneUsages || 0}</td>
@@ -148,9 +169,7 @@ export const EmployeesReportTab = ({
             </td>
             <td>
               {(() => {
-                const emp = employees.find(e => String(e.id).trim() === String(report.userId || report.employeeId || '').trim() || String(e.name).trim() === String(report.userName || '').trim());
-                const empId = emp ? (emp.employeeId || emp.id) : (report.userId || report.employeeId);
-                const avg = getOverallAverage(empId, report.userName);
+                const avg = getOverallAverage(resolvedEmpId, report.userName);
                 return (
                   <span className={`report-score-badge ${getScoreTone(avg)}`} title="متوسط التقييم خلال الفترة المحددة">
                     {Math.round(avg)}%
@@ -173,7 +192,8 @@ export const EmployeesReportTab = ({
               </div>
             </td>
           </tr>
-        ))}
+          );
+        })})()}
       </tbody>
     </>
   );

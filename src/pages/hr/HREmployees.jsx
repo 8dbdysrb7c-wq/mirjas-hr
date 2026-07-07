@@ -150,7 +150,7 @@ const HREmployees = ({ user, onViewProfile }) => {
     // Check for active assets if terminating
     if (editingEmp && editingEmp.employmentStatus === 'فعال' && (formData.employmentStatus === 'منتهي خدمات' || formData.employmentStatus === 'مستقيل')) {
       const allAssets = await getHRAssets();
-      const activeAssets = allAssets.filter(a => a.employeeId === editingEmp.id && a.status === 'نشطة');
+      const activeAssets = allAssets.filter(a => (String(a.employeeId || '').trim() === String(editingEmp.id || '').trim() || String(a.employeeName || '').trim() === String(editingEmp.name || '').trim()) && a.status === 'نشطة');
       if (activeAssets.length > 0) {
         Swal.fire('لا يمكن إتمام العملية', `هذا الموظف لديه ${activeAssets.length} عهد نشطة. يجب استرجاع العهد أولاً قبل إنهاء الخدمات.`, 'warning');
         return;
@@ -473,7 +473,7 @@ const HREmployees = ({ user, onViewProfile }) => {
                 <div className="input-group" style={{ gridColumn: '1 / -1' }}>
                   <label>صلاحيات أنواع الإجازة والمغادرة</label>
                   <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                    {['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي'].map(type => (
+                    {['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي', 'مغادرة الدخان'].map(type => (
                       <label key={type} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
                         <input type="checkbox" checked={formData.allowedLeaveTypes?.includes(type)} onChange={(e) => {
                           const current = formData.allowedLeaveTypes || [];
@@ -507,6 +507,7 @@ const HREmployees = ({ user, onViewProfile }) => {
                   {globalSettings?.workLocations?.length > 0 ? (
                     <select value={formData.workLocationId} onChange={e=>setFormData({...formData, workLocationId: e.target.value})} className="input-field">
                       <option value="">-- جميع الفروع / غير محدد --</option>
+                      <option value="anywhere">-- السماح بالبصمة من أي مكان (بدون قيود) --</option>
                       {globalSettings.workLocations.map((loc, idx) => (
                         <option key={loc.id || idx} value={loc.id}>{loc.name}</option>
                       ))}

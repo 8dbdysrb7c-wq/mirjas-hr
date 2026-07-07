@@ -5,9 +5,10 @@ import {
   ClipboardCheck, Activity, Truck, ShoppingCart, 
   Settings as SewingMachineIcon, Layers, Users, FileText, Settings, 
   Plus, Clock, DollarSign, Calendar as CustomCalendar, 
-  FileText as CustomReport, Folder as CustomFolder 
+  FileText as CustomReport, Folder as CustomFolder, ClipboardList
 } from 'lucide-react';
 import Swal from 'sweetalert2';
+import { isAdmin } from '../../../store';
 
 // DashboardCard is assumed to be imported locally inside EmployeeDashboard, 
 // so we might need to pass it or we should just import it if it's external.
@@ -37,6 +38,7 @@ export const HomeTab = ({
   isSupervisor,
   canViewSupervisorReports,
   remainingPunches,
+  bonusPunches,
   setShowMissingPunchModal
 }) => {
   return (
@@ -141,6 +143,16 @@ export const HomeTab = ({
           title="تقرير العمل اليومي" 
           onClick={() => handleTabChange('add')} 
         />
+        {(isAdmin(user) || 
+          user.employeeId === 'EMP-0017' ||
+          user.id === 'EMP-0017'
+        ) && (
+          <DashboardCard isMobile={isMobile} icon={ClipboardList} 
+            iconType="custom"
+            title="تقرير زيارة" 
+            onClick={() => handleTabChange('rep-visits')} 
+          />
+        )}
         <DashboardCard isMobile={isMobile} icon={CustomFolder} 
           iconType="custom"
           title="طلباتي" 
@@ -174,7 +186,7 @@ export const HomeTab = ({
           iconType="ring"
           title="تقديم مغادرة" 
           onClick={() => { 
-            const allowedDepartures = allowedLeaveTypes.filter(t => ['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر'].includes(t));
+            const allowedDepartures = allowedLeaveTypes.filter(t => ['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر', 'مغادرة الدخان'].includes(t));
             if (allowedDepartures.length === 0) {
                Swal.fire('مرفوض', 'ليس لديك صلاحية لتقديم مغادرة.', 'error');
                return;
@@ -311,6 +323,11 @@ export const HomeTab = ({
           {/* Text */}
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <h4 style={{ fontWeight: '800', color: '#115e59', fontSize: isMobile ? '1.05rem' : '1.25rem', margin: 0 }}>الختمات الناقصة</h4>
+            {bonusPunches > 0 && (
+              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded-md mt-1 w-max">
+                بونص إضافي: +{bonusPunches}
+              </span>
+            )}
           </div>
         </div>
 

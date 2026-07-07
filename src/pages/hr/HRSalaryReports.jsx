@@ -12,6 +12,14 @@ import withReactContent from 'sweetalert2-react-content';
 
 const MySwal = withReactContent(Swal);
 
+const formatVal = (val, showZeroAsDash = true) => {
+  if (val === undefined || val === null || val === '') return '-';
+  const num = Number(val);
+  if (isNaN(num)) return val;
+  if (num === 0) return showZeroAsDash ? '-' : '0.00';
+  return num.toFixed(2);
+};
+
 const HRSalaryReports = ({ user, isNested }) => {
   const useLocalStorageState = (key, initialValue) => {
     const [state, setState] = useState(() => {
@@ -206,6 +214,16 @@ const HRSalaryReports = ({ user, isNested }) => {
     };
     fetchArchive();
   }, [selectedMonth]);
+
+  useEffect(() => {
+    setArchiveSearch('');
+    setArchiveStatus('all');
+    setArchiveDateFrom('');
+    setArchiveDateTo('');
+    setAssetCategoryFilter('all');
+    setAssetJobTitleFilter('all');
+    setSelectedDepartment('all');
+  }, [activeReportTab]);
 
   const calculateSalaries = () => {
     if (archivedSalaryData) return archivedSalaryData;
@@ -1224,30 +1242,30 @@ const HRSalaryReports = ({ user, isNested }) => {
                 </h3>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                   <span style={{ color: '#475569', fontSize: '0.875rem' }}>الراتب الأساسي</span>
-                  <span style={{ fontWeight: 'bold', color: '#0f172a' }}>{selectedEmployeeData.basic} د.أ</span>
+                  <span style={{ fontWeight: 'bold', color: '#0f172a' }}>{formatVal(selectedEmployeeData.basic, false)} د.أ</span>
                 </div>
                 {selectedEmployeeData.transportAllowanceAddition > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                     <span style={{ color: '#475569', fontSize: '0.875rem' }}>بدل مواصلات</span>
-                    <span style={{ fontWeight: 'bold', color: '#0f172a' }}>{selectedEmployeeData.transportAllowanceAddition} د.أ</span>
+                    <span style={{ fontWeight: 'bold', color: '#0f172a' }}>{formatVal(selectedEmployeeData.transportAllowanceAddition, false)} د.أ</span>
                   </div>
                 )}
                 {selectedEmployeeData.overtimePay > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                     <span style={{ color: '#475569', fontSize: '0.875rem' }}>بدل إضافي <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>({selectedEmployeeData.totalOvertimeHours.toFixed(1)} ساعة)</span></span>
-                    <span style={{ fontWeight: 'bold', color: '#059669' }}>{selectedEmployeeData.overtimePay} د.أ</span>
+                    <span style={{ fontWeight: 'bold', color: '#059669' }}>{formatVal(selectedEmployeeData.overtimePay, false)} د.أ</span>
                   </div>
                 )}
                 {selectedEmployeeData.holidayPay > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                     <span style={{ color: '#475569', fontSize: '0.875rem' }}>تعويض عطل الرسمية</span>
-                    <span style={{ fontWeight: 'bold', color: '#7e22ce' }}>{selectedEmployeeData.holidayPay} د.أ</span>
+                    <span style={{ fontWeight: 'bold', color: '#7e22ce' }}>{formatVal(selectedEmployeeData.holidayPay, false)} د.أ</span>
                   </div>
                 )}
                 {selectedEmployeeData.totalBonusAmount > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                     <span style={{ color: '#475569', fontSize: '0.875rem' }}>بدلات ومكافآت</span>
-                    <span style={{ fontWeight: 'bold', color: '#10b981' }}>{selectedEmployeeData.totalBonusAmount} د.أ</span>
+                    <span style={{ fontWeight: 'bold', color: '#10b981' }}>{formatVal(selectedEmployeeData.totalBonusAmount, false)} د.أ</span>
                   </div>
                 )}
                 {selectedEmployeeData.bonusesList?.length > 0 && (
@@ -1255,14 +1273,14 @@ const HRSalaryReports = ({ user, isNested }) => {
                     {selectedEmployeeData.bonusesList.map((b, i) => (
                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', marginBottom: '4px', paddingLeft: '8px' }}>
                         <span>- {b.type}</span>
-                        <span>{b.amount} د.أ</span>
+                        <span>{formatVal(b.amount, false)} د.أ</span>
                       </div>
                     ))}
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', marginTop: '8px' }}>
                   <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '0.875rem' }}>إجمالي الاستحقاقات</span>
-                  <span style={{ fontWeight: 'bold', color: '#0f172a' }}>{Math.round(selectedEmployeeData.basic + selectedEmployeeData.overtimePay + (selectedEmployeeData.holidayPay || 0) + (selectedEmployeeData.totalBonusAmount || 0) + (selectedEmployeeData.transportAllowanceAddition || 0))} د.أ</span>
+                  <span style={{ fontWeight: 'bold', color: '#0f172a' }}>{formatVal(selectedEmployeeData.basic + selectedEmployeeData.overtimePay + (selectedEmployeeData.holidayPay || 0) + (selectedEmployeeData.totalBonusAmount || 0) + (selectedEmployeeData.transportAllowanceAddition || 0), false)} د.أ</span>
                 </div>
               </div>
 
@@ -1274,19 +1292,19 @@ const HRSalaryReports = ({ user, isNested }) => {
                 {selectedEmployeeData.lateDeduction > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                     <span style={{ color: '#475569', fontSize: '0.875rem' }}>خصم التأخير والمغادرات</span>
-                    <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{selectedEmployeeData.lateDeduction} د.أ</span>
+                    <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{formatVal(selectedEmployeeData.lateDeduction, false)} د.أ</span>
                   </div>
                 )}
                 {(selectedEmployeeData.unpaidLeaveDeduction > 0 || selectedEmployeeData.unexcusedAbsenceDeduction > 0) && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                     <span style={{ color: '#475569', fontSize: '0.875rem' }}>خصم الغياب الشامل (آلي ويدوي)</span>
-                    <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{(selectedEmployeeData.unpaidLeaveDeduction || 0) + (selectedEmployeeData.unexcusedAbsenceDeduction || 0)} د.أ</span>
+                    <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{formatVal((selectedEmployeeData.unpaidLeaveDeduction || 0) + (selectedEmployeeData.unexcusedAbsenceDeduction || 0), false)} د.أ</span>
                   </div>
                 )}
                 {Math.round(selectedEmployeeData.violationsList?.reduce((sum, v) => sum + (Number(v.deductionAmount) || 0), 0) || 0) > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                     <span style={{ color: '#475569', fontSize: '0.875rem' }}>مخالفات يدوية</span>
-                    <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{Math.round(selectedEmployeeData.violationsList?.reduce((sum, v) => sum + (Number(v.deductionAmount) || 0), 0) || 0)} د.أ</span>
+                    <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{formatVal(selectedEmployeeData.violationsList?.reduce((sum, v) => sum + (Number(v.deductionAmount) || 0), 0) || 0, false)} د.أ</span>
                   </div>
                 )}
                 {selectedEmployeeData.violationsList?.length > 0 && (
@@ -1301,18 +1319,18 @@ const HRSalaryReports = ({ user, isNested }) => {
                 {selectedEmployeeData.socialSecurityEmployeeDeduction > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                     <span style={{ color: '#475569', fontSize: '0.875rem' }}>اقتطاع الضمان الاجتماعي</span>
-                    <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{selectedEmployeeData.socialSecurityEmployeeDeduction} د.أ</span>
+                    <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{formatVal(selectedEmployeeData.socialSecurityEmployeeDeduction, false)} د.أ</span>
                   </div>
                 )}
                 {selectedEmployeeData.advanceDeduction > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                     <span style={{ color: '#475569', fontSize: '0.875rem' }}>سلفة مقتطعة</span>
-                    <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{selectedEmployeeData.advanceDeduction} د.أ</span>
+                    <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{formatVal(selectedEmployeeData.advanceDeduction, false)} د.أ</span>
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', marginTop: 'auto' }}>
                   <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '0.875rem' }}>إجمالي الاستقطاعات</span>
-                  <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{selectedEmployeeData.totalDeductions} د.أ</span>
+                  <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{formatVal(selectedEmployeeData.totalDeductions, false)} د.أ</span>
                 </div>
               </div>
             </div>
@@ -1322,7 +1340,7 @@ const HRSalaryReports = ({ user, isNested }) => {
               <span style={{ fontSize: '1.125rem', fontWeight: 'bold', color: '#0f172a' }}>صافي الراتب المستحق</span>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
                 <span style={{ fontSize: '2rem', fontWeight: 'bold', color: '#1a8d9b', lineHeight: 1 }}>
-                  {selectedEmployeeData.netSalary}
+                  {formatVal(selectedEmployeeData.netSalary, false)}
                 </span>
                 <span style={{ fontSize: '1rem', color: '#1a8d9b' }}>د.أ</span>
               </div>
@@ -1421,14 +1439,14 @@ const HRSalaryReports = ({ user, isNested }) => {
                       <td style={{ padding: '12px', color: '#64748b', textAlign: 'center' }}>{index + 1}</td>
                       <td style={{ padding: '12px', color: '#64748b', textAlign: 'center', direction: 'ltr' }}>{emp.employeeId || emp.id}</td>
                       <td style={{ padding: '12px', fontWeight: 'bold', color: '#0f172a', textAlign: 'right' }}>{emp.name}</td>
-                      <td style={{ padding: '12px', color: '#475569', textAlign: 'center' }}>{emp.basic}</td>
-                      <td style={{ padding: '12px', color: '#475569', textAlign: 'center' }}>{emp.transportAllowanceAddition || 0}</td>
-                      <td style={{ padding: '12px', color: '#10b981', textAlign: 'center' }}>{emp.totalBonusAmount}</td>
-                      <td style={{ padding: '12px', color: '#059669', textAlign: 'center' }}>{emp.overtimePay}</td>
-                      <td style={{ padding: '12px', color: '#e11d48', textAlign: 'center' }}>{emp.totalDeductions}</td>
-                      <td style={{ padding: '12px', color: '#3b82f6', textAlign: 'center' }}>{emp.socialSecurityEmployeeDeduction || '-'}</td>
-                      <td style={{ padding: '12px', color: '#6366f1', textAlign: 'center' }}>{emp.socialSecurityCompanyContribution || '-'}</td>
-                      <td style={{ padding: '12px', fontWeight: 'bold', color: '#0f172a', textAlign: 'center' }}>{emp.netSalary}</td>
+                      <td style={{ padding: '12px', color: '#475569', textAlign: 'center' }}>{formatVal(emp.basic, false)}</td>
+                      <td style={{ padding: '12px', color: '#475569', textAlign: 'center' }}>{formatVal(emp.transportAllowanceAddition || 0)}</td>
+                      <td style={{ padding: '12px', color: '#10b981', textAlign: 'center' }}>{formatVal(emp.totalBonusAmount)}</td>
+                      <td style={{ padding: '12px', color: '#059669', textAlign: 'center' }}>{formatVal(emp.overtimePay)}</td>
+                      <td style={{ padding: '12px', color: '#e11d48', textAlign: 'center' }}>{formatVal(emp.totalDeductions)}</td>
+                      <td style={{ padding: '12px', color: '#3b82f6', textAlign: 'center' }}>{formatVal(emp.socialSecurityEmployeeDeduction || 0)}</td>
+                      <td style={{ padding: '12px', color: '#6366f1', textAlign: 'center' }}>{formatVal(emp.socialSecurityCompanyContribution || 0)}</td>
+                      <td style={{ padding: '12px', fontWeight: 'bold', color: '#0f172a', textAlign: 'center' }}>{formatVal(emp.netSalary, false)}</td>
                       <td style={{ padding: '12px' }}>
                         <div style={{ borderBottom: '1px solid #cbd5e1', width: '100%', marginTop: '12px' }}></div>
                       </td>
@@ -1439,36 +1457,28 @@ const HRSalaryReports = ({ user, isNested }) => {
                 <tr style={{ background: '#f8fafc', borderTop: '1px solid #cbd5e1', borderBottom: '1px solid #cbd5e1' }}>
                   <td colSpan="3" style={{ padding: '16px 12px', fontWeight: 'bold', color: '#0f172a', textAlign: 'center' }}>المجموع الكلي:</td>
                   <td style={{ padding: '16px 12px', fontWeight: 'bold', color: '#0f172a', textAlign: 'center' }}>
-                    {filteredSheetSalaryData
-                      .reduce((sum, e) => sum + e.basic, 0)}
+                    {formatVal(filteredSheetSalaryData.reduce((sum, e) => sum + e.basic, 0), false)}
                   </td>
                   <td style={{ padding: '16px 12px', fontWeight: 'bold', color: '#0f172a', textAlign: 'center' }}>
-                    {filteredSheetSalaryData
-                      .reduce((sum, e) => sum + (e.transportAllowanceAddition || 0), 0)}
+                    {formatVal(filteredSheetSalaryData.reduce((sum, e) => sum + (e.transportAllowanceAddition || 0), 0), false)}
                   </td>
                   <td style={{ padding: '16px 12px', fontWeight: 'bold', color: '#10b981', textAlign: 'center' }}>
-                    {filteredSheetSalaryData
-                      .reduce((sum, e) => sum + (e.totalBonusAmount || 0), 0)}
+                    {formatVal(filteredSheetSalaryData.reduce((sum, e) => sum + (e.totalBonusAmount || 0), 0), false)}
                   </td>
                   <td style={{ padding: '16px 12px', fontWeight: 'bold', color: '#059669', textAlign: 'center' }}>
-                    {filteredSheetSalaryData
-                      .reduce((sum, e) => sum + e.overtimePay, 0)}
+                    {formatVal(filteredSheetSalaryData.reduce((sum, e) => sum + e.overtimePay, 0), false)}
                   </td>
                   <td style={{ padding: '16px 12px', fontWeight: 'bold', color: '#e11d48', textAlign: 'center' }}>
-                    {filteredSheetSalaryData
-                      .reduce((sum, e) => sum + e.totalDeductions, 0)}
+                    {formatVal(filteredSheetSalaryData.reduce((sum, e) => sum + e.totalDeductions, 0), false)}
                   </td>
                   <td style={{ padding: '16px 12px', fontWeight: 'bold', color: '#3b82f6', textAlign: 'center' }}>
-                    {filteredSheetSalaryData
-                      .reduce((sum, e) => sum + (e.socialSecurityEmployeeDeduction || 0), 0)}
+                    {formatVal(filteredSheetSalaryData.reduce((sum, e) => sum + (e.socialSecurityEmployeeDeduction || 0), 0), false)}
                   </td>
                   <td style={{ padding: '16px 12px', fontWeight: 'bold', color: '#6366f1', textAlign: 'center' }}>
-                    {filteredSheetSalaryData
-                      .reduce((sum, e) => sum + (e.socialSecurityCompanyContribution || 0), 0)}
+                    {formatVal(filteredSheetSalaryData.reduce((sum, e) => sum + (e.socialSecurityCompanyContribution || 0), 0), false)}
                   </td>
                   <td style={{ padding: '16px 12px', fontWeight: 'bold', color: '#0f172a', textAlign: 'center' }}>
-                    {filteredSheetSalaryData
-                      .reduce((sum, e) => sum + e.netSalary, 0)} د.أ
+                    {formatVal(filteredSheetSalaryData.reduce((sum, e) => sum + e.netSalary, 0), false)} د.أ
                   </td>
                   <td style={{ padding: '16px 12px' }}></td>
                 </tr>

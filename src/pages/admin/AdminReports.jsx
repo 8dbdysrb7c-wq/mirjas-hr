@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import HRSalaryReports from '../hr/HRSalaryReports';
 import { createPortal } from 'react-dom';
-import { getReports, getEmployees, getDepartments, saveReport, deleteReport, getSalesOrders, getOrders, getCustomers, getMissions, getStock, getReportsByDateRange, getSalesOrdersByDateRange, getOrdersByDateRange, getMissionsByDateRange, getHRAttendanceByDateRange, getHRViolationsByDateRange, getSupervisorTasksByDateRange, getSupervisorReportsByDateRange, getMissingPunches, updateMissingPunchStatus, createNotification, getGlobalSettings, canPerformStockAction } from '../../store';
-import { sendWhatsAppNotification } from '../../utils/whatsappService';
-import { FileText, Calendar, Search, Printer, List, Trash2, ShoppingCart, ShoppingBag, Users, X, Filter, Eye, Edit2, Plus, Minus, Trash, ArrowUpDown, Truck, Package, Building2, ClipboardList, UserCheck, FileSpreadsheet, FileDown, AlertTriangle, CheckCircle, User, ArrowLeft, Download, Upload, Layers } from 'lucide-react';
+import { getReports, getEmployees, getDepartments, saveReport, deleteReport, getSalesOrders, getOrders, getCustomers, getMissions, getStock, getReportsByDateRange, getSalesOrdersByDateRange, getOrdersByDateRange, getMissionsByDateRange, getHRAttendanceByDateRange, getHRViolationsByDateRange, getSupervisorTasksByDateRange, getSupervisorReportsByDateRange, getMissingPunches, updateMissingPunchStatus, createNotification, getGlobalSettings, canPerformStockAction, getStockVouchers, getStocktakes, saveSupervisorReport, deleteSupervisorReport } from '../../store';
+import { sendWhatsAppNotification, sendTemplatedWhatsAppNotification } from '../../utils/whatsappService';
+import { FileText, Calendar, Search, Printer, List, Trash2, ShoppingCart, ShoppingBag, Users, X, Filter, Eye, Edit2, Plus, Minus, Trash, ArrowUpDown, Truck, Package, Building2, ClipboardList, UserCheck, FileSpreadsheet, FileDown, AlertTriangle, CheckCircle, User, ArrowLeft, Download, Upload, Layers, Clock, RotateCcw } from 'lucide-react';
 import SewingMachineIcon from '../../components/SewingMachineIcon';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
@@ -20,9 +20,11 @@ import { MissingPunchesReportTab } from './reports/MissingPunchesReportTab';
 import { TasksReportTab } from './reports/TasksReportTab';
 import { SupervisorsReportTab } from './reports/SupervisorsReportTab';
 import { CustomersReportTab } from './reports/CustomersReportTab';
+import HRDateFilter from '../../components/ui/HRDateFilter';
+import Select from 'react-select';
 const MySwal = withReactContent(Swal);
 
-const JORDANIAN_CITIES = ['عمان', 'الزرقاء', 'إربد', 'المفرق', 'عجلون', 'جرش', 'البلقاء', 'مأدبا', 'الكرك', 'الطفيلة', 'معان', 'العقبة'];
+const JORDANIAN_CITIES = ['عمان', 'الزرقاء', 'إربد', 'العقبة', 'السلط', 'مادبا', 'الكرك', 'الطفيلة', 'معان', 'جرش', 'عجلون', 'المفرق'];
 
 const getLocalDateStr = (d) => {
   if (!d) return '';
@@ -62,7 +64,7 @@ const DEFAULT_PRINT_CONFIGS = {
   stock: { selectedColumns: ['itemNumber', 'name', 'variant', 'category', 'warehouse', 'quantity', 'unit', 'status'], rowLimit: 'all' },
   hr: { selectedColumns: ['date', 'employeeName', 'type', 'details'], rowLimit: 'all' },
   tasks: { selectedColumns: ['createdAt', 'supervisorName', 'title', 'dueDate', 'status'], rowLimit: 'all' },
-  supervisors: { selectedColumns: ['date', 'supervisorName', 'type', 'content'], rowLimit: 'all' },
+  supervisors: { selectedColumns: ['date', 'supervisorName', 'employeeEvaluations', 'status'], rowLimit: 'all' },
   customers: { selectedColumns: ['name', 'phone', 'city', 'location', 'sector', 'status'], rowLimit: 'all' },
   missingpunches: { selectedColumns: ['date', 'employeeName', 'status'], rowLimit: 'all' }
 };
@@ -124,6 +126,9 @@ const AdminReports = ({ user, notificationTarget }) => {
   const [customers, setCustomers] = useState([]);
   const [deliveryMissions, setDeliveryMissions] = useState([]);
   const [stockItems, setStockItems] = useState([]);
+  const [selectedStockSubTab, setSelectedStockSubTab] = useState('items');
+  const [stockVouchers, setStockVouchers] = useState([]);
+  const [stocktakes, setStocktakes] = useState([]);
   const [missingPunches, setMissingPunches] = useState([]);
   const [hrAttendance, setHRAttendance] = useState([]);
   const [hrViolations, setHRViolations] = useState([]);
@@ -139,6 +144,8 @@ const AdminReports = ({ user, notificationTarget }) => {
   const [selectedCity, setSelectedCity] = useState('');
   const [customerSectors, setCustomerSectors] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedType, setSelectedType] = useState('');
+  const [selectedSalesRep, setSelectedSalesRep] = useState('');
   const [selectedWarehouse, setSelectedWarehouse] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [defaultDateFrom, setDefaultDateFrom] = useState('');
@@ -163,6 +170,13 @@ const AdminReports = ({ user, notificationTarget }) => {
   const [empSortKey, setEmpSortKey] = useState('date');
   const [empSortDir, setEmpSortDir] = useState('desc');
 
+  // Isolating Employee Reports inline filter bar states
+  const [empDateMode, setEmpDateMode] = useState('month');
+  const [empSelectedDate, setEmpSelectedDate] = useState(getLocalDateStr(new Date()));
+  const [empSelectedMonth, setEmpSelectedMonth] = useState(new Date().toISOString().substring(0, 7));
+  const [empStartDate, setEmpStartDate] = useState(getLocalDateStr(new Date()));
+  const [empEndDate, setEmpEndDate] = useState(getLocalDateStr(new Date()));
+
   const handleEmpSort = (key) => {
     if (empSortKey === key) {
       setEmpSortDir(empSortDir === 'asc' ? 'desc' : 'asc');
@@ -181,6 +195,26 @@ const AdminReports = ({ user, notificationTarget }) => {
 
   const handleTabChange = (tab) => {
     setActiveReportTab(tab);
+    
+    // Reset filters
+    setSelectedEmployee('');
+    setSelectedJobDepartment('');
+    setSelectedJobTitle('');
+    setSelectedCustomer('');
+    setSelectedCategory('');
+    setSelectedSector('');
+    setSelectedCity('');
+    setSelectedStatus('');
+    setSelectedType('');
+    setSelectedSalesRep('');
+    setSelectedWarehouse('');
+    setDateFrom('');
+    setDateTo('');
+    setFilterOrderNumber('');
+    setFilterCreatedBy('');
+    setSearchTerm('');
+    setIsDefaultDate(true);
+
     switch (tab) {
       case 'employees': 
         setEmpSortKey('date');
@@ -358,12 +392,14 @@ const AdminReports = ({ user, notificationTarget }) => {
   useEffect(() => {
     const fetchStaticData = async () => {
       try {
-        const [emps, custs, stock, mpData, fetchedSettings] = await Promise.all([
+        const [emps, custs, stock, mpData, fetchedSettings, vouchers, takes] = await Promise.all([
           getEmployees(),
           getCustomers(),
           getStock(),
           getMissingPunches(),
-          getGlobalSettings()
+          getGlobalSettings(),
+          getStockVouchers(),
+          getStocktakes()
         ]);
         setEmployees(emps.filter(e => e.role !== 'admin' && e.level !== 'admin'));
         setDepartments(fetchedSettings?.departmentsList || []);
@@ -374,6 +410,8 @@ const AdminReports = ({ user, notificationTarget }) => {
         setCustomerSectors(fetchedSettings?.customerSectors || []);
         setCustomers(custs || []);
         setStockItems(stock || []);
+        setStockVouchers(vouchers || []);
+        setStocktakes(takes || []);
         setMissingPunches(mpData || []);
       } catch (err) {
         console.error("Error fetching static data:", err);
@@ -404,6 +442,33 @@ const AdminReports = ({ user, notificationTarget }) => {
       setSortConfig({ key: '', direction: 'ascending' });
     }
   }, [activeReportTab]);
+
+  // Sync dates and fetch data when Employee Reports tab filters change
+  useEffect(() => {
+    if (activeReportTab !== 'employees') return;
+
+    let from = '';
+    let to = '';
+
+    if (empDateMode === 'day') {
+      from = empSelectedDate;
+      to = empSelectedDate;
+    } else if (empDateMode === 'month') {
+      const [year, month] = empSelectedMonth.split('-');
+      from = `${year}-${month}-01`;
+      const lastDay = new Date(parseInt(year, 10), parseInt(month, 10), 0).getDate();
+      to = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+    } else if (empDateMode === 'range') {
+      from = empStartDate;
+      to = empEndDate;
+    }
+
+    setDateFrom(from);
+    setDateTo(to);
+    setIsDefaultDate(false);
+
+    fetchDynamicData(from, to, false);
+  }, [activeReportTab, empDateMode, empSelectedDate, empSelectedMonth, empStartDate, empEndDate]);
 
   useEffect(() => {
     if (!notificationTarget || notificationTarget.moduleKey !== 'reports' || loading || reports.length === 0) return;
@@ -448,7 +513,7 @@ const AdminReports = ({ user, notificationTarget }) => {
     const empJobDept = empObj ? (empObj.employeeType || empObj.departmentName) : '';
     const empJobTitle = empObj ? empObj.jobTitle : '';
 
-    const matchEmp = selectedEmployee ? mp.employeeId === selectedEmployee : true;
+    const matchEmp = selectedEmployee ? (mp.employeeId === selectedEmployee || (empObj && empObj.id === selectedEmployee) || mp.employeeName === selectedEmployee) : true;
     const matchJobDept = selectedJobDepartment ? empJobDept === selectedJobDepartment : true;
     const matchJobTitle = selectedJobTitle ? empJobTitle === selectedJobTitle : true;
     const matchDateFrom = dateFrom ? mp.date >= dateFrom : true;
@@ -485,7 +550,7 @@ const AdminReports = ({ user, notificationTarget }) => {
           const emp = employees.find(e => e.id === punch.employeeId || e.name === punch.employeeName);
           if (emp && emp.phone) {
             const msg = `مرحباً ${emp.name}،\nتمت الموافقة على طلب الختمة الناقصة الخاصة بك بتاريخ ${punch.date}.\n-- الإدارة`;
-            await sendWhatsAppNotification(emp.phone, msg);
+            await sendWhatsAppNotification(emp.phone, msg, 'missing_punches');
           }
         } catch(err) { console.error('WhatsApp Error:', err); }
       }
@@ -536,7 +601,7 @@ const AdminReports = ({ user, notificationTarget }) => {
             const emp = employees.find(e => e.id === punch.employeeId || e.name === punch.employeeName);
             if (emp && emp.phone) {
               const msg = `مرحباً ${emp.name}،\nتم رفض طلب الختمة الناقصة الخاصة بك بتاريخ ${punch.date}.\n-- الإدارة`;
-              await sendWhatsAppNotification(emp.phone, msg);
+              await sendWhatsAppNotification(emp.phone, msg, 'missing_punches');
             }
           } catch(err) { console.error('WhatsApp Error:', err); }
         }
@@ -575,7 +640,7 @@ const AdminReports = ({ user, notificationTarget }) => {
     const empJobDept = empObj ? (empObj.employeeType || empObj.departmentName) : '';
     const empJobTitle = empObj ? empObj.jobTitle : '';
 
-    const matchEmp = selectedEmployee ? (r.userId === selectedEmployee || r.employeeId === selectedEmployee) : true;
+    const matchEmp = selectedEmployee ? (r.userId === selectedEmployee || r.employeeId === selectedEmployee || (empObj && empObj.id === selectedEmployee) || r.userName === selectedEmployee) : true;
     const matchJobDept = selectedJobDepartment ? empJobDept === selectedJobDepartment : true;
     const matchJobTitle = selectedJobTitle ? empJobTitle === selectedJobTitle : true;
     const matchDateFrom = dateFrom ? r.date >= dateFrom : true;
@@ -654,15 +719,65 @@ const AdminReports = ({ user, notificationTarget }) => {
     }).slice(0, 20);
   }
 
+  const getVoucherTypeFromSubTab = (subTab) => {
+    switch (subTab) {
+      case 'vouchers_in': return 'إدخال';
+      case 'vouchers_out': return 'إخراج';
+      case 'vouchers_trf': return 'تحويل';
+      case 'vouchers_dmg': return 'إتلاف';
+      case 'audit': return 'خصم';
+      default: return '';
+    }
+  };
+
+  let filteredStockVouchers = stockVouchers.filter(v => {
+    const vType = getVoucherTypeFromSubTab(selectedStockSubTab);
+    if (v.type !== vType) return false;
+    
+    const vDate = (v.createdAt || v.date || '').split('T')[0];
+    const matchDateFrom = (dateFrom && !isDefaultDate) ? vDate >= dateFrom : true;
+    const matchDateTo = dateTo ? vDate <= dateTo : true;
+    const matchCreatedBy = filterCreatedBy ? (v.createdBy || '').includes(filterCreatedBy) : true;
+    const matchStatus = selectedStatus ? v.status === selectedStatus : true;
+    const matchSearch = searchTerm
+      ? (
+          String(v.voucherNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          String(v.createdBy || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          String(v.notes || '').toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      : true;
+    return matchDateFrom && matchDateTo && matchCreatedBy && matchStatus && matchSearch;
+  });
+
+  let filteredStocktakes = stocktakes.filter(st => {
+    const stDate = (st.createdAt || st.date || '').split('T')[0];
+    const matchDateFrom = (dateFrom && !isDefaultDate) ? stDate >= dateFrom : true;
+    const matchDateTo = dateTo ? stDate <= dateTo : true;
+    const matchCreatedBy = filterCreatedBy ? (st.createdBy || '').includes(filterCreatedBy) : true;
+    const matchWarehouse = selectedWarehouse ? st.warehouse === selectedWarehouse : true;
+    const matchStatus = selectedStatus ? st.status === selectedStatus : true;
+    const matchSearch = searchTerm
+      ? (
+          String(st.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          String(st.createdBy || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          String(st.notes || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          String(st.warehouse || '').toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      : true;
+    return matchDateFrom && matchDateTo && matchCreatedBy && matchWarehouse && matchStatus && matchSearch;
+  });
+
   const hrCombined = [...hrAttendance.map(a => ({...a, source: 'حضور/انصراف'})), ...hrViolations.map(v => ({...v, source: 'مخالفة'}))];
   hrCombined.sort((a,b) => new Date(b.date) - new Date(a.date));
 
   const filteredHR = hrCombined.filter(item => {
     const term = searchTerm.toLowerCase();
     const matchSearch = String(item.employeeName || '').toLowerCase().includes(term) || String(item.employeeId || '').toLowerCase().includes(term) || String(item.details || item.reason || '').toLowerCase().includes(term);
-    const matchEmp = selectedEmployee ? item.employeeId === selectedEmployee : true;
 
-    const empObj = employees.find(e => e.id === item.employeeId || e.name === item.employeeName);
+    const empObj = employees.find(e => String(e.id || '').trim() === String(item.employeeId || '').trim() || String(e.name || '').trim() === String(item.employeeName || '').trim());
+    
+    const matchEmp = selectedEmployee ? (String(item.employeeId || '').trim() === String(selectedEmployee).trim() || (empObj && String(empObj.id).trim() === String(selectedEmployee).trim()) || String(item.employeeName || '').trim() === String(selectedEmployee).trim()) : true;
+
     const empJobDept = empObj ? (empObj.employeeType || empObj.departmentName) : '';
     const empJobTitle = empObj ? empObj.jobTitle : '';
     const matchJobDept = selectedJobDepartment ? empJobDept === selectedJobDepartment : true;
@@ -698,10 +813,13 @@ const AdminReports = ({ user, notificationTarget }) => {
     const matchStatus = selectedStatus ? item.status === selectedStatus : true;
     const matchSector = selectedSector ? item.sector === selectedSector : true;
     const matchCity = selectedCity ? item.city === selectedCity : true;
-    return matchSearch && matchStatus && matchSector && matchCity;
+    const matchType = selectedType ? (item.type || 'عميل') === selectedType : true;
+    const actualRep = item.type === 'مورد' ? '' : (item.salesRep || 'زبائن الشركة');
+    const matchSalesRep = selectedSalesRep ? actualRep === selectedSalesRep : true;
+    return matchSearch && matchStatus && matchSector && matchCity && matchType && matchSalesRep;
   });
 
-  const isCustomerFilterActive = searchTerm || selectedStatus || selectedSector || selectedCity;
+  const isCustomerFilterActive = searchTerm || selectedStatus || selectedSector || selectedCity || selectedType || selectedSalesRep;
   if (!isCustomerFilterActive && activeReportTab === 'customers') {
     filteredCustomersReports = filteredCustomersReports.sort((a, b) => {
       const dateA = new Date(a.updatedAt || a.createdAt || 0).getTime();
@@ -748,7 +866,11 @@ const AdminReports = ({ user, notificationTarget }) => {
     activeReportTab === 'sales' ? filteredSalesOrders.length :
     activeReportTab === 'production' ? filteredProductionOrders.length :
     activeReportTab === 'delivery' ? filteredDeliveryMissions.length :
-    activeReportTab === 'stock' ? filteredStockItems.length :
+    activeReportTab === 'stock' ? (
+      selectedStockSubTab === 'items' ? filteredStockItems.length :
+      selectedStockSubTab === 'stocktake' ? filteredStocktakes.length :
+      filteredStockVouchers.length
+    ) :
     activeReportTab === 'hr' ? filteredHR.length :
     activeReportTab === 'missingpunches' ? filteredMissingPunches.length :
     activeReportTab === 'tasks' ? filteredTasks.length :
@@ -789,7 +911,7 @@ const AdminReports = ({ user, notificationTarget }) => {
           : activeReportTab === 'delivery'
             ? 6
             : activeReportTab === 'stock'
-              ? 9
+              ? (selectedStockSubTab === 'items' ? 9 : selectedStockSubTab === 'stocktake' ? 7 : 6)
               : activeReportTab === 'customers'
                 ? 6
                 : 8;
@@ -856,28 +978,53 @@ const AdminReports = ({ user, notificationTarget }) => {
       { key: 'dueDate', label: 'موعد التنفيذ', render: (mission) => mission.dueDate || '---' },
       { key: 'status', label: 'الحالة', render: (mission) => <span className={`badge ${getStatusBadgeClass(mission.status || '')}`}>{mission.status || '---'}</span> }
     ],
-    stock: [
-      { key: 'itemNumber', label: 'رقم الصنف', render: (item) => item.itemNumber || '---' },
-      { key: 'itemCode', label: 'رمز الصنف', render: (item) => item.itemCode || '---' },
-      { key: 'name', label: 'الاسم', render: (item) => item.name || '---' },
-      { key: 'variant', label: 'اللون/التفصيل', render: renderStockVariant },
-      { key: 'category', label: 'التصنيف', render: (item) => item.category || '---' },
-      { key: 'warehouse', label: 'المستودع', render: (item) => item.warehouse || '---' },
-      { key: 'quantity', label: 'الكمية', render: (item) => item.quantity ?? 0 },
-      { key: 'unit', label: 'الوحدة', render: (item) => item.unit || '---' },
-      { key: 'status', label: 'الحالة', render: (item) => {
-        const s = getStockItemStatus(item);
-        return <span className={`badge ${getStatusBadgeClass(s)}`}>{s}</span>;
-      } }
-    ],
+    stock: selectedStockSubTab === 'items'
+      ? [
+          { key: 'itemNumber', label: 'رقم الصنف', render: (item) => item.itemNumber || '---' },
+          { key: 'itemCode', label: 'رمز الصنف', render: (item) => item.itemCode || '---' },
+          { key: 'name', label: 'الاسم', render: (item) => item.name || '---' },
+          { key: 'variant', label: 'اللون/التفصيل', render: renderStockVariant },
+          { key: 'category', label: 'التصنيف', render: (item) => item.category || '---' },
+          { key: 'warehouse', label: 'المستودع', render: (item) => item.warehouse || '---' },
+          { key: 'quantity', label: 'الكمية', render: (item) => item.quantity ?? 0 },
+          { key: 'unit', label: 'الوحدة', render: (item) => item.unit || '---' },
+          { key: 'status', label: 'الحالة', render: (item) => {
+            const s = getStockItemStatus(item);
+            return <span className={`badge ${getStatusBadgeClass(s)}`}>{s}</span>;
+          } }
+        ]
+      : selectedStockSubTab === 'stocktake'
+      ? [
+          { key: 'voucherNumber', label: 'رقم الجرد', render: (st) => st.id?.slice(-8).toUpperCase() || '---' },
+          { key: 'date', label: 'التاريخ', render: (st) => (st.createdAt || st.date || '').split('T')[0] || '---' },
+          { key: 'warehouse', label: 'المستودع', render: (st) => st.warehouse || '---' },
+          { key: 'createdBy', label: 'المنشئ', render: (st) => st.createdBy || '---' },
+          { key: 'itemsCount', label: 'عدد الأصناف', render: (st) => st.items?.length || 0 },
+          { key: 'notes', label: 'الملاحظات', render: (st) => st.notes || '---' },
+          { key: 'status', label: 'الحالة', render: (st) => <span className={`badge ${st.status === 'معتمد' ? 'badge-success' : 'badge-info'}`}>{st.status || '---'}</span> }
+        ]
+      : [
+          { key: 'voucherNumber', label: 'رقم السند', render: (v) => v.voucherNumber || '---' },
+          { key: 'date', label: 'التاريخ', render: (v) => (v.createdAt || v.date || '').split('T')[0] || '---' },
+          { key: 'createdBy', label: 'المنشئ', render: (v) => v.createdBy || '---' },
+          { key: 'itemsCount', label: 'عدد المواد', render: (v) => v.items?.length || 0 },
+          { key: 'notes', label: 'الملاحظات', render: (v) => v.notes || '---' },
+          { key: 'status', label: 'الحالة', render: (v) => <span className={`badge ${v.status === 'معتمد' ? 'badge-success' : 'badge-info'}`}>{v.status || '---'}</span> }
+        ],
     customers: [
       { key: 'customerNumber', label: 'الرقم', render: (row) => row.customerNumber || '---' },
-      { key: 'name', label: 'اسم العميل', render: (row) => row.name || '---' },
+      { key: 'type', label: 'النوع', render: (row) => (
+        <span className={`badge ${row.type === 'مورد' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+          {row.type || 'عميل'}
+        </span>
+      ) },
+      { key: 'name', label: 'الاسم', render: (row) => row.name || '---' },
       { key: 'phone', label: 'رقم التلفون', render: (row) => row.phone || '---' },
       { key: 'city', label: 'المدينة', render: (row) => row.city || '---' },
       { key: 'location', label: 'العنوان', render: (row) => row.location || '---' },
       { key: 'sector', label: 'القطاع', render: (row) => row.sector || '---' },
-      { key: 'status', label: 'حالة العميل', render: (row) => row.status || 'نشط' }
+      { key: 'salesRep', label: 'البائع', render: (row) => (row.type === 'مورد' ? '---' : (row.salesRep || 'زبائن الشركة')) },
+      { key: 'status', label: 'الحالة', render: (row) => row.status || 'نشط' }
     ],
     tasks: [
       { key: 'createdAt', label: 'تاريخ الإنشاء', render: (task) => (task.createdAt || '').split('T')[0] || '---' },
@@ -891,11 +1038,21 @@ const AdminReports = ({ user, notificationTarget }) => {
     supervisors: [
       { key: 'date', label: 'التاريخ', render: (report) => report.date || '---' },
       { key: 'supervisorName', label: 'المشرف', render: (report) => report.supervisorName || '---' },
-      { key: 'timeIn', label: 'وقت الحضور', render: (report) => report.timeIn || '---' },
-      { key: 'timeOut', label: 'وقت الخروج', render: (report) => report.timeOut || '---' },
-      { key: 'attendanceNotes', label: 'ملاحظات', render: (report) => report.attendanceNotes || '---' },
-      { key: 'status', label: 'الحالة', render: (report) => <span className={`badge ${getStatusBadgeClass(report.status || 'قيد المراجعة')}`}>{report.status || 'قيد المراجعة'}</span> }
+      { key: 'employeeEvaluations', label: 'تقييم الموظفين', render: (report) => `تم تقييم ${report.employeeEvaluations?.length || 0} موظف` },
+      { key: 'status', label: 'حالة التقرير', render: (report) => <span className={`badge ${(!report.status || report.status === 'قيد المراجعة') ? 'bg-blue-100 text-blue-700' : report.status === 'معتمد' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{report.status || 'قيد المراجعة'}</span> }
     ]
+  };
+
+  const getSortedStockData = () => {
+    let rawData = [];
+    if (selectedStockSubTab === 'items') {
+      rawData = filteredStockItems;
+    } else if (selectedStockSubTab === 'stocktake') {
+      rawData = filteredStocktakes;
+    } else {
+      rawData = filteredStockVouchers;
+    }
+    return getSortedData(rawData, 'stock');
   };
 
   const sortedRowsByTab = {
@@ -903,7 +1060,7 @@ const AdminReports = ({ user, notificationTarget }) => {
     sales: getSortedData(filteredSalesOrders, 'sales'),
     production: getSortedData(filteredProductionOrders, 'production'),
     delivery: getSortedData(filteredDeliveryMissions, 'delivery'),
-    stock: getSortedData(filteredStockItems, 'stock'),
+    stock: getSortedStockData(),
     hr: getSortedData(filteredHR, 'hr'),
     tasks: getSortedData(filteredTasks, 'tasks'),
     supervisors: getSortedData(filteredSupervisorReports, 'supervisors'),
@@ -1034,6 +1191,234 @@ const AdminReports = ({ user, notificationTarget }) => {
 
     setShowPrintConfigModal(false);
     setPendingExportAction(exportActionToRun);
+  };
+
+  const handleViewSupervisorReport = (report) => {
+    Swal.fire({
+      customClass: {
+        container: 'premium-modal-container',
+        popup: 'premium-modal-popup-report',
+        confirmButton: 'btn-premium-close-teal',
+        actions: 'premium-modal-actions'
+      },
+      buttonsStyling: false,
+      width: '850px',
+      confirmButtonText: 'إغلاق',
+      html: `
+        <div style="direction: rtl; text-align: right; font-family: 'Rubik', sans-serif; color: #1e293b; padding: 10px; max-height: 75vh; overflow-y: auto;">
+          <h2 style="text-align: center; color: #1e293b; font-size: 1.8rem; margin-bottom: 25px; font-weight: 800; border-bottom: 2px solid var(--primary); padding-bottom: 10px;">
+            تقرير المشرف: ${report.supervisorName || '---'}
+          </h2>
+          
+          <h3 style="color: #1e293b; font-size: 1.3rem; font-weight: 800; margin-bottom: 15px;">الدوام</h3>
+          <div style="margin-bottom: 30px; line-height: 2; font-size: 1.05rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px;">
+            <div><span style="font-weight: 800; min-width: 120px; display: inline-block;">التاريخ:</span> ${report.date || '---'}</div>
+            <div><span style="font-weight: 800; min-width: 120px; display: inline-block;">وقت الحضور:</span> <span dir="ltr" style="display: inline-block;">${report.timeIn || '---'}</span></div>
+            <div><span style="font-weight: 800; min-width: 120px; display: inline-block;">وقت الخروج:</span> <span dir="ltr" style="display: inline-block;">${report.timeOut || '---'}</span></div>
+          </div>
+
+          <h3 style="color: #1e293b; font-size: 1.3rem; font-weight: 800; margin-bottom: 15px;">التقييم اليومي للموظفين</h3>
+          <table style="width: 100%; border-collapse: collapse; text-align: center; margin-bottom: 30px;">
+            <thead style="background-color: #f8fafc;">
+              <tr>
+                <th style="padding: 12px; border: 1px solid #cbd5e1; background-color: #f8fafc;">الموظف</th>
+                <th style="padding: 12px; border: 1px solid #cbd5e1; background-color: #f8fafc;">التقييم</th>
+                <th style="padding: 12px; border: 1px solid #cbd5e1; background-color: #f8fafc;">النسبة</th>
+                <th style="padding: 12px; border: 1px solid #cbd5e1; background-color: #f8fafc;">الملاحظة</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(report.employeeEvaluations || []).map(ev => {
+                 const empDailyReport = reports.find(r => (String(r.userId || '').trim() === String(ev.employeeId).trim() || String(r.employeeId || '').trim() === String(ev.employeeId).trim() || String(r.userName || '').trim() === String(ev.employeeName).trim()) && r.date === report.date);
+                 let reportHtml = '';
+                 
+                 if (empDailyReport) {
+                   reportHtml = `
+                     <tr>
+                       <td colspan="4" style="padding: 15px; border: 1px solid #cbd5e1; background-color: #f8fafc; text-align: right;">
+                         <div style="font-weight: 800; margin-bottom: 10px; color: #1a8d9b; font-size: 1.1rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;">
+                           تفاصيل تقرير الموظف
+                         </div>
+                         <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 0.9rem; margin-bottom: 10px;">
+                           <thead style="background-color: #e2e8f0;">
+                             <tr>
+                               <th style="padding: 8px; border: 1px solid #cbd5e1;">القسم</th>
+                               <th style="padding: 8px; border: 1px solid #cbd5e1;">الصنف</th>
+                               <th style="padding: 8px; border: 1px solid #cbd5e1;">العملية</th>
+                               <th style="padding: 8px; border: 1px solid #cbd5e1;">المنجز</th>
+                               <th style="padding: 8px; border: 1px solid #cbd5e1;">الحد المطلوب</th>
+                             </tr>
+                           </thead>
+                           <tbody>
+                             ${(empDailyReport.tasks && empDailyReport.tasks.length > 0) ? empDailyReport.tasks.map(t => `
+                               <tr style="background-color: #ffffff;">
+                                 <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold; color: #1a8d9b;">${t.departmentName || t.department || 'عام'}</td>
+                                 <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold;">${t.name}</td>
+                                 <td style="padding: 8px; border: 1px solid #cbd5e1; color: #475569;">${t.operation}</td>
+                                 <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 1.1rem; color: #1a8d9b;">${t.count}</td>
+                                 <td style="padding: 8px; border: 1px solid #cbd5e1;">${(t.min > 0 || t.max > 0) ? `<span dir="ltr">${t.max} - ${t.min}</span>` : '-'}</td>
+                               </tr>
+                             `).join('') : `
+                               <tr><td colspan="5" style="padding: 10px; color: #64748b; font-style: italic;">لا توجد مهام مسجلة.</td></tr>
+                             `}
+                           </tbody>
+                         </table>
+                         
+                         <div style="display: flex; justify-content: space-between; align-items: center; background-color: #eaf4f5; padding: 10px; border-radius: 8px; font-weight: bold; color: #334155; font-size: 0.9rem;">
+                           <div style="display: flex; gap: 15px;">
+                             <span>الهاتف بالأمانات: <span style="color: ${empDailyReport.phoneSafe ? '#16a34a' : '#ef4444'}">${empDailyReport.phoneSafe ? 'نعم' : 'لا'}</span></span>
+                             <span>استخدام الهاتف: <span style="color: ${empDailyReport.phoneUsages > 0 ? '#ef4444' : '#16a34a'}">${empDailyReport.phoneUsages || 0} مرات</span></span>
+                           </div>
+                           <div style="display: flex; gap: 15px; color: #1a8d9b;">
+                             <span>دخول: <span dir="ltr">${(() => { 
+                               const attLog = hrAttendance.find(l => (String(l.employeeId || '').trim() === String(ev.employeeId || '').trim() || String(l.employeeName || '').trim() === String(ev.employeeName || '').trim()) && l.date === report.date);
+                               const tIn = attLog?.timeIn || empDailyReport.timeIn;
+                               if (!tIn) return '---';
+                               const [h,m] = tIn.split(':'); let hh = parseInt(h,10); const ampm = hh >= 12 ? 'م' : 'ص'; hh = hh % 12 || 12; return `${hh}:${m} ${ampm}`; 
+                             })()}</span></span>
+                             <span>خروج: <span dir="ltr">${(() => { 
+                               const attLog = hrAttendance.find(l => (String(l.employeeId || '').trim() === String(ev.employeeId || '').trim() || String(l.employeeName || '').trim() === String(ev.employeeName || '').trim()) && l.date === report.date);
+                               const tOut = attLog?.timeOut || empDailyReport.timeOut;
+                               if (!tOut) return '---';
+                               const [h,m] = tOut.split(':'); let hh = parseInt(h,10); const ampm = hh >= 12 ? 'م' : 'ص'; hh = hh % 12 || 12; return `${hh}:${m} ${ampm}`; 
+                             })()}</span></span>
+                            </div>
+                          </div>
+                          ${empDailyReport.notes ? `
+                            <div style="margin-top: 10px; padding: 10px; background-color: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; font-size: 0.85rem; color: #78350f; text-align: right;">
+                              <strong>ملاحظة الموظف في تقريره:</strong> ${empDailyReport.notes}
+                            </div>
+                          ` : ''}
+                        </td>
+                      </tr>
+                    `
+                    + `
+                           </div>
+                         </div>
+                       </td>
+                     </tr>
+                   `;
+                 }
+
+                 return `
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: bold; background-color: #ffffff;">${ev.employeeName}</td>
+                    <td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: bold; background-color: #ffffff; color: ${ev.rating === 'ممتاز' || (ev.rating && ev.rating.includes('%') && parseInt(ev.rating) >= 90) ? 'green' : ev.rating === 'سيئ' || (ev.rating && ev.rating.includes('%') && parseInt(ev.rating) < 50) ? 'red' : (ev.rating && ev.rating.includes('%')) ? 'blue' : 'inherit'}">${ev.rating}</td>
+                    <td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: bold; color: #1a8d9b; background-color: #ffffff;" dir="ltr">${ev.scorePercentage ? ev.scorePercentage + '%' : '---'}</td>
+                    <td style="padding: 10px; border: 1px solid #cbd5e1; background-color: #ffffff;">${ev.reason || '---'}</td>
+                  </tr>
+                   ${reportHtml}
+                   <tr><td colspan="4" style="height: 12px; background-color: #0f172a; padding: 0; border: none; border-top: 2px solid #000; border-bottom: 2px solid #000;"></td></tr>
+                  `;
+              }).join('')}
+              ${(!report.employeeEvaluations || report.employeeEvaluations.length === 0) ? '<tr><td colspan="4" style="padding: 10px; border: 1px solid #cbd5e1;">لا توجد تقييمات</td></tr>' : ''}
+            </tbody>
+          </table>
+          
+          <h3 style="color: #1e293b; font-size: 1.3rem; font-weight: 800; margin-bottom: 15px;">متابعة الطلبيات والإنتاج المباشر</h3>
+          <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 0.9rem;">
+            <thead style="background-color: #f8fafc;">
+              <tr>
+                <th style="padding: 10px; border: 1px solid #cbd5e1;">الطلبية/المهمة</th>
+                <th style="padding: 10px; border: 1px solid #cbd5e1;">القسم</th>
+                <th style="padding: 10px; border: 1px solid #cbd5e1;">الحالة</th>
+                <th style="padding: 10px; border: 1px solid #cbd5e1;">ملاحظات المشرف</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(report.ordersSnapshot && report.ordersSnapshot.length > 0) ? report.ordersSnapshot.map(o => `
+                <tr>
+                  <td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: bold;">${o.isMission ? o.customerName : `#${o.orderNumber}`}</td>
+                  <td style="padding: 10px; border: 1px solid #cbd5e1;">${o.isMission ? 'التوصيل' : (o.currentDepartment || 'الإنتاج')}</td>
+                  <td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: bold; color: ${o.executionStatus === 'متوقف' || o.status === 'متوقف' ? '#ef4444' : 'inherit'}">${o.executionStatus || o.status || 'غير محدد'}</td>
+                  <td style="padding: 10px; border: 1px solid #cbd5e1;">${o.supervisorNotes || '---'}</td>
+                </tr>
+              `).join('') : '<tr><td colspan="4" style="padding: 10px; border: 1px solid #cbd5e1;">لا توجد طلبيات مسجلة</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      `
+    });
+  };
+
+  const handleChangeSupervisorReportStatus = async (report, newStatus) => {
+    const actionText = newStatus === 'معتمد' ? 'اعتماد' : 'إرجاع / رفض';
+    const result = await Swal.fire({
+      title: 'تأكيد الإجراء',
+      html: `
+        <p style="margin-bottom: 15px;">${newStatus === 'معتمد' ? 'هل أنت متأكد من اعتماد هذا التقرير؟ سيمنع هذا المشرف من تعديله.' : 'هل أنت متأكد من رفض/إرجاع التقرير للمشرف لكي يتمكن من تعديله؟'}</p>
+        <div style="text-align: right; margin-top: 15px;">
+          <label style="display:block; margin-bottom: 8px; font-weight: bold; color: #1e293b;">${newStatus === 'معتمد' ? 'ملاحظات (اختياري)' : 'سبب الرفض (اختياري)'}</label>
+          <textarea id="swal-report-note" class="swal2-textarea" style="margin:0; width:100%; font-size: 14px;" placeholder="اكتب ملاحظتك هنا..."></textarea>
+        </div>
+      `,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'نعم، متأكد',
+      cancelButtonText: 'إلغاء',
+      preConfirm: () => {
+        return document.getElementById('swal-report-note').value;
+      }
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const adminNote = result.value;
+        const updatedReport = { 
+          ...report, 
+          status: newStatus
+        };
+        
+        const newAdminNotes = adminNote ? `${report.adminNotes ? report.adminNotes + '\n' : ''}(${newStatus === 'معتمد' ? 'ملاحظة اعتماد' : 'سبب الرفض'}: ${adminNote})` : report.adminNotes;
+        if (newAdminNotes !== undefined) {
+          updatedReport.adminNotes = newAdminNotes;
+        }
+        await saveSupervisorReport(updatedReport);
+        setSupervisorReports(supervisorReports.map(r => r.id === report.id ? updatedReport : r));
+        
+        // Send WhatsApp notification
+        try {
+          const supEmp = employees.find(e => String(e.id) === String(report.supervisorId));
+          if (supEmp && supEmp.phone) {
+             const statusMsg = newStatus === 'معتمد' ? 'اعتماد ✅' : 'رفض/إرجاع ❌';
+             await sendTemplatedWhatsAppNotification(supEmp.phone, 'report_approval', {
+               name: report.supervisorName,
+               status: statusMsg,
+               date: report.date,
+               reason: adminNote || 'بدون ملاحظات'
+             });
+          }
+        } catch(e) { console.error(e); }
+
+        Swal.fire('تم بنجاح', `تم ${actionText} التقرير.`, 'success');
+      } catch (err) {
+        Swal.fire('خطأ', 'حدث خطأ أثناء تغيير الحالة.', 'error');
+      }
+    }
+  };
+
+  const handleDeleteSupervisorReport = async (report) => {
+    const result = await Swal.fire({
+      title: 'هل أنت متأكد؟',
+      text: 'لن تتمكن من التراجع عن عملية الحذف!',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#cbd5e1',
+      confirmButtonText: 'نعم، احذف',
+      cancelButtonText: 'إلغاء'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await deleteSupervisorReport(report.id);
+        setSupervisorReports(supervisorReports.filter((r) => r.id !== report.id));
+        Swal.fire('تم الحذف!', 'تم حذف تقرير المشرف بنجاح.', 'success');
+      } catch (err) {
+        console.error("Error deleting report:", err);
+        Swal.fire('خطأ', 'حدث خطأ أثناء حذف التقرير.', 'error');
+      }
+    }
   };
 
   const handleViewReportDetails = (report) => {
@@ -1463,6 +1848,52 @@ const AdminReports = ({ user, notificationTarget }) => {
     openPrintConfig('print');
   };
 
+  const employeeIdOptions = (employees || []).map(emp => ({ value: emp.id, label: emp.employeeId || emp.id }));
+  const employeeNameOptions = (employees || []).map(emp => ({ value: emp.id, label: emp.name }));
+
+  const customSelectStyles = {
+    control: (provided) => ({
+      ...provided,
+      backgroundColor: 'white',
+      border: '1px solid #e2e8f0',
+      borderRadius: '8px',
+      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+      cursor: 'pointer',
+      minHeight: '44px',
+      height: '44px',
+    }),
+    valueContainer: (provided) => ({
+      ...provided,
+      padding: '0 8px',
+    }),
+    singleValue: (provided) => ({
+      ...provided,
+      color: '#1e293b',
+      fontWeight: 'bold',
+      fontSize: '0.9rem',
+    }),
+    placeholder: (provided) => ({
+      ...provided,
+      color: '#94a3b8',
+      fontSize: '0.9rem',
+    }),
+    menuPortal: base => ({ ...base, zIndex: 9999 }),
+    menu: (provided) => ({
+      ...provided,
+      zIndex: 9999,
+      textAlign: 'right',
+      direction: 'rtl'
+    }),
+    option: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isSelected ? '#0284c7' : state.isFocused ? '#f1f5f9' : 'white',
+      color: state.isSelected ? 'white' : '#1e293b',
+      cursor: 'pointer',
+      fontSize: '0.9rem',
+      fontWeight: state.isSelected ? 'bold' : 'normal',
+    })
+  };
+
   return (
     <div className="space-y-4" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
@@ -1563,7 +1994,7 @@ const AdminReports = ({ user, notificationTarget }) => {
         {/* Advanced Stock & Export Panel */}
         {activeReportTab === 'stock' && (
           <div className="overflow-x-auto no-print mb-6 pb-2" style={{ direction: 'rtl' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(11, 1fr)`, gap: '12px', minWidth: `1300px` }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(7, 1fr)`, gap: '12px', minWidth: `900px` }}>
               {/* Stat/Redirect Cards */}
               {[
                 {
@@ -1572,7 +2003,7 @@ const AdminReports = ({ user, notificationTarget }) => {
                   icon: <Layers />,
                   color: '#0ea5e9',
                   bgLight: '#e0f2fe',
-                  onClick: () => {} 
+                  onClick: () => setSelectedStockSubTab('items')
                 },
                 {
                   id: 'vouchers_in',
@@ -1580,7 +2011,7 @@ const AdminReports = ({ user, notificationTarget }) => {
                   icon: <Download />,
                   color: '#16a34a',
                   bgLight: '#dcfce7',
-                  onClick: () => typeof handleVoucherRedirect !== 'undefined' && handleVoucherRedirect('إدخال')
+                  onClick: () => setSelectedStockSubTab('vouchers_in')
                 },
                 {
                   id: 'vouchers_out',
@@ -1588,7 +2019,7 @@ const AdminReports = ({ user, notificationTarget }) => {
                   icon: <Upload />,
                   color: '#dc2626',
                   bgLight: '#fee2e2',
-                  onClick: () => typeof handleVoucherRedirect !== 'undefined' && handleVoucherRedirect('إخراج')
+                  onClick: () => setSelectedStockSubTab('vouchers_out')
                 },
                 {
                   id: 'vouchers_trf',
@@ -1596,7 +2027,7 @@ const AdminReports = ({ user, notificationTarget }) => {
                   icon: <ArrowUpDown />,
                   color: '#0284c7',
                   bgLight: '#e0f2fe',
-                  onClick: () => typeof handleVoucherRedirect !== 'undefined' && handleVoucherRedirect('تحويل')
+                  onClick: () => setSelectedStockSubTab('vouchers_trf')
                 },
                 {
                   id: 'vouchers_dmg',
@@ -1604,7 +2035,7 @@ const AdminReports = ({ user, notificationTarget }) => {
                   icon: <AlertTriangle />,
                   color: '#ea580c',
                   bgLight: '#ffedd5',
-                  onClick: () => typeof handleVoucherRedirect !== 'undefined' && handleVoucherRedirect('إتلاف')
+                  onClick: () => setSelectedStockSubTab('vouchers_dmg')
                 },
                 {
                   id: 'audit',
@@ -1612,7 +2043,7 @@ const AdminReports = ({ user, notificationTarget }) => {
                   icon: <AlertTriangle />,
                   color: '#8b5cf6',
                   bgLight: '#f3e8ff',
-                  onClick: () => typeof handleVoucherRedirect !== 'undefined' && handleVoucherRedirect('خصم')
+                  onClick: () => setSelectedStockSubTab('audit')
                 },
                 {
                   id: 'stocktake',
@@ -1620,40 +2051,7 @@ const AdminReports = ({ user, notificationTarget }) => {
                   icon: <ClipboardList />,
                   color: '#f59e0b',
                   bgLight: '#fef3c7',
-                  onClick: () => typeof handleVoucherRedirect !== 'undefined' && handleVoucherRedirect('جرد')
-                },
-                // Export Cards
-                {
-                  id: 'export_print',
-                  label: 'طباعة التقرير',
-                  icon: <Printer />,
-                  color: '#3b82f6',
-                  bgLight: '#eff6ff',
-                  onClick: handlePrint
-                },
-                {
-                  id: 'export_excel',
-                  label: 'تصدير إكسل',
-                  icon: <FileSpreadsheet />,
-                  color: '#10b981',
-                  bgLight: '#d1fae5',
-                  onClick: () => { setExportActionToRun('excel'); openPrintConfig('excel'); }
-                },
-                {
-                  id: 'export_word',
-                  label: 'تصدير وورد',
-                  icon: <FileText />,
-                  color: '#2563eb',
-                  bgLight: '#dbeafe',
-                  onClick: () => { setExportActionToRun('word'); openPrintConfig('word'); }
-                },
-                {
-                  id: 'export_pdf',
-                  label: 'تصدير PDF',
-                  icon: <FileDown />,
-                  color: '#ef4444',
-                  bgLight: '#fee2e2',
-                  onClick: () => { setExportActionToRun('pdf'); openPrintConfig('pdf'); }
+                  onClick: () => setSelectedStockSubTab('stocktake')
                 }
               ].map(item => (
                 <div
@@ -1665,13 +2063,15 @@ const AdminReports = ({ user, notificationTarget }) => {
                     e.currentTarget.style.transform = 'translateY(-3px)';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '#e2e8f0';
-                    e.currentTarget.style.boxShadow = '0 4px 10px -2px rgba(0, 0, 0, 0.03)';
-                    e.currentTarget.style.transform = 'translateY(0)';
+                    if (selectedStockSubTab !== item.id) {
+                      e.currentTarget.style.borderColor = '#e2e8f0';
+                      e.currentTarget.style.boxShadow = '0 4px 10px -2px rgba(0, 0, 0, 0.03)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }
                   }}
                   style={{
                     backgroundColor: '#ffffff',
-                    border: '1.5px solid #e2e8f0',
+                    border: selectedStockSubTab === item.id ? `2px solid ${item.color}` : '1.5px solid #e2e8f0',
                     borderRadius: '16px',
                     padding: '16px 8px 12px 8px',
                     display: 'flex',
@@ -1680,11 +2080,12 @@ const AdminReports = ({ user, notificationTarget }) => {
                     justifyContent: 'center',
                     gap: '12px',
                     cursor: 'pointer',
-                    boxShadow: '0 4px 10px -2px rgba(0, 0, 0, 0.03)',
+                    boxShadow: selectedStockSubTab === item.id ? `0 6px 15px -3px ${item.color}40` : '0 4px 10px -2px rgba(0, 0, 0, 0.03)',
                     color: '#334155',
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     position: 'relative',
-                    height: '110px'
+                    height: '110px',
+                    transform: selectedStockSubTab === item.id ? 'translateY(-3px)' : 'translateY(0)'
                   }}
                 >
                   <div style={{ color: item.color, backgroundColor: item.bgLight, padding: '12px', borderRadius: '12px' }}>
@@ -1757,38 +2158,127 @@ const AdminReports = ({ user, notificationTarget }) => {
           gap: '16px',
           flexWrap: 'wrap'
         }}>
-          {/* Search Input */}
-          <div className="flex-1 flex gap-4 items-center" style={{ minWidth: '260px' }}>
-            <div style={{ position: 'relative', width: '100%' }}>
-              <input
-                type="text"
-                placeholder="بحث سريع في التقرير الحالي..."
-                className="input-field"
-                style={{ 
-                  margin: 0, 
-                  paddingRight: '40px',
-                  width: '100%',
-                  borderRadius: '12px',
-                  border: '1px solid #cbd5e1'
-                }}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+          {/* Filter Controls: Conditional for Employee Reports vs Other Reports */}
+          {activeReportTab === 'employees' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', flex: 1, direction: 'rtl' }}>
+              {/* Date Filter */}
+              <HRDateFilter 
+                mode={empDateMode}
+                setMode={setEmpDateMode}
+                date={empSelectedDate}
+                setDate={setEmpSelectedDate}
+                month={empSelectedMonth}
+                setMonth={setEmpSelectedMonth}
+                startDate={empStartDate}
+                setStartDate={setEmpStartDate}
+                endDate={empEndDate}
+                setEndDate={setEmpEndDate}
+                allowedModes={['day', 'month', 'range']}
               />
-              <Search 
-                size={18} 
-                style={{ 
-                  position: 'absolute', 
-                  right: '12px', 
-                  top: '50%', 
-                  transform: 'translateY(-50%)',
-                  color: '#64748b' 
-                }} 
-              />
+              {/* Employee ID Selector */}
+              <div style={{ width: '180px' }}>
+                <Select
+                  options={employeeIdOptions}
+                  value={employeeIdOptions.find(opt => opt.value === selectedEmployee) || null}
+                  onChange={(selected) => setSelectedEmployee(selected ? selected.value : '')}
+                  styles={customSelectStyles}
+                  placeholder="رقم الموظف..."
+                  isSearchable={true}
+                  isClearable={true}
+                  menuPortalTarget={document.body}
+                />
+              </div>
+              {/* Employee Name Selector */}
+              <div style={{ width: '250px', position: 'relative' }}>
+                <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, color: '#94a3b8', pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
+                  <User size={16} />
+                </div>
+                <Select
+                  options={employeeNameOptions}
+                  value={employeeNameOptions.find(opt => opt.value === selectedEmployee) || null}
+                  onChange={(selected) => setSelectedEmployee(selected ? selected.value : '')}
+                  styles={{
+                    ...customSelectStyles,
+                    control: (base) => ({
+                      ...base,
+                      height: '44px',
+                      minHeight: '44px',
+                      borderRadius: '10px',
+                      border: '1px solid #e2e8f0',
+                      paddingLeft: '24px'
+                    })
+                  }}
+                  placeholder="اسم الموظف..."
+                  isSearchable={true}
+                  isClearable={true}
+                  menuPortalTarget={document.body}
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            /* Search Input for Other Tabs */
+            <div className="flex-1 flex gap-4 items-center" style={{ minWidth: '260px' }}>
+              <div style={{ position: 'relative', width: '100%' }}>
+                <input
+                  type="text"
+                  placeholder="بحث سريع في التقرير الحالي..."
+                  className="input-field"
+                  style={{ 
+                    margin: 0, 
+                    paddingRight: '40px',
+                    width: '100%',
+                    borderRadius: '12px',
+                    border: '1px solid #cbd5e1'
+                  }}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <Search 
+                  size={18} 
+                  style={{ 
+                    position: 'absolute', 
+                    right: '12px', 
+                    top: '50%', 
+                    transform: 'translateY(-50%)',
+                    color: '#64748b' 
+                  }} 
+                />
+              </div>
+            </div>
+          )}
 
           {/* Action Buttons Group */}
           <div className="flex items-center gap-3 flex-wrap">
+            {/* Reset Filters Button (Only for Employee Reports) */}
+            {activeReportTab === 'employees' && (
+              <button 
+                className="btn flex items-center gap-2"
+                onClick={() => {
+                  setSelectedEmployee('');
+                  setEmpDateMode('month');
+                  setEmpSelectedDate(getLocalDateStr(new Date()));
+                  setEmpSelectedMonth(new Date().toISOString().substring(0, 7));
+                  setEmpStartDate(getLocalDateStr(new Date()));
+                  setEmpEndDate(getLocalDateStr(new Date()));
+                }}
+                style={{
+                  borderRadius: '12px',
+                  padding: '10px 16px',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  backgroundColor: '#f1f5f9',
+                  color: '#475569',
+                  border: '1px solid #cbd5e1'
+                }}
+                title="إعادة تعيين فلاتر البحث"
+              >
+                <RotateCcw size={18} />
+                <span className="hidden sm:inline">تصفير الفلاتر</span>
+              </button>
+            )}
+
             {/* Reset Button */}
             <button 
               className="btn flex items-center gap-2"
@@ -1810,25 +2300,27 @@ const AdminReports = ({ user, notificationTarget }) => {
               <span className="hidden sm:inline">تصفير</span>
             </button>
 
-            {/* Filter Button */}
-            <button 
-              className="btn btn-primary flex items-center gap-2"
-              onClick={() => setShowFilterModal(true)}
-              style={{
-                borderRadius: '12px',
-                padding: '10px 16px',
-                fontWeight: 'bold',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-            >
-              <Filter size={18} />
-              <span>تصفية مخصصة</span>
-              {(selectedEmployee || selectedJobDepartment || selectedJobTitle || selectedCustomer || selectedCategory || selectedWarehouse || selectedStatus || selectedCity || selectedSector || (dateFrom && !isDefaultDate) || dateTo || filterOrderNumber || filterCreatedBy) && (
-                <span className="bg-white text-primary rounded-full px-2 py-0.5 text-[0.7rem] font-bold mr-1">نشط</span>
-              )}
-            </button>
+            {/* Filter Button (Hidden for Employee Reports since we have inline filters) */}
+            {activeReportTab !== 'employees' && (
+              <button 
+                className="btn btn-primary flex items-center gap-2"
+                onClick={() => setShowFilterModal(true)}
+                style={{
+                  borderRadius: '12px',
+                  padding: '10px 16px',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <Filter size={18} />
+                <span>تصفية مخصصة</span>
+                {(selectedEmployee || selectedJobDepartment || selectedJobTitle || selectedCustomer || selectedCategory || selectedWarehouse || selectedStatus || selectedCity || selectedSector || (dateFrom && !isDefaultDate) || dateTo || filterOrderNumber || filterCreatedBy) && (
+                  <span className="bg-white text-primary rounded-full px-2 py-0.5 text-[0.7rem] font-bold mr-1">نشط</span>
+                )}
+              </button>
+            )}
 
             {/* Print Button */}
             <button 
@@ -2188,10 +2680,18 @@ const AdminReports = ({ user, notificationTarget }) => {
                 ) : activeReportTab === 'customers' ? (
                   <>
                     <div className="input-group">
+                      <label>النوع</label>
+                      <select className="input-field" value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
+                        <option value="">الكل (عملاء وموردين)</option>
+                        <option value="عميل">العملاء</option>
+                        <option value="مورد">الموردين</option>
+                      </select>
+                    </div>
+                    <div className="input-group">
                       <label>المدينة</label>
                       <select className="input-field" value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)}>
                         <option value="">جميع المدن</option>
-                        {JORDANIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
+                         {((globalSettings.jordanianCities && globalSettings.jordanianCities.length > 0) ? globalSettings.jordanianCities : JORDANIAN_CITIES).map(city => <option key={city} value={city}>{city}</option>)}
                       </select>
                     </div>
                     <div className="input-group">
@@ -2207,6 +2707,14 @@ const AdminReports = ({ user, notificationTarget }) => {
                         <option value="">جميع الحالات</option>
                         <option value="نشط">نشط</option>
                         <option value="غير نشط">غير نشط</option>
+                      </select>
+                    </div>
+                    <div className="input-group">
+                      <label>البائع (مندوب المبيعات)</label>
+                      <select className="input-field" value={selectedSalesRep} onChange={(e) => setSelectedSalesRep(e.target.value)}>
+                        <option value="">جميع البائعين</option>
+                        <option value="زبائن الشركة">زبائن الشركة</option>
+                        {(globalSettings.salesReps || []).filter(rep => rep !== 'زبائن الشركة').map(rep => <option key={rep} value={rep}>{rep}</option>)}
                       </select>
                     </div>
                   </>
@@ -2298,33 +2806,34 @@ const AdminReports = ({ user, notificationTarget }) => {
           {activeReportTab === 'supervisors' && (
             <div className="supervisors-mobile-view mt-4 space-y-4">
               {sortedRowsByTab.supervisors.map(row => {
-                const isLate = String(row.type).includes('تأخير') || String(row.type).includes('غياب');
+                const isApproved = row.status === 'معتمد';
+                const isRejected = row.status === 'مرفوض/مُعاد';
                 return (
                   <div key={row.id} className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 relative overflow-hidden" style={{ direction: 'rtl' }}>
-                    <div className={`absolute top-0 left-0 right-0 h-1.5 ${isLate ? 'bg-amber-400' : 'bg-emerald-500'}`}></div>
+                    <div className={`absolute top-0 left-0 right-0 h-1.5 ${isApproved ? 'bg-emerald-500' : isRejected ? 'bg-rose-500' : 'bg-blue-500'}`}></div>
                     
                     <div className="flex justify-between items-center mb-3 pt-1">
                       <div className="flex items-center gap-2 text-slate-500 text-sm font-bold">
                         <Calendar size={15} className="text-slate-400" />
                         <span>{row.date}</span>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${isLate ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                        {isLate ? <AlertTriangle size={12} /> : <CheckCircle size={12} />}
-                        {row.type || 'معتمد'}
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${isApproved ? 'bg-emerald-100 text-emerald-700' : isRejected ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {isApproved ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
+                        {row.status || 'قيد المراجعة'}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex-1 pr-2">
                         <h3 className="font-black text-slate-800 text-lg mb-2">{row.supervisorName || row.supervisorId}</h3>
-                        <div className="flex items-center gap-4 text-xs font-bold text-slate-500">
+                        <div className="flex flex-col gap-1.5 text-xs font-bold text-slate-500">
                            <div className="flex items-center gap-1">
                              <Users size={14} className="text-primary" />
-                             <span>تم تقييم الموظفين</span>
+                             <span>تم تقييم {row.employeeEvaluations?.length || 0} موظف</span>
                            </div>
                            <div className="flex items-center gap-1">
-                             <div className={`w-2 h-2 rounded-full ${isLate ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
-                             <span>{row.type || 'الجميع متواجدون'}</span>
+                             <Clock size={14} className="text-primary" />
+                             <span>حضور: {row.timeIn || '---'} | انصراف: {row.timeOut || '---'}</span>
                            </div>
                         </div>
                       </div>
@@ -2332,19 +2841,22 @@ const AdminReports = ({ user, notificationTarget }) => {
                         <User size={24} />
                       </div>
                     </div>
-                    
-                    <div className="text-slate-600 text-sm mt-3 leading-relaxed border-t border-slate-100 pt-3 pb-3">
-                      {row.content}
-                    </div>
 
                     <div className="flex border-t border-slate-100 pt-3 mt-1 divide-x divide-x-reverse divide-slate-100">
-                       <button className="flex-1 flex items-center justify-center gap-2 text-primary font-bold text-xs py-1 hover:bg-slate-50 transition-colors">
+                       <button onClick={() => handleViewSupervisorReport(row)} className="flex-1 flex items-center justify-center gap-2 text-primary font-bold text-xs py-1 hover:bg-slate-50 transition-colors">
                          <Eye size={14} /> عرض
                        </button>
-                       <button className="flex-1 flex items-center justify-center gap-2 text-emerald-600 font-bold text-xs py-1 hover:bg-slate-50 transition-colors">
-                         <CheckCircle size={14} /> اعتماد
-                       </button>
-                       <button className="flex-1 flex items-center justify-center gap-2 text-red-500 font-bold text-xs py-1 hover:bg-slate-50 transition-colors">
+                       {!isApproved && (
+                         <button onClick={() => handleChangeSupervisorReportStatus(row, 'معتمد')} className="flex-1 flex items-center justify-center gap-2 text-emerald-600 font-bold text-xs py-1 hover:bg-slate-50 transition-colors">
+                           <CheckCircle size={14} /> اعتماد
+                         </button>
+                       )}
+                       {!isRejected && (
+                         <button onClick={() => handleChangeSupervisorReportStatus(row, 'مرفوض/مُعاد')} className="flex-1 flex items-center justify-center gap-2 text-amber-600 font-bold text-xs py-1 hover:bg-slate-50 transition-colors">
+                           <X size={14} /> إرجاع
+                         </button>
+                       )}
+                       <button onClick={() => handleDeleteSupervisorReport(row)} className="flex-1 flex items-center justify-center gap-2 text-red-500 font-bold text-xs py-1 hover:bg-slate-50 transition-colors">
                          <Trash2 size={14} /> حذف
                        </button>
                     </div>
@@ -2409,6 +2921,7 @@ const AdminReports = ({ user, notificationTarget }) => {
                 renderStockVariant={renderStockVariant}
                 getStockItemStatus={getStockItemStatus}
                 getStatusBadgeClass={getStatusBadgeClass}
+                selectedStockSubTab={selectedStockSubTab}
               />
             )}
             {activeReportTab === 'missingpunches' && (
@@ -2432,6 +2945,10 @@ const AdminReports = ({ user, notificationTarget }) => {
                 sortedSupervisors={sortedRowsByTab.supervisors}
                 handleSort={handleSort}
                 getSortIcon={getSortIcon}
+                onView={handleViewSupervisorReport}
+                onApprove={(report) => handleChangeSupervisorReportStatus(report, 'معتمد')}
+                onReject={(report) => handleChangeSupervisorReportStatus(report, 'مرفوض/مُعاد')}
+                onDelete={handleDeleteSupervisorReport}
               />
             )}
             {activeReportTab === 'customers' && (

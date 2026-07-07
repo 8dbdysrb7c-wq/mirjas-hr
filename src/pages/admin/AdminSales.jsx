@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText } from 'lucide-react';
-import { getSalesOrders, saveSalesOrder, deleteSalesOrder, getCustomers, saveCustomer, getGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getMissions, saveMission, deleteMission } from '../../store';
+import { getSalesOrders, saveSalesOrder, deleteSalesOrder, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getMissions, saveMission, deleteMission } from '../../store';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import Flatpickr from 'react-flatpickr';
@@ -77,7 +77,7 @@ const AdminSales = ({ user }) => {
       getStock()
     ]);
     setOrders(ordersData);
-    setCustomers(customersData);
+    setCustomers(customersData.filter(c => (c.type || 'عميل') === 'عميل'));
     setGlobalSettings(settingsData);
     setStock(stockData);
     setLoading(false);
@@ -172,30 +172,47 @@ const AdminSales = ({ user }) => {
   };
 
   const handleAddNewStockItem = () => {
-    const generateNextID = () => {
-      if (stock.length === 0) return 'SKU-001';
-      const ids = stock.map(item => {
-        const match = item.itemNumber?.match(/\d+/);
-        return match ? parseInt(match[0]) : 0;
+    const generateNextID = (category) => {
+      let prefix = 'UNK';
+      if (!category) prefix = 'UNK';
+      else if (category === 'بضاعة جاهزة' || category.includes('بضاعة')) prefix = 'FG';
+      else if (category === 'أقمشة' || category.includes('قماش')) prefix = 'FAB';
+      else if (category === 'تغليف' || category.includes('كرتون')) prefix = 'PKG';
+      else if (category === 'مستهلكات' || category.includes('مستهلك')) prefix = 'CON';
+      else if (category === 'أصول' || category.includes('أصل')) prefix = 'AST';
+
+      const categoryItems = stock.filter(item => item.itemNumber && item.itemNumber.startsWith(prefix + '-'));
+      
+      if (categoryItems.length === 0) return `${prefix}-00001`;
+      
+      const ids = categoryItems.map(item => {
+        const parts = item.itemNumber.split('-');
+        if (parts.length > 1) {
+          return parseInt(parts[1], 10) || 0;
+        }
+        return 0;
       });
+      
       const maxID = Math.max(...ids, 0);
-      return `SKU-${String(maxID + 1).padStart(3, '0')}`;
+      return `${prefix}-${String(maxID + 1).padStart(5, '0')}`;
     };
 
+    const categories = globalSettings?.stockCategories || ['الأصول', 'مستهلكات الخياطة'];
+    const defaultCategory = categories[0] || 'الأصول';
     const initialData = {
-      itemNumber: generateNextID(),
+      itemNumber: generateNextID(defaultCategory),
+      category: defaultCategory,
+      warehouse: globalSettings?.warehouses?.[0] || 'المستودع الرئيسي',
       itemCode: '',
       name: '',
-      category: globalSettings.stockCategories?.[0] || '',
-      warehouse: globalSettings.warehouses?.[0] || '',
       location: '',
       spec: '',
-      unit: globalSettings.stockUnits?.[0] || '',
-      quantity: 0,
+      unit: globalSettings.stockUnits?.[0] || 'عدد',
+      quantity: 1,
       minLimit: 0,
       lastMovement: 'إدخال',
       lastMovementDate: new Date().toISOString().split('T')[0],
-      lastRecipient: '',
+      lastRecipient: user?.name || '',
       notes: ''
     };
 
@@ -209,6 +226,52 @@ const AdminSales = ({ user }) => {
       },
       buttonsStyling: false,
       showCloseButton: false,
+      didOpen: () => {
+        const categorySelect = document.getElementById('swal-category');
+        const itemNumberInput = document.getElementById('swal-itemNumber');
+        if (categorySelect && itemNumberInput) {
+          categorySelect.addEventListener('change', (e) => {
+            itemNumberInput.value = generateNextID(e.target.value);
+          });
+        }
+
+        // Location select management
+        const locationSelect = document.getElementById('swal-location');
+        const addBtn = document.getElementById('swal-add-location-btn');
+        if (addBtn && locationSelect) {
+          addBtn.addEventListener('click', async () => {
+            const { value: newLoc } = await Swal.fire({
+              title: 'إضافة رف جديد',
+              input: 'text',
+              inputPlaceholder: 'مثال: رف 6',
+              showCancelButton: true,
+              confirmButtonText: 'إضافة',
+              cancelButtonText: 'إلغاء'
+            });
+            if (newLoc && newLoc.trim()) {
+              const name = newLoc.trim();
+              const optionExists = Array.from(locationSelect.options).some(opt => opt.value === name);
+              if (!optionExists) {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                locationSelect.appendChild(opt);
+              }
+              locationSelect.value = name;
+
+              const updatedLocations = [...(globalSettings.stockLocations || [])];
+              if (!updatedLocations.includes(name)) {
+                updatedLocations.push(name);
+                await saveGlobalSettings({
+                  ...globalSettings,
+                  stockLocations: updatedLocations
+                });
+                globalSettings.stockLocations = updatedLocations;
+              }
+            }
+          });
+        }
+      },
       html: `
         <div class="premium-modal-header">
           <div class="premium-modal-title">
@@ -219,17 +282,14 @@ const AdminSales = ({ user }) => {
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </div>
         </div>
-        <div class="premium-form">
+        <div class="premium-form text-right" style="direction: rtl;">
           <div class="grid grid-cols-12 gap-x-8 gap-y-8">
+            <!-- Row 1: Item Number, Name, Category -->
             <div class="premium-form-group col-span-12 md:col-span-3">
               <label>رقم الصنف (ID)</label>
-              <input id="swal-itemNumber" class="premium-input" placeholder="SKU-001" value="${initialData.itemNumber}">
+              <input id="swal-itemNumber" class="premium-input" placeholder="SKU-00001" value="${initialData.itemNumber}" disabled style="background: var(--surface); cursor: not-allowed; font-weight: bold; color: var(--primary-dark); text-align: center;">
             </div>
-            <div class="premium-form-group col-span-12 md:col-span-3">
-              <label>رمز الصنف</label>
-              <input id="swal-itemCode" class="premium-input" placeholder="" value="${initialData.itemCode || ''}">
-            </div>
-            <div class="premium-form-group col-span-12 md:col-span-3">
+            <div class="premium-form-group col-span-12 md:col-span-6">
               <label>اسم الصنف</label>
               <input id="swal-name" class="premium-input" placeholder="مثال: قماش أبيض تركي" value="${initialData.name}">
             </div>
@@ -237,26 +297,41 @@ const AdminSales = ({ user }) => {
               <label>التصنيف</label>
               <select id="swal-category" class="premium-input">
                 <option value="" disabled>اختر التصنيف</option>
-                ${globalSettings.stockCategories?.map(c => `<option value="${c}" ${initialData.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+                ${categories.map(c => `<option value="${c}" ${initialData.category === c ? 'selected' : ''}>${c}</option>`).join('')}
               </select>
             </div>
 
+            <!-- Row 2: Item Code, Warehouse -->
+            <div class="premium-form-group col-span-12 md:col-span-3">
+              <label>رمز الصنف</label>
+              <input id="swal-itemCode" class="premium-input" placeholder="" value="${initialData.itemCode || ''}">
+            </div>
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label>المخزن</label>
               <select id="swal-warehouse" class="premium-input">
                 <option value="" disabled>اختر المخزن</option>
-                ${globalSettings.warehouses?.map(w => `<option value="${w}" ${initialData.warehouse === w ? 'selected' : ''}>${w}</option>`).join('')}
+                ${(globalSettings?.warehouses || ['المستودع الرئيسي']).map(w => `<option value="${w}" ${initialData.warehouse === w ? 'selected' : ''}>${w}</option>`).join('')}
               </select>
             </div>
-            <div class="premium-form-group col-span-12 md:col-span-4">
+
+            <!-- Row 3: Location (Full Width Dropdown + Add Button) -->
+            <div class="premium-form-group col-span-12" id="swal-location-container">
               <label>الموقع (داخل المخزن)</label>
-              <input id="swal-location" class="premium-input" placeholder="مثال: رف 5، قسم B" value="${initialData.location}">
+              <div class="flex gap-2">
+                <select id="swal-location" class="premium-input" style="flex: 1;">
+                  <option value="">-- اختر الرف --</option>
+                  ${(globalSettings.stockLocations || []).map(l => `<option value="${l}" ${initialData.location === l ? 'selected' : ''}>${l}</option>`).join('')}
+                </select>
+                <button type="button" id="swal-add-location-btn" style="width: 42px; height: 42px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 0;">+</button>
+              </div>
             </div>
+
+            <!-- Row 4: Spec, Quantity, MinLimit -->
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label>اللون / المواصفة</label>
               <select id="swal-spec" class="premium-input">
                 <option value="">اختر اللون/المواصفة</option>
-                ${globalSettings.stockColors?.map(c => `<option value="${c}" ${initialData.spec === c ? 'selected' : ''}>${c}</option>`).join('')}
+                ${(globalSettings?.stockColors || []).map(c => `<option value="${c}" ${initialData.spec === c ? 'selected' : ''}>${c}</option>`).join('')}
               </select>
             </div>
 
@@ -265,7 +340,7 @@ const AdminSales = ({ user }) => {
               <div class="flex gap-2">
                 <input id="swal-quantity" type="number" class="premium-input" style="flex: 2;" value="${initialData.quantity}">
                 <select id="swal-unit" class="premium-input" style="flex: 1;">
-                  ${globalSettings.stockUnits?.map(u => `<option value="${u}" ${initialData.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
+                  ${(globalSettings?.stockUnits || ['عدد', 'متر', 'كغم']).map(u => `<option value="${u}" ${initialData.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
                 </select>
               </div>
             </div>
@@ -320,14 +395,25 @@ const AdminSales = ({ user }) => {
           id: null
         };
 
-        if (!data.itemNumber || !data.name || !data.warehouse) {
-          Swal.showValidationMessage('يرجى ملء الاسم ورقم الصنف والمخزن');
+        if (!data.itemNumber || !data.name || !data.warehouse || !data.category) {
+          Swal.showValidationMessage('يرجى ملء الاسم والتصنيف ورقم الصنف والمخزن');
           return false;
         }
         if (data.itemCode && data.itemCode.trim().length !== 13) {
           Swal.showValidationMessage('يجب أن يتكون رمز الصنف من 13 خانة بالضبط');
           return false;
         }
+
+        const existingInWarehouse = stock.find(s => 
+          s.itemNumber === data.itemNumber && 
+          s.warehouse === data.warehouse &&
+          s.spec === data.spec
+        );
+        if (existingInWarehouse) {
+          Swal.showValidationMessage(`عذراً، يوجد بضاعة من هذا الصنف بنفس المواصفة/اللون مسبقاً في المستودع المختار (${data.warehouse})!`);
+          return false;
+        }
+
         return data;
       }
     }).then(async (result) => {
@@ -573,7 +659,8 @@ const AdminSales = ({ user }) => {
         if (!isNaN(num) && num > maxNum) maxNum = num;
       }
     });
-    const JORDANIAN_CITIES = ['عمان', 'الزرقاء', 'إربد', 'المفرق', 'عجلون', 'جرش', 'البلقاء', 'مأدبا', 'الكرك', 'الطفيلة', 'معان', 'العقبة'];
+    const JORDANIAN_CITIES = ['عمان', 'الزرقاء', 'إربد', 'العقبة', 'السلط', 'مادبا', 'الكرك', 'الطفيلة', 'معان', 'جرش', 'عجلون', 'المفرق'];
+    const cities = (globalSettings.jordanianCities && globalSettings.jordanianCities.length > 0) ? globalSettings.jordanianCities : JORDANIAN_CITIES;
     const customerNumber = `CLI-${String(maxNum + 1).padStart(4, '0')}`;
     const initialData = { name: '', phone: '', city: '', location: '', status: 'نشط', customerNumber, sector: '' };
 
@@ -627,15 +714,11 @@ const AdminSales = ({ user }) => {
               </label>
               <select id="swal-city" class="premium-input">
                 <option value="">اختر المدينة...</option>
-                ${JORDANIAN_CITIES.map(city => `<option value="${city}">${city}</option>`).join('')}
+                ${cities.map(city => `<option value="${city}">${city}</option>`).join('')}
               </select>
             </div>
-            <div class="premium-form-group" style="margin-bottom: 0;">
-              <label>
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin text-muted"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                المنطقة
-              </label>
-              <input id="swal-location" class="premium-input" placeholder="مثال: خلدا، شارع المدينة..." value="${initialData.location || ''}">
+            <div class="premium-form-group" style="margin-bottom: 0;" id="swal-location-container">
+              <!-- Dynamically populated -->
             </div>
           </div>
           <div class="premium-form-group">
@@ -646,6 +729,16 @@ const AdminSales = ({ user }) => {
             <select id="swal-sector" class="premium-input">
               <option value="">اختر القطاع...</option>
               ${(globalSettings.customerSectors || []).map(s => `<option value="${s}">${s}</option>`).join('')}
+            </select>
+          </div>
+          <div class="premium-form-group">
+            <label>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user text-muted"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              البائع (مندوب المبيعات) *
+            </label>
+            <select id="swal-salesRep" class="premium-input">
+              <option value="زبائن الشركة" selected>زبائن الشركة</option>
+              ${(globalSettings.salesReps || []).filter(rep => rep !== 'زبائن الشركة').map(rep => `<option value="${rep}">${rep}</option>`).join('')}
             </select>
           </div>
           <div class="premium-form-group">
@@ -665,6 +758,50 @@ const AdminSales = ({ user }) => {
       confirmButtonText: 'حفظ العميل',
       cancelButtonText: 'إلغاء',
       focusConfirm: false,
+      didOpen: () => {
+        const citySelect = document.getElementById('swal-city');
+        const locationContainer = document.getElementById('swal-location-container');
+
+        const updateLocationField = (selectedCity, currentVal) => {
+          if (!locationContainer) return;
+          if (selectedCity === 'عمان') {
+            const areas = (globalSettings.ammanAreas && globalSettings.ammanAreas.length > 0) ? globalSettings.ammanAreas : [
+              'عبدون', 'دير غبار', 'أم أذينة', 'الرابية', 'الشميساني', 'الصويفية', 'الجندويل', 
+              'خلدا', 'تلاع العلي', 'أم السماق', 'ضاحية الرشيد', 'ضاحية الحسين', 'مرج الحمام', 
+              'الجبيهة', 'شفا بدران', 'أبو نصير', 'طبربور', 'الهاشمي الشمالي', 'الهاشمي الجنوبي', 
+              'جبل الحسين', 'جبل عمان', 'جبل اللويبدة', 'الأشرفية', 'الوحدات', 'رأس العين', 
+              'وسط البلد', 'النصر', 'القويسمة', 'أبو علندا', 'خريبة السوق', 'المقابلين', 
+              'الجويدة', 'سحاب', 'الموقر', 'ماركا الشمالية', 'ماركا الجنوبية', 'طارق', 
+              'بسمان', 'البيادر', 'وادي السير', 'اليادودة', 'حسبان', 'البنيات'
+            ];
+            locationContainer.innerHTML = `
+              <label>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin text-muted"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                المنطقة *
+              </label>
+              <select id="swal-location" class="premium-input">
+                <option value="">اختر المنطقة...</option>
+                ${areas.map(area => `<option value="${area}" ${currentVal === area ? 'selected' : ''}>${area}</option>`).join('')}
+              </select>
+            `;
+          } else {
+            locationContainer.innerHTML = `
+              <label>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin text-muted"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                المنطقة
+              </label>
+              <input id="swal-location" class="premium-input" placeholder="مثال: وسط المدينة..." value="${selectedCity ? currentVal : ''}">
+            `;
+          }
+        };
+
+        if (citySelect) {
+          updateLocationField(citySelect.value, '');
+          citySelect.addEventListener('change', (e) => {
+            updateLocationField(e.target.value, '');
+          });
+        }
+      },
       preConfirm: () => {
         const name = document.getElementById('swal-name').value;
         const phone = document.getElementById('swal-phone').value;
@@ -684,15 +821,20 @@ const AdminSales = ({ user }) => {
           Swal.showValidationMessage('يرجى اختيار المدينة');
           return false;
         }
-        if (!location) {
-          Swal.showValidationMessage('يرجى إدخال المنطقة');
+        if (city === 'عمان' && !location) {
+          Swal.showValidationMessage('يرجى اختيار المنطقة لمدينة عمان');
           return false;
         }
         if (!sector) {
           Swal.showValidationMessage('يرجى اختيار القطاع');
           return false;
         }
-        return { name, phone: phone.trim(), city, location, sector, status, customerNumber: initialData.customerNumber };
+        const salesRep = document.getElementById('swal-salesRep').value;
+        if ((globalSettings.salesReps || []).length > 0 && !salesRep) {
+          Swal.showValidationMessage('يرجى اختيار البائع (مندوب المبيعات)');
+          return false;
+        }
+        return { name, phone: phone.trim(), city, location, sector, status, salesRep, type: 'عميل', customerNumber: initialData.customerNumber };
       }
     }).then(async (result) => {
       if (result.isConfirmed) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { getEmployees, getHRAttendance, getHolidays, addLog, createNotification } from '../store';
-import { sendWhatsAppNotification } from '../utils/whatsappService';
+import { sendWhatsAppNotification, sendTemplatedWhatsAppNotification } from '../utils/whatsappService';
 
 export const useAttendanceReminders = (isAdminOnline) => {
   const sentReminders = useRef(new Set());
@@ -68,9 +68,10 @@ export const useAttendanceReminders = (isAdminOnline) => {
                   target: { tab: 'hr_requests' }
                 });
 
-                if (emp.phone) {
-                  await sendWhatsAppNotification(emp.phone, `*تذكير من النظام* ⏰\nمرحباً ${emp.name}،\n${msg}`);
-                }
+                  await sendTemplatedWhatsAppNotification(emp.phone, 'reminders', {
+                    name: emp.name,
+                    msg: msg
+                  });
 
                 await addLog({
                   action: 'إرسال تذكير تلقائي',
@@ -102,9 +103,10 @@ export const useAttendanceReminders = (isAdminOnline) => {
                   target: { tab: 'hr_requests' }
                 });
 
-                if (emp.phone) {
-                  await sendWhatsAppNotification(emp.phone, `*تذكير من النظام* ⏰\nمرحباً ${emp.name}،\n${msg}`);
-                }
+                  await sendTemplatedWhatsAppNotification(emp.phone, 'reminders', {
+                    name: emp.name,
+                    msg: msg
+                  });
 
                 await addLog({
                   action: 'إرسال تذكير تلقائي',

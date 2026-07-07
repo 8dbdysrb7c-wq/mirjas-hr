@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import {
   Clock, Save, Search, ArrowUpDown, ArrowUp, ArrowDown,
   MapPin, Users, CheckCircle, AlertTriangle, X,
-  LogIn, LogOut, Sun, ChevronDown, Calendar
+  LogIn, LogOut, Sun, ChevronDown, Calendar, User
 } from 'lucide-react';
+import Select from 'react-select';
 import {
   getEmployees, getHRAttendance, saveHRAttendance,
   getReports, getSupervisorReports, getHRLeaves,
@@ -11,6 +12,7 @@ import {
 } from '../../store';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
+import HRDateFilter from '../../components/ui/HRDateFilter';
 
 /* ─────────────────────────── helpers ─────────────────────────── */
 const getLocalDateStr = (d) => {
@@ -45,7 +47,8 @@ const HRAttendance = ({ user }) => {
   const [sortConfig, setSortConfig]         = useState({ key: null, direction: 'asc' });
   const [activeFilter, setActiveFilter]     = useState(null);
 
-  const selectedDate = getLocalDateStr(new Date());
+  const [selectedDate, setSelectedDate] = useState(getLocalDateStr(new Date()));
+  const [dateMode, setDateMode] = useState('day');
 
   /* ── sorting ── */
   const handleSort = (key) => {
@@ -447,6 +450,70 @@ const HRAttendance = ({ user }) => {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
 
+  const customSelectStyles = {
+    control: (provided, state) => ({
+      ...provided,
+      backgroundColor: 'white',
+      border: '1px solid #e2e8f0',
+      borderRadius: '8px',
+      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+      cursor: 'pointer',
+      minHeight: '42px',
+      height: '42px',
+    }),
+    valueContainer: (provided) => ({
+      ...provided,
+      padding: '0 8px',
+    }),
+    singleValue: (provided) => ({
+      ...provided,
+      color: '#1e293b',
+      fontWeight: 'bold',
+      fontSize: '0.9rem',
+    }),
+    placeholder: (provided) => ({
+      ...provided,
+      color: '#94a3b8',
+      fontSize: '0.9rem',
+    }),
+    menuPortal: base => ({ ...base, zIndex: 9999 }),
+    menu: (provided) => ({
+      ...provided,
+      borderRadius: '12px',
+      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+      border: '1px solid #e2e8f0',
+      overflow: 'hidden',
+      zIndex: 9999,
+      width: 'max-content',
+      minWidth: '100%',
+    }),
+    option: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isSelected ? '#1a8d9b' : state.isFocused ? '#f1f5f9' : 'white',
+      color: state.isSelected ? 'white' : '#1e293b',
+      cursor: 'pointer',
+      padding: '10px 16px',
+      fontSize: '0.9rem',
+      fontWeight: state.isSelected ? 'bold' : 'normal',
+      textAlign: 'right',
+      whiteSpace: 'nowrap',
+    }),
+    indicatorSeparator: () => ({ display: 'none' }),
+    dropdownIndicator: (provided) => ({
+      ...provided,
+      color: '#94a3b8',
+      '&:hover': { color: '#1a8d9b' }
+    })
+  };
+
+  const employeeNameOptions = [...employees]
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    .map(emp => ({ value: emp.id, label: emp.name }));
+
+  const employeeIdOptions = [...employees]
+    .sort((a, b) => (parseInt(a.id) || 0) - (parseInt(b.id) || 0))
+    .map(emp => ({ value: emp.id, label: String(emp.id) }));
+
   /* ── loading state ── */
   if (loading && employees.length === 0) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:400, flexDirection:'column', gap:16 }}>
@@ -469,8 +536,6 @@ const HRAttendance = ({ user }) => {
         borderBottom: '1px solid #e2e8f0',
         position: 'relative',
       }}>
-        {/* decorative circles */}
-
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', position:'relative', zIndex:1, gap:16 }}>
           
           {/* Right: Title */}
@@ -491,32 +556,42 @@ const HRAttendance = ({ user }) => {
             </div>
           </div>
 
-          <div style={{ display:'flex', alignItems:'center', gap:12, flexShrink:0, flex: 1, maxWidth: '450px' }}>
-            {/* Search */}
-            <div style={{
-              background:'#fff',
-              border:'1px solid #e2e8f0',
-              borderRadius:10,
-              padding:'9px 14px',
-              display:'flex',
-              alignItems:'center',
-              gap:8,
-              width: '100%',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-              transition: 'all 0.2s ease-in-out',
-            }}>
-              <input
-                type="text"
-                placeholder="ابحث بالاسم أو الرقم..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                style={{
-                  background:'transparent', border:'none', outline:'none',
-                  fontSize:13, width:'100%', textAlign:'right',
-                  color:'#1e293b', direction:'rtl',
-                }}
-              />
-              <Search size={15} style={{ color:'#94a3b8', flexShrink:0 }} />
+          <div style={{ display:'flex', alignItems:'center', gap:12, flexShrink:0, flex: 1, maxWidth: 'auto', justifyContent: 'flex-end' }}>
+            {/* Date Filter */}
+            <HRDateFilter 
+              mode={dateMode}
+              setMode={setDateMode}
+              date={selectedDate}
+              setDate={setSelectedDate}
+              allowedModes={['day']}
+            />
+            {/* Employee ID */}
+            <div style={{ width: '180px' }}>
+                <Select
+                  options={employeeIdOptions}
+                  value={employeeIdOptions.find(opt => opt.value === search) || null}
+                  onChange={(selected) => setSearch(selected ? selected.value : '')}
+                  styles={{...customSelectStyles, control: (base) => ({...base, height: '42px', minHeight: '42px', borderRadius: '10px', border: '1px solid #e2e8f0'})}}
+                  placeholder="رقم الموظف..."
+                  isSearchable={true}
+                  isClearable={true}
+                />
+            </div>
+
+            {/* Employee Name */}
+            <div style={{ width: '250px', position: 'relative' }}>
+                <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, color: '#94a3b8', pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
+                  <User size={16} />
+                </div>
+                <Select
+                  options={employeeNameOptions}
+                  value={employeeNameOptions.find(opt => opt.value === search) || null}
+                  onChange={(selected) => setSearch(selected ? selected.value : '')}
+                  styles={{...customSelectStyles, control: (base) => ({...base, height: '42px', minHeight: '42px', borderRadius: '10px', border: '1px solid #e2e8f0', paddingLeft: '24px'})}}
+                  placeholder="اسم الموظف..."
+                  isSearchable={true}
+                  isClearable={true}
+                />
             </div>
             
             {activeFilter && (

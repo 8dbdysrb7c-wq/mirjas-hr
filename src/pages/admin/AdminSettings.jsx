@@ -12,7 +12,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-import { Settings, Globe, MessageSquare, Image as ImageIcon, CheckCircle, ListTodo, Users, Plus, Trash2, Save, Upload, Edit2, Package, Home, Palette, Ruler, Truck, CheckCircle2, Bell, ChevronDown, ChevronUp, Volume2, VolumeX, Briefcase, Building, Clock, Fingerprint, ArrowUpDown, Calendar, PlusCircle, MinusCircle, Shield, RotateCcw, DollarSign, Database } from 'lucide-react';
+import { Settings, Globe, MessageSquare, Image as ImageIcon, CheckCircle, ListTodo, Users, Plus, Trash2, Save, Upload, Edit2, Package, Home, Palette, Ruler, Truck, CheckCircle2, Bell, ChevronDown, ChevronUp, Volume2, VolumeX, Briefcase, Building, Clock, MapPin, Fingerprint, ArrowUpDown, Calendar, PlusCircle, MinusCircle, Shield, RotateCcw, DollarSign, Database } from 'lucide-react';
 import Swal from 'sweetalert2';
 import WhatsAppSettingsTab from './WhatsAppSettingsTab';
 import NotificationSettingsTab from './NotificationSettingsTab';
@@ -55,7 +55,8 @@ const ALL_LEAVE_TYPES = [
   'إذن تأخير',
   'خروج مبكر',
   'إجازة غير مدفوعة',
-  'بدل عمل إضافي'
+  'بدل عمل إضافي',
+  'مغادرة الدخان'
 ];
 
 const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
@@ -158,6 +159,18 @@ const AdminSettings = ({ user }) => {
       ]);
       setSettings({
         ...data,
+        ammanAreas: data.ammanAreas || [
+          'عبدون', 'دير غبار', 'أم أذينة', 'الرابية', 'الشميساني', 'الصويفية', 'الجندويل', 
+          'خلدا', 'تلاع العلي', 'أم السماق', 'ضاحية الرشيد', 'ضاحية الحسين', 'مرج الحمام', 
+          'الجبيهة', 'شفا بدران', 'أبو نصير', 'طبربور', 'الهاشمي الشمالي', 'الهاشمي الجنوبي', 
+          'جبل الحسين', 'جبل عمان', 'جبل اللويبدة', 'الأشرفية', 'الوحدات', 'رأس العين', 
+          'وسط البلد', 'النصر', 'القويسمة', 'أبو علندا', 'خريبة السوق', 'المقابلين', 
+          'الجويدة', 'سحاب', 'الموقر', 'ماركا الشمالية', 'ماركا الجنوبية', 'طارق', 
+          'بسمان', 'البيادر', 'وادي السير', 'اليادودة', 'حسبان', 'البنيات'
+        ],
+        jordanianCities: data.jordanianCities || [
+          'عمان', 'الزرقاء', 'إربد', 'العقبة', 'السلط', 'مادبا', 'الكرك', 'الطفيلة', 'معان', 'جرش', 'عجلون', 'المفرق'
+        ],
         hrSettings: data.hrSettings || {
           standardWorkHours: 8,
           gracePeriodMinutes: 15,
@@ -422,12 +435,20 @@ const AdminSettings = ({ user }) => {
       inputPlaceholder: 'أدخل القيمة هنا...',
       showCancelButton: true,
       confirmButtonText: 'إضافة',
-      cancelButtonText: 'إلغاء'
+      cancelButtonText: 'إلغاء',
+      inputValidator: (value) => {
+        if (!value || !value.trim()) {
+          return 'يرجى إدخال قيمة!';
+        }
+        if ((settings[field] || []).includes(value.trim())) {
+          return 'هذا البند موجود مسبقاً!';
+        }
+      }
     }).then((result) => {
       if (result.isConfirmed && result.value) {
         setSettings({
           ...settings,
-          [field]: [...(settings[field] || []), result.value]
+          [field]: [...(settings[field] || []), result.value.trim()]
         });
       }
     });
@@ -450,11 +471,20 @@ const AdminSettings = ({ user }) => {
       inputValue: settings[field][index],
       showCancelButton: true,
       confirmButtonText: 'حفظ',
-      cancelButtonText: 'إلغاء'
+      cancelButtonText: 'إلغاء',
+      inputValidator: (value) => {
+        if (!value || !value.trim()) {
+          return 'يرجى إدخال قيمة!';
+        }
+        const existingIndex = (settings[field] || []).indexOf(value.trim());
+        if (existingIndex !== -1 && existingIndex !== index) {
+          return 'هذا البند موجود مسبقاً!';
+        }
+      }
     }).then((result) => {
       if (result.isConfirmed && result.value) {
         const newList = [...settings[field]];
-        newList[index] = result.value;
+        newList[index] = result.value.trim();
         setSettings({ ...settings, [field]: newList });
       }
     });
@@ -930,6 +960,47 @@ const AdminSettings = ({ user }) => {
   
 return (
     <div className="space-y-6">
+      <style>{`
+        .switch-toggle {
+          position: relative;
+          display: inline-block;
+          width: 48px;
+          height: 24px;
+        }
+        .switch-toggle input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+        }
+        .switch-toggle .slider {
+          position: absolute;
+          cursor: pointer;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: #cbd5e1;
+          transition: .3s;
+          border-radius: 24px;
+        }
+        .switch-toggle .slider:before {
+          position: absolute;
+          content: "";
+          height: 18px;
+          width: 18px;
+          left: 3px;
+          bottom: 3px;
+          background-color: white;
+          transition: .3s;
+          border-radius: 50%;
+        }
+        .switch-toggle input:checked + .slider {
+          background-color: #0f766e;
+        }
+        .switch-toggle input:checked + .slider:before {
+          transform: translateX(24px);
+        }
+      `}</style>
       <div className="flex-responsive mb-4">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -1131,6 +1202,73 @@ return (
                   </select>
                 </div>
                 
+              </div>
+            </div>
+
+            {/* إعدادات تقرير العمل اليومي */}
+            <div className="glass-panel p-6 mb-6">
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 border-b pb-4 text-indigo-600">
+                <Clock size={20} className="text-indigo-500" /> إعدادات تقرير العمل اليومي
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="input-group">
+                  <div className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                    <div className="flex flex-col gap-0.5" style={{ paddingLeft: '10px' }}>
+                      <span className="font-bold text-slate-700">تفعيل وقت إغلاق التقرير اليومي للموظف</span>
+                      <span className="text-xs text-slate-500">بعد هذا الوقت لا يمكن للموظف تقديم أو تعديل التقرير.</span>
+                    </div>
+                    <label className="switch-toggle" style={{ flexShrink: 0 }}>
+                      <input 
+                        type="checkbox" 
+                        checked={settings.hrSettings?.enableDailyReportCutoff !== false}
+                        onChange={(e) => setSettings({...settings, hrSettings: {...settings.hrSettings, enableDailyReportCutoff: e.target.checked}})}
+                      />
+                      <span className="slider round"></span>
+                    </label>
+                  </div>
+                  {settings.hrSettings?.enableDailyReportCutoff !== false && (
+                    <div className="mt-2">
+                      <input 
+                        type="time" className="input-field" 
+                        value={
+                          typeof settings.hrSettings?.dailyReportCutoffTime === 'number' 
+                            ? `${String(settings.hrSettings.dailyReportCutoffTime).padStart(2, '0')}:00`
+                            : (settings.hrSettings?.dailyReportCutoffTime ?? '22:00')
+                        } 
+                        onChange={(e) => setSettings({...settings, hrSettings: {...settings.hrSettings, dailyReportCutoffTime: e.target.value}})}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="input-group">
+                  <div className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                    <div className="flex flex-col gap-0.5" style={{ paddingLeft: '10px' }}>
+                      <span className="font-bold text-slate-700">تفعيل وقت إغلاق التقرير اليومي للمشرف</span>
+                      <span className="text-xs text-slate-500">بعد هذا الوقت لا يمكن للمشرف تقديم أو تعديل التقرير.</span>
+                    </div>
+                    <label className="switch-toggle" style={{ flexShrink: 0 }}>
+                      <input 
+                        type="checkbox" 
+                        checked={settings.hrSettings?.enableSupervisorReportCutoff !== false}
+                        onChange={(e) => setSettings({...settings, hrSettings: {...settings.hrSettings, enableSupervisorReportCutoff: e.target.checked}})}
+                      />
+                      <span className="slider round"></span>
+                    </label>
+                  </div>
+                  {settings.hrSettings?.enableSupervisorReportCutoff !== false && (
+                    <div className="mt-2">
+                      <input 
+                        type="time" className="input-field" 
+                        value={
+                          typeof settings.hrSettings?.supervisorReportCutoffTime === 'number' 
+                            ? `${String(settings.hrSettings.supervisorReportCutoffTime).padStart(2, '0')}:00`
+                            : (settings.hrSettings?.supervisorReportCutoffTime ?? '23:00')
+                        } 
+                        onChange={(e) => setSettings({...settings, hrSettings: {...settings.hrSettings, supervisorReportCutoffTime: e.target.value}})}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1948,6 +2086,45 @@ return (
           </div>
         )}
 
+        {activeTab === 'jobtitles' && (
+          <div className="glass-panel p-6 space-y-4 animate-fade-in">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-bold flex items-center gap-2"><Users size={18} className="text-primary" /> مندوبو المبيعات (البائعين)</h3>
+              <button className="btn-premium-add" onClick={() => addItem('salesReps')}><span>إضافة مندوب جديد</span> <Plus size={16} /></button>
+            </div>
+            <p className="text-sm text-slate-500">أضف أسماء مندوبي المبيعات (البائعين) في شركتك لربطهم بالعملاء وتسهيل الفرز والتقارير.</p>
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
+              <table className="w-full text-right border-collapse">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="p-3 font-bold text-slate-700 border border-slate-200">الاسم</th>
+                    <th className="p-3 font-bold text-slate-700 w-32 text-center border border-slate-200">الإجراء</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(settings.salesReps || []).length > 0 ? (
+                    (settings.salesReps || []).map((rep, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-3 font-medium align-middle border border-slate-200">{rep}</td>
+                        <td className="p-3 align-middle text-center border border-slate-200">
+                          <div className="flex gap-2 justify-center">
+                            <button className="icon-btn icon-btn-edit" onClick={() => editItem('salesReps', idx)}><Edit2 size={16} /></button>
+                            <button className="icon-btn icon-btn-delete" onClick={() => removeItem('salesReps', idx)}><Trash2 size={16} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="2" className="p-4 text-center text-slate-500 border border-slate-200">لا يوجد مندوبون مضافون بعد</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'sectors' && (
           <div className="glass-panel p-6 space-y-4 animate-fade-in">
             <div className="flex justify-between items-center mb-2">
@@ -1979,6 +2156,84 @@ return (
                   ) : (
                     <tr>
                       <td colSpan="2" className="p-4 text-center text-slate-500 border border-slate-200">لا توجد قطاعات مضافة</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'sectors' && (
+          <div className="glass-panel p-6 space-y-4 animate-fade-in mt-6">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-bold flex items-center gap-2"><MapPin size={18} className="text-primary" /> مناطق مدينة عمان</h3>
+              <button className="btn-premium-add" onClick={() => addItem('ammanAreas')}><span>إضافة منطقة جديدة</span> <Plus size={16} /></button>
+            </div>
+            <p className="text-sm text-slate-500">أضف مناطق عمان المتاحة للاختيار عند تعيين عنوان عميل داخل عمان.</p>
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
+              <table className="w-full text-right border-collapse">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="p-3 font-bold text-slate-700 border border-slate-200">المنطقة</th>
+                    <th className="p-3 font-bold text-slate-700 w-32 text-center border border-slate-200">الإجراء</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(settings.ammanAreas || []).length > 0 ? (
+                    (settings.ammanAreas || []).map((area, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-3 font-medium align-middle border border-slate-200">{area}</td>
+                        <td className="p-3 align-middle text-center border border-slate-200">
+                          <div className="flex gap-2 justify-center">
+                            <button className="icon-btn icon-btn-edit" onClick={() => editItem('ammanAreas', idx)}><Edit2 size={16} /></button>
+                            <button className="icon-btn icon-btn-delete" onClick={() => removeItem('ammanAreas', idx)}><Trash2 size={16} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="2" className="p-4 text-center text-slate-500 border border-slate-200">لا توجد مناطق مضافة</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'sectors' && (
+          <div className="glass-panel p-6 space-y-4 animate-fade-in mt-6">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-bold flex items-center gap-2"><Globe size={18} className="text-primary" /> المحافظات والمدن</h3>
+              <button className="btn-premium-add" onClick={() => addItem('jordanianCities')}><span>إضافة مدينة جديدة</span> <Plus size={16} /></button>
+            </div>
+            <p className="text-sm text-slate-500">أضف أو عدّل المدن والمحافظات الرئيسية المتاحة للعملاء.</p>
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
+              <table className="w-full text-right border-collapse">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="p-3 font-bold text-slate-700 border border-slate-200">المدينة</th>
+                    <th className="p-3 font-bold text-slate-700 w-32 text-center border border-slate-200">الإجراء</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(settings.jordanianCities || []).length > 0 ? (
+                    (settings.jordanianCities || []).map((city, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-3 font-medium align-middle border border-slate-200">{city}</td>
+                        <td className="p-3 align-middle text-center border border-slate-200">
+                          <div className="flex gap-2 justify-center">
+                            <button className="icon-btn icon-btn-edit" onClick={() => editItem('jordanianCities', idx)}><Edit2 size={16} /></button>
+                            <button className="icon-btn icon-btn-delete" onClick={() => removeItem('jordanianCities', idx)}><Trash2 size={16} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="2" className="p-4 text-center text-slate-500 border border-slate-200">لا توجد مدن مضافة</td>
                     </tr>
                   )}
                 </tbody>
@@ -2132,12 +2387,48 @@ return (
                 </table>
               </div>
             </div>
+
+            <div className="glass-panel p-6 space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold flex items-center gap-2"><Globe size={18} className="text-primary" /> مواقع المخزون (الرفوف)</h3>
+                <button className="btn-premium-add" onClick={() => addItem('stockLocations')}><span>إضافة</span> <Plus size={16} /></button>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
+                <table className="w-full text-right border-collapse">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="p-3 font-bold text-slate-700 border border-slate-200">الاسم</th>
+                      <th className="p-3 font-bold text-slate-700 w-32 text-center border border-slate-200">الإجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(settings.stockLocations || []).length > 0 ? (
+                      (settings.stockLocations || []).map((item, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-3 font-medium align-middle border border-slate-200">{item}</td>
+                          <td className="p-3 align-middle text-center border border-slate-200">
+                            <div className="flex gap-2 justify-center">
+                              <button className="icon-btn icon-btn-edit" onClick={() => editItem('stockLocations', idx)}><Edit2 size={16} /></button>
+                              <button className="icon-btn icon-btn-delete" onClick={() => removeItem('stockLocations', idx)}><Trash2 size={16} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="2" className="p-4 text-center text-slate-500 border border-slate-200">لا توجد مواقع مضافة</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
                 {activeTab === 'whatsapp' && (
           <div className="admin-content-layout space-y-8 animate-fade-in">
-            <WhatsAppSettingsTab />
+            <WhatsAppSettingsTab settings={settings} setSettings={setSettings} />
           </div>
         )}
 

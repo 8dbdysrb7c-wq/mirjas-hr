@@ -47,7 +47,7 @@ const HRSettlement = ({ user }) => {
     vacationBalance = Number(selectedEmployee.vacationBalance) || 0;
     vacationValue = vacationBalance * dailyRate;
 
-    const empAdvances = advances.filter(a => a.employeeId === selectedEmployeeId && a.status === 'موافق');
+    const empAdvances = advances.filter(a => (String(a.employeeId || '').trim() === String(selectedEmployeeId).trim() || (selectedEmployee && String(a.employeeName || '').trim() === String(selectedEmployee.name || '').trim())) && a.status === 'موافق');
     
     unpaidAdvances = empAdvances.reduce((sum, a) => {
       if (a.isPaid) return sum;
@@ -114,8 +114,8 @@ const HRSettlement = ({ user }) => {
                     </div>
                     <div>
                       <p style={{ margin: 0, color: '#64748b', fontSize: '0.8rem' }}>رصيد الإجازات المتبقي</p>
-                      <p style={{ margin: 0, fontWeight: 'bold', fontSize: '1.1rem', color: '#0f172a' }}>{vacationBalance} يوم</p>
-                      <p style={{ margin: 0, fontSize: '0.75rem', color: '#059669' }}>يقدر بـ {Math.round(vacationValue)} د.أ</p>
+                      <p style={{ margin: 0, fontWeight: 'bold', fontSize: '1.1rem', color: '#0f172a' }}>{vacationBalance.toFixed(2)} يوم</p>
+                      <p style={{ margin: 0, fontSize: '0.75rem', color: '#059669' }}>يقدر بـ {vacationValue.toFixed(2)} د.أ</p>
                     </div>
                   </div>
 
@@ -125,7 +125,7 @@ const HRSettlement = ({ user }) => {
                     </div>
                     <div>
                       <p style={{ margin: 0, color: '#64748b', fontSize: '0.8rem' }}>السلف غير المسددة (ذمم)</p>
-                      <p style={{ margin: 0, fontWeight: 'bold', fontSize: '1.1rem', color: '#dc2626' }}>{Math.round(unpaidAdvances)} د.أ</p>
+                      <p style={{ margin: 0, fontWeight: 'bold', fontSize: '1.1rem', color: '#dc2626' }}>{unpaidAdvances.toFixed(2)} د.أ</p>
                     </div>
                   </div>
                   
@@ -135,7 +135,7 @@ const HRSettlement = ({ user }) => {
                     </div>
                     <div>
                       <p style={{ margin: 0, color: '#64748b', fontSize: '0.8rem' }}>الراتب الأساسي المعتمد للمخالصة</p>
-                      <p style={{ margin: 0, fontWeight: 'bold', fontSize: '1.1rem', color: '#4f46e5' }}>{basicSalary} د.أ <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'normal' }}>(يومية: {Math.round(dailyRate)} د.أ)</span></p>
+                      <p style={{ margin: 0, fontWeight: 'bold', fontSize: '1.1rem', color: '#4f46e5' }}>{basicSalary.toFixed(2)} د.أ <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'normal' }}>(يومية: {dailyRate.toFixed(2)} د.أ)</span></p>
                     </div>
                   </div>
                 </div>
@@ -146,7 +146,7 @@ const HRSettlement = ({ user }) => {
                 <div>
                   <p style={{ margin: '0 0 8px 0', color: '#94a3b8', fontSize: '0.9rem' }}>صافي المخالصة المبدئي (للعلم فقط)</p>
                   <p style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold', display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                    {Math.round((vacationValue) - unpaidAdvances)}
+                    {((vacationValue) - unpaidAdvances).toFixed(2)}
                     <span style={{ fontSize: '1rem', color: '#94a3b8' }}>د.أ</span>
                   </p>
                   <p style={{ margin: '8px 0 0 0', fontSize: '0.75rem', color: '#cbd5e1' }}>* لا يشمل أي رواتب محتجزة أو أيام داومها خلال الشهر الحالي ولم تُدفع بعد.</p>

@@ -230,3 +230,50 @@ export const getOrdersByDateRange = async (dateFrom, dateTo) => {
     return [];
   }
 };
+
+export const getRepVisits = async () => {
+  try {
+    const querySnapshot = await getDocs(collection(db, 'rep_visits'));
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    console.error("Error in getRepVisits:", error);
+    return [];
+  }
+};
+
+export const saveRepVisit = async (visit) => {
+  try {
+    const docRef = visit.id ? doc(db, 'rep_visits', visit.id) : doc(collection(db, 'rep_visits'));
+    const fullVisit = { createdAt: new Date().toISOString(), ...visit, id: docRef.id };
+    await setDoc(docRef, fullVisit);
+    return fullVisit;
+  } catch (error) {
+    console.error("Error in saveRepVisit:", error);
+    return null;
+  }
+};
+
+export const deleteRepVisit = async (id) => {
+  try {
+    await deleteDoc(doc(db, 'rep_visits', id));
+  } catch (error) {
+    console.error("Error in deleteRepVisit:", error);
+  }
+};
+
+export const getRepVisitsByDateRange = async (dateFrom, dateTo) => {
+  try {
+    let q = collection(db, 'rep_visits');
+    if (dateFrom || dateTo) {
+      let conditions = [];
+      if (dateFrom) conditions.push(where('date', '>=', dateFrom));
+      if (dateTo) conditions.push(where('date', '<=', dateTo));
+      q = query(q, ...conditions);
+    }
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    console.error("Error in getRepVisitsByDateRange:", error);
+    return [];
+  }
+};

@@ -20,6 +20,7 @@ import { ReportHistoryTab } from './employee/tabs/ReportHistoryTab';
 import { MissionsTab } from './employee/tabs/MissionsTab';
 import { MissingPunchesTab } from './employee/tabs/MissingPunchesTab';
 import { HRRequestsTab } from './employee/tabs/HRRequestsTab';
+import RepVisitsTab from './employee/tabs/RepVisitsTab';
 
 
 import AdminStock from './admin/AdminStock';
@@ -47,7 +48,7 @@ const notifyHR = async (message) => {
     const hrAdmins = allEmployees.filter(emp => emp.role === 'admin' || emp.level === 'admin' || emp.level === 'إدارة');
     for (const admin of hrAdmins) {
       if (admin.phone) {
-        await sendWhatsAppNotification(admin.phone, message);
+        await sendWhatsAppNotification(admin.phone, message, 'attendance');
       }
     }
   } catch(e) { console.error('Error notifying HR', e); }
@@ -386,7 +387,8 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
     'إذن تأخير',
     'خروج مبكر',
     'إجازة غير مدفوعة',
-    'بدل عمل إضافي'
+    'بدل عمل إضافي',
+    'مغادرة الدخان'
   ];
   const _allowed = user?.allowedLeaveTypes;
   const allowedLeaveTypes = Array.isArray(_allowed) ? _allowed : (typeof _allowed === 'string' ? [_allowed] : ALL_LEAVE_TYPES);
@@ -455,10 +457,25 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
   }, [user.id]);
 
   const handleGPSAction = async (actionType) => {
+    if (!navigator.onLine) {
+      Swal.fire('خطأ في الاتصال', 'يبدو أنك غير متصل بالإنترنت حالياً. لتجنب تكرار تسجيل الحضور، الرجاء التأكد من جودة الاتصال والمحاولة مرة أخرى.', 'error');
+      return;
+    }
+
     if (!navigator.geolocation) {
       Swal.fire('خطأ', 'متصفحك لا يدعم تحديد الموقع.', 'error');
       return;
     }
+
+    // Immediately block screen to prevent double clicking/lag clicks
+    Swal.fire({
+      title: 'جاري التحقق وبصم الدوام...',
+      text: 'الرجاء الانتظار ثوانٍ معدودة حتى تكتمل العملية...',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
 
     setIsCheckingInOut(true);
 
@@ -488,37 +505,46 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
 
       // Filter by user's allowed locations
       let allowedLocations = [];
-      if (user.workLocationId && user.workLocationId !== '') {
-        allowedLocations = locationsToCheck.filter(loc => loc.id === user.workLocationId);
-      } else {
-        const userAllowedIds = user.allowedWorkLocations || ['all'];
-        allowedLocations = userAllowedIds.includes('all') 
-          ? locationsToCheck 
-          : locationsToCheck.filter(loc => userAllowedIds.includes(loc.id));
-      }
-
-      if (allowedLocations.length === 0) {
-        setIsCheckingInOut(false);
-        Swal.fire('مرفوض', 'الفرع أو الموقع المخصص لك غير موجود، يرجى مراجعة الإدارة.', 'error');
-        return;
-      }
-
+      isAllowed = false;
+      minDistance = Infinity;
       let matchedLocationName = 'موقع معتمد';
-      for (const loc of allowedLocations) {
-        if (!loc.lat || !loc.lng) continue;
-        const distance = getDistanceFromLatLonInKm(empLat, empLng, loc.lat, loc.lng);
-        if (distance < minDistance) minDistance = distance;
-        if (distance <= (loc.radius || 500)) {
-          isAllowed = true;
-          matchedLocationName = loc.name || 'موقع معتمد';
-          break;
-        }
-      }
 
-      if (!isAllowed) {
-        setIsCheckingInOut(false);
-        Swal.fire('مرفوض', `أنت بعيد عن مواقع العمل المسموحة لك. أقرب موقع يبعد عنك ${Math.round(minDistance)} متر.`, 'warning');
-        return;
+      if (user.workLocationId === 'anywhere') {
+        isAllowed = true;
+        matchedLocationName = 'موقع حر (بدون قيود)';
+        minDistance = 0;
+      } else {
+        if (user.workLocationId && user.workLocationId !== '') {
+          allowedLocations = locationsToCheck.filter(loc => loc.id === user.workLocationId);
+        } else {
+          const userAllowedIds = user.allowedWorkLocations || ['all'];
+          allowedLocations = userAllowedIds.includes('all') 
+            ? locationsToCheck 
+            : locationsToCheck.filter(loc => userAllowedIds.includes(loc.id));
+        }
+
+        if (allowedLocations.length === 0) {
+          setIsCheckingInOut(false);
+          Swal.fire('مرفوض', 'الفرع أو الموقع المخصص لك غير موجود، يرجى مراجعة الإدارة.', 'error');
+          return;
+        }
+
+        for (const loc of allowedLocations) {
+          if (!loc.lat || !loc.lng) continue;
+          const distance = getDistanceFromLatLonInKm(empLat, empLng, loc.lat, loc.lng);
+          if (distance < minDistance) minDistance = distance;
+          if (distance <= (loc.radius || 500)) {
+            isAllowed = true;
+            matchedLocationName = loc.name || 'موقع معتمد';
+            break;
+          }
+        }
+
+        if (!isAllowed) {
+          setIsCheckingInOut(false);
+          Swal.fire('مرفوض', `أنت بعيد عن مواقع العمل المسموحة لك. أقرب موقع يبعد عنك ${Math.round(minDistance)} متر.`, 'warning');
+          return;
+        }
       }
 
       const todayStr = getLocalDateStr(new Date());
@@ -529,6 +555,11 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         const latestAtt = await getEmployeeAttendanceByDate(user.id, user.employeeId || user.id, todayStr, user.name);
         
         if (actionType === 'in') {
+          if (latestAtt && latestAtt.timeIn && latestAtt.timeIn !== '--:--') {
+             setIsCheckingInOut(false);
+             Swal.fire('تنبيه', 'لقد قمت بتسجيل الدخول مسبقاً لهذا اليوم.', 'info');
+             return;
+          }
           const newRecord = {
             ...(latestAtt || todayAttendance || {}),
             employeeId: user.employeeId || user.id,
@@ -542,6 +573,24 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
           };
           await saveHRAttendance(newRecord);
         } else if (actionType === 'out') {
+          if (latestAtt && latestAtt.timeOut && latestAtt.timeOut !== '--:--') {
+             setIsCheckingInOut(false);
+             Swal.fire('تنبيه', 'لقد قمت بتسجيل الخروج مسبقاً لهذا اليوم.', 'info');
+             return;
+          }
+          if (latestAtt && latestAtt.timeIn && latestAtt.timeIn !== '--:--') {
+             const [inH, inM] = latestAtt.timeIn.split(':').map(Number);
+             const checkInDate = new Date();
+             checkInDate.setHours(inH, inM, 0, 0);
+             
+             const diffMs = new Date() - checkInDate;
+             const diffMins = diffMs / (1000 * 60);
+             if (diffMins < 5) {
+                setIsCheckingInOut(false);
+                Swal.fire('غير مسموح', 'لا يمكن تسجيل الخروج قبل مرور 5 دقائق من تسجيل الدخول لتجنب نقرات الدبل كليك بالخطأ.', 'warning');
+                return;
+             }
+          }
           const record = {
             ...(latestAtt || todayAttendance || {}),
             employeeId: user.employeeId || user.id,
@@ -803,6 +852,22 @@ const userRoles = useMemo(() =>
   }, [darkMode]);
 
   useEffect(() => {
+    if (leaveFormData.type === 'مغادرة الدخان') {
+      const todayStr = getLocalDateStr(new Date());
+      const updates = {};
+      if (leaveFormData.date !== todayStr) {
+        updates.date = todayStr;
+      }
+      if (leaveFormData.notes !== 'دخان') {
+        updates.notes = 'دخان';
+      }
+      if (Object.keys(updates).length > 0) {
+        setLeaveFormData(prev => ({ ...prev, ...updates }));
+      }
+    }
+  }, [leaveFormData.type, leaveFormData.date, leaveFormData.notes]);
+
+  useEffect(() => {
     const fetchData = async () => {
       const [depts, tasks, reports, mData, sData, leavesData, punchesData, advancesData] = await Promise.all([
         getDepartments(),
@@ -817,7 +882,7 @@ const userRoles = useMemo(() =>
       setDepartments(depts);
       setTasksData(tasks);
       setAllReports(reports);
-      setMissions(mData.filter(m => m.assignedEmployeeId === user.id).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+      setMissions(mData.filter(m => String(m.assignedEmployeeId || '').trim() === String(user.id || '').trim() || String(m.assignedEmployeeName || '').trim() === String(user.name || '').trim()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
       setGlobalSettings(sData);
       setMyLeaves(leavesData.filter(l => String(l.employeeId) === String(user.id) || l.employeeName === user.name));
       setMissingPunches(punchesData.filter(p => String(p.employeeId) === String(user.id) || p.employeeName === user.name));
@@ -1015,6 +1080,32 @@ const userRoles = useMemo(() =>
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    const enableCutoff = isSupervisor 
+      ? (globalSettings?.hrSettings?.enableSupervisorReportCutoff !== false)
+      : (globalSettings?.hrSettings?.enableDailyReportCutoff !== false);
+
+    if (enableCutoff) {
+      let cutoffSetting = isSupervisor 
+        ? (globalSettings?.hrSettings?.supervisorReportCutoffTime ?? '23:00')
+        : (globalSettings?.hrSettings?.dailyReportCutoffTime ?? '22:00');
+      
+      if (typeof cutoffSetting === 'number') {
+        cutoffSetting = `${String(cutoffSetting).padStart(2, '0')}:00`;
+      }
+
+      const now = new Date();
+      const currentTimeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+      if (currentTimeStr >= cutoffSetting) {
+        const cutoffHour = parseInt(cutoffSetting.split(':')[0], 10);
+        const cutoffMin = cutoffSetting.split(':')[1];
+        const ampm = cutoffHour >= 12 ? 'مساءً' : 'صباحاً';
+        const displayHour = cutoffHour > 12 ? cutoffHour - 12 : (cutoffHour === 0 ? 12 : cutoffHour);
+        MySwal.fire('غير مسموح', `لا يمكن تقديم أو تعديل التقرير اليومي بدءاً من الساعة ${displayHour}:${cutoffMin} ${ampm}.`, 'error');
+        return;
+      }
+    }
+
     if (isSubmitting) return;
 
     if (!tasks.some(t => t.name && t.count)) {
@@ -1163,9 +1254,16 @@ const userRoles = useMemo(() =>
 
       const updatedReports = await getReports();
       setAllReports(updatedReports);
+      setActiveTab('home');
+      window.scrollTo(0, 0);
     };
 
-    processSubmission();
+    processSubmission().catch(err => {
+      console.error('Error saving report:', err);
+      MySwal.fire('خطأ', 'حدث خطأ أثناء حفظ التقرير', 'error');
+    }).finally(() => {
+      setIsSubmitting(false);
+    });
   };
 
   const setCurrentTime = (setter) => {
@@ -1200,7 +1298,7 @@ const userRoles = useMemo(() =>
       });
     }
     const updatedMissions = await getMissions();
-    setMissions(updatedMissions.filter(m => m.assignedEmployeeId === user.id).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+    setMissions(updatedMissions.filter(m => String(m.assignedEmployeeId || '').trim() === String(user.id || '').trim() || String(m.assignedEmployeeName || '').trim() === String(user.name || '').trim()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
     MySwal.fire({ icon: 'success', title: 'تم تحديث الحالة', timer: 1000, showConfirmButton: false });
   };
 
@@ -1233,6 +1331,10 @@ const userRoles = useMemo(() =>
   }, [notificationTarget, myReports]);
 
   const myMissingPunches = missingPunches.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const currentMonthStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })();
   const currentMonthPunchesCount = myMissingPunches.filter(p => {
     if (!p.date) return false;
     const pDate = new Date(p.date);
@@ -1240,7 +1342,8 @@ const userRoles = useMemo(() =>
     return pDate.getMonth() === now.getMonth() && pDate.getFullYear() === now.getFullYear();
   }).length;
   
-  const userMissingPunchQuota = user.allowedMissingPunches ?? 0;
+  const bonusPunches = user.bonusMissingPunches?.[currentMonthStr] || 0;
+  const userMissingPunchQuota = (user.allowedMissingPunches ?? 0) + bonusPunches;
   const remainingPunches = Math.max(0, userMissingPunchQuota - currentMonthPunchesCount);
 
   const [isRequestSubmitting, setIsRequestSubmitting] = useState(false);
@@ -1267,7 +1370,7 @@ const userRoles = useMemo(() =>
       return;
     }
 
-    const isDuplicate = missingPunches.some(p => p.date === missingPunchForm.date && p.type === missingPunchForm.type);
+    const isDuplicate = missingPunches.some(p => p.date === missingPunchForm.date && p.type === missingPunchForm.type && p.status !== 'مرفوض');
     if (isDuplicate) {
       MySwal.fire('خطأ', 'لقد قمت بتقديم طلب ختمة ناقصة مسبقاً في نفس التاريخ ونفس النوع!', 'error');
       return;
@@ -1279,7 +1382,17 @@ const userRoles = useMemo(() =>
         ...missingPunchForm,
         employeeId: user.id,
         employeeName: user.name,
-        department: departments[userRoles[0]] || 'غير محدد',
+        department: (() => {
+          const d = String(user.department || departments[userRoles[0]] || 'غير محدد').trim();
+          const lower = d.toLowerCase();
+          if (lower === 'logistics' || lower === 'مسطرة اللوجيستي' || lower === 'مسطرة اللوجستي' || lower === 'لوجستيات' || lower === 'الدعم اللوجستي') return 'الدعم اللوجستي';
+          if (lower === 'sewing' || lower === 'مسطرة الخياطة' || lower === 'الخياطة' || lower === 'القص والخياطة') return 'القص والخياطة';
+          if (lower === 'packaging' || lower === 'مسطرة التغليف' || lower === 'تغليف' || lower === 'تغليف وتشطيب') return 'تغليف وتشطيب';
+          if (lower === 'cutting' || lower === 'القص') return 'القص والخياطة';
+          if (lower === 'admin' || lower === 'الإدارة' || lower === 'الادارة') return 'الادارة';
+          if (lower === 'sales' || lower === 'المبيعات') return 'المبيعات';
+          return d;
+        })(),
         status: 'قيد المراجعة'
       });
       
@@ -1315,7 +1428,7 @@ const userRoles = useMemo(() =>
       return;
     }
     
-    const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر', 'بدل عمل إضافي'].includes(leaveFormData.type);
+    const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر', 'بدل عمل إضافي', 'مغادرة الدخان'].includes(leaveFormData.type);
     if (isDept) {
       if (!leaveFormData.date || !leaveFormData.startTime || !leaveFormData.endTime) {
         MySwal.fire('تنبيه', 'الرجاء إدخال التاريخ ووقت البداية والنهاية للمغادرة', 'warning');
@@ -1326,47 +1439,65 @@ const userRoles = useMemo(() =>
         return;
       }
       
-      if (leaveFormData.type !== 'بدل عمل إضافي') {
-        const [sHours, sMins] = leaveFormData.startTime.split(':').map(Number);
-        const [eHours, eMins] = leaveFormData.endTime.split(':').map(Number);
-        const diffMins = (eHours * 60 + eMins) - (sHours * 60 + sMins);
-        
+      if (leaveFormData.type === 'مغادرة الدخان') {
+        const todayStr = getLocalDateStr(new Date());
+        if (leaveFormData.date !== todayStr) {
+          MySwal.fire('مرفوض', 'مغادرة الدخان مسموحة فقط لليوم الحالي.', 'error');
+          return;
+        }
+      }
+      
+      let shiftStart = user.shiftStart || '08:00';
+      let shiftEnd = user.shiftEnd || '16:00';
+      try {
+        const settings = await getGlobalSettings();
+        if (user.workShiftName && settings.workShifts) {
+          const shift = settings.workShifts.find(s => s.name === user.workShiftName);
+          if (shift) {
+            shiftStart = shift.startTime;
+            shiftEnd = shift.endTime;
+          }
+        }
+      } catch(e){}
+
+      const [sHours, sMins] = leaveFormData.startTime.split(':').map(Number);
+      const [eHours, eMins] = leaveFormData.endTime.split(':').map(Number);
+      const [shiftStartH, shiftStartM] = shiftStart.split(':').map(Number);
+      const [shiftEndH, shiftEndM] = shiftEnd.split(':').map(Number);
+
+      const reqStartMins = sHours * 60 + sMins;
+      const reqEndMins = eHours * 60 + eMins;
+      const shiftStartMins = shiftStartH * 60 + shiftStartM;
+      const shiftEndMins = shiftEndH * 60 + shiftEndM;
+      
+      const diffMins = reqEndMins - reqStartMins;
+
+      if (leaveFormData.type === 'مغادرة الدخان') {
+        const maxEndMins = shiftEndMins + 180; // 3 hours
+        if (reqStartMins < shiftStartMins || reqEndMins > maxEndMins) {
+          const maxEndH = Math.floor(maxEndMins / 60);
+          const maxEndM = maxEndMins % 60;
+          const maxEndTimeStr = `${String(maxEndH).padStart(2, '0')}:${String(maxEndM).padStart(2, '0')}`;
+          MySwal.fire('مرفوض', `مغادرة الدخان يجب أن تكون ضمن أوقات العمل الرسمية بالإضافة لـ 3 ساعات بحد أقصى (${shiftStart} إلى ${maxEndTimeStr}).`, 'error');
+          return;
+        }
+      } else if (leaveFormData.type !== 'بدل عمل إضافي') {
         if (diffMins > 240) {
           MySwal.fire('خطأ', 'يوجد مشكلة بالوقت المدخل', 'error');
           return;
         }
+
+        if (reqStartMins < shiftStartMins || reqEndMins > shiftEndMins) {
+          MySwal.fire('مرفوض', 'الطلب مرفوض بسبب عدم تقديم المغادرة أثناء أوقات الدوام الرسمي المعتمدة لك (' + shiftStart + ' إلى ' + shiftEnd + ')', 'error');
+          return;
+        }
       } else {
-        const [sHours, sMins] = leaveFormData.startTime.split(':').map(Number);
-        const [eHours, eMins] = leaveFormData.endTime.split(':').map(Number);
-        const diffMins = (eHours * 60 + eMins) - (sHours * 60 + sMins);
-        
         if (diffMins > 360) {
           MySwal.fire('خطأ', 'يوجد مشكلة بالوقت المدخل', 'error');
           return;
         }
 
-        let shiftStart = user.shiftStart || '08:00';
-        let shiftEnd = user.shiftEnd || '16:00';
-        try {
-          const settings = await getGlobalSettings();
-          if (user.workShiftName && settings.workShifts) {
-            const shift = settings.workShifts.find(s => s.name === user.workShiftName);
-            if (shift) {
-              shiftStart = shift.startTime;
-              shiftEnd = shift.endTime;
-            }
-          }
-        } catch(e){}
-
-        const [shiftStartH, shiftStartM] = shiftStart.split(':').map(Number);
-        const [shiftEndH, shiftEndM] = shiftEnd.split(':').map(Number);
-
-        const overtimeStartMins = sHours * 60 + sMins;
-        const overtimeEndMins = eHours * 60 + eMins;
-        const shiftStartMins = shiftStartH * 60 + shiftStartM;
-        const shiftEndMins = shiftEndH * 60 + shiftEndM;
-
-        if (overtimeStartMins < shiftEndMins && overtimeEndMins > shiftStartMins) {
+        if (reqStartMins < shiftEndMins && reqEndMins > shiftStartMins) {
           MySwal.fire('خطأ', 'لا يمكن تقديم عمل إضافي خلال أوقات الدوام الرسمي الخاصة بك (' + shiftStart + ' إلى ' + shiftEnd + ')', 'error');
           return;
         }
@@ -1388,7 +1519,17 @@ const userRoles = useMemo(() =>
         ...leaveFormData,
         employeeId: user.id,
         employeeName: user.name,
-        department: departments[userRoles[0]] || 'غير محدد'
+        department: (() => {
+          const d = String(user.department || departments[userRoles[0]] || 'غير محدد').trim();
+          const lower = d.toLowerCase();
+          if (lower === 'logistics' || lower === 'مسطرة اللوجيستي' || lower === 'مسطرة اللوجستي' || lower === 'لوجستيات' || lower === 'الدعم اللوجستي') return 'الدعم اللوجستي';
+          if (lower === 'sewing' || lower === 'مسطرة الخياطة' || lower === 'الخياطة' || lower === 'القص والخياطة') return 'القص والخياطة';
+          if (lower === 'packaging' || lower === 'مسطرة التغليف' || lower === 'تغليف' || lower === 'تغليف وتشطيب') return 'تغليف وتشطيب';
+          if (lower === 'cutting' || lower === 'القص') return 'القص والخياطة';
+          if (lower === 'admin' || lower === 'الإدارة' || lower === 'الادارة') return 'الادارة';
+          if (lower === 'sales' || lower === 'المبيعات') return 'المبيعات';
+          return d;
+        })()
       });
       
       const settingKeyMap = {
@@ -1399,7 +1540,8 @@ const userRoles = useMemo(() =>
         'مغادرة عمل': 'earlyLeave',
         'خروج مبكر': 'earlyLeave',
         'إذن تأخير': 'earlyLeave',
-        'بدل عمل إضافي': 'overtime'
+        'بدل عمل إضافي': 'overtime',
+        'مغادرة الدخان': 'earlyLeave'
       };
       const settingKey = settingKeyMap[leaveFormData.type] || 'leaves';
 
@@ -1452,6 +1594,7 @@ const userRoles = useMemo(() =>
             isSupervisor={isSupervisor}
             canViewSupervisorReports={canViewSupervisorReports}
             remainingPunches={remainingPunches}
+            bonusPunches={bonusPunches}
             setShowMissingPunchModal={setShowMissingPunchModal}
           />
         );
@@ -1479,6 +1622,8 @@ const userRoles = useMemo(() =>
             setPhoneSafe={setPhoneSafe}
             phoneUsages={phoneUsages}
             setPhoneUsages={setPhoneUsages}
+            notes={notes}
+            setNotes={setNotes}
             tasks={tasks}
             tasksData={tasksData}
             updateTask={updateTask}
@@ -1511,6 +1656,7 @@ const userRoles = useMemo(() =>
           <MissingPunchesTab
             remainingPunches={remainingPunches}
             userMissingPunchQuota={userMissingPunchQuota}
+            bonusPunches={bonusPunches}
             currentMonthPunchesCount={currentMonthPunchesCount}
             setShowMissingPunchModal={setShowMissingPunchModal}
             myMissingPunches={myMissingPunches}
@@ -1530,6 +1676,16 @@ const userRoles = useMemo(() =>
             handleDeleteRequest={handleDeleteRequest}
           />
         );
+
+      case 'rep-visits':
+        return (
+          <RepVisitsTab
+            user={user}
+            onBack={() => handleTabChange('home')}
+            handleTabChange={handleTabChange}
+          />
+        );
+
       case 'sales': return <AdminSales user={user} />;
       case 'production': return <AdminProduction user={user} notificationTarget={notificationTarget} />;
       case 'supervisor-tasks': return <AdminSupervisorTasks user={user} />;
@@ -1721,24 +1877,47 @@ const userRoles = useMemo(() =>
                   </div>
                   <div className="input-group">
                     <label>الوقت</label>
-                    <Flatpickr 
-                      className="input-field" 
-                      value={missingPunchForm.time} 
-                      onChange={([d]) => setMissingPunchForm({...missingPunchForm, time: d ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''})} 
-                      options={{ enableTime: true, noCalendar: true, dateFormat: "h:i K", locale: Arabic, disableMobile: true }} 
-                      placeholder="اختر الوقت" 
-                      required 
+                    <input
+                      type="time"
+                      className="input-field w-full bg-white"
+                      value={(() => {
+                        if (!missingPunchForm.time) return '';
+                        const timeStr = String(missingPunchForm.time);
+                        if (!timeStr.includes('ص') && !timeStr.includes('م') && !timeStr.includes('AM') && !timeStr.includes('PM')) {
+                          return timeStr;
+                        }
+                        const isPM = timeStr.includes('م') || timeStr.includes('PM');
+                        const cleanTime = timeStr.replace(/[صمAMPM\s]/g, '').trim();
+                        const parts = cleanTime.split(':');
+                        if (parts.length < 2) return '';
+                        let h = parseInt(parts[0], 10);
+                        if (isPM && h < 12) h += 12;
+                        if (!isPM && h === 12) h = 0;
+                        return `${String(h).padStart(2, '0')}:${String(parts[1]).padStart(2, '0')}`;
+                      })()}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val) {
+                          setMissingPunchForm({ ...missingPunchForm, time: '' });
+                          return;
+                        }
+                        const [hoursStr, minutesStr] = val.split(':');
+                        let hours = parseInt(hoursStr, 10);
+                        const ampm = hours >= 12 ? 'م' : 'ص';
+                        hours = hours % 12 || 12;
+                        setMissingPunchForm({ ...missingPunchForm, time: `${hours}:${minutesStr} ${ampm}` });
+                      }}
+                      required
                     />
                   </div>
                 </div>
                 <div className="input-group">
                   <label>سبب عدم تسجيل الختمة</label>
                   <textarea rows={2} className="input-field" required placeholder="اذكر السبب بوضوح..." value={missingPunchForm.reason} onChange={e => setMissingPunchForm({...missingPunchForm, reason: e.target.value})}></textarea>
-                  <label>نوع الطلب</label>
                 </div>
                 <div className="flex justify-end gap-3 pt-4 mt-2 border-t border-gray-100">
-                  <button type="button" onClick={() => setShowMissingPunchModal(false)} className="btn btn-outline">Cancel</button>
-                  <button type="submit" disabled={isRequestSubmitting} className="btn btn-primary">{isRequestSubmitting ? 'Loading...' : 'Submit'}</button>
+                  <button type="button" onClick={() => setShowMissingPunchModal(false)} className="btn btn-outline">إلغاء</button>
+                  <button type="submit" disabled={isRequestSubmitting} className="btn btn-primary">{isRequestSubmitting ? 'جاري الإرسال...' : 'إرسال الطلب'}</button>
                 </div>
               </form>
             </div>
@@ -1797,9 +1976,9 @@ const userRoles = useMemo(() =>
                 <div className="input-group">
                   <label>نوع الطلب</label>
                   <select value={leaveFormData.type} onChange={e=>setLeaveFormData({...leaveFormData, type: e.target.value})} className="input-field" required>
-                    {['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر'].includes(leaveFormData.type) ? (
+                    {['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر', 'مغادرة الدخان'].includes(leaveFormData.type) ? (
 
-                      allowedLeaveTypes.filter(t => ['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر'].includes(t)).map(type => (
+                      allowedLeaveTypes.filter(t => ['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر', 'مغادرة الدخان'].includes(t)).map(type => (
                         <option key={type} value={type}>{type}</option>
                       ))
                     ) : (
@@ -1823,7 +2002,7 @@ const userRoles = useMemo(() =>
                     ملاحظة: العمل الإضافي يجب أن يكون حصراً خارج أوقات الدوام الرسمي.
                   </div>
                 )}
-                {['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر', 'بدل عمل إضافي'].includes(leaveFormData.type) ? (
+                {['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر', 'بدل عمل إضافي', 'مغادرة الدخان'].includes(leaveFormData.type) ? (
                   <div className="space-y-4">
                     <div className="input-group">
                       <label>{leaveFormData.type === 'بدل عمل إضافي' ? 'تاريخ العمل الإضافي' : 'تاريخ المغادرة'}</label>
@@ -1833,8 +2012,8 @@ const userRoles = useMemo(() =>
                         className="input-field w-full bg-white" 
                         options={{ 
                           ...defaultDatePickerOptions,
-                          minDate: new Date(new Date().setDate(new Date().getDate() - 2)),
-                          maxDate: leaveFormData.type === 'بدل عمل إضافي' ? 'today' : new Date(new Date().setDate(new Date().getDate() + 7))
+                          minDate: leaveFormData.type === 'مغادرة الدخان' ? 'today' : new Date(new Date().setDate(new Date().getDate() - 2)),
+                          maxDate: leaveFormData.type === 'مغادرة الدخان' ? 'today' : (leaveFormData.type === 'بدل عمل إضافي' ? 'today' : new Date(new Date().setDate(new Date().getDate() + 7)))
                         }}
                         placeholder="اختر التاريخ"
                         required
@@ -1904,7 +2083,14 @@ const userRoles = useMemo(() =>
 
                 <div className="input-group">
                   <label>ملاحظات / السبب</label>
-                  <textarea rows={2} value={leaveFormData.notes} onChange={e=>setLeaveFormData({...leaveFormData, notes: e.target.value})} className="input-field" required></textarea>
+                  <textarea 
+                    rows={2} 
+                    value={leaveFormData.notes} 
+                    onChange={e=>setLeaveFormData({...leaveFormData, notes: e.target.value})} 
+                    className="input-field" 
+                    required 
+                    disabled={leaveFormData.type === 'مغادرة الدخان'}
+                  ></textarea>
                 </div>
                 <div className="flex justify-end gap-3 pt-4 mt-2 border-t border-gray-100">
                   <button type="button" onClick={() => setShowLeaveModal(false)} className="btn btn-outline">إلغاء</button>
@@ -2004,7 +2190,17 @@ const userRoles = useMemo(() =>
                   amount: amountNum,
                   employeeId: user.id,
                   employeeName: user.name,
-                  department: user.department || 'غير محدد'
+                  department: (() => {
+                    const d = String(user.department || 'غير محدد').trim();
+                    const lower = d.toLowerCase();
+                    if (lower === 'logistics' || lower === 'مسطرة اللوجيستي' || lower === 'مسطرة اللوجستي' || lower === 'لوجستيات' || lower === 'الدعم اللوجستي') return 'الدعم اللوجستي';
+                    if (lower === 'sewing' || lower === 'مسطرة الخياطة' || lower === 'الخياطة' || lower === 'القص والخياطة') return 'القص والخياطة';
+                    if (lower === 'packaging' || lower === 'مسطرة التغليف' || lower === 'تغليف' || lower === 'تغليف وتشطيب') return 'تغليف وتشطيب';
+                    if (lower === 'cutting' || lower === 'القص') return 'القص والخياطة';
+                    if (lower === 'admin' || lower === 'الإدارة' || lower === 'الادارة') return 'الادارة';
+                    if (lower === 'sales' || lower === 'المبيعات') return 'المبيعات';
+                    return d;
+                  })()
                 }, user);
                 await createNotification({
                   settingKey: 'advances',

@@ -34,10 +34,11 @@ const EmployeeProfile = ({ user, employeeId, onBack }) => {
       setGlobalSettings(settings || {});
       
       if (emp) {
-        setAttendance(att.filter(a => a.employeeId === emp.id).sort((a,b) => new Date(b.date) - new Date(a.date)));
-        setLeaves(lvs.filter(l => l.employeeId === emp.id).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
-        setViolations(viols.filter(v => v.employeeId === emp.id).sort((a,b) => new Date(b.date) - new Date(a.date)));
-        setEmployeeAssets(allAssets.filter(a => a.employeeId === emp.id).sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
+        const isMatch = (item) => String(item.employeeId || '').trim() === String(emp.id || '').trim() || String(item.employeeName || '').trim() === String(emp.name || '').trim();
+        setAttendance(att.filter(isMatch).sort((a,b) => new Date(b.date) - new Date(a.date)));
+        setLeaves(lvs.filter(isMatch).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
+        setViolations(viols.filter(isMatch).sort((a,b) => new Date(b.date) - new Date(a.date)));
+        setEmployeeAssets(allAssets.filter(isMatch).sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
       }
       setLoading(false);
     };

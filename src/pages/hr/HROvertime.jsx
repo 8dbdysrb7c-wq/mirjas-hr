@@ -1,13 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, Clock, XCircle, Calendar, Plus, X, ArrowUpDown, ArrowUp, ArrowDown, Check, Undo2, Trash2, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, Calendar, Plus, X, ArrowUpDown, ArrowUp, ArrowDown, Check, Undo2, Trash2, Eye, ChevronDown, ChevronUp, User } from 'lucide-react';
+import Select from 'react-select';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
-import { getEmployees, getHRLeaves, saveHRLeave, deleteHRLeave, getGlobalSettings } from '../../store';
+import { getEmployees, getHRLeaves, saveHRLeave, deleteHRLeave, getGlobalSettings, getHRAttendance } from '../../store';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
+import HRDateFilter from '../../components/ui/HRDateFilter';
+
+const getLocalDateStr = (d) => {
+  const offset = d.getTimezoneOffset();
+  return new Date(d.getTime() - offset * 60000).toISOString().split('T')[0];
+};
 
 const HROvertime = ({ user, refreshCounts }) => {
   const [leaves, setLeaves] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -17,14 +25,168 @@ const HROvertime = ({ user, refreshCounts }) => {
     date: '',
     startTime: '',
     endTime: '',
+    rate: '1:1',
     notes: '',
     status: 'معلق'
   });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [filterStatus, setFilterStatus] = useState('معلق');
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [dateMode, setDateMode] = useState('month');
+  const [selectedDate, setSelectedDate] = useState(getLocalDateStr(new Date()));
+  const [startDate, setStartDate] = useState(getLocalDateStr(new Date()));
+  const [endDate, setEndDate] = useState(getLocalDateStr(new Date()));
   const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false);
-  const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
+
+  const [smartModal, setSmartModal] = useState({ show: false, leave: null, attendance: null, deficitMins: 0, requestedMins: 0, loading: false });
+
+  const openSmartApproval = async (leave) => {
+    setSmartModal({ show: true, leave, attendance: null, deficitMins: 0, requestedMins: 0, loading: true });
+    
+    // Calculate requested minutes
+    let reqMins = 0;
+    if (leave.startTime && leave.endTime) {
+      const [sh, sm] = leave.startTime.split(':').map(Number);
+      const [eh, em] = leave.endTime.split(':').map(Number);
+      reqMins = (eh * 60 + em) - (sh * 60 + sm);
+    } else {
+      reqMins = 8 * 60; // Default full day
+    }
+    
+    // Fetch attendance for the employee on that day
+    let attendanceData = null;
+    let defMins = 0;
+    try {
+      const attList = await getHRAttendance();
+      attendanceData = attList.find(a => String(a.employeeId) === String(leave.employeeId) && a.date === leave.date);
+      
+      const emp = employees.find(e => String(e.id) === String(leave.employeeId) || String(e.employeeId) === String(leave.employeeId));
+      let shiftStart = emp?.shiftStart || '08:00';
+      let shiftEnd = emp?.shiftEnd || '16:00';
+      
+      try {
+        const settings = await getGlobalSettings();
+        if (emp?.workShiftName && settings.workShifts) {
+          const shift = settings.workShifts.find(s => s.name === emp.workShiftName);
+          if (shift) { shiftStart = shift.startTime; shiftEnd = shift.endTime; }
+        }
+      } catch(e) {}
+      
+      const [ssh, ssm] = shiftStart.split(':').map(Number);
+      const [seh, sem] = shiftEnd.split(':').map(Number);
+      const shiftMins = (seh * 60 + sem) - (ssh * 60 + ssm);
+
+      if (attendanceData && attendanceData.timeIn && attendanceData.timeOut && attendanceData.timeOut !== '--:--') {
+        const [ah, am] = attendanceData.timeIn.split(':').map(Number);
+        const [oh, om] = attendanceData.timeOut.split(':').map(Number);
+        
+        let lateMins = 0;
+        let earlyMins = 0;
+
+        // Calculate late arrival
+        const actualStartMins = ah * 60 + am;
+        const shiftStartMins = ssh * 60 + ssm;
+        if (actualStartMins > shiftStartMins) {
+           lateMins = actualStartMins - shiftStartMins;
+        }
+
+        // Calculate early departure
+        const actualEndMins = oh * 60 + om;
+        const shiftEndMins = seh * 60 + sem;
+        if (actualEndMins < shiftEndMins) {
+           earlyMins = shiftEndMins - actualEndMins;
+        }
+        
+        defMins = lateMins + earlyMins;
+      } else {
+        const lDate = new Date(leave.date);
+        if (lDate.getDay() !== 5) { // Assuming Friday is weekend
+           defMins = shiftMins; // full day deficit
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    
+    setSmartModal({
+      show: true,
+      leave,
+      attendance: attendanceData,
+      deficitMins: defMins,
+      requestedMins: reqMins,
+      loading: false
+    });
+  };
+
+  const confirmSmartApproval = async () => {
+    const { leave, deficitMins, requestedMins } = smartModal;
+    
+    // Check if it's weekend
+    const lDate = new Date(leave.date);
+    const isHoliday = lDate.getDay() === 5; // simplified holiday check (Friday)
+    
+    let baseRate = isHoliday ? '1:1.5' : '1:1.25';
+    if(leave.rate) baseRate = leave.rate; // Respect original if set explicitly
+    
+    let compMins = 0; // Compensating (1:1)
+    let extraMins = 0; // Pure overtime
+    
+    if (deficitMins > 0) {
+      if (requestedMins <= deficitMins) {
+        compMins = requestedMins;
+      } else {
+        compMins = deficitMins;
+        extraMins = requestedMins - deficitMins;
+      }
+    } else {
+      extraMins = requestedMins;
+    }
+    
+    const compHoursStr = compMins > 0 ? `${Math.floor(compMins/60)} ساعة و ${compMins%60} دقيقة (بمعدل 1:1 لتغطية العجز)` : '';
+    const extraHoursStr = extraMins > 0 ? `${Math.floor(extraMins/60)} ساعة و ${extraMins%60} دقيقة (بمعدل ${baseRate})` : '';
+    
+    let splitNotes = `\n\n-- تفاصيل الاحتساب الذكي --\n`;
+    if(compMins > 0) splitNotes += `* تم اقتطاع ${compHoursStr}\n`;
+    if(extraMins > 0) splitNotes += `* الصافي الفعلي للإضافي: ${extraHoursStr}\n`;
+    
+    const finalNotes = (leave.notes || '') + splitNotes;
+    
+    const updatedLeave = {
+      ...leave,
+      notes: finalNotes,
+      status: 'موافق',
+      rateDetails: {
+         compMins,
+         extraMins,
+         baseRate
+      }
+    };
+    
+    Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false });
+    Swal.showLoading();
+    try {
+      await saveHRLeave(updatedLeave);
+      
+      try {
+        const emp = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim() || String(e.name || '').trim() === String(leave.employeeName || '').trim());
+        if (emp && emp.phone) {
+          let msg = `مرحباً ${emp.name}،\nتم الموافقة على طلب العمل الإضافي الخاص بك (بمعدل احتساب ذكي).`;
+          if (extraMins > 0) msg += `\nصافي الإضافي المعتمد: ${Math.floor(extraMins/60)} ساعة و ${extraMins%60} دقيقة.`;
+          msg += `\n-- الإدارة`;
+          await sendWhatsAppNotification(emp.phone, msg, 'overtime');
+        }
+      } catch(err) {
+        console.error('WhatsApp Error in smart approval:', err);
+      }
+
+      setLeaves(prev => prev.map(l => l.id === leave.id ? updatedLeave : l));
+      setSmartModal({ show: false, leave: null, attendance: null, deficitMins: 0, requestedMins: 0, loading: false });
+      if(refreshCounts) refreshCounts();
+      Swal.fire('نجاح', 'تم احتساب الإضافي والموافقة عليه بإنصاف', 'success');
+    } catch(e) {
+       Swal.fire('خطأ', 'حدث خطأ', 'error');
+    }
+  };
 
   const arabicMonths = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
   const currentYear = new Date().getFullYear();
@@ -44,7 +206,20 @@ const HROvertime = ({ user, refreshCounts }) => {
     return () => document.removeEventListener('click', closeDropdown);
   }, [isMonthDropdownOpen]);
 
+  const formatDepartmentName = (dept) => {
+    if (!dept) return 'غير محدد';
+    const d = String(dept).trim().toLowerCase();
+    if (d === 'logistics' || d === 'مسطرة اللوجيستي' || d === 'مسطرة اللوجستي' || d === 'لوجستيات' || d === 'الدعم اللوجستي') return 'الدعم اللوجستي';
+    if (d === 'sewing' || d === 'مسطرة الخياطة' || d === 'الخياطة' || d === 'القص والخياطة') return 'القص والخياطة';
+    if (d === 'packaging' || d === 'مسطرة التغليف' || d === 'تغليف' || d === 'تغليف وتشطيب') return 'تغليف وتشطيب';
+    if (d === 'cutting' || d === 'القص') return 'القص والخياطة';
+    if (d === 'admin' || d === 'الإدارة' || d === 'الادارة') return 'الادارة';
+    if (d === 'sales' || d === 'المبيعات') return 'المبيعات';
+    return dept;
+  };
+
   const handlePreviewOvertime = (leave) => {
+    const emp = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim());
     let htmlContent = `
       <style>
         .swal-table-preview { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 0.95rem; text-align: right; direction: rtl; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
@@ -56,12 +231,15 @@ const HROvertime = ({ user, refreshCounts }) => {
       </style>
       <table class="swal-table-preview">
         <tr><th>الموظف</th><td>${leave.employeeName}</td></tr>
-        <tr><th>القسم</th><td>${leave.department || 'غير محدد'}</td></tr>
+        <tr><th>القسم</th><td>${formatDepartmentName(emp?.department || leave.department || 'غير محدد')}</td></tr>
         <tr><th>نوع الطلب</th><td><span style="color:var(--primary); font-weight:bold;">${leave.type}</span></td></tr>
         <tr><th>التاريخ</th><td>${leave.date || leave.startDate || '-'}</td></tr>
     `;
     if (leave.startTime && leave.endTime) {
       htmlContent += `<tr><th>الوقت</th><td dir="ltr">${leave.startTime} - ${leave.endTime}</td></tr>`;
+      if (leave.rate) {
+        htmlContent += `<tr><th>معدل الاحتساب</th><td dir="ltr"><span style="background:#e0e7ff; color:#4f46e5; padding:3px 8px; border-radius:12px; font-weight:bold; font-size:0.85rem;">${leave.rate}</span></td></tr>`;
+      }
     }
     htmlContent += `</table>`;
     htmlContent += `<div class="swal-notes-box"><strong>السبب / الملاحظات:</strong><br><div style="margin-top: 8px;">${leave.notes ? leave.notes.replace(/\n/g, '<br>') : '<span style="color:#94a3b8; font-style:italic;">لا يوجد ملاحظات</span>'}</div></div>`;
@@ -203,7 +381,7 @@ const HROvertime = ({ user, refreshCounts }) => {
             let msg = `مرحباً ${emp.name}،\nتم ${actionText} طلب العمل الإضافي الخاص بك.`;
             if (actionReason) msg += `\nملاحظات: ${actionReason}`;
             msg += `\n-- الإدارة`;
-            await sendWhatsAppNotification(emp.phone, msg);
+            await sendWhatsAppNotification(emp.phone, msg, 'overtime');
           }
         } catch(err) { console.error('WhatsApp Error:', err); }
       }
@@ -276,16 +454,92 @@ const HROvertime = ({ user, refreshCounts }) => {
 
 
 
-  const overtimeRequests = sortedLeaves.filter(l => {
+  const customSelectStyles = {
+    control: (provided, state) => ({
+      ...provided,
+      backgroundColor: 'white',
+      border: '1px solid #e2e8f0',
+      borderRadius: '8px',
+      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+      cursor: 'pointer',
+      minHeight: '42px',
+      height: '42px',
+    }),
+    valueContainer: (provided) => ({
+      ...provided,
+      padding: '0 8px',
+    }),
+    singleValue: (provided) => ({
+      ...provided,
+      color: '#1e293b',
+      fontWeight: 'bold',
+      fontSize: '0.9rem',
+    }),
+    placeholder: (provided) => ({
+      ...provided,
+      color: '#94a3b8',
+      fontSize: '0.9rem',
+    }),
+    menuPortal: base => ({ ...base, zIndex: 9999 }),
+    menu: (provided) => ({
+      ...provided,
+      borderRadius: '12px',
+      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+      border: '1px solid #e2e8f0',
+      overflow: 'hidden',
+      zIndex: 9999,
+      width: 'max-content',
+      minWidth: '100%',
+    }),
+    option: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isSelected ? '#1a8d9b' : state.isFocused ? '#f1f5f9' : 'white',
+      color: state.isSelected ? 'white' : '#1e293b',
+      cursor: 'pointer',
+      padding: '10px 16px',
+      fontSize: '0.9rem',
+      fontWeight: state.isSelected ? 'bold' : 'normal',
+      textAlign: 'right',
+      whiteSpace: 'nowrap',
+    }),
+    indicatorSeparator: () => ({ display: 'none' }),
+    dropdownIndicator: (provided) => ({
+      ...provided,
+      color: '#94a3b8',
+      '&:hover': { color: '#1a8d9b' }
+    })
+  };
+
+  const employeeNameOptions = [...employees]
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    .map(emp => ({ value: emp.id, label: emp.name }));
+
+  const employeeIdOptions = [...employees]
+    .sort((a, b) => (parseInt(a.id) || 0) - (parseInt(b.id) || 0))
+    .map(emp => ({ value: emp.id, label: String(emp.id) }));
+
+  const baseOvertime = sortedLeaves.filter(l => {
+    if (searchTerm && String(l.employeeId) !== String(searchTerm)) return false;
     if (l.type !== 'بدل عمل إضافي' && l.type !== 'عمل إضافي') return false;
     
-    if (filterStatus !== 'الكل') {
-      const reqMonth = new Date(l.createdAt).toISOString().slice(0, 7);
-      if (reqMonth !== selectedMonth) return false;
-    }
+    const reqDate = new Date(l.createdAt).toISOString().split('T')[0];
+    const reqMonth = reqDate.slice(0, 7);
+    
+    if (dateMode === 'day' && reqDate !== selectedDate) return false;
+    if (dateMode === 'month' && reqMonth !== selectedMonth) return false;
+    if (dateMode === 'range' && (reqDate < startDate || reqDate > endDate)) return false;
+    return true;
+  });
 
+  const totalCount = baseOvertime.length;
+  const pendingCount = baseOvertime.filter(l => l.status === 'معلق' || l.status === 'قيد المراجعة').length;
+  const approvedCount = baseOvertime.filter(l => l.status === 'موافق' || l.status === 'مقبول').length;
+  const rejectedCount = baseOvertime.filter(l => l.status === 'مرفوض').length;
+
+  const overtimeRequests = baseOvertime.filter(l => {
     if (filterStatus === 'الكل') return true;
     if (filterStatus === 'معلق') return l.status === 'معلق' || l.status === 'قيد المراجعة';
+    if (filterStatus === 'موافق') return l.status === 'موافق' || l.status === 'مقبول';
     return l.status === filterStatus;
   });
 
@@ -300,121 +554,46 @@ const HROvertime = ({ user, refreshCounts }) => {
           <p className="text-muted text-sm mt-1">إدارة واعتماد طلبات بدل العمل الإضافي</p>
         </div>
         <div className="flex flex-wrap gap-3 items-center">
-          <div className="shrink-0 month-picker-container" style={{ position: 'relative' }}>
-            <div 
-              onClick={() => {
-                const [year] = selectedMonth.split('-');
-                setPickerYear(parseInt(year));
-                setIsMonthDropdownOpen(!isMonthDropdownOpen);
-              }}
-              className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2 shadow-sm hover:border-primary transition-colors cursor-pointer min-w-[160px] h-[42px]"
-            >
-              <div className="flex items-center gap-2">
-                <Calendar size={18} className="text-primary" />
-                <span className="font-bold text-slate-700 whitespace-nowrap">
-                  {getSelectedMonthLabel()}
-                </span>
+          <HRDateFilter 
+            mode={dateMode}
+            setMode={setDateMode}
+            date={selectedDate}
+            setDate={setSelectedDate}
+            month={selectedMonth}
+            setMonth={setSelectedMonth}
+            startDate={startDate}
+            setStartDate={setStartDate}
+            endDate={endDate}
+            setEndDate={setEndDate}
+            allowedModes={['day', 'month', 'range']}
+          />
+          {/* Employee ID */}
+          <div style={{ width: '180px', minWidth: '180px', flexShrink: 0 }}>
+              <Select
+                options={employeeIdOptions}
+                value={employeeIdOptions.find(opt => opt.value === searchTerm) || null}
+                onChange={(selected) => setSearchTerm(selected ? selected.value : '')}
+                styles={{...customSelectStyles, control: (base) => ({...base, height: '42px', minHeight: '42px', borderRadius: '10px', border: '1px solid #e2e8f0'})}}
+                placeholder="رقم الموظف..."
+                isSearchable={true}
+                isClearable={true}
+              />
+          </div>
+
+          {/* Employee Name */}
+          <div style={{ width: '250px', minWidth: '250px', flexShrink: 0, position: 'relative' }}>
+              <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, color: '#94a3b8', pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
+                <User size={16} />
               </div>
-              <ChevronDown size={14} className={`text-slate-400 transition-transform ${isMonthDropdownOpen ? 'rotate-180' : ''}`} />
-            </div>
-            
-            {isMonthDropdownOpen && (
-              <div 
-                className="month-picker-popup"
-                style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 8px)',
-                  right: '0',
-                  width: '280px',
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '16px',
-                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-                  zIndex: 99999,
-                  overflow: 'hidden'
-                }}
-              >
-                <div className="flex justify-between items-center bg-slate-50/80 backdrop-blur-sm p-4 border-b border-slate-100">
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setPickerYear(prev => prev + 1); }}
-                    disabled={pickerYear >= currentYear}
-                    className={`p-1.5 rounded-full transition-colors ${pickerYear >= currentYear ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'}`}
-                    title="السنة القادمة"
-                  >
-                    <ChevronUp size={18} />
-                  </button>
-                  <span className="font-bold text-lg text-slate-800">{pickerYear}</span>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setPickerYear(prev => prev - 1); }}
-                    className="p-1.5 hover:bg-slate-200/70 rounded-full transition-colors text-slate-600 hover:text-slate-900"
-                    title="السنة السابقة"
-                  >
-                    <ChevronDown size={18} />
-                  </button>
-                </div>
-                
-                <div 
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: '8px',
-                    padding: '16px'
-                  }}
-                >
-                  {arabicMonths.map((m, index) => {
-                    const monthVal = `${pickerYear}-${(index + 1).toString().padStart(2, '0')}`;
-                    const isSelected = selectedMonth === monthVal;
-                    const isCurrentMonth = currentYear === pickerYear && currentMonth === (index + 1);
-                    const isFutureMonth = pickerYear > currentYear || (pickerYear === currentYear && (index + 1) > currentMonth);
-                    
-                    return (
-                      <button
-                        key={monthVal}
-                        disabled={isFutureMonth}
-                        onClick={() => {
-                          setSelectedMonth(monthVal);
-                          setIsMonthDropdownOpen(false);
-                        }}
-                        style={{
-                          padding: '8px 4px',
-                          borderRadius: '12px',
-                          fontSize: '14px',
-                          fontWeight: 'bold',
-                          transition: 'all 0.2s',
-                          border: '1px solid',
-                          borderColor: isCurrentMonth && !isSelected ? 'rgba(26, 141, 155, 0.2)' : 'transparent',
-                          backgroundColor: isSelected ? '#1a8d9b' : isCurrentMonth ? 'rgba(26, 141, 155, 0.1)' : 'transparent',
-                          color: isFutureMonth ? '#cbd5e1' : isSelected ? '#ffffff' : isCurrentMonth ? '#1a8d9b' : '#475569',
-                          cursor: isFutureMonth ? 'not-allowed' : 'pointer',
-                          transform: isSelected ? 'scale(1.05)' : 'scale(1)'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (isFutureMonth) return;
-                          if (!isSelected && !isCurrentMonth) {
-                            e.currentTarget.style.backgroundColor = '#f1f5f9';
-                            e.currentTarget.style.color = '#0f172a';
-                          } else if (isCurrentMonth && !isSelected) {
-                            e.currentTarget.style.backgroundColor = 'rgba(26, 141, 155, 0.2)';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (isFutureMonth) return;
-                          if (!isSelected && !isCurrentMonth) {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                            e.currentTarget.style.color = '#475569';
-                          } else if (isCurrentMonth && !isSelected) {
-                            e.currentTarget.style.backgroundColor = 'rgba(26, 141, 155, 0.1)';
-                            e.currentTarget.style.color = '#1a8d9b';
-                          }
-                        }}
-                      >
-                        {m}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+              <Select
+                options={employeeNameOptions}
+                value={employeeNameOptions.find(opt => opt.value === searchTerm) || null}
+                onChange={(selected) => setSearchTerm(selected ? selected.value : '')}
+                styles={{...customSelectStyles, control: (base) => ({...base, height: '42px', minHeight: '42px', borderRadius: '10px', border: '1px solid #e2e8f0', paddingLeft: '24px'})}}
+                placeholder="اسم الموظف..."
+                isSearchable={true}
+                isClearable={true}
+              />
           </div>
           <select 
             value={filterStatus} 
@@ -429,13 +608,64 @@ const HROvertime = ({ user, refreshCounts }) => {
           </select>
           <button 
             onClick={() => {
-              setFormData({ employeeId: '', type: 'بدل عمل إضافي', date: '', startTime: '', endTime: '', notes: '', status: 'معلق' });
+              setFormData({ employeeId: '', type: 'بدل عمل إضافي', date: '', startTime: '', endTime: '', rate: '1:1', notes: '', status: 'معلق' });
               setShowModal(true);
             }}
             className="premium-add-btn flex items-center gap-2 whitespace-nowrap"
           >
             <Plus size={18} /> تقديم طلب جديد
           </button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '24px' }}>
+        {/* Total (Rightmost) */}
+        <div onClick={() => setFilterStatus('الكل')} style={{ cursor: 'pointer', opacity: filterStatus === 'الكل' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'الكل' ? '2px solid #3b82f6' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>إجمالي الطلبات</p>
+            <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{totalCount}</h3>
+            <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
+          </div>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#eff6ff', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Clock size={28} strokeWidth={2} />
+          </div>
+        </div>
+
+        {/* Pending */}
+        <div onClick={() => setFilterStatus('معلق')} style={{ cursor: 'pointer', opacity: filterStatus === 'معلق' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'معلق' ? '2px solid #d97706' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>طلبات معلقة</p>
+            <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{pendingCount}</h3>
+            <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
+          </div>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#fffbeb', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Clock size={28} strokeWidth={2} />
+          </div>
+        </div>
+
+        {/* Approved */}
+        <div onClick={() => setFilterStatus('موافق')} style={{ cursor: 'pointer', opacity: filterStatus === 'موافق' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'موافق' ? '2px solid #10b981' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>طلبات موافق عليها</p>
+            <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{approvedCount}</h3>
+            <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
+          </div>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#ecfdf5', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Check size={28} strokeWidth={2.5} />
+          </div>
+        </div>
+
+        {/* Rejected */}
+        <div onClick={() => setFilterStatus('مرفوض')} style={{ cursor: 'pointer', opacity: filterStatus === 'مرفوض' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'مرفوض' ? '2px solid #ef4444' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>طلبات مرفوضة</p>
+            <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{rejectedCount}</h3>
+            <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
+          </div>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#fef2f2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <X size={28} strokeWidth={2.5} />
+          </div>
         </div>
       </div>
 
@@ -472,6 +702,11 @@ const HROvertime = ({ user, refreshCounts }) => {
                     <div className="flex flex-col items-center">
                       <span className="font-mono text-xs">{leave.date}</span>
                       <span className="font-bold text-xs text-primary mt-1" dir="ltr">{leave.startTime} - {leave.endTime}</span>
+                      {leave.rate && (
+                        <span className="mt-1 font-bold text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100" dir="ltr">
+                          {leave.rate}
+                        </span>
+                      )}
                     </div>
                   ) : (
                     <div className="flex flex-col items-center">
@@ -499,7 +734,7 @@ const HROvertime = ({ user, refreshCounts }) => {
                     </button>
                     {leave.status === 'معلق' ? (
                       <>
-                        <button onClick={() => handleStatusChange(leave, 'موافق')} className="icon-btn icon-btn-success" title="موافقة">
+                        <button onClick={() => openSmartApproval(leave)} className="icon-btn icon-btn-success" title="موافقة">
                           <Check size={18} strokeWidth={2.5} />
                         </button>
                         <button onClick={() => handleStatusChange(leave, 'مرفوض')} className="icon-btn icon-btn-delete" title="رفض">
@@ -559,7 +794,7 @@ const HROvertime = ({ user, refreshCounts }) => {
                       placeholder="اختر التاريخ"
                     />
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
                     <div className="input-group">
                       <label>من الساعة</label>
                       <input type="time" value={formData.startTime} onChange={e=>setFormData({...formData, startTime: e.target.value})} className="input-field" required />
@@ -567,6 +802,14 @@ const HROvertime = ({ user, refreshCounts }) => {
                     <div className="input-group">
                       <label>إلى الساعة</label>
                       <input type="time" value={formData.endTime} onChange={e=>setFormData({...formData, endTime: e.target.value})} className="input-field" required />
+                    </div>
+                    <div className="input-group">
+                      <label>معدل الاحتساب</label>
+                      <select value={formData.rate || '1:1'} onChange={e=>setFormData({...formData, rate: e.target.value})} className="input-field" required>
+                        <option value="1:1">1:1 (عادي)</option>
+                        <option value="1:1.25">1:1.25 (إضافي)</option>
+                        <option value="1:1.5">1:1.5 (عطلة)</option>
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -583,6 +826,117 @@ const HROvertime = ({ user, refreshCounts }) => {
           </div>
         </div>
       )}
+    
+      {/* Smart Approval Modal */}
+      {smartModal.show && smartModal.leave && (
+        <div className="modal-overlay" style={{ zIndex: 10600 }}>
+          <div className="modal-content" style={{ maxWidth: '650px', background: '#f8fafc', padding: 0, overflow: 'hidden' }}>
+            
+            <div style={{ padding: '20px', borderBottom: '1px solid #e2e8f0', background: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                <CheckCircle style={{ color: '#10b981' }} size={24} />
+                شاشة الاحتساب الذكي للإضافي
+              </h3>
+              <button type="button" onClick={() => setSmartModal({ show: false, leave: null })} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '5px', color: '#64748b' }}>
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div style={{ padding: '20px', maxHeight: '70vh', overflowY: 'auto' }}>
+              {smartModal.loading ? (
+                 <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>جاري التدقيق...</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                   
+                   {/* الطلب الأصلي */}
+                   <div style={{ background: '#ffffff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                     <h4 style={{ fontSize: '1rem', fontWeight: 'bold', color: '#334155', margin: '0 0 12px 0', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>بيانات الطلب الأصلي</h4>
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.95rem' }}>
+                       <div><span style={{ color: '#64748b' }}>الموظف:</span> <span style={{ fontWeight: '600', color: '#0f172a' }}>{smartModal.leave.employeeName}</span></div>
+                       <div><span style={{ color: '#64748b' }}>التاريخ:</span> <span style={{ fontWeight: '500', color: '#0f172a' }} dir="ltr">{smartModal.leave.date}</span></div>
+                       <div>
+                          <span style={{ color: '#64748b' }}>المدة المطلوبة:</span> 
+                          <span style={{ fontWeight: 'bold', color: '#1a8d9b', marginRight: '6px' }}>{smartModal.requestedMins} دقيقة</span>
+                          <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginRight: '4px' }}>({Math.floor(smartModal.requestedMins / 60)} ساعة و {smartModal.requestedMins % 60} دقيقة)</span>
+                       </div>
+                       <div>
+                          <span style={{ color: '#64748b' }}>معدل الطلب:</span> 
+                          <span style={{ fontWeight: 'bold', background: '#e0e7ff', color: '#4f46e5', padding: '2px 8px', borderRadius: '12px', fontSize: '0.85rem', marginRight: '6px' }} dir="ltr">{smartModal.leave.rate || '1:1'}</span>
+                       </div>
+                     </div>
+                   </div>
+
+                   {/* تدقيق الدوام */}
+                   <div style={{ background: '#fff7ed', borderRadius: '12px', padding: '16px', border: '1px solid #ffedd5', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                     <h4 style={{ fontSize: '1rem', fontWeight: 'bold', color: '#9a3412', margin: '0 0 12px 0', borderBottom: '1px solid #ffedd5', paddingBottom: '8px' }}>تدقيق الدوام في نفس اليوم</h4>
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.95rem' }}>
+                       <div>
+                         <span style={{ color: '#9a3412', opacity: 0.8 }}>حالة الحضور:</span> 
+                         {smartModal.attendance ? (
+                           <span style={{ fontWeight: 'bold', color: '#15803d', marginRight: '6px' }} dir="ltr">{smartModal.attendance.timeIn} - {smartModal.attendance.timeOut || 'لا يوجد'}</span>
+                         ) : (
+                           <span style={{ fontWeight: 'bold', color: '#b91c1c', marginRight: '6px' }}>لم يبصم!</span>
+                         )}
+                       </div>
+                       <div>
+                         <span style={{ color: '#9a3412', opacity: 0.8 }}>عجز الدوام (تأخير/مغادرة):</span> 
+                         {smartModal.deficitMins > 0 ? (
+                           <span style={{ fontWeight: 'bold', color: '#b91c1c', marginRight: '6px' }}>{smartModal.deficitMins} دقيقة</span>
+                         ) : (
+                           <span style={{ fontWeight: 'bold', color: '#15803d', marginRight: '6px' }}>لا يوجد عجز (0)</span>
+                         )}
+                       </div>
+                     </div>
+                   </div>
+
+                   {/* الاقتراح */}
+                   <div style={{ background: '#f0fdf4', borderRadius: '12px', padding: '16px', border: '1px solid #dcfce3', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                     <h4 style={{ fontSize: '1rem', fontWeight: 'bold', color: '#166534', margin: '0 0 12px 0', borderBottom: '1px solid #dcfce3', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                       <CheckCircle size={18} /> نتيجة الاحتساب والتقسيم
+                     </h4>
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                       
+                       {smartModal.deficitMins > 0 ? (
+                         <>
+                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                             <span style={{ fontWeight: '600', color: '#334155' }}>مدة لتعويض العجز (بمعدل 1:1)</span>
+                             <span style={{ fontWeight: 'bold', color: '#d97706', fontSize: '1.1rem' }}>{Math.min(smartModal.deficitMins, smartModal.requestedMins)} دقيقة</span>
+                           </div>
+                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                             <span style={{ fontWeight: '600', color: '#334155' }}>الصافي الفعلي للإضافي (بمعدل {new Date(smartModal.leave.date).getDay() === 5 ? '1:1.5' : (smartModal.leave.rate || '1:1.25')})</span>
+                             <span style={{ fontWeight: 'bold', color: '#059669', fontSize: '1.1rem' }}>
+                               {smartModal.requestedMins > smartModal.deficitMins 
+                                 ? (smartModal.requestedMins - smartModal.deficitMins) + ' دقيقة'
+                                 : '0 دقيقة'}
+                             </span>
+                           </div>
+                         </>
+                       ) : (
+                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                           <span style={{ fontWeight: '600', color: '#334155' }}>جميع الدقائق مستحقة بمعدل ({new Date(smartModal.leave.date).getDay() === 5 ? '1:1.5' : (smartModal.leave.rate || '1:1.25')})</span>
+                           <span style={{ fontWeight: 'bold', color: '#059669', fontSize: '1.1rem' }}>{smartModal.requestedMins} دقيقة</span>
+                         </div>
+                       )}
+                       <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', marginTop: '10px' }}>
+                         * سيتم حفظ هذا التقسيم كمرجع في الطلب لحسابات الرواتب بدقة.
+                       </div>
+                     </div>
+                   </div>
+
+                </div>
+              )}
+            </div>
+            
+            <div style={{ padding: '20px', borderTop: '1px solid #e2e8f0', background: '#ffffff', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+               <button type="button" onClick={() => setSmartModal({ show: false, leave: null })} className="btn btn-outline">إلغاء</button>
+               <button type="button" onClick={confirmSmartApproval} disabled={smartModal.loading} className="btn btn-primary" style={{ background: '#10b981', borderColor: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                 <CheckCircle size={18} /> تأكيد التقسيم والموافقة
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </>
   );
 };

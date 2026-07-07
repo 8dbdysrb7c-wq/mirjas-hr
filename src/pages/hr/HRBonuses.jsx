@@ -1,15 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { Gift, Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X } from 'lucide-react';
+import { Gift, Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, User } from 'lucide-react';
+import Select from 'react-select';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
 import { getEmployees, getHRBonuses, saveHRBonus, deleteHRBonus } from '../../store';
 import Swal from 'sweetalert2';
+import HRDateFilter from '../../components/ui/HRDateFilter';
+
+const getLocalDateStr = (d) => {
+  const offset = d.getTimezoneOffset();
+  return new Date(d.getTime() - offset * 60000).toISOString().split('T')[0];
+};
 
 const HRBonuses = ({ user }) => {
   const [bonuses, setBonuses] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [dateMode, setDateMode] = useState('month');
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().substring(0, 7));
+  const [selectedDate, setSelectedDate] = useState(getLocalDateStr(new Date()));
+  const [startDate, setStartDate] = useState(getLocalDateStr(new Date()));
+  const [endDate, setEndDate] = useState(getLocalDateStr(new Date()));
   
   const [formData, setFormData] = useState({
     employeeId: '',
@@ -72,7 +85,82 @@ const HRBonuses = ({ user }) => {
 
   if (loading) return <div className="text-center p-8">جاري التحميل...</div>;
 
-  const sortedBonuses = [...bonuses].filter(b => b.status !== 'محذوف').sort((a, b) => {
+  const customSelectStyles = {
+    control: (provided, state) => ({
+      ...provided,
+      backgroundColor: 'white',
+      border: '1px solid #e2e8f0',
+      borderRadius: '8px',
+      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+      cursor: 'pointer',
+      minHeight: '42px',
+      height: '42px',
+    }),
+    valueContainer: (provided) => ({
+      ...provided,
+      padding: '0 8px',
+    }),
+    singleValue: (provided) => ({
+      ...provided,
+      color: '#1e293b',
+      fontWeight: 'bold',
+      fontSize: '0.9rem',
+    }),
+    placeholder: (provided) => ({
+      ...provided,
+      color: '#94a3b8',
+      fontSize: '0.9rem',
+    }),
+    menuPortal: base => ({ ...base, zIndex: 9999 }),
+    menu: (provided) => ({
+      ...provided,
+      borderRadius: '12px',
+      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+      border: '1px solid #e2e8f0',
+      overflow: 'hidden',
+      zIndex: 9999,
+      width: 'max-content',
+      minWidth: '100%',
+    }),
+    option: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isSelected ? '#1a8d9b' : state.isFocused ? '#f1f5f9' : 'white',
+      color: state.isSelected ? 'white' : '#1e293b',
+      cursor: 'pointer',
+      padding: '10px 16px',
+      fontSize: '0.9rem',
+      fontWeight: state.isSelected ? 'bold' : 'normal',
+      textAlign: 'right',
+      whiteSpace: 'nowrap',
+    }),
+    indicatorSeparator: () => ({ display: 'none' }),
+    dropdownIndicator: (provided) => ({
+      ...provided,
+      color: '#94a3b8',
+      '&:hover': { color: '#1a8d9b' }
+    })
+  };
+
+  const employeeNameOptions = [...employees]
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    .map(emp => ({ value: emp.id, label: emp.name }));
+
+  const employeeIdOptions = [...employees]
+    .sort((a, b) => (parseInt(a.id) || 0) - (parseInt(b.id) || 0))
+    .map(emp => ({ value: emp.id, label: String(emp.id) }));
+
+  const sortedBonuses = [...bonuses].filter(b => b.status !== 'محذوف').filter(b => {
+    if (searchTerm && String(b.employeeId) !== String(searchTerm)) return false;
+    if (!b.date) return false;
+    const reqDate = new Date(b.date).toISOString().split('T')[0];
+    const reqMonth = reqDate.slice(0, 7);
+    
+    if (dateMode === 'day' && reqDate !== selectedDate) return false;
+    if (dateMode === 'month' && reqMonth !== selectedMonth) return false;
+    if (dateMode === 'range' && (reqDate < startDate || reqDate > endDate)) return false;
+    
+    return true;
+  }).sort((a, b) => {
     if (!sortConfig.key) return 0;
     let valA = a[sortConfig.key];
     let valB = b[sortConfig.key];
@@ -121,7 +209,49 @@ const HRBonuses = ({ user }) => {
             }
           `}
         </style>
-        <button 
+        <div className="flex flex-wrap gap-3 items-center">
+          <HRDateFilter 
+            mode={dateMode}
+            setMode={setDateMode}
+            date={selectedDate}
+            setDate={setSelectedDate}
+            month={selectedMonth}
+            setMonth={setSelectedMonth}
+            startDate={startDate}
+            setStartDate={setStartDate}
+            endDate={endDate}
+            setEndDate={setEndDate}
+            allowedModes={['day', 'month', 'range']}
+          />
+          {/* Employee ID */}
+          <div style={{ width: '180px' }}>
+              <Select
+                options={employeeIdOptions}
+                value={employeeIdOptions.find(opt => opt.value === searchTerm) || null}
+                onChange={(selected) => setSearchTerm(selected ? selected.value : '')}
+                styles={{...customSelectStyles, control: (base) => ({...base, height: '42px', minHeight: '42px', borderRadius: '10px', border: '1px solid #e2e8f0'})}}
+                placeholder="رقم الموظف..."
+                isSearchable={true}
+                isClearable={true}
+              />
+          </div>
+
+          {/* Employee Name */}
+          <div style={{ width: '250px', position: 'relative' }}>
+              <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, color: '#94a3b8', pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
+                <User size={16} />
+              </div>
+              <Select
+                options={employeeNameOptions}
+                value={employeeNameOptions.find(opt => opt.value === searchTerm) || null}
+                onChange={(selected) => setSearchTerm(selected ? selected.value : '')}
+                styles={{...customSelectStyles, control: (base) => ({...base, height: '42px', minHeight: '42px', borderRadius: '10px', border: '1px solid #e2e8f0', paddingLeft: '24px'})}}
+                placeholder="اسم الموظف..."
+                isSearchable={true}
+                isClearable={true}
+              />
+          </div>
+          <button 
           onClick={() => {
             setFormData({ employeeId: '', type: 'مكافأة أداء', date: new Date().toISOString().split('T')[0], amount: '', notes: '' });
             setShowModal(true);
@@ -130,6 +260,7 @@ const HRBonuses = ({ user }) => {
         >
           <Plus size={20} /> تسجيل مكافأة
         </button>
+        </div>
       </div>
 
       <div className="table-responsive">

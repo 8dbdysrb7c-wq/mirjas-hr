@@ -11,7 +11,7 @@ export default defineConfig({
   },
   server: {
     watch: {
-      ignored: ['**/whatsapp-server/**']
+      ignored: ['**/whatsapp-server/**', '**/.wwebjs_auth/**', '**/.wwebjs_cache/**']
     }
   }
 })

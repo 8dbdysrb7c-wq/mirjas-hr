@@ -19,8 +19,10 @@ const AdminCustomers = ({ user }) => {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterSector, setFilterSector] = useState('');
   const [filterCity, setFilterCity] = useState('');
+  const [filterSalesRep, setFilterSalesRep] = useState('');
+  const [activeTab, setActiveTab] = useState('عميل'); // 'عميل' or 'مورد'
 
-  const JORDANIAN_CITIES = ['عمان', 'الزرقاء', 'إربد', 'المفرق', 'عجلون', 'جرش', 'البلقاء', 'مأدبا', 'الكرك', 'الطفيلة', 'معان', 'العقبة'];
+  const JORDANIAN_CITIES = ['عمان', 'الزرقاء', 'إربد', 'العقبة', 'السلط', 'مادبا', 'الكرك', 'الطفيلة', 'معان', 'جرش', 'عجلون', 'المفرق'];
 
   const [formData, setFormData] = useState({
     name: '',
@@ -43,10 +45,22 @@ const AdminCustomers = ({ user }) => {
     setLoading(false);
   };
 
+  const getNextNumber = (type) => {
+    const prefix = type === 'مورد' ? 'SUP-' : 'CLI-';
+    let maxNum = 0;
+    customers.forEach(c => {
+      if (c.customerNumber && c.customerNumber.startsWith(prefix)) {
+        const num = parseInt(c.customerNumber.replace(prefix, ''), 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+    });
+    return `${prefix}${String(maxNum + 1).padStart(4, '0')}`;
+  };
+
   useEffect(() => {
     const updateExistingCustomers = async () => {
       if (customers.length > 0) {
-        const toUpdate = customers.filter(c => !c.customerNumber);
+        const toUpdate = customers.filter(c => !c.customerNumber || !c.type);
         if (toUpdate.length > 0) {
           let maxNum = 0;
           customers.forEach(c => {
@@ -59,9 +73,13 @@ const AdminCustomers = ({ user }) => {
           toUpdate.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
           
           for (const c of toUpdate) {
-            maxNum++;
-            const newNum = `CLI-${String(maxNum).padStart(4, '0')}`;
-            await saveCustomer({ ...c, customerNumber: newNum });
+            let updateData = { ...c };
+            if (!c.type) updateData.type = 'عميل';
+            if (!c.customerNumber) {
+              maxNum++;
+              updateData.customerNumber = `CLI-${String(maxNum).padStart(4, '0')}`;
+            }
+            await saveCustomer(updateData);
           }
           fetchData();
         }
@@ -80,20 +98,15 @@ const AdminCustomers = ({ user }) => {
 
   const handleOpenModal = (customer = null) => {
     const isEdit = !!customer;
-    let customerNumber = customer?.customerNumber || '';
+    const defaultType = customer?.type || activeTab;
+    const customerNumber = customer?.customerNumber || getNextNumber(defaultType);
 
-    if (!isEdit) {
-      let maxNum = 0;
-      customers.forEach(c => {
-        if (c.customerNumber && c.customerNumber.startsWith('CLI-')) {
-          const num = parseInt(c.customerNumber.replace('CLI-', ''), 10);
-          if (!isNaN(num) && num > maxNum) maxNum = num;
-        }
-      });
-      customerNumber = `CLI-${String(maxNum + 1).padStart(4, '0')}`;
-    }
+    const initialData = isEdit 
+      ? { ...customer, customerNumber, salesRep: customer?.salesRep || (customer?.type === 'مورد' ? '' : 'زبائن الشركة') } 
+      : { name: '', phone: '', city: '', location: '', status: 'نشط', type: defaultType, salesRep: defaultType === 'مورد' ? '' : 'زبائن الشركة', customerNumber };
 
-    const initialData = isEdit ? { ...customer, customerNumber } : { name: '', phone: '', city: '', location: '', status: 'نشط', customerNumber };
+    const typeLabel = initialData.type === 'مورد' ? 'المورد' : 'العميل';
+    const cities = (globalSettings.jordanianCities && globalSettings.jordanianCities.length > 0) ? globalSettings.jordanianCities : JORDANIAN_CITIES;
 
     MySwal.fire({
       customClass: {
@@ -109,7 +122,7 @@ const AdminCustomers = ({ user }) => {
         <div class="premium-modal-header">
           <div class="premium-modal-title">
              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-plus text-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>
-             <span>${isEdit ? 'تعديل بيانات عميل' : 'إضافة عميل جديد'}</span>
+             <span>${isEdit ? `تعديل بيانات ${typeLabel}` : `إضافة ${typeLabel} جديد`}</span>
           </div>
           <div class="premium-modal-close" onclick="Swal.close()">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -118,15 +131,25 @@ const AdminCustomers = ({ user }) => {
         <div class="premium-form">
           <div class="premium-form-group">
             <label>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-tag text-muted"><path d="M12 2H2v10l9.29 9.29c.39.39 1.02.39 1.41 0l8.59-8.59c.39-.39.39-1.02 0-1.41z"/><line x1="7" x2="7.01" y1="7" y2="7"/></svg>
+              النوع (عميل / مورد) *
+            </label>
+            <select id="swal-type" class="premium-input" ${isEdit ? 'disabled style="background-color: #f8fafc; cursor: not-allowed;"' : ''}>
+              <option value="عميل" ${initialData.type === 'عميل' ? 'selected' : ''}>عميل</option>
+              <option value="مورد" ${initialData.type === 'مورد' ? 'selected' : ''}>مورد</option>
+            </select>
+          </div>
+          <div class="premium-form-group">
+            <label>
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-hash text-muted"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>
-              رقم العميل
+              الرقم التعريفي
             </label>
             <input id="swal-customerNumber" class="premium-input bg-slate-50 text-slate-500 cursor-not-allowed font-bold" value="${initialData.customerNumber}" disabled>
           </div>
           <div class="premium-form-group">
             <label>
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user text-muted"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              اسم العميل
+              الاسم
             </label>
             <input id="swal-name" class="premium-input" placeholder="مثال: شركة مرجاس للتجارة" value="${initialData.name}">
           </div>
@@ -145,15 +168,11 @@ const AdminCustomers = ({ user }) => {
               </label>
               <select id="swal-city" class="premium-input">
                 <option value="">اختر المدينة...</option>
-                ${JORDANIAN_CITIES.map(city => `<option value="${city}" ${initialData.city === city ? 'selected' : ''}>${city}</option>`).join('')}
+                ${cities.map(city => `<option value="${city}" ${initialData.city === city ? 'selected' : ''}>${city}</option>`).join('')}
               </select>
             </div>
-            <div class="premium-form-group" style="margin-bottom: 0;">
-              <label>
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin text-muted"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                المنطقة
-              </label>
-              <input id="swal-location" class="premium-input" placeholder="مثال: خلدا، شارع المدينة..." value="${initialData.location || ''}">
+            <div class="premium-form-group" style="margin-bottom: 0;" id="swal-location-container">
+              <!-- Dynamically populated -->
             </div>
           </div>
           <div class="premium-form-group">
@@ -166,10 +185,20 @@ const AdminCustomers = ({ user }) => {
               ${(globalSettings.customerSectors || []).map(s => `<option value="${s}" ${initialData.sector === s ? 'selected' : ''}>${s}</option>`).join('')}
             </select>
           </div>
+          <div class="premium-form-group" id="swal-salesRep-group">
+            <label>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user text-muted"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              البائع (مندوب المبيعات) *
+            </label>
+            <select id="swal-salesRep" class="premium-input">
+              <option value="زبائن الشركة" ${(!initialData.salesRep || initialData.salesRep === 'زبائن الشركة') ? 'selected' : ''}>زبائن الشركة</option>
+              ${(globalSettings.salesReps || []).filter(rep => rep !== 'زبائن الشركة').map(rep => `<option value="${rep}" ${initialData.salesRep === rep ? 'selected' : ''}>${rep}</option>`).join('')}
+            </select>
+          </div>
           <div class="premium-form-group">
             <label>
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-activity text-muted"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
-              حالة العميل
+              حالة الحساب
             </label>
             <select id="swal-status" class="premium-input">
               <option value="نشط" ${(!initialData.status || initialData.status === 'نشط') ? 'selected' : ''}>نشط</option>
@@ -180,18 +209,98 @@ const AdminCustomers = ({ user }) => {
         </div>
       `,
       showCancelButton: true,
-      confirmButtonText: isEdit ? 'تحديث البيانات' : 'حفظ العميل',
+      confirmButtonText: isEdit ? 'تحديث البيانات' : `حفظ ${typeLabel}`,
       cancelButtonText: 'إلغاء',
       focusConfirm: false,
+      didOpen: () => {
+        const typeSelect = document.getElementById('swal-type');
+        const salesRepGroup = document.getElementById('swal-salesRep-group');
+        const salesRepSelect = document.getElementById('swal-salesRep');
+
+        const toggleSalesRep = (type) => {
+          if (salesRepGroup && salesRepSelect) {
+            if (type === 'مورد') {
+              salesRepGroup.style.display = 'none';
+              salesRepSelect.value = '';
+            } else {
+              salesRepGroup.style.display = 'block';
+            }
+          }
+        };
+
+        if (typeSelect) {
+          toggleSalesRep(typeSelect.value);
+          typeSelect.addEventListener('change', (e) => {
+            const selectedType = e.target.value;
+            toggleSalesRep(selectedType);
+            if (!isEdit) {
+              const numberInput = document.getElementById('swal-customerNumber');
+              if (numberInput) {
+                numberInput.value = getNextNumber(selectedType);
+              }
+            }
+          });
+        }
+
+        const citySelect = document.getElementById('swal-city');
+        const locationContainer = document.getElementById('swal-location-container');
+
+        const updateLocationField = (selectedCity, currentVal) => {
+          if (!locationContainer) return;
+          if (selectedCity === 'عمان') {
+            const areas = (globalSettings.ammanAreas && globalSettings.ammanAreas.length > 0) ? globalSettings.ammanAreas : [
+              'عبدون', 'دير غبار', 'أم أذينة', 'الرابية', 'الشميساني', 'الصويفية', 'الجندويل', 
+              'خلدا', 'تلاع العلي', 'أم السماق', 'ضاحية الرشيد', 'ضاحية الحسين', 'مرج الحمام', 
+              'الجبيهة', 'شفا بدران', 'أبو نصير', 'طبربور', 'الهاشمي الشمالي', 'الهاشمي الجنوبي', 
+              'جبل الحسين', 'جبل عمان', 'جبل اللويبدة', 'الأشرفية', 'الوحدات', 'رأس العين', 
+              'وسط البلد', 'النصر', 'القويسمة', 'أبو علندا', 'خريبة السوق', 'المقابلين', 
+              'الجويدة', 'سحاب', 'الموقر', 'ماركا الشمالية', 'ماركا الجنوبية', 'طارق', 
+              'بسمان', 'البيادر', 'وادي السير', 'اليادودة', 'حسبان', 'البنيات'
+            ];
+            locationContainer.innerHTML = `
+              <label>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin text-muted"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                المنطقة *
+              </label>
+              <select id="swal-location" class="premium-input">
+                <option value="">اختر المنطقة...</option>
+                ${areas.map(area => `<option value="${area}" ${currentVal === area ? 'selected' : ''}>${area}</option>`).join('')}
+              </select>
+            `;
+          } else {
+            locationContainer.innerHTML = `
+              <label>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin text-muted"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                المنطقة
+              </label>
+              <input id="swal-location" class="premium-input" placeholder="مثال: وسط المدينة..." value="${selectedCity ? currentVal : ''}">
+            `;
+          }
+        };
+
+        if (citySelect) {
+          updateLocationField(citySelect.value, initialData.location || '');
+          citySelect.addEventListener('change', (e) => {
+            updateLocationField(e.target.value, '');
+          });
+        }
+      },
       preConfirm: () => {
+        const type = document.getElementById('swal-type').value;
         const name = document.getElementById('swal-name').value;
         const phone = document.getElementById('swal-phone').value;
         const location = document.getElementById('swal-location').value;
         const city = document.getElementById('swal-city').value;
         const sector = document.getElementById('swal-sector').value;
         const status = document.getElementById('swal-status').value;
+        const salesRep = document.getElementById('swal-salesRep').value;
+
+        if (!type) {
+          Swal.showValidationMessage('يرجى اختيار النوع (عميل / مورد)');
+          return false;
+        }
         if (!name) {
-          Swal.showValidationMessage('يرجى ملء اسم العميل');
+          Swal.showValidationMessage('يرجى ملء الاسم');
           return false;
         }
         if (!phone || phone.trim().length !== 10 || isNaN(phone.trim())) {
@@ -202,27 +311,43 @@ const AdminCustomers = ({ user }) => {
           Swal.showValidationMessage('يرجى اختيار المدينة');
           return false;
         }
-        if (!location) {
-          Swal.showValidationMessage('يرجى إدخال المنطقة');
+        if (city === 'عمان' && !location) {
+          Swal.showValidationMessage('يرجى اختيار المنطقة لمدينة عمان');
           return false;
         }
         if (!sector) {
           Swal.showValidationMessage('يرجى اختيار القطاع');
           return false;
         }
+        if (type === 'عميل' && (globalSettings.salesReps || []).length > 0 && !salesRep) {
+          Swal.showValidationMessage('يرجى اختيار البائع (مندوب المبيعات)');
+          return false;
+        }
 
-        return { name, phone: phone.trim(), city, location, sector, status, customerNumber: initialData.customerNumber, id: isEdit ? customer.id : null };
+        return { 
+          type, 
+          name, 
+          phone: phone.trim(), 
+          city, 
+          location, 
+          sector, 
+          status, 
+          salesRep: type === 'عميل' ? salesRep : '', 
+          customerNumber: document.getElementById('swal-customerNumber').value, 
+          id: isEdit ? customer.id : null 
+        };
       }
     }).then(async (result) => {
       if (result.isConfirmed) {
         const res = await saveCustomer(result.value);
         if (res) {
+          const finalTypeLabel = result.value.type === 'مورد' ? 'المورد' : 'العميل';
           await addLog({
             userName: user.name,
             userId: user.id,
             module: 'العملاء',
             action: isEdit ? 'تعديل' : 'إضافة',
-            details: `${isEdit ? 'تعديل بيانات' : 'إضافة'} العميل: ${result.value.name}`
+            details: `${isEdit ? 'تعديل بيانات' : 'إضافة'} ${finalTypeLabel}: ${result.value.name}`
           });
           Swal.fire({
             title: isEdit ? 'تم التحديث' : 'تمت الإضافة',
@@ -257,13 +382,14 @@ const AdminCustomers = ({ user }) => {
 
     if (result.isConfirmed) {
       const customerToDelete = customers.find(c => c.id === id);
+      const finalTypeLabel = customerToDelete?.type === 'مورد' ? 'المورد' : 'العميل';
       await deleteCustomer(id);
       await addLog({
         userName: user.name,
         userId: user.id,
         module: 'العملاء',
         action: 'حذف',
-        details: `حذف العميل: ${customerToDelete?.name || id}`
+        details: `حذف ${finalTypeLabel}: ${customerToDelete?.name || id}`
       });
       Swal.fire({
         title: 'تم الحذف!',
@@ -285,14 +411,17 @@ const AdminCustomers = ({ user }) => {
   });
 
   const filteredCustomers = sortedCustomers.filter(c => {
+    const typeMatch = (c.type || 'عميل') === activeTab;
     const nameMatch = (c.name || '').toLowerCase().includes(searchName.toLowerCase());
     const locationMatch = (c.location || '').toLowerCase().includes(searchLocation.toLowerCase());
-    const phoneMatch = (c.phone || '').includes(searchName); // Search by phone in the name box is also common
+    const phoneMatch = (c.phone || '').includes(searchName);
     const statusMatch = filterStatus ? c.status === filterStatus : true;
     const sectorMatch = filterSector ? c.sector === filterSector : true;
     const cityMatch = filterCity ? c.city === filterCity : true;
+    const actualRep = c.type === 'مورد' ? '' : (c.salesRep || 'زبائن الشركة');
+    const salesRepMatch = filterSalesRep ? actualRep === filterSalesRep : true;
     
-    return (nameMatch || phoneMatch) && locationMatch && statusMatch && sectorMatch && cityMatch;
+    return typeMatch && (nameMatch || phoneMatch) && locationMatch && statusMatch && sectorMatch && cityMatch && salesRepMatch;
   });
 
   return (
@@ -311,9 +440,47 @@ const AdminCustomers = ({ user }) => {
             disabled={loading}
             style={loading ? {opacity: 0.6, cursor: 'not-allowed'} : {}}
           >
-            <Plus size={18} /> إضافة عميل جديد
+            <Plus size={18} /> {activeTab === 'مورد' ? 'إضافة مورد جديد' : 'إضافة عميل جديد'}
           </button>
         )}
+      </div>
+
+      {/* Switcher Tabs */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+        <button
+          onClick={() => { setActiveTab('عميل'); }}
+          className="flex items-center justify-center transition-all"
+          style={{
+            padding: '8px 24px',
+            borderRadius: '10px',
+            fontWeight: 'bold',
+            fontSize: '14px',
+            border: activeTab === 'عميل' ? 'none' : '1px solid #e2e8f0',
+            backgroundColor: activeTab === 'عميل' ? 'var(--primary)' : '#ffffff',
+            color: activeTab === 'عميل' ? '#ffffff' : '#64748b',
+            cursor: 'pointer',
+            boxShadow: activeTab === 'عميل' ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none'
+          }}
+        >
+          العملاء
+        </button>
+        <button
+          onClick={() => { setActiveTab('مورد'); }}
+          className="flex items-center justify-center transition-all"
+          style={{
+            padding: '8px 24px',
+            borderRadius: '10px',
+            fontWeight: 'bold',
+            fontSize: '14px',
+            border: activeTab === 'مورد' ? 'none' : '1px solid #e2e8f0',
+            backgroundColor: activeTab === 'مورد' ? 'var(--primary)' : '#ffffff',
+            color: activeTab === 'مورد' ? '#ffffff' : '#64748b',
+            cursor: 'pointer',
+            boxShadow: activeTab === 'مورد' ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none'
+          }}
+        >
+          الموردين
+        </button>
       </div>
 
       <div className="glass-panel mb-4 no-print flex justify-between items-center flex-wrap gap-3" style={{ padding: '0.8rem 1rem' }}>
@@ -321,7 +488,7 @@ const AdminCustomers = ({ user }) => {
           <Search className="text-muted" size={20} />
           <input 
             type="text" 
-            placeholder="البحث باسم العميل أو رقم الهاتف..." 
+            placeholder={activeTab === 'مورد' ? "البحث باسم المورد أو رقم الهاتف..." : "البحث باسم العميل أو رقم الهاتف..."}
             className="input-field flex-1" 
             style={{ marginBottom: 0 }}
             value={searchName}
@@ -344,7 +511,7 @@ const AdminCustomers = ({ user }) => {
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
             <span>تصفية</span>
-            {(filterStatus || filterSector || filterCity) && (
+            {(filterStatus || filterSector || filterCity || filterSalesRep) && (
               <span className="bg-white text-primary rounded-full px-2 py-0.5 text-[0.7rem] font-bold mr-1">نشط</span>
             )}
           </button>
@@ -362,7 +529,7 @@ const AdminCustomers = ({ user }) => {
                   <div className="flex items-center gap-1">الرقم <ArrowUpDown size={14} className="text-muted" /></div>
                 </th>
                 <th onClick={() => handleSort('name')} className="cursor-pointer hover:text-primary transition-colors">
-                  <div className="flex items-center gap-1">اسم العميل <ArrowUpDown size={14} className="text-muted" /></div>
+                  <div className="flex items-center gap-1">{activeTab === 'مورد' ? 'اسم المورد' : 'اسم العميل'} <ArrowUpDown size={14} className="text-muted" /></div>
                 </th>
                 <th onClick={() => handleSort('phone')} className="cursor-pointer hover:text-primary transition-colors">
                   <div className="flex items-center gap-1">رقم التلفون <ArrowUpDown size={14} className="text-muted" /></div>
@@ -376,8 +543,13 @@ const AdminCustomers = ({ user }) => {
                 <th onClick={() => handleSort('sector')} className="cursor-pointer hover:text-primary transition-colors">
                   <div className="flex items-center gap-1">القطاع <ArrowUpDown size={14} className="text-muted" /></div>
                 </th>
+                {activeTab === 'عميل' && (
+                  <th onClick={() => handleSort('salesRep')} className="cursor-pointer hover:text-primary transition-colors text-center">
+                    <div className="flex items-center justify-center gap-1">البائع <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                )}
                 <th onClick={() => handleSort('status')} className="cursor-pointer hover:text-primary transition-colors text-center">
-                  <div className="flex items-center justify-center gap-1">حالة العميل <ArrowUpDown size={14} className="text-muted" /></div>
+                  <div className="flex items-center justify-center gap-1">{activeTab === 'مورد' ? 'حالة المورد' : 'حالة العميل'} <ArrowUpDown size={14} className="text-muted" /></div>
                 </th>
                 <th style={{ width: '150px', textAlign: 'center' }}>إجراءات</th>
               </tr>
@@ -387,7 +559,7 @@ const AdminCustomers = ({ user }) => {
                 filteredCustomers.map((customer, index) => (
                   <tr key={customer.id}>
                     <td data-label="الرقم" style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }} className="text-primary">{customer.customerNumber || (index + 1)}</td>
-                    <td data-label="اسم العميل">
+                    <td data-label={activeTab === 'مورد' ? 'اسم المورد' : 'اسم العميل'}>
                       {customer.name}
                     </td>
                     <td data-label="رقم التلفون">
@@ -403,7 +575,7 @@ const AdminCustomers = ({ user }) => {
                     </td>
                     <td data-label="العنوان / المنطقة">
                       <div className="flex items-center gap-2 justify-end lg:justify-start text-xs">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin text-muted"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-map-pin text-muted"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
                         {customer.location || '---'}
                       </div>
                     </td>
@@ -412,7 +584,14 @@ const AdminCustomers = ({ user }) => {
                         {customer.sector || '---'}
                       </div>
                     </td>
-                    <td data-label="حالة العميل" className="text-center">
+                    {activeTab === 'عميل' && (
+                      <td data-label="البائع" className="text-center">
+                        <div className="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded w-fit mx-auto">
+                          {customer.type === 'مورد' ? '---' : (customer.salesRep || 'زبائن الشركة')}
+                        </div>
+                      </td>
+                    )}
+                    <td data-label={activeTab === 'مورد' ? 'حالة المورد' : 'حالة العميل'} className="text-center">
                       <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                         (customer.status || 'نشط') === 'نشط' ? 'bg-emerald-100 text-emerald-700' :
                         (customer.status === 'غير نشط') ? 'bg-slate-100 text-slate-700' :
@@ -440,7 +619,9 @@ const AdminCustomers = ({ user }) => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="8" className="text-center py-10 text-muted">لا يوجد عملاء مطابقين للبحث</td>
+                  <td colSpan={activeTab === 'عميل' ? 9 : 8} className="text-center py-10 text-muted">
+                    {activeTab === 'مورد' ? 'لا يوجد موردين مطابقين للبحث' : 'لا يوجد عملاء مطابقين للبحث'}
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -461,7 +642,7 @@ const AdminCustomers = ({ user }) => {
                 <label>المدينة</label>
                 <select className="input-field" value={filterCity} onChange={(e) => setFilterCity(e.target.value)}>
                   <option value="">جميع المدن</option>
-                  {JORDANIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
+                  {((globalSettings.jordanianCities && globalSettings.jordanianCities.length > 0) ? globalSettings.jordanianCities : JORDANIAN_CITIES).map(city => <option key={city} value={city}>{city}</option>)}
                 </select>
               </div>
               <div className="input-group">
@@ -480,6 +661,15 @@ const AdminCustomers = ({ user }) => {
                   <option value="عميل محتمل">عميل محتمل</option>
                 </select>
               </div>
+              {activeTab === 'عميل' && (
+                <div className="input-group">
+                  <label>البائع (مندوب المبيعات)</label>
+                  <select className="input-field" value={filterSalesRep} onChange={(e) => setFilterSalesRep(e.target.value)}>
+                    <option value="">جميع البائعين</option>
+                    {(globalSettings.salesReps || []).map(rep => <option key={rep} value={rep}>{rep}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-4 mt-6 pt-4 border-t">
@@ -488,6 +678,7 @@ const AdminCustomers = ({ user }) => {
                 setFilterCity('');
                 setFilterSector('');
                 setFilterStatus('');
+                setFilterSalesRep('');
                 setShowFilterModal(false);
               }}>إلغاء التصفية</button>
             </div>

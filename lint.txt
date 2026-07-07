@@ -1,0 +1,213 @@
+Lint error output:
+
+C:\Users\a.awwad\.gemini\antigravity\mirjas-hr\src\pages\hr\HRMissingPunches.jsx
+    1:8    error    'React' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               no-unused-vars
+    2:27   error    'Search' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              no-unused-vars
+    2:35   error    'Filter' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              no-unused-vars
+    2:104  error    'MessageCircle' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       no-unused-vars
+    2:153  error    'ChevronUp' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           no-unused-vars
+   50:7    error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  48 |   useEffect(() => {
+  49 |     if (dateMode === 'day') {
+> 50 |       setDateFrom(selectedDate);
+     |       ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  51 |       setDateTo(selectedDate);
+  52 |     } else if (dateMode === 'month') {
+  53 |       const parts = selectedMonth.split('-');                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 react-hooks/set-state-in-effect
+   70:9    error    'employeeOptions' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            no-unused-vars
+   87:5    error    Error: Cannot access variable before it is declared
+
+`fetchPunches` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+  85 |
+  86 |   useEffect(() => {
+> 87 |     fetchPunches();
+     |     ^^^^^^^^^^^^ `fetchPunches` accessed before it is declared
+  88 |   }, [dateFrom, dateTo]);
+  89 |
+  90 |   const fetchPunches = async () => {
+
+   88 |   }, [dateFrom, dateTo]);
+   89 |
+>  90 |   const fetchPunches = async () => {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>  91 |     setLoading(true);
+      | ^^^^^^^^^^^^^^^^^^^^^
+>  92 |     const data = await getMissingPunches();
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^
+> 171 |     setLoading(false);
+      | ^^^^^^^^^^^^^^^^^^^^^
+> 172 |   };
+      | ^^^^^ `fetchPunches` is declared here
+  173 |
+  174 |   const handleUpdateStatus = async (punch, newStatus) => {
+  175 |     try {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               react-hooks/immutability
+   88:6    warning  React Hook useEffect has a missing dependency: 'fetchPunches'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 react-hooks/exhaustive-deps
+  231:17   error    'adminId' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    no-unused-vars
+  658:9    error    The value assigned to 'matchStatus' is not used in subsequent statements                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        no-useless-assignment
+  683:25   error    'state' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               no-unused-vars
+  833:15   error    'MonthPicker' is not defined                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    no-undef
+  959:87   error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  957 |               <tr className="bg-white text-slate-900 border-b border-slate-200 text-sm">
+  958 |                 <th className="p-5 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-50 transition-colors text-right" onClick={() => handleSort('employeeId')}>
+> 959 |                   <div className="flex items-center gap-1 justify-end">الرقم الوظيفي <SortIcon col="employeeId" /></div>
+      |                                                                                       ^^^^^^^^ This component is created during render
+  960 |                 </th>
+  961 |                 <th className="p-5 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-50 transition-colors text-right" style={{ minWidth: '10cm' }} onClick={() => handleSort('employeeName')}>
+  962 |                   <div className="flex items-center gap-1 justify-end">اسم الموظف <SortIcon col="employeeName" /></div>
+
+  79 |   };
+  80 |
+> 81 |   const SortIcon = ({ col }) => {
+     |                    ^^^^^^^^^^^^^^
+> 82 |     if (sortConfig.key !== col) return <ArrowUpDown size={13} style={{ color: '#cbd5e1' }} />;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 83 |     return sortConfig.direction === 'asc' ? <ArrowUp size={13} style={{ color: '#0f5c6e' }} /> : <ArrowDown size={13} style={{ color: '#0f5c6e' }} />;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 84 |   };
+     | ^^^^ The component is created during render here
+  85 |
+  86 |   useEffect(() => {
+  87 |     fetchPunches();  react-hooks/static-components
+  962:84   error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  960 |                 </th>
+  961 |                 <th className="p-5 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-50 transition-colors text-right" style={{ minWidth: '10cm' }} onClick={() => handleSort('employeeName')}>
+> 962 |                   <div className="flex items-center gap-1 justify-end">اسم الموظف <SortIcon col="employeeName" /></div>
+      |                                                                                    ^^^^^^^^ This component is created during render
+  963 |                 </th>
+  964 |                 <th className="p-5 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-50 transition-colors text-center" onClick={() => handleSort('date')}>
+  965 |                   <div className="flex items-center justify-center gap-1">التاريخ <SortIcon col="date" /></div>
+
+  79 |   };
+  80 |
+> 81 |   const SortIcon = ({ col }) => {
+     |                    ^^^^^^^^^^^^^^
+> 82 |     if (sortConfig.key !== col) return <ArrowUpDown size={13} style={{ color: '#cbd5e1' }} />;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 83 |     return sortConfig.direction === 'asc' ? <ArrowUp size={13} style={{ color: '#0f5c6e' }} /> : <ArrowDown size={13} style={{ color: '#0f5c6e' }} />;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 84 |   };
+     | ^^^^ The component is created during render here
+  85 |
+  86 |   useEffect(() => {
+  87 |     fetchPunches();                                                                                      react-hooks/static-components
+  965:84   error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  963 |                 </th>
+  964 |                 <th className="p-5 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-50 transition-colors text-center" onClick={() => handleSort('date')}>
+> 965 |                   <div className="flex items-center justify-center gap-1">التاريخ <SortIcon col="date" /></div>
+      |                                                                                    ^^^^^^^^ This component is created during render
+  966 |                 </th>
+  967 |                 <th className="p-5 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-50 transition-colors text-center" onClick={() => handleSort('type')}>
+  968 |                   <div className="flex items-center justify-center gap-1">النوع <SortIcon col="type" /></div>
+
+  79 |   };
+  80 |
+> 81 |   const SortIcon = ({ col }) => {
+     |                    ^^^^^^^^^^^^^^
+> 82 |     if (sortConfig.key !== col) return <ArrowUpDown size={13} style={{ color: '#cbd5e1' }} />;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 83 |     return sortConfig.direction === 'asc' ? <ArrowUp size={13} style={{ color: '#0f5c6e' }} /> : <ArrowDown size={13} style={{ color: '#0f5c6e' }} />;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 84 |   };
+     | ^^^^ The component is created during render here
+  85 |
+  86 |   useEffect(() => {
+  87 |     fetchPunches();                                                                                                                                    react-hooks/static-components
+  968:82   error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  966 |                 </th>
+  967 |                 <th className="p-5 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-50 transition-colors text-center" onClick={() => handleSort('type')}>
+> 968 |                   <div className="flex items-center justify-center gap-1">النوع <SortIcon col="type" /></div>
+      |                                                                                  ^^^^^^^^ This component is created during render
+  969 |                 </th>
+  970 |                 <th className="p-5 font-bold whitespace-nowrap text-center">وقت الدخول</th>
+  971 |                 <th className="p-5 font-bold whitespace-nowrap text-center">وقت الخروج</th>
+
+  79 |   };
+  80 |
+> 81 |   const SortIcon = ({ col }) => {
+     |                    ^^^^^^^^^^^^^^
+> 82 |     if (sortConfig.key !== col) return <ArrowUpDown size={13} style={{ color: '#cbd5e1' }} />;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 83 |     return sortConfig.direction === 'asc' ? <ArrowUp size={13} style={{ color: '#0f5c6e' }} /> : <ArrowDown size={13} style={{ color: '#0f5c6e' }} />;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 84 |   };
+     | ^^^^ The component is created during render here
+  85 |
+  86 |   useEffect(() => {
+  87 |     fetchPunches();                                                                                                                                                                                                                                 react-hooks/static-components
+  973:79   error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  971 |                 <th className="p-5 font-bold whitespace-nowrap text-center">وقت الخروج</th>
+  972 |                 <th className="p-5 font-bold w-1/4 cursor-pointer hover:bg-slate-50 transition-colors text-right" onClick={() => handleSort('reason')}>
+> 973 |                   <div className="flex items-center gap-1 justify-end">السبب <SortIcon col="reason" /></div>
+      |                                                                               ^^^^^^^^ This component is created during render
+  974 |                 </th>
+  975 |                 <th className="p-5 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-50 transition-colors text-center" onClick={() => handleSort('status')}>
+  976 |                   <div className="flex items-center justify-center gap-1">الحالة <SortIcon col="status" /></div>
+
+  79 |   };
+  80 |
+> 81 |   const SortIcon = ({ col }) => {
+     |                    ^^^^^^^^^^^^^^
+> 82 |     if (sortConfig.key !== col) return <ArrowUpDown size={13} style={{ color: '#cbd5e1' }} />;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 83 |     return sortConfig.direction === 'asc' ? <ArrowUp size={13} style={{ color: '#0f5c6e' }} /> : <ArrowDown size={13} style={{ color: '#0f5c6e' }} />;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 84 |   };
+     | ^^^^ The component is created during render here
+  85 |
+  86 |   useEffect(() => {
+  87 |     fetchPunches();                                                                            react-hooks/static-components
+  976:83   error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  974 |                 </th>
+  975 |                 <th className="p-5 font-bold whitespace-nowrap cursor-pointer hover:bg-slate-50 transition-colors text-center" onClick={() => handleSort('status')}>
+> 976 |                   <div className="flex items-center justify-center gap-1">الحالة <SortIcon col="status" /></div>
+      |                                                                                   ^^^^^^^^ This component is created during render
+  977 |                 </th>
+  978 |                 <th className="p-5 font-bold whitespace-nowrap text-center">الإجراء</th>
+  979 |               </tr>
+
+  79 |   };
+  80 |
+> 81 |   const SortIcon = ({ col }) => {
+     |                    ^^^^^^^^^^^^^^
+> 82 |     if (sortConfig.key !== col) return <ArrowUpDown size={13} style={{ color: '#cbd5e1' }} />;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 83 |     return sortConfig.direction === 'asc' ? <ArrowUp size={13} style={{ color: '#0f5c6e' }} /> : <ArrowDown size={13} style={{ color: '#0f5c6e' }} />;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 84 |   };
+     | ^^^^ The component is created during render here
+  85 |
+  86 |   useEffect(() => {
+  87 |     fetchPunches();                                                                                                                                                                                                                                                                                                      react-hooks/static-components
+
+✖ 19 problems (18 errors, 1 warning)
+
+
+
+Command failed: npx eslint src/pages/hr/HRMissingPunches.jsx

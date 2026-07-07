@@ -93,7 +93,8 @@ export const calculateSalaries = ({
     
     // 1. Manual Violations
     const empViolations = violations.filter(v => {
-      if (v.employeeId !== emp.id || v.status === 'محذوف') return false;
+      const isEmpMatch = String(v.employeeId || '').trim() === String(emp.id || '').trim() || String(v.employeeName || '').trim() === String(emp.name || '').trim();
+      if (!isEmpMatch || v.status === 'محذوف') return false;
       if (v.processedInPeriod && v.processedInPeriod !== selectedMonth) return false;
       if (!v.processedInPeriod) return v.date >= cycle.start && v.date <= cycle.end;
       return true;
@@ -102,7 +103,8 @@ export const calculateSalaries = ({
 
     // 1.5 Bonuses
     const empBonuses = bonuses.filter(b => {
-      if (b.employeeId !== emp.id || b.status === 'محذوف') return false;
+      const isEmpMatch = String(b.employeeId || '').trim() === String(emp.id || '').trim() || String(b.employeeName || '').trim() === String(emp.name || '').trim();
+      if (!isEmpMatch || b.status === 'محذوف') return false;
       if (b.processedInPeriod && b.processedInPeriod !== selectedMonth) return false;
       if (!b.processedInPeriod) return b.date >= cycle.start && b.date <= cycle.end;
       return true;
@@ -111,13 +113,31 @@ export const calculateSalaries = ({
     const bonusesList = empBonuses.map(b => ({ type: b.type, amount: Number(b.amount) || 0 }));
 
     // 2. Attendance (Lateness & Absences)
-    const empAttendance = attendance.filter(a => a.employeeId === emp.id && a.date >= cycle.start && a.date <= cycle.end);
+    const empAttendance = attendance.filter(a => {
+      const isEmpMatch = String(a.employeeId || '').trim() === String(emp.id || '').trim() || String(a.employeeName || '').trim() === String(emp.name || '').trim();
+      return isEmpMatch && a.date >= cycle.start && a.date <= cycle.end;
+    });
     const rawLateMinutes = empAttendance.reduce((sum, a) => sum + (Number(a.lateMinutes) || 0), 0);
-    const manualUnpaidLeaveDays = empAttendance.filter(a => a.status === 'إجازة غير مدفوعة').length;
-    const manualUnexcused = empAttendance.filter(a => a.status === 'غياب غير مبرر').length;
     
+    const unpaidLeaveDates = new Set();
+    empAttendance.forEach(a => {
+      if (a.status === 'إجازة غير مدفوعة' && a.date) {
+        unpaidLeaveDates.add(a.date);
+      }
+    });
+
+    const unexcusedAbsenceDates = new Set();
+    empAttendance.forEach(a => {
+      if (a.status === 'غياب غير مبرر' && a.date) {
+        unexcusedAbsenceDates.add(a.date);
+      }
+    });
+    
+    const approvedStatuses = ['موافق', 'موافق عليه', 'مقبول', 'تمت الموافقة', 'تم التسليم'];
     const empLeaves = leaves.filter(l => {
-      if (l.employeeId !== emp.id || (l.status !== 'موافق' && l.status !== 'مقبول')) return false;
+      const isApproved = approvedStatuses.includes(l.status);
+      const isEmpMatch = String(l.employeeId || '').trim() === String(emp.id || '').trim() || String(l.employeeName || '').trim() === String(emp.name || '').trim();
+      if (!isEmpMatch || !isApproved) return false;
       if (l.date) return l.date >= cycle.start && l.date <= cycle.end;
       if (l.startDate && l.endDate) return l.startDate <= cycle.end && l.endDate >= cycle.start;
       return false;
@@ -138,10 +158,8 @@ export const calculateSalaries = ({
     });
     
     // Automatic Unexcused Absence Detection
-    let autoUnexcusedAbsenceDays = 0;
-    let multiDayUnpaidLeaves = 0;
-    
-    const todayStr = new Date().toLocaleDateString('en-CA');
+    const todayObj = new Date();
+    const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
     const endProcessDate = cycle.end > todayStr ? todayStr : cycle.end;
     
     const arabicDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
@@ -149,9 +167,13 @@ export const calculateSalaries = ({
     
     let currentDay = new Date(cycle.start);
     const lastDay = new Date(endProcessDate);
+    const nonWorkStatuses = ['غائب', 'غياب غير مبرر', 'إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة', 'لم يسجل دخول', 'محذوف'];
     
     while (currentDay <= lastDay) {
-      const dateStr = currentDay.toLocaleDateString('en-CA');
+      const year = currentDay.getFullYear();
+      const month = String(currentDay.getMonth() + 1).padStart(2, '0');
+      const day = String(currentDay.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
       const dayName = arabicDays[currentDay.getDay()];
       
       // Skip weekends
@@ -166,8 +188,14 @@ export const calculateSalaries = ({
         continue;
       }
       
-      // Skip if attendance exists (and not deleted)
-      if (empAttendance.some(a => a.date === dateStr && a.status !== 'لم يسجل دخول' && a.status !== 'محذوف')) {
+      // Skip if actual attendance exists (meaning they worked)
+      const hasActualAttendance = empAttendance.some(a => 
+        a.date === dateStr && 
+        a.status && String(a.status).trim() !== '' &&
+        !nonWorkStatuses.includes(a.status)
+      );
+      
+      if (hasActualAttendance) {
         currentDay.setDate(currentDay.getDate() + 1);
         continue;
       }
@@ -175,20 +203,20 @@ export const calculateSalaries = ({
       // Check if leave exists
       const leaveForDay = empLeaves.find(l => (l.date && l.date === dateStr) || (l.startDate && l.startDate <= dateStr && l.endDate >= dateStr));
       if (leaveForDay) {
-        if (leaveForDay.type === 'إجازة غير مدفوعة') {
-          multiDayUnpaidLeaves++;
+        if (String(leaveForDay.type || '').trim() === 'إجازة غير مدفوعة') {
+          unpaidLeaveDates.add(dateStr);
         }
         currentDay.setDate(currentDay.getDate() + 1);
         continue;
       }
       
       // Unexcused absence
-      autoUnexcusedAbsenceDays++;
+      unexcusedAbsenceDates.add(dateStr);
       currentDay.setDate(currentDay.getDate() + 1);
     }
     
-    const unexcusedAbsenceDays = manualUnexcused + autoUnexcusedAbsenceDays;
-    const unpaidLeaveDays = manualUnpaidLeaveDays + multiDayUnpaidLeaves;
+    const unexcusedAbsenceDays = unexcusedAbsenceDates.size;
+    const unpaidLeaveDays = unpaidLeaveDates.size;
     
     const roundedLateMinutes = roundMinutes(rawLateMinutes, hrSettings.timeRounding);
     const roundedMissionMinutes = roundMinutes(missionMinutes, hrSettings.timeRounding);
@@ -211,17 +239,26 @@ export const calculateSalaries = ({
     let unexcusedAbsenceDeduction = 0;
     
     // Absence Handling
-    if (hrSettings.absenceHandling === 'full_day' || (!hrSettings.absenceHandling && hrSettings.fullDayAbsenceDeduction)) {
+    // Unpaid Leave Deduction (Unconditionally deducted since it's an approved unpaid request)
+    if (hrSettings.absenceHandling === 'work_hours') {
+      unpaidLeaveDeduction = unpaidLeaveDays * (empStandardWorkHours * hourlyRate);
+    } else {
       unpaidLeaveDeduction = unpaidLeaveDays * dailyRate;
+    }
+
+    // Unexcused Absence Deduction (Depends on absenceHandling strategy)
+    if (hrSettings.absenceHandling === 'full_day' || (!hrSettings.absenceHandling && hrSettings.fullDayAbsenceDeduction)) {
       unexcusedAbsenceDeduction = unexcusedAbsenceDays * dailyRate;
     } else if (hrSettings.absenceHandling === 'work_hours') {
-      unpaidLeaveDeduction = unpaidLeaveDays * (empStandardWorkHours * hourlyRate);
       unexcusedAbsenceDeduction = unexcusedAbsenceDays * (empStandardWorkHours * hourlyRate);
-    } // needs_approval means 0 automatic deduction
+    } else {
+      unexcusedAbsenceDeduction = 0; // needs_approval means 0 automatic deduction for unexcused absence
+    }
     
     // 2.5 Approved Overtime Requests
     const overtimeReqs = leaves.filter(l => {
-      if (l.employeeId !== emp.id || (l.type !== 'بدل عمل إضافي' && l.type !== 'عمل إضافي') || (l.status !== 'موافق' && l.status !== 'مقبول')) return false;
+      const isApproved = approvedStatuses.includes(l.status);
+      if (l.employeeId !== emp.id || (l.type !== 'بدل عمل إضافي' && l.type !== 'عمل إضافي') || !isApproved) return false;
       if (l.date) return l.date >= cycle.start && l.date <= cycle.end;
       if (l.startDate && l.endDate) return l.startDate <= cycle.end && l.endDate >= cycle.start;
       return false;
@@ -268,6 +305,7 @@ export const calculateSalaries = ({
     const roundedWeekendOvertimeMins = roundMinutes(rawWeekendOvertimeMins, hrSettings.timeRounding);
     const totalNormalOvertimeHours = roundedNormalOvertimeMins / 60;
     const totalWeekendOvertimeHours = roundedWeekendOvertimeMins / 60;
+    const totalOvertimeHours = totalNormalOvertimeHours + totalWeekendOvertimeHours;
 
     // Additions (Overtime)
     let overtimePay = 0;
@@ -331,7 +369,8 @@ export const calculateSalaries = ({
     let advanceAddition = 0;
 
     const empAdvancesList = advances ? advances.filter(a => {
-      if (a.employeeId !== emp.id || a.status !== 'موافق') return false;
+      const isEmpMatch = String(a.employeeId || '').trim() === String(emp.id || '').trim() || String(a.employeeName || '').trim() === String(emp.name || '').trim();
+      if (!isEmpMatch || a.status !== 'موافق') return false;
       
       if (a.isInstallment && a.installments && a.installments.length > 0) {
         return a.installments.some(inst => inst.month === selectedMonth);
@@ -370,25 +409,25 @@ export const calculateSalaries = ({
     return {
       ...emp,
       basic,
-      transportAllowanceAddition: Math.round(transportAllowanceAddition || 0),
+      transportAllowanceAddition: transportAllowanceAddition || 0,
       totalOvertimeHours: totalOvertimeHours || 0,
-      overtimePay: Math.round(overtimePay || 0),
-      holidayPay: Math.round(holidayPay || 0),
+      overtimePay: overtimePay || 0,
+      holidayPay: holidayPay || 0,
       holidayAlternativeDays,
-      lateDeduction: Math.round(lateDeduction || 0),
-      unpaidLeaveDeduction: Math.round(unpaidLeaveDeduction || 0),
+      lateDeduction: lateDeduction || 0,
+      unpaidLeaveDeduction: unpaidLeaveDeduction || 0,
       unexcusedAbsenceDays,
-      unexcusedAbsenceDeduction: Math.round(unexcusedAbsenceDeduction || 0),
-      manualDeductions: Math.round(manualDeductions || 0),
-      advanceDeduction: Math.round(advanceDeduction || 0),
-      advanceAddition: Math.round(advanceAddition || 0),
-      bonusAddition: Math.round(totalBonusAmount || 0),
-      totalBonusAmount: Math.round(totalBonusAmount || 0),
+      unexcusedAbsenceDeduction: unexcusedAbsenceDeduction || 0,
+      manualDeductions: manualDeductions || 0,
+      advanceDeduction: advanceDeduction || 0,
+      advanceAddition: advanceAddition || 0,
+      bonusAddition: totalBonusAmount || 0,
+      totalBonusAmount: totalBonusAmount || 0,
       bonusesList,
-      socialSecurityEmployeeDeduction: Math.round(socialSecurityEmployeeDeduction || 0),
-      socialSecurityCompanyContribution: Math.round(socialSecurityCompanyContribution || 0),
-      totalDeductions: Math.round(totalDeductions || 0),
-      netSalary: Math.round(netSalary || 0),
+      socialSecurityEmployeeDeduction: socialSecurityEmployeeDeduction || 0,
+      socialSecurityCompanyContribution: socialSecurityCompanyContribution || 0,
+      totalDeductions: totalDeductions || 0,
+      netSalary: netSalary || 0,
       violationsList: empViolations
     };
   });

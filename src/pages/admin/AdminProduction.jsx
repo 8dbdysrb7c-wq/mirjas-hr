@@ -85,7 +85,7 @@ const AdminProduction = ({ user, notificationTarget }) => {
       getStock()
     ]);
     setOrders(ordersData);
-    setCustomers(customersData);
+    setCustomers(customersData.filter(c => (c.type || 'عميل') === 'عميل'));
     setGlobalSettings(settings);
     setStockItems(stockData);
     setLoading(false);
@@ -262,7 +262,8 @@ const AdminProduction = ({ user, notificationTarget }) => {
         if (!isNaN(num) && num > maxNum) maxNum = num;
       }
     });
-    const JORDANIAN_CITIES = ['عمان', 'الزرقاء', 'إربد', 'المفرق', 'عجلون', 'جرش', 'البلقاء', 'مأدبا', 'الكرك', 'الطفيلة', 'معان', 'العقبة'];
+    const JORDANIAN_CITIES = ['عمان', 'الزرقاء', 'إربد', 'العقبة', 'السلط', 'مادبا', 'الكرك', 'الطفيلة', 'معان', 'جرش', 'عجلون', 'المفرق'];
+    const cities = (globalSettings.jordanianCities && globalSettings.jordanianCities.length > 0) ? globalSettings.jordanianCities : JORDANIAN_CITIES;
     const customerNumber = `CLI-${String(maxNum + 1).padStart(4, '0')}`;
     const initialData = { name: '', phone: '', city: '', location: '', status: 'نشط', customerNumber, sector: '' };
 
@@ -316,15 +317,11 @@ const AdminProduction = ({ user, notificationTarget }) => {
               </label>
               <select id="swal-city" class="premium-input">
                 <option value="">اختر المدينة...</option>
-                ${JORDANIAN_CITIES.map(city => `<option value="${city}">${city}</option>`).join('')}
+                ${cities.map(city => `<option value="${city}">${city}</option>`).join('')}
               </select>
             </div>
-            <div class="premium-form-group" style="margin-bottom: 0;">
-              <label>
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin text-muted"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                المنطقة
-              </label>
-              <input id="swal-location" class="premium-input" placeholder="مثال: خلدا، شارع المدينة..." value="${initialData.location || ''}">
+            <div class="premium-form-group" style="margin-bottom: 0;" id="swal-location-container">
+              <!-- Dynamically populated -->
             </div>
           </div>
           <div class="premium-form-group">
@@ -335,6 +332,16 @@ const AdminProduction = ({ user, notificationTarget }) => {
             <select id="swal-sector" class="premium-input">
               <option value="">اختر القطاع...</option>
               ${(globalSettings.customerSectors || []).map(s => `<option value="${s}">${s}</option>`).join('')}
+            </select>
+          </div>
+          <div class="premium-form-group">
+            <label>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user text-muted"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              البائع (مندوب المبيعات) *
+            </label>
+            <select id="swal-salesRep" class="premium-input">
+              <option value="زبائن الشركة" selected>زبائن الشركة</option>
+              ${(globalSettings.salesReps || []).filter(rep => rep !== 'زبائن الشركة').map(rep => `<option value="${rep}">${rep}</option>`).join('')}
             </select>
           </div>
           <div class="premium-form-group">
@@ -354,6 +361,50 @@ const AdminProduction = ({ user, notificationTarget }) => {
       confirmButtonText: 'حفظ العميل',
       cancelButtonText: 'إلغاء',
       focusConfirm: false,
+      didOpen: () => {
+        const citySelect = document.getElementById('swal-city');
+        const locationContainer = document.getElementById('swal-location-container');
+
+        const updateLocationField = (selectedCity, currentVal) => {
+          if (!locationContainer) return;
+          if (selectedCity === 'عمان') {
+            const areas = (globalSettings.ammanAreas && globalSettings.ammanAreas.length > 0) ? globalSettings.ammanAreas : [
+              'عبدون', 'دير غبار', 'أم أذينة', 'الرابية', 'الشميساني', 'الصويفية', 'الجندويل', 
+              'خلدا', 'تلاع العلي', 'أم السماق', 'ضاحية الرشيد', 'ضاحية الحسين', 'مرج الحمام', 
+              'الجبيهة', 'شفا بدران', 'أبو نصير', 'طبربور', 'الهاشمي الشمالي', 'الهاشمي الجنوبي', 
+              'جبل الحسين', 'جبل عمان', 'جبل اللويبدة', 'الأشرفية', 'الوحدات', 'رأس العين', 
+              'وسط البلد', 'النصر', 'القويسمة', 'أبو علندا', 'خريبة السوق', 'المقابلين', 
+              'الجويدة', 'سحاب', 'الموقر', 'ماركا الشمالية', 'ماركا الجنوبية', 'طارق', 
+              'بسمان', 'البيادر', 'وادي السير', 'اليادودة', 'حسبان', 'البنيات'
+            ];
+            locationContainer.innerHTML = `
+              <label>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin text-muted"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                المنطقة *
+              </label>
+              <select id="swal-location" class="premium-input">
+                <option value="">اختر المنطقة...</option>
+                ${areas.map(area => `<option value="${area}" ${currentVal === area ? 'selected' : ''}>${area}</option>`).join('')}
+              </select>
+            `;
+          } else {
+            locationContainer.innerHTML = `
+              <label>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin text-muted"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                المنطقة
+              </label>
+              <input id="swal-location" class="premium-input" placeholder="مثال: وسط المدينة..." value="${selectedCity ? currentVal : ''}">
+            `;
+          }
+        };
+
+        if (citySelect) {
+          updateLocationField(citySelect.value, '');
+          citySelect.addEventListener('change', (e) => {
+            updateLocationField(e.target.value, '');
+          });
+        }
+      },
       preConfirm: () => {
         const name = document.getElementById('swal-name').value;
         const phone = document.getElementById('swal-phone').value;
@@ -373,15 +424,20 @@ const AdminProduction = ({ user, notificationTarget }) => {
           Swal.showValidationMessage('يرجى اختيار المدينة');
           return false;
         }
-        if (!location) {
-          Swal.showValidationMessage('يرجى إدخال المنطقة');
+        if (city === 'عمان' && !location) {
+          Swal.showValidationMessage('يرجى اختيار المنطقة لمدينة عمان');
           return false;
         }
         if (!sector) {
           Swal.showValidationMessage('يرجى اختيار القطاع');
           return false;
         }
-        return { name, phone: phone.trim(), city, location, sector, status, customerNumber: initialData.customerNumber };
+        const salesRep = document.getElementById('swal-salesRep').value;
+        if ((globalSettings.salesReps || []).length > 0 && !salesRep) {
+          Swal.showValidationMessage('يرجى اختيار البائع (مندوب المبيعات)');
+          return false;
+        }
+        return { name, phone: phone.trim(), city, location, sector, status, salesRep, type: 'عميل', customerNumber: initialData.customerNumber };
       }
     }).then(async (result) => {
       if (result.isConfirmed) {

@@ -210,7 +210,7 @@ const AdminLive = ({ user, onBack }) => {
   const handleAttendanceChange = async (employee, clickedStatus) => {
     const todayKey = toLocalDateKey();
     const updatedLogs = [...attendanceLogs];
-    const existingIndex = updatedLogs.findIndex(log => log.employeeId === employee.id);
+    const existingIndex = updatedLogs.findIndex(log => String(log.employeeId || '').trim() === String(employee.id || '').trim() || String(log.employeeName || '').trim() === String(employee.name || '').trim());
     
     const existingLog = existingIndex >= 0 ? updatedLogs[existingIndex] : {};
     const currentStatus = existingLog.status || '';
@@ -249,7 +249,7 @@ const AdminLive = ({ user, onBack }) => {
   const handleAttendanceNotesChange = async (employee, notes) => {
     const todayKey = toLocalDateKey();
     const updatedLogs = [...attendanceLogs];
-    const existingIndex = updatedLogs.findIndex(log => log.employeeId === employee.id);
+    const existingIndex = updatedLogs.findIndex(log => String(log.employeeId || '').trim() === String(employee.id || '').trim() || String(log.employeeName || '').trim() === String(employee.name || '').trim());
     
     const existingLog = existingIndex >= 0 ? updatedLogs[existingIndex] : {};
     const newLog = {
@@ -570,12 +570,12 @@ const AdminLive = ({ user, onBack }) => {
         });
 
         const presentCount = filteredEmployees.filter(e => {
-           const s = attendanceLogs.find(l => l.employeeId === e.id)?.status;
+           const s = attendanceLogs.find(l => String(l.employeeId || '').trim() === String(e.id || '').trim() || String(l.employeeName || '').trim() === String(e.name || '').trim())?.status;
            return s === 'حضور' || s === 'تأخير' || s === 'حاضر متأخر';
         }).length;
-        const absentCount = filteredEmployees.filter(e => attendanceLogs.find(l => l.employeeId === e.id)?.status === 'غياب').length;
+        const absentCount = filteredEmployees.filter(e => attendanceLogs.find(l => String(l.employeeId || '').trim() === String(e.id || '').trim() || String(l.employeeName || '').trim() === String(e.name || '').trim())?.status === 'غياب').length;
         const lateCount = filteredEmployees.filter(e => {
-           const s = attendanceLogs.find(l => l.employeeId === e.id)?.status;
+           const s = attendanceLogs.find(l => String(l.employeeId || '').trim() === String(e.id || '').trim() || String(l.employeeName || '').trim() === String(e.name || '').trim())?.status;
            return s === 'تأخير' || s === 'حاضر متأخر';
         }).length;
 
@@ -616,7 +616,7 @@ const AdminLive = ({ user, onBack }) => {
             {/* Employee Cards List */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {filteredEmployees.map((employee, index) => {
-                const currentLog = attendanceLogs.find(log => log.employeeId === employee.id) || {};
+                const currentLog = attendanceLogs.find(log => String(log.employeeId || '').trim() === String(employee.id || '').trim() || String(log.employeeName || '').trim() === String(employee.name || '').trim()) || {};
                 const currentStatus = currentLog.status || '';
                 const currentNotes = currentLog.notes || '';
                 

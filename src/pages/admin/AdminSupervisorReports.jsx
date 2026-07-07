@@ -1,9 +1,9 @@
 /* eslint-disable */
 import React, { useState, useEffect } from 'react';
 import { getEmployees, getSupervisorReports, saveSupervisorReport, deleteSupervisorReport, addLog, isAdmin, getSalesOrders, saveSalesOrder, getGlobalSettings, getMissions, saveMission, getOrders, saveOrder, getTasksData, getProductionLogs, saveProductionLog, deleteProductionLog, getReports, getReportsByDateRange, saveReport, getAttendanceLogs, createNotification } from '../../store';
-import { FileText, Check, Calendar, Plus, Trash2, Save, UserCheck, Clock, CheckCircle2, AlertTriangle, Eye, X, Package, MessageSquare, Truck, ChevronDown, ChevronUp, ClipboardList, Building2, Settings, Target, TrendingUp, Edit, CheckCircle, RotateCcw, ArrowUpDown, Filter } from 'lucide-react';
+import { FileText, Check, Calendar, Plus, Trash2, Save, UserCheck, Clock, CheckCircle2, AlertTriangle, Eye, X, Package, MessageSquare, Truck, ChevronDown, ChevronUp, ClipboardList, Building2, Settings, Target, TrendingUp, Edit, CheckCircle, RotateCcw, ArrowUpDown, Filter, Shield, Smartphone, LogIn, LogOut } from 'lucide-react';
 import Swal from 'sweetalert2';
-import { sendWhatsAppNotification } from '../../utils/whatsappService';
+import { sendWhatsAppNotification, sendTemplatedWhatsAppNotification } from '../../utils/whatsappService';
 import withReactContent from 'sweetalert2-react-content';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/light.css';
@@ -293,9 +293,36 @@ const AdminSupervisorReports = ({ user }) => {
       MySwal.fire('تنبيه', 'الرجاء اختيار التقييم قبل الحفظ.', 'warning');
       return;
     }
-    if ((evalData.rating === 'مقبول' || evalData.rating === 'سيئ') && (!evalData.reason || !evalData.reason.trim())) {
-      MySwal.fire('تنبيه', 'يجب كتابة سبب نظراً لأن التقييم مقبول أو سيئ.', 'warning');
-      return;
+
+    let finalReason = evalData.reason || '';
+
+    if (evalData.rating === 'مقبول' || evalData.rating === 'سيئ') {
+      const result = await MySwal.fire({
+        title: 'سبب التقييم مطلوب',
+        text: `يرجى كتابة سبب التقييم للموظف ${emp.name} (نظراً لأن التقييم مقبول أو سيئ):`,
+        input: 'textarea',
+        inputPlaceholder: 'اكتب السبب هنا...',
+        inputValue: finalReason,
+        showCancelButton: true,
+        confirmButtonText: 'حفظ السبب والتقييم',
+        cancelButtonText: 'إلغاء',
+        inputValidator: (value) => {
+          if (!value || !value.trim()) {
+            return 'يجب كتابة سبب التقييم!';
+          }
+        }
+      });
+
+      if (!result.isConfirmed) {
+        return;
+      }
+      finalReason = result.value;
+      
+      // Update state with reason
+      setEmployeeEvaluations(prev => {
+        const current = prev[empId] || { rating: '', reason: '', scorePercentage: '', reportApproved: false };
+        return { ...prev, [empId]: { ...current, reason: finalReason } };
+      });
     }
 
     setSavedItems(prev => ({ ...prev, [`emp_${empId}`]: true }));
@@ -386,7 +413,7 @@ const AdminSupervisorReports = ({ user }) => {
         employeeId: empId,
         employeeName: employees.find(e => e.id === empId)?.name || 'غير معروف',
         rating: employeeEvaluations[empId].rating,
-        reason: employeeEvaluations[empId].reason,
+        reason: employeeEvaluations[empId].reason || '',
         scorePercentage: employeeEvaluations[empId].scorePercentage || '',
         reportApproved: employeeEvaluations[empId].reportApproved || false
       })).filter(ev => ev.rating);
@@ -443,7 +470,7 @@ const AdminSupervisorReports = ({ user }) => {
            if (!empDailyReport && ev.rating === 'لم يقدم تقرير') {
                const empUser = employees.find(e => String(e.id) === String(ev.employeeId));
                empDailyReport = {
-                   id: 'rep_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                   id: `rep_${ev.employeeId}_${date}`,
                    userId: ev.employeeId,
                    employeeId: ev.employeeId,
                    userName: empUser ? empUser.name : 'غير معروف',
@@ -472,7 +499,7 @@ const AdminSupervisorReports = ({ user }) => {
              
              const empUser = employees.find(e => String(e.id) === String(ev.employeeId));
              if (empUser && empUser.phone) {
-               sendWhatsAppNotification(empUser.phone, `*اعتماد تقرير العمل اليومي* ✅\nمرحباً ${empUser.name}، قام المشرف (${user.name}) بتقييم تقريرك لتاريخ ${date}.\nالتقييم: ${ev.rating} (${supervisorScore}%)\nالملاحظات: ${ev.reason || 'لا يوجد'}`);
+               sendWhatsAppNotification(empUser.phone, `*اعتماد تقرير العمل اليومي* ✅\nمرحباً ${empUser.name}، قام المشرف (${user.name}) بتقييم تقريرك لتاريخ ${date}.\nالتقييم: ${ev.rating} (${supervisorScore}%)\nالملاحظات: ${ev.reason || 'لا يوجد'}`, 'report_approval');
              }
            }
         }
@@ -515,6 +542,14 @@ const AdminSupervisorReports = ({ user }) => {
         createdByRole: user.level || user.role,
         target: { tab: 'supervisors-reports' }
       });
+
+      // Refresh employee daily reports local state to prevent duplicate creation on subsequent saves
+      try {
+        const updatedReps = await getReportsByDateRange(date, date);
+        setEmployeeReports(updatedReps);
+      } catch (err) {
+        console.error("Error refreshing employee reports:", err);
+      }
 
       // Clear local storage after successful save
       localStorage.removeItem(`sup_eval_${user.id}_${date}`);
@@ -833,7 +868,12 @@ const AdminSupervisorReports = ({ user }) => {
              const statusMsg = newStatus === 'معتمد' ? 'اعتماد ✅' : 'رفض/إرجاع ❌';
              let msg = `مرحباً ${report.supervisorName}،\nتم ${statusMsg} تقريرك اليومي لتاريخ ${report.date}.`;
              if (adminNote) msg += `\nملاحظة الإدارة: ${adminNote}`;
-             await sendWhatsAppNotification(supEmp.phone, msg);
+             await sendTemplatedWhatsAppNotification(supEmp.phone, 'report_approval', {
+               name: report.supervisorName,
+               status: statusMsg,
+               date: report.date,
+               reason: adminNote || 'بدون ملاحظات'
+             });
           }
         } catch(e) { console.error(e); }
 
@@ -915,9 +955,6 @@ const AdminSupervisorReports = ({ user }) => {
                        <Flatpickr className="input-field h-10 w-40 mb-0" value={date} onChange={([d]) => setDate(getLocalDateStr(d))} options={{ dateFormat: 'Y-m-d', disableMobile: true, maxDate: 'today' }} placeholder="اختر تاريخ" />
                     )}
                   </div>
-                  <button type="submit" className="btn btn-primary h-10 px-4 font-bold w-full sm:w-auto flex justify-center items-center gap-2" style={{ whiteSpace: 'nowrap' }}>
-                    <Save size={18} /> حفظ واعتماد
-                  </button>
                 </div>
               </div>
 
@@ -925,7 +962,7 @@ const AdminSupervisorReports = ({ user }) => {
           {currentUserPerms.evaluations && (
           <div className="bg-slate-50 p-4 rounded-xl mb-6 border border-slate-200">
             <h4 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2">
-              <AlertTriangle size={18} className="text-primary" /> ثانياً: تقييم الموظفين اليومي
+              <AlertTriangle size={18} className="text-primary" /> أولاً: تقييم الموظفين اليومي
             </h4>
             
             <div className="flex flex-col">
@@ -939,39 +976,68 @@ const AdminSupervisorReports = ({ user }) => {
                 const isExpanded = expandedEmployees[emp.id];
                 
                 return (
-                  <div key={emp.id} className="p-5 transition-colors duration-500" style={{ marginBottom: '1.25rem', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.03)', backgroundColor: savedItems[`emp_${emp.id}`] ? '#ecfdf5' : '#ffffff' }}>
-                    {/* Top Row: Employee Evaluation */}
-                    <div className="flex flex-col xl:flex-row" style={{ alignItems: 'stretch', justifyContent: 'space-between', gap: '1.5rem' }}>
-                      
-                      {/* Block 1: Name & Button (Rightmost) */}
-                      <div className="w-full xl:w-[180px]" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', flexShrink: 0, gap: '1rem' }}>
-                        <span style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '1.1rem', padding: '0 0.5rem', width: '100%', textAlign: 'right' }}>{emp.name}</span>
-                        {empDailyReport ? (
-                          <button 
-                            type="button"
-                            onClick={() => toggleEmployeeReport(emp.id)}
-                            style={{ 
-                              display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', 
-                              padding: '0.6rem 1rem', border: '1px solid #e2e8f0', borderRadius: '12px', 
-                              backgroundColor: '#ffffff', color: '#334155', fontWeight: 'bold', fontSize: '0.875rem', cursor: 'pointer' 
-                            }}
-                          >
-                            <span>{isExpanded ? 'إخفاء التقرير' : 'عرض التقرير اليومي'}</span>
-                            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                          </button>
-                        ) : (
-                          <div style={{ padding: '0.6rem 1rem', border: '1px dashed #cbd5e1', borderRadius: '12px', width: '100%', textAlign: 'center', color: '#94a3b8', fontSize: '0.875rem', fontWeight: 'bold' }}>
-                            لم يُقدم تقرير
-                          </div>
-                        )}
+                  <div 
+                    key={emp.id} 
+                    style={{ 
+                      transition: 'all 0.3s ease',
+                      marginBottom: '1.5rem',
+                      backgroundColor: '#ffffff',
+                      border: '2px solid #cbd5e1',
+                      borderRadius: '20px',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+                      padding: '1.25rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '1rem'
+                    }} 
+                    dir="rtl"
+                  >
+                    {/* Employee Header (Name & ID) */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem', gap: '0.5rem' }}>
+                      {/* Right side: Name & ID vertically */}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px', textAlign: 'right' }}>
+                        <h3 style={{ margin: 0, fontWeight: 'extrabold', color: '#1e293b', fontSize: '0.875rem', lineHeight: '1.2' }}>{emp.name}</h3>
+                        <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#94a3b8', lineHeight: '1' }}>({emp.id})</span>
                       </div>
+                      {/* Left side: Toggle button horizontally */}
+                      {empDailyReport ? (
+                        <button 
+                          type="button"
+                          onClick={() => toggleEmployeeReport(emp.id)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            backgroundColor: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            color: '#334155',
+                            fontWeight: 'extrabold',
+                            fontSize: '0.75rem',
+                            padding: '0.5rem 0.75rem',
+                            borderRadius: '10px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0
+                          }}
+                        >
+                          <span>{isExpanded ? 'إخفاء التقرير' : 'عرض التقرير'}</span>
+                          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#94a3b8', backgroundColor: '#f1f5f9', padding: '0.4rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          لم يُقدم تقرير
+                        </span>
+                      )}
+                    </div>
 
-                      {/* Block 2: Middle (Radio & Percentage) */}
-                      <div className="w-full xl:flex-1" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.75rem' }}>
-                        {/* Radio Buttons */}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-around', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.5rem 1rem', minHeight: '2.8rem' }}>
+                    {/* Evaluation Card Form */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {/* Radio Buttons Container */}
+                      <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1rem', boxShadow: '0 2px 6px rgba(0,0,0,0.01)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', direction: 'rtl' }}>
                           {['ممتاز', 'جيد', 'مقبول', 'سيئ', 'لم يقدم تقرير', 'غائب'].map(rate => (
-                            <label key={rate} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', margin: '0.25rem 0' }}>
+                            <label key={rate} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', padding: '0.25rem 0', borderRadius: '8px' }}>
                               <input 
                                 type="radio" 
                                 name={`rating-${emp.id}`} 
@@ -980,265 +1046,318 @@ const AdminSupervisorReports = ({ user }) => {
                                 onChange={(e) => handleEvaluationChange(emp.id, 'rating', e.target.value)}
                                 style={{ width: '16px', height: '16px', accentColor: '#1a8d9b', cursor: 'pointer' }}
                               />
-                              <span style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#334155' }}>{rate}</span>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#334155', whiteSpace: 'nowrap' }}>{rate}</span>
                             </label>
                           ))}
                         </div>
-                        
-                        {/* Percentage */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', height: '2.8rem', opacity: (evalData.rating === 'غائب' || evalData.rating === 'لم يقدم تقرير') ? 0.5 : 1 }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: '1.1' }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#475569' }}>نسبة</span>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#475569' }}>التقييم</span>
+                      </div>
+
+                      {/* Rating Percentage Row & Save Button */}
+                      <div style={{ display: 'flex', flexDirection: 'row', gap: '0.75rem', alignItems: 'center', width: '100%', marginTop: '0.25rem' }}>
+                        {/* Rating Percentage Box */}
+                        <div style={{ 
+                          flex: 1, 
+                          backgroundColor: '#ffffff', 
+                          border: '1px solid #e2e8f0', 
+                          borderRadius: '16px', 
+                          padding: '0 1rem', 
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.01)', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'space-between', 
+                          height: '3.2rem' 
+                        }}>
+                          {/* Right: Trend Icon & Text Label */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', backgroundColor: '#eaf4f5', borderRadius: '10px', color: '#1a8d9b' }}>
+                              <TrendingUp size={18} />
+                            </div>
+                            <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#334155' }}>نسبة التقييم</span>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '2.8rem', height: '100%', backgroundColor: (evalData.rating === 'غائب' || evalData.rating === 'لم يقدم تقرير') ? '#f1f5f9' : '#eaf4f5', borderRadius: '12px', color: (evalData.rating === 'غائب' || evalData.rating === 'لم يقدم تقرير') ? '#94a3b8' : '#1a8d9b' }}>
-                            <TrendingUp size={20} />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', flex: 1, height: '100%', backgroundColor: (evalData.rating === 'غائب' || evalData.rating === 'لم يقدم تقرير') ? '#f1f5f9' : '#eaf4f5', borderRadius: '12px', overflow: 'hidden' }}>
+
+                          {/* Left: Input with % inside */}
+                          <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '0.25rem', 
+                            backgroundColor: '#f8fafc', 
+                            border: '1px solid #e2e8f0', 
+                            borderRadius: '10px', 
+                            padding: '0 0.5rem', 
+                            height: '2.4rem' 
+                          }}>
                             <input 
                               type="number" 
                               min="0" max="100" 
-                              style={{ flex: 1, backgroundColor: 'transparent', border: 'none', textAlign: 'center', fontWeight: 'bold', color: (evalData.rating === 'غائب' || evalData.rating === 'لم يقدم تقرير') ? '#94a3b8' : '#1a8d9b', outline: 'none', padding: '0 1rem', width: '100%', cursor: (evalData.rating === 'غائب' || evalData.rating === 'لم يقدم تقرير') ? 'not-allowed' : 'text' }}
-                              placeholder={evalData.rating === 'غائب' ? "---" : "مثال: 95"}
+                              style={{
+                                width: '45px',
+                                backgroundColor: 'transparent',
+                                border: 'none',
+                                textAlign: 'center',
+                                fontWeight: 'extrabold',
+                                fontSize: '0.9rem',
+                                color: '#1e293b',
+                                outline: 'none',
+                                padding: 0
+                              }}
+                              placeholder={evalData.rating === 'غائب' ? "---" : "95"}
                               value={evalData.rating === 'غائب' ? '' : evalData.scorePercentage}
                               disabled={evalData.rating === 'غائب' || evalData.rating === 'لم يقدم تقرير'}
                               onChange={(e) => handleEvaluationChange(emp.id, 'scorePercentage', e.target.value)}
                             />
-                            <div style={{ backgroundColor: (evalData.rating === 'غائب' || evalData.rating === 'لم يقدم تقرير') ? '#94a3b8' : '#1a8d9b', color: '#ffffff', fontWeight: 'bold', height: '100%', padding: '0 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>%</div>
+                            <span style={{ fontWeight: 'extrabold', color: '#1a8d9b', fontSize: '0.95rem' }}>%</span>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Block 3: Notes (Middle-Left) */}
-                      <div className="w-full xl:w-[300px]">
-                        <div style={{ position: 'relative', height: '100%', opacity: evalData.rating === 'غائب' ? 0.6 : 1 }}>
-                          <textarea 
-                            style={{ 
-                              width: '100%', height: '100%', minHeight: '6rem', padding: '0.75rem 2.5rem 0.75rem 1rem', 
-                              backgroundColor: evalData.rating === 'غائب' ? '#f1f5f9' : '#ffffff', border: isReasonRequired && !evalData.reason.trim() ? '1px solid #f87171' : '1px solid #e2e8f0', 
-                              borderRadius: '12px', fontSize: '0.875rem', fontWeight: 'bold', color: evalData.rating === 'غائب' ? '#94a3b8' : '#334155', outline: 'none', resize: 'none',
-                              cursor: evalData.rating === 'غائب' ? 'not-allowed' : 'text'
-                            }}
-                            placeholder={evalData.rating === 'غائب' ? "غائب (ملاحظات غير مطلوبة)" : isReasonRequired ? "السبب مطلوب..." : "ملاحظات..."}
-                            value={evalData.rating === 'غائب' ? '' : evalData.reason}
-                            disabled={evalData.rating === 'غائب'}
-                            onChange={(e) => handleEvaluationChange(emp.id, 'reason', e.target.value)}
-                          />
-                          <FileText size={18} style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', color: '#94a3b8' }} />
-                        </div>
-                      </div>
-
-                      {/* Block 4: Save Button (Leftmost) */}
-                      <div className="w-full xl:w-auto" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                         <button 
-                           type="button"
-                           onClick={() => handleSaveSingleEvaluation(emp.id)}
-                           className={`transition-all duration-300 w-full xl:w-auto ${savedItems[`emp_${emp.id}`] ? 'bg-emerald-500 border-emerald-500 text-white' : 'hover:bg-primary hover:text-white bg-transparent border-primary text-primary'}`}
-                           style={{
-                             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                             padding: '0.75rem', minWidth: '60px', minHeight: '4rem',
-                             borderWidth: '1px', borderStyle: 'solid', borderRadius: '12px',
-                             fontWeight: 'bold', cursor: 'pointer', gap: '0.5rem'
-                           }}
-                         >
-                           {savedItems[`emp_${emp.id}`] ? <CheckCircle2 size={24} /> : <Save size={24} />}
-                           <span style={{ fontSize: '0.8rem' }}>{savedItems[`emp_${emp.id}`] ? 'تم الحفظ' : 'حفظ'}</span>
-                         </button>
+                        {/* Save Button */}
+                        <button 
+                          type="button"
+                          onClick={() => handleSaveSingleEvaluation(emp.id)}
+                          style={{
+                            width: '90px',
+                            height: '3.2rem',
+                            borderRadius: '16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.35rem',
+                            border: savedItems[`emp_${emp.id}`] ? '1px solid #a7f3d0' : 'none',
+                            backgroundColor: savedItems[`emp_${emp.id}`] ? '#ecfdf5' : '#1a8d9b',
+                            color: savedItems[`emp_${emp.id}`] ? '#10b981' : '#ffffff',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            flexShrink: 0,
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.01)'
+                          }}
+                        >
+                          {savedItems[`emp_${emp.id}`] ? (
+                            <>
+                              <CheckCircle2 size={18} />
+                              <span style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>تم</span>
+                            </>
+                          ) : (
+                            <>
+                              <Save size={18} />
+                              <span style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>حفظ</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                     </div>
 
-                    {/* Expanded Report Section */}
+                    {/* Collapsible Report Summary */}
                     {isExpanded && empDailyReport && (
-                      <div className="p-4" style={{ marginTop: '1rem', background: '#f8fafc', borderRadius: '16px', border: '1px solid #f1f5f9' }}>
-                        {/* Desktop view for Tasks (Table) */}
-                        <div className="hidden lg:block" style={{ overflowX: 'auto' }}>
-                          <table className="w-full text-right text-sm" style={{ borderCollapse: 'collapse', minWidth: '600px' }}>
-                            <thead>
-                              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                <th className="font-bold p-2" style={{ color: '#334155', paddingBottom: '0.75rem' }}>
-                                  <div className="flex items-center gap-2">
-                                    <Building2 size={16} className="text-primary"/> القسم
-                                  </div>
-                                </th>
-                                <th className="font-bold text-center p-2" style={{ color: '#334155', paddingBottom: '0.75rem' }}>
-                                  <div className="flex items-center justify-center gap-2">
-                                    <Package size={16} className="text-primary"/> الصنف
-                                  </div>
-                                </th>
-                                <th className="font-bold text-center p-2" style={{ color: '#334155', paddingBottom: '0.75rem' }}>
-                                  <div className="flex items-center justify-center gap-2">
-                                    <Settings size={16} className="text-primary"/> العملية
-                                  </div>
-                                </th>
-                                <th className="font-bold text-center p-2" style={{ color: '#334155', paddingBottom: '0.75rem' }}>
-                                  <div className="flex items-center justify-center gap-2">
-                                    <CheckCircle2 size={16} className="text-primary"/> المنجز
-                                  </div>
-                                </th>
-                                <th className="font-bold text-center p-2" style={{ color: '#334155', paddingBottom: '0.75rem' }}>
-                                  <div className="flex items-center justify-center gap-2">
-                                    الحد المطلوب (أدنى - أعلى)
-                                  </div>
-                                </th>
+                      <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1.25rem' }}>
+                        {/* Section Header */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1a8d9b' }}>
+                          <TrendingUp size={18} />
+                          <h4 style={{ margin: 0, fontWeight: 'bold', fontSize: '0.85rem', color: '#1e293b' }}>ملخص التقرير بناءً على جدول مقاييس الوظيفة</h4>
+                        </div>
+
+                        {/* Horizontal Table for tasks */}
+                        <div style={{ backgroundColor: '#ffffff', border: '1px solid #f1f5f9', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', overflowX: 'auto', width: '100%' }}>
+                          <table style={{ display: 'table', width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '0.75rem' }}>
+                            <thead style={{ display: 'table-header-group' }}>
+                              <tr style={{ display: 'table-row', backgroundColor: '#f8fafc', borderBottom: '1px solid #f1f5f9', color: '#64748b', fontWeight: 'bold' }}>
+                                <th style={{ display: 'table-cell', padding: '0.5rem 0.75rem', textAlign: 'right', whiteSpace: 'nowrap' }}>الصنف</th>
+                                <th style={{ display: 'table-cell', padding: '0.5rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}>العملية</th>
+                                <th style={{ display: 'table-cell', padding: '0.5rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}>المنجز</th>
+                                <th style={{ display: 'table-cell', padding: '0.5rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}>الحد المطلوب (أدنى-أعلى)</th>
                               </tr>
                             </thead>
-                            <tbody>
+                            <tbody style={{ display: 'table-row-group' }}>
                               {empDailyReport.tasks && empDailyReport.tasks.length > 0 ? (
                                 empDailyReport.tasks.map((t, idx) => (
-                                  <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                    <td className="p-2" style={{ paddingTop: '0.75rem', paddingBottom: '0.75rem' }}>
-                                      <div className="inline-flex items-center font-bold" style={{ gap: '0.5rem', background: '#eaf4f5', color: '#1a8d9b', padding: '0.375rem 0.75rem', borderRadius: '8px', fontSize: '0.75rem' }}>
-                                        <span>{t.departmentName || t.department || 'عام'}</span>
+                                  <tr key={idx} style={{ display: 'table-row', borderBottom: '1px solid #f1f5f9' }}>
+                                    {/* الصنف (with department name very small under it) */}
+                                    <td style={{ display: 'table-cell', padding: '0.5rem 0.3rem', textAlign: 'right', verticalAlign: 'middle' }}>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', alignItems: 'stretch', textAlign: 'right', width: '100%' }}>
+                                        <span style={{ fontWeight: 'extrabold', color: '#1e293b', fontSize: '0.62rem', whiteSpace: 'nowrap', lineHeight: '1.2' }} title={t.name}>
+                                          {t.name}
+                                        </span>
+                                        <span style={{ fontSize: '0.48rem', fontWeight: 'bold', color: '#94a3b8', marginTop: '1px', whiteSpace: 'nowrap' }}>
+                                          {t.departmentName || t.department || 'عام'}
+                                        </span>
                                       </div>
                                     </td>
-                                    <td className="p-2 font-bold text-right" style={{ color: '#1e293b' }}>{t.name}</td>
-                                    <td className="p-2 text-center font-bold" style={{ color: '#475569', fontSize: '0.75rem' }}>{t.operation}</td>
-                                    <td className="p-2 text-center font-bold text-primary" style={{ fontSize: '1rem' }}>{t.count}</td>
-                                    <td className="p-2 text-center">
+                                    {/* العملية */}
+                                    <td style={{ display: 'table-cell', padding: '0.5rem 0.2rem', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', color: '#475569', fontSize: '0.5rem', whiteSpace: 'nowrap' }}>
+                                      {t.operation}
+                                    </td>
+                                    {/* المنجز */}
+                                    <td style={{ display: 'table-cell', padding: '0.5rem 0.2rem', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', color: '#1a8d9b', fontSize: '0.7rem' }}>
+                                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', textAlign: 'center' }}>
+                                        {t.count}
+                                      </div>
+                                    </td>
+                                    {/* الحد المطلوب */}
+                                    <td style={{ display: 'table-cell', padding: '0.5rem 0.2rem', textAlign: 'center', verticalAlign: 'middle' }}>
                                       {(t.min > 0 || t.max > 0) ? (
-                                        <div className="flex flex-col items-center mx-auto" style={{ gap: '0.375rem', width: '100%', maxWidth: '140px' }}>
-                                          <div className="font-bold flex justify-between w-full px-2" style={{ fontSize: '0.75rem', color: '#334155' }} dir="ltr">
-                                            <span>{t.max}</span>
-                                            <span>-</span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem', width: '60px', margin: '0 auto' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'center', gap: '0.15rem', width: '100%', fontSize: '0.5rem', fontWeight: 'extrabold', color: '#475569', whiteSpace: 'nowrap' }} dir="rtl">
                                             <span>{t.min}</span>
+                                            <span>-</span>
+                                            <span>{t.max}</span>
                                           </div>
-                                          <div className="w-full flex items-center justify-between" style={{ position: 'relative', height: '0.375rem', background: '#e2e8f0', borderRadius: '9999px' }}>
-                                            <div style={{ width: '12px', height: '12px', background: '#1a8d9b', borderRadius: '50%', position: 'absolute', right: '-4px', zIndex: 10 }}></div>
-                                            <div style={{ height: '100%', background: 'rgba(26, 141, 155, 0.4)', width: '100%', borderRadius: '9999px', position: 'absolute', top: 0, right: 0 }}></div>
-                                            <div style={{ width: '12px', height: '12px', background: '#1a8d9b', borderRadius: '50%', position: 'absolute', left: '-4px', zIndex: 10 }}></div>
+                                          <div style={{ width: '100%', height: '2px', backgroundColor: '#cbd5e1', borderRadius: '4px', position: 'relative' }}>
+                                            <div style={{ width: '5px', height: '5px', background: '#1a8d9b', borderRadius: '50%', position: 'absolute', right: '-1px', top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}></div>
+                                            <div style={{ width: '5px', height: '5px', background: '#1a8d9b', borderRadius: '50%', position: 'absolute', left: '-1px', top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}></div>
                                           </div>
                                         </div>
-                                      ) : '-'}
+                                      ) : (
+                                        <span style={{ color: '#94a3b8', fontWeight: 'bold' }}>-</span>
+                                      )}
                                     </td>
                                   </tr>
                                 ))
                               ) : (
-                                <tr>
-                                  <td colSpan="5" className="text-center italic" style={{ padding: '1.5rem', color: '#64748b' }}>لا توجد مهام مسجلة.</td>
+                                <tr style={{ display: 'table-row' }}>
+                                  <td colSpan="4" style={{ display: 'table-cell', textAlign: 'center', fontStyle: 'italic', color: '#94a3b8', padding: '1.5rem' }}>لا توجد مهام مسجلة.</td>
                                 </tr>
                               )}
                             </tbody>
                           </table>
                         </div>
 
-                        {/* Mobile view for Tasks (Cards) */}
-                        <div className="flex lg:hidden flex-col gap-3 w-full">
-                          {empDailyReport.tasks && empDailyReport.tasks.length > 0 ? (
-                            empDailyReport.tasks.map((t, idx) => (
-                              <div key={idx} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1rem', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                                <div className="flex justify-between items-start mb-3">
-                                  <div className="flex flex-col gap-1">
-                                    <span style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#1e293b' }}>{t.name}</span>
-                                    <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#64748b' }}>{t.operation}</span>
-                                  </div>
-                                  <div style={{ background: '#eaf4f5', color: '#1a8d9b', padding: '0.25rem 0.75rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                                    {t.departmentName || t.department || 'عام'}
-                                  </div>
-                                </div>
-                                <div className="flex items-center justify-between" style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
-                                  <div className="flex flex-col items-center gap-1 w-1/3 border-l border-slate-200">
-                                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>المنجز</span>
-                                    <div className="flex items-center gap-1 text-primary font-bold">
-                                      <CheckCircle2 size={16} />
-                                      <span style={{ fontSize: '1.1rem' }}>{t.count}</span>
-                                    </div>
-                                  </div>
-                                  <div className="flex flex-col items-center gap-1 w-2/3">
-                                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>الحد المطلوب</span>
-                                    {(t.min > 0 || t.max > 0) ? (
-                                      <div className="flex flex-col items-center w-full px-4" style={{ gap: '0.3rem' }}>
-                                        <div className="font-bold flex justify-between w-full" style={{ fontSize: '0.8rem', color: '#334155' }} dir="ltr">
-                                          <span>{t.max}</span>
-                                          <span>-</span>
-                                          <span>{t.min}</span>
-                                        </div>
-                                        <div className="w-full flex items-center justify-between" style={{ position: 'relative', height: '0.375rem', background: '#e2e8f0', borderRadius: '9999px' }}>
-                                          <div style={{ width: '10px', height: '10px', background: '#1a8d9b', borderRadius: '50%', position: 'absolute', right: '-4px', zIndex: 10 }}></div>
-                                          <div style={{ height: '100%', background: 'rgba(26, 141, 155, 0.4)', width: '100%', borderRadius: '9999px', position: 'absolute', top: 0, right: 0 }}></div>
-                                          <div style={{ width: '10px', height: '10px', background: '#1a8d9b', borderRadius: '50%', position: 'absolute', left: '-4px', zIndex: 10 }}></div>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <span style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#94a3b8' }}>-</span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            ))
-                          ) : (
-                            <div className="text-center italic" style={{ padding: '1.5rem', color: '#64748b' }}>لا توجد مهام مسجلة.</div>
-                          )}
-                        </div>
-                        {/* Footer */}
-                        {/* Footer */}
-                        <div className="flex flex-col sm:flex-row justify-between gap-4" style={{ marginTop: '1rem', background: '#eaf4f5', borderRadius: '12px', padding: '1rem' }}>
-                          <div className="flex flex-col gap-3 w-full sm:w-1/2 text-sm font-bold" style={{ color: '#334155' }}>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#475569' }}></div>
-                                <span style={{ color: '#475569' }}>الهاتف بالأمانات</span>
-                              </div>
-                              <span style={{ color: empDailyReport.phoneSafe ? '#16a34a' : '#ef4444', background: '#fff', padding: '0.2rem 0.6rem', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                                {empDailyReport.phoneSafe ? 'نعم' : 'لا'}
-                              </span>
+                        {/* Metadata container */}
+                        <div style={{ backgroundColor: '#eef7f8', borderRadius: '20px', padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          {/* Row 1: الامتثال بالإضافات */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.35rem 0', borderBottom: '1px solid #dbeef0' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#334155' }}>
+                              <Shield size={16} className="text-[#334155]" />
+                              <span style={{ fontWeight: 'extrabold', fontSize: '0.75rem' }}>الامتثال بالإضافات</span>
                             </div>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#475569' }}></div>
-                                <span style={{ color: '#475569' }}>استخدام الهاتف</span>
-                              </div>
-                              <span style={{ color: empDailyReport.phoneUsages > 0 ? '#ef4444' : '#16a34a', background: '#fff', padding: '0.2rem 0.6rem', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                                {empDailyReport.phoneUsages || 0} مرات
-                              </span>
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: '#ffffff',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                              border: '1px solid rgba(0, 0, 0, 0.04)',
+                              borderRadius: '10px',
+                              padding: '0.25rem 0.5rem',
+                              fontWeight: 'extrabold',
+                              fontSize: '0.75rem',
+                              minWidth: '75px',
+                              height: '30px',
+                              color: empDailyReport.phoneSafe ? '#10b981' : '#ef4444'
+                            }}>
+                              {empDailyReport.phoneSafe ? 'نعم' : 'لا'}
+                            </span>
+                          </div>
+
+                          {/* Row 2: استخدام الهاتف */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.35rem 0', borderBottom: '1px solid #dbeef0' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#334155' }}>
+                              <Smartphone size={16} className="text-[#334155]" />
+                              <span style={{ fontWeight: 'extrabold', fontSize: '0.75rem' }}>استخدام الهاتف</span>
+                            </div>
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: '#ffffff',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                              border: '1px solid rgba(0, 0, 0, 0.04)',
+                              borderRadius: '10px',
+                              padding: '0.25rem 0.5rem',
+                              fontWeight: 'extrabold',
+                              fontSize: '0.75rem',
+                              minWidth: '75px',
+                              height: '30px',
+                              color: empDailyReport.phoneUsages > 0 ? '#ef4444' : '#10b981'
+                            }}>
+                              {empDailyReport.phoneUsages || 0} مرات
+                            </span>
+                          </div>
+
+                          {/* Row 3: وقت الدخول */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.35rem 0', borderBottom: '1px solid #dbeef0' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#334155' }}>
+                              <LogIn size={16} className="text-[#334155]" />
+                              <span style={{ fontWeight: 'extrabold', fontSize: '0.75rem' }}>وقت الدخول</span>
+                            </div>
+                            <span dir="ltr" style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: '#ffffff',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                              border: '1px solid rgba(0, 0, 0, 0.04)',
+                              borderRadius: '10px',
+                              padding: '0.25rem 0.5rem',
+                              fontWeight: 'extrabold',
+                              fontSize: '0.75rem',
+                              minWidth: '75px',
+                              height: '30px',
+                              color: '#1a8d9b'
+                            }}>
+                              {(() => {
+                                const attLog = attendanceLogs.find(l => {
+                                  const matchId = String(l.employeeId || 'NO_ID').trim() === String(emp.id || 'MISSING_ID').trim();
+                                  const matchName = String(l.employeeName || 'NO_NAME').trim() === String(emp.name || 'MISSING_NAME').trim();
+                                  const matchDate = String(l.date).trim() === String(empDailyReport.date).trim();
+                                  return (matchId || matchName) && matchDate;
+                                });
+                                const tIn = attLog?.timeIn || empDailyReport.timeIn;
+                                if (!tIn) return '---';
+                                if (typeof tIn !== 'string' || !tIn.includes(':')) return String(tIn);
+                                const [h,m] = tIn.split(':');
+                                let hh = parseInt(h,10); const ampm = hh >= 12 ? 'م' : 'ص'; hh = hh % 12 || 12; return `${ampm} ${hh}:${m}`;
+                              })()}
+                            </span>
+                          </div>
+
+                          {/* Row 4: وقت الخروج */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.35rem 0', borderBottom: 'none' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#334155' }}>
+                              <LogOut size={16} className="text-[#334155]" />
+                              <span style={{ fontWeight: 'extrabold', fontSize: '0.75rem' }}>وقت الخروج</span>
+                            </div>
+                            <span dir="ltr" style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: '#ffffff',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                              border: '1px solid rgba(0, 0, 0, 0.04)',
+                              borderRadius: '10px',
+                              padding: '0.25rem 0.5rem',
+                              fontWeight: 'extrabold',
+                              fontSize: '0.75rem',
+                              minWidth: '75px',
+                              height: '30px',
+                              color: '#1a8d9b'
+                            }}>
+                              {(() => {
+                                const attLog = attendanceLogs.find(l => {
+                                  const matchId = String(l.employeeId || 'NO_ID').trim() === String(emp.id || 'MISSING_ID').trim();
+                                  const matchName = String(l.employeeName || 'NO_NAME').trim() === String(emp.name || 'MISSING_NAME').trim();
+                                  const matchDate = String(l.date).trim() === String(empDailyReport.date).trim();
+                                  return (matchId || matchName) && matchDate;
+                                });
+                                const tOut = attLog?.timeOut || empDailyReport.timeOut;
+                                if (!tOut) return '---';
+                                if (typeof tOut !== 'string' || !tOut.includes(':')) return String(tOut);
+                                const [h,m] = tOut.split(':');
+                                let hh = parseInt(h,10); const ampm = hh >= 12 ? 'م' : 'ص'; hh = hh % 12 || 12; return `${ampm} ${hh}:${m}`;
+                              })()}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Employee Notes Box */}
+                        {empDailyReport.notes && (
+                          <div style={{ marginTop: '0.5rem', borderTop: '1px solid #fef08a', backgroundColor: '#fffbeb', borderRadius: '16px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', textAlign: 'right', width: '100%' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '0.5rem', color: '#a16207', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                              <MessageSquare size={20} className="text-[#a16207]" />
+                              <span>ملاحظات الموظف</span>
+                            </div>
+                            <div style={{ color: '#334155', fontSize: '0.85rem', fontWeight: 'bold', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
+                              {empDailyReport.notes}
                             </div>
                           </div>
-                          
-                          <div className="hidden sm:block w-px" style={{ background: 'rgba(26, 141, 155, 0.2)' }}></div>
-                          <div className="sm:hidden w-full h-px" style={{ background: 'rgba(26, 141, 155, 0.2)' }}></div>
-                          
-                          <div className="flex flex-col gap-3 w-full sm:w-1/2 text-sm font-bold" style={{ color: '#1a8d9b' }}>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <Clock size={16} />
-                                  <span>وقت الدخول</span>
-                                </div>
-                                <span dir="ltr" style={{ background: '#fff', padding: '0.2rem 0.6rem', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                                  {(() => {
-                                    const attLog = attendanceLogs.find(l => {
-                                      const matchId = String(l.employeeId || 'NO_ID').trim() === String(emp.id || 'MISSING_ID').trim();
-                                      const matchName = String(l.employeeName || 'NO_NAME').trim() === String(emp.name || 'MISSING_NAME').trim();
-                                      const matchDate = String(l.date).trim() === String(empDailyReport.date).trim();
-                                      return (matchId || matchName) && matchDate;
-                                    });
-                                    const tIn = attLog?.timeIn || empDailyReport.timeIn;
-                                    if (!tIn) return '---';
-                                    const [h,m] = tIn.split(':');
-                                    let hh = parseInt(h,10); const ampm = hh >= 12 ? 'م' : 'ص'; hh = hh % 12 || 12; return `${hh}:${m} ${ampm}`;
-                                  })()}
-                                </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <Clock size={16} />
-                                  <span>وقت الخروج</span>
-                                </div>
-                                <span dir="ltr" style={{ background: '#fff', padding: '0.2rem 0.6rem', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                                  {(() => {
-                                    const attLog = attendanceLogs.find(l => {
-                                      const matchId = String(l.employeeId || 'NO_ID').trim() === String(emp.id || 'MISSING_ID').trim();
-                                      const matchName = String(l.employeeName || 'NO_NAME').trim() === String(emp.name || 'MISSING_NAME').trim();
-                                      const matchDate = String(l.date).trim() === String(empDailyReport.date).trim();
-                                      return (matchId || matchName) && matchDate;
-                                    });
-                                    const tOut = attLog?.timeOut || empDailyReport.timeOut;
-                                    if (!tOut) return '---';
-                                    const [h,m] = tOut.split(':');
-                                    let hh = parseInt(h,10); const ampm = hh >= 12 ? 'م' : 'ص'; hh = hh % 12 || 12; return `${hh}:${m} ${ampm}`;
-                                  })()}
-                                </span>
-                            </div>
-                          </div>
-                        </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1248,11 +1367,16 @@ const AdminSupervisorReports = ({ user }) => {
           </div>
           )}
 
+          {/* زر حفظ التقرير واعتماده (منقول قبل القسم ثانياً بناءً على طلب المستخدم) */}
+          <button type="submit" className="btn btn-primary w-full h-12 text-lg font-bold mb-8 mt-4 shadow-lg">
+            <Save size={20} /> حفظ التقرير واعتماده
+          </button>
+
           {/* ثالثاً: لوحة متابعة الطلبيات والإنتاج المباشر */}
           {currentUserPerms.orders && (
           <div className="bg-slate-50 p-4 rounded-xl mb-6 border border-slate-200">
             <h4 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2">
-              <Package size={18} className="text-primary" /> ثالثاً: لوحة متابعة الطلبيات والإنتاج المباشر
+              <Package size={18} className="text-primary" /> ثانياً: لوحة متابعة الطلبيات والإنتاج المباشر
             </h4>
             
             <div className="overflow-x-auto">
@@ -1361,9 +1485,8 @@ const AdminSupervisorReports = ({ user }) => {
           </div>
           )}
 
-          <button type="submit" className="btn btn-primary w-full h-12 text-lg font-bold mb-24 mt-4 shadow-lg">
-            <Save size={20} /> حفظ التقرير واعتماده
-          </button>
+          {/* مسافة سفلية بديلة عن الزر القديم */}
+          <div className="h-24 mt-4"></div>
         </form>
           );
         })()

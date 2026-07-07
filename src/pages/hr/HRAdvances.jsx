@@ -1,39 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, Clock, XCircle, FileText, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Undo2, Trash2, DollarSign, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, FileText, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Undo2, Trash2, DollarSign, Eye, ChevronDown, ChevronUp, User } from 'lucide-react';
+import Select from 'react-select';
 import { getEmployees, getHRAdvances, saveHRAdvance, deleteHRAdvance, createNotification, getGlobalSettings } from '../../store';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/light.css';
+import HRDateFilter from '../../components/ui/HRDateFilter';
+
+const getLocalDateStr = (d) => {
+  const offset = d.getTimezoneOffset();
+  return new Date(d.getTime() - offset * 60000).toISOString().split('T')[0];
+};
 
 const HRAdvances = ({ user, refreshCounts }) => {
   const [advances, setAdvances] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
   const [filterStatus, setFilterStatus] = useState('معلق');
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false);
-  const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
+  const [dateMode, setDateMode] = useState('month');
+  const [selectedDate, setSelectedDate] = useState(getLocalDateStr(new Date()));
+  const [startDate, setStartDate] = useState(getLocalDateStr(new Date()));
+  const [endDate, setEndDate] = useState(getLocalDateStr(new Date()));
   const [showModal, setShowModal] = useState(false);
-
-  const arabicMonths = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth() + 1;
-  const getSelectedMonthLabel = () => {
-    const [year, month] = selectedMonth.split('-');
-    return `${arabicMonths[parseInt(month, 10) - 1]} ${year}`;
-  };
-
-  useEffect(() => {
-    const closeDropdown = (e) => {
-      if (isMonthDropdownOpen && !e.target.closest('.month-picker-container')) {
-        setIsMonthDropdownOpen(false);
-      }
-    };
-    document.addEventListener('click', closeDropdown);
-    return () => document.removeEventListener('click', closeDropdown);
-  }, [isMonthDropdownOpen]);
   const [formData, setFormData] = useState({
     employeeId: '',
     type: 'سلفة شخصية',
@@ -233,7 +225,20 @@ const HRAdvances = ({ user, refreshCounts }) => {
     }
   };
 
+  const formatDepartmentName = (dept) => {
+    if (!dept) return 'غير محدد';
+    const d = String(dept).trim().toLowerCase();
+    if (d === 'logistics' || d === 'مسطرة اللوجيستي' || d === 'مسطرة اللوجستي' || d === 'لوجستيات' || d === 'الدعم اللوجستي') return 'الدعم اللوجستي';
+    if (d === 'sewing' || d === 'مسطرة الخياطة' || d === 'الخياطة' || d === 'القص والخياطة') return 'القص والخياطة';
+    if (d === 'packaging' || d === 'مسطرة التغليف' || d === 'تغليف' || d === 'تغليف وتشطيب') return 'تغليف وتشطيب';
+    if (d === 'cutting' || d === 'القص') return 'القص والخياطة';
+    if (d === 'admin' || d === 'الإدارة' || d === 'الادارة') return 'الادارة';
+    if (d === 'sales' || d === 'المبيعات') return 'المبيعات';
+    return dept;
+  };
+
   const handlePreviewAdvance = (advance) => {
+    const emp = employees.find(e => String(e.id || '').trim() === String(advance.employeeId || '').trim());
     let htmlContent = `
       <style>
         .swal-table-preview { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 0.95rem; text-align: right; direction: rtl; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
@@ -245,7 +250,7 @@ const HRAdvances = ({ user, refreshCounts }) => {
       </style>
       <table class="swal-table-preview">
         <tr><th>الموظف</th><td>${advance.employeeName}</td></tr>
-        <tr><th>القسم</th><td>${advance.department || 'غير محدد'}</td></tr>
+        <tr><th>القسم</th><td>${formatDepartmentName(emp?.department || advance.department || 'غير محدد')}</td></tr>
         <tr><th>نوع السلفة</th><td><span style="color:var(--primary); font-weight:bold;">${advance.type}</span></td></tr>
         <tr><th>التاريخ</th><td>${advance.date || '-'}</td></tr>
         <tr><th>القيمة المطلوبة</th><td dir="ltr" style="text-align: right; font-weight: bold; color: #10b981;">${advance.amount} د.أ</td></tr>
@@ -331,12 +336,90 @@ const HRAdvances = ({ user, refreshCounts }) => {
 
   if (loading) return <div className="text-center p-8">جاري التحميل...</div>;
 
-  const sortedAdvances = [...advances].filter(a => {
-    const reqMonth = new Date(a.createdAt).toISOString().slice(0, 7);
-    if (reqMonth !== selectedMonth) return false;
+  const customSelectStyles = {
+    control: (provided, state) => ({
+      ...provided,
+      backgroundColor: 'white',
+      border: '1px solid #e2e8f0',
+      borderRadius: '8px',
+      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+      cursor: 'pointer',
+      minHeight: '42px',
+      height: '42px',
+    }),
+    valueContainer: (provided) => ({
+      ...provided,
+      padding: '0 8px',
+    }),
+    singleValue: (provided) => ({
+      ...provided,
+      color: '#1e293b',
+      fontWeight: 'bold',
+      fontSize: '0.9rem',
+    }),
+    placeholder: (provided) => ({
+      ...provided,
+      color: '#94a3b8',
+      fontSize: '0.9rem',
+    }),
+    menuPortal: base => ({ ...base, zIndex: 9999 }),
+    menu: (provided) => ({
+      ...provided,
+      borderRadius: '12px',
+      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+      border: '1px solid #e2e8f0',
+      overflow: 'hidden',
+      zIndex: 9999,
+      width: 'max-content',
+      minWidth: '100%',
+    }),
+    option: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isSelected ? '#1a8d9b' : state.isFocused ? '#f1f5f9' : 'white',
+      color: state.isSelected ? 'white' : '#1e293b',
+      cursor: 'pointer',
+      padding: '10px 16px',
+      fontSize: '0.9rem',
+      fontWeight: state.isSelected ? 'bold' : 'normal',
+      textAlign: 'right',
+      whiteSpace: 'nowrap',
+    }),
+    indicatorSeparator: () => ({ display: 'none' }),
+    dropdownIndicator: (provided) => ({
+      ...provided,
+      color: '#94a3b8',
+      '&:hover': { color: '#1a8d9b' }
+    })
+  };
 
+  const employeeNameOptions = [...employees]
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    .map(emp => ({ value: emp.id, label: emp.name }));
+
+  const employeeIdOptions = [...employees]
+    .sort((a, b) => (parseInt(a.id) || 0) - (parseInt(b.id) || 0))
+    .map(emp => ({ value: emp.id, label: String(emp.id) }));
+
+  const baseAdvances = [...advances].filter(a => {
+    if (searchTerm && String(a.employeeId) !== String(searchTerm)) return false;
+    const reqDate = new Date(a.createdAt).toISOString().split('T')[0];
+    const reqMonth = reqDate.slice(0, 7);
+    
+    if (dateMode === 'day' && reqDate !== selectedDate) return false;
+    if (dateMode === 'month' && reqMonth !== selectedMonth) return false;
+    if (dateMode === 'range' && (reqDate < startDate || reqDate > endDate)) return false;
+    return true;
+  });
+
+  const totalCount = baseAdvances.length;
+  const pendingCount = baseAdvances.filter(a => a.status === 'معلق' || a.status === 'قيد المراجعة').length;
+  const approvedCount = baseAdvances.filter(a => a.status === 'موافق' || a.status === 'مقبول').length;
+  const rejectedCount = baseAdvances.filter(a => a.status === 'مرفوض').length;
+
+  const sortedAdvances = baseAdvances.filter(a => {
     if (filterStatus === 'الكل') return true;
     if (filterStatus === 'معلق') return a.status === 'معلق' || a.status === 'قيد المراجعة';
+    if (filterStatus === 'موافق') return a.status === 'موافق' || a.status === 'مقبول';
     return a.status === filterStatus;
   }).sort((a, b) => {
     if (!sortConfig.key) return 0;
@@ -378,121 +461,46 @@ const HRAdvances = ({ user, refreshCounts }) => {
             </p>
           </div>
           <div className="flex flex-wrap gap-3 items-center">
-            <div className="shrink-0 month-picker-container" style={{ position: 'relative' }}>
-              <div 
-                onClick={() => {
-                  const [year] = selectedMonth.split('-');
-                  setPickerYear(parseInt(year));
-                  setIsMonthDropdownOpen(!isMonthDropdownOpen);
-                }}
-                className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2 shadow-sm hover:border-primary transition-colors cursor-pointer min-w-[160px] h-[42px]"
-              >
-                <div className="flex items-center gap-2">
-                  <Calendar size={18} className="text-primary" />
-                  <span className="font-bold text-slate-700 whitespace-nowrap">
-                    {getSelectedMonthLabel()}
-                  </span>
+            <HRDateFilter 
+              mode={dateMode}
+              setMode={setDateMode}
+              date={selectedDate}
+              setDate={setSelectedDate}
+              month={selectedMonth}
+              setMonth={setSelectedMonth}
+              startDate={startDate}
+              setStartDate={setStartDate}
+              endDate={endDate}
+              setEndDate={setEndDate}
+              allowedModes={['day', 'month', 'range']}
+            />
+            {/* Employee ID */}
+            <div style={{ width: '180px', minWidth: '180px', flexShrink: 0 }}>
+                <Select
+                  options={employeeIdOptions}
+                  value={employeeIdOptions.find(opt => opt.value === searchTerm) || null}
+                  onChange={(selected) => setSearchTerm(selected ? selected.value : '')}
+                  styles={{...customSelectStyles, control: (base) => ({...base, height: '42px', minHeight: '42px', borderRadius: '10px', border: '1px solid #e2e8f0'})}}
+                  placeholder="رقم الموظف..."
+                  isSearchable={true}
+                  isClearable={true}
+                />
+            </div>
+
+            {/* Employee Name */}
+            <div style={{ width: '250px', minWidth: '250px', flexShrink: 0, position: 'relative' }}>
+                <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, color: '#94a3b8', pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
+                  <User size={16} />
                 </div>
-                <ChevronDown size={14} className={`text-slate-400 transition-transform ${isMonthDropdownOpen ? 'rotate-180' : ''}`} />
-              </div>
-              
-              {isMonthDropdownOpen && (
-                <div 
-                  className="month-picker-popup"
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 8px)',
-                    right: '0',
-                    width: '280px',
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '16px',
-                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-                    zIndex: 99999,
-                    overflow: 'hidden'
-                  }}
-                >
-                  <div className="flex justify-between items-center bg-slate-50/80 backdrop-blur-sm p-4 border-b border-slate-100">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setPickerYear(prev => prev + 1); }}
-                      disabled={pickerYear >= currentYear}
-                      className={`p-1.5 rounded-full transition-colors ${pickerYear >= currentYear ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'}`}
-                      title="السنة القادمة"
-                    >
-                      <ChevronUp size={18} />
-                    </button>
-                    <span className="font-bold text-lg text-slate-800">{pickerYear}</span>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setPickerYear(prev => prev - 1); }}
-                      className="p-1.5 hover:bg-slate-200/70 rounded-full transition-colors text-slate-600 hover:text-slate-900"
-                      title="السنة السابقة"
-                    >
-                      <ChevronDown size={18} />
-                    </button>
-                  </div>
-                  
-                  <div 
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(3, 1fr)',
-                      gap: '8px',
-                      padding: '16px'
-                    }}
-                  >
-                    {arabicMonths.map((m, index) => {
-                      const monthVal = `${pickerYear}-${(index + 1).toString().padStart(2, '0')}`;
-                      const isSelected = selectedMonth === monthVal;
-                      const isCurrentMonth = currentYear === pickerYear && currentMonth === (index + 1);
-                      const isFutureMonth = pickerYear > currentYear || (pickerYear === currentYear && (index + 1) > currentMonth);
-                      
-                      return (
-                        <button
-                          key={monthVal}
-                          disabled={isFutureMonth}
-                          onClick={() => {
-                            setSelectedMonth(monthVal);
-                            setIsMonthDropdownOpen(false);
-                          }}
-                          style={{
-                            padding: '8px 4px',
-                            borderRadius: '12px',
-                            fontSize: '14px',
-                            fontWeight: 'bold',
-                            transition: 'all 0.2s',
-                            border: '1px solid',
-                            borderColor: isCurrentMonth && !isSelected ? 'rgba(26, 141, 155, 0.2)' : 'transparent',
-                            backgroundColor: isSelected ? '#1a8d9b' : isCurrentMonth ? 'rgba(26, 141, 155, 0.1)' : 'transparent',
-                            color: isFutureMonth ? '#cbd5e1' : isSelected ? '#ffffff' : isCurrentMonth ? '#1a8d9b' : '#475569',
-                            cursor: isFutureMonth ? 'not-allowed' : 'pointer',
-                            transform: isSelected ? 'scale(1.05)' : 'scale(1)'
-                          }}
-                          onMouseEnter={(e) => {
-                            if (isFutureMonth) return;
-                            if (!isSelected && !isCurrentMonth) {
-                              e.currentTarget.style.backgroundColor = '#f1f5f9';
-                              e.currentTarget.style.color = '#0f172a';
-                            } else if (isCurrentMonth && !isSelected) {
-                              e.currentTarget.style.backgroundColor = 'rgba(26, 141, 155, 0.2)';
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (isFutureMonth) return;
-                            if (!isSelected && !isCurrentMonth) {
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                              e.currentTarget.style.color = '#475569';
-                            } else if (isCurrentMonth && !isSelected) {
-                              e.currentTarget.style.backgroundColor = 'rgba(26, 141, 155, 0.1)';
-                              e.currentTarget.style.color = '#1a8d9b';
-                            }
-                          }}
-                        >
-                          {m}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                <Select
+                  options={employeeNameOptions}
+                  value={employeeNameOptions.find(opt => opt.value === searchTerm) || null}
+                  onChange={(selected) => setSearchTerm(selected ? selected.value : '')}
+                  styles={{...customSelectStyles, control: (base) => ({...base, height: '42px', minHeight: '42px', borderRadius: '10px', border: '1px solid #e2e8f0', paddingLeft: '24px'})}}
+                  placeholder="اسم الموظف..."
+                  isSearchable={true}
+                  isClearable={true}
+                />
             </div>
             <select 
               value={filterStatus} 
@@ -522,6 +530,57 @@ const HRAdvances = ({ user, refreshCounts }) => {
           </div>
         </div>
 
+      {/* Stats Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '24px' }}>
+        {/* Total (Rightmost) */}
+        <div onClick={() => setFilterStatus('الكل')} style={{ cursor: 'pointer', opacity: filterStatus === 'الكل' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'الكل' ? '2px solid #3b82f6' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>إجمالي الطلبات</p>
+            <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{totalCount}</h3>
+            <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
+          </div>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#eff6ff', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <DollarSign size={28} strokeWidth={2} />
+          </div>
+        </div>
+
+        {/* Pending */}
+        <div onClick={() => setFilterStatus('معلق')} style={{ cursor: 'pointer', opacity: filterStatus === 'معلق' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'معلق' ? '2px solid #d97706' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>طلبات معلقة</p>
+            <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{pendingCount}</h3>
+            <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
+          </div>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#fffbeb', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Clock size={28} strokeWidth={2} />
+          </div>
+        </div>
+
+        {/* Approved */}
+        <div onClick={() => setFilterStatus('موافق')} style={{ cursor: 'pointer', opacity: filterStatus === 'موافق' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'موافق' ? '2px solid #10b981' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>طلبات موافق عليها</p>
+            <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{approvedCount}</h3>
+            <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
+          </div>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#ecfdf5', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Check size={28} strokeWidth={2.5} />
+          </div>
+        </div>
+
+        {/* Rejected */}
+        <div onClick={() => setFilterStatus('مرفوض')} style={{ cursor: 'pointer', opacity: filterStatus === 'مرفوض' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'مرفوض' ? '2px solid #ef4444' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>طلبات مرفوضة</p>
+            <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{rejectedCount}</h3>
+            <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
+          </div>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#fef2f2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <X size={28} strokeWidth={2.5} />
+          </div>
+        </div>
+      </div>
+
         <div className="table-responsive">
           <table className="table">
             <thead>
@@ -544,11 +603,13 @@ const HRAdvances = ({ user, refreshCounts }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {sortedAdvances.map((advance) => (
+              {sortedAdvances.map((advance) => {
+                const emp = employees.find(e => String(e.id || '').trim() === String(advance.employeeId || '').trim());
+                return (
                 <tr key={advance.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="text-muted text-sm text-center align-middle py-3">{new Date(advance.createdAt).toLocaleDateString('en-GB')}</td>
                   <td className="font-semibold text-center align-middle py-3">{advance.employeeName}</td>
-                  <td className="text-muted text-sm text-center align-middle py-3">{advance.department}</td>
+                  <td className="text-muted text-sm text-center align-middle py-3">{formatDepartmentName(emp?.department || advance.department)}</td>
                   <td className="text-center align-middle py-3">{advance.type}</td>
                   <td className="font-bold text-slate-800 text-center align-middle py-3">
                     <div className="flex flex-col items-center justify-center">
@@ -605,7 +666,8 @@ const HRAdvances = ({ user, refreshCounts }) => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {sortedAdvances.length === 0 && (
                 <tr><td colSpan="8" className="py-10 text-center text-muted">لا توجد طلبات سلف حالياً</td></tr>
               )}

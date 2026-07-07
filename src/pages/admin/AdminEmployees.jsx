@@ -235,29 +235,38 @@ const AdminEmployees = ({ user }) => {
               <input id="swal-join-date" class="premium-input bg-white" placeholder="اختر تاريخ التعيين" value="${initialData.joinDate || ''}">
             </div>
 
-            <div class="col-span-3 premium-form-group flex flex-col justify-end">
-              <label class="whitespace-nowrap">الراتب الأساسي</label>
-              <input id="swal-basic-salary" type="number" class="premium-input" placeholder="الراتب الأساسي" value="${initialData.basicSalary}">
-            </div>
+            <div class="col-span-12 grid grid-cols-4 gap-4">
+              <div class="premium-form-group flex flex-col justify-end">
+                <label class="whitespace-nowrap">الراتب الأساسي</label>
+                <input id="swal-basic-salary" type="number" class="premium-input" placeholder="الراتب الأساسي" value="${initialData.basicSalary}">
+              </div>
 
-            <div class="col-span-3 premium-form-group flex flex-col justify-end">
-              <label class="whitespace-nowrap">بدل مواصلات</label>
-              <input id="swal-transportation-allowance" type="number" class="premium-input" placeholder="بدل مواصلات" value="${initialData.transportationAllowance}">
-            </div>
+              <div class="premium-form-group flex flex-col justify-end">
+                <label class="whitespace-nowrap">بدل مواصلات</label>
+                <input id="swal-transportation-allowance" type="number" class="premium-input" placeholder="بدل مواصلات" value="${initialData.transportationAllowance}">
+              </div>
 
-            <div class="col-span-3 premium-form-group flex flex-col justify-end">
-              <label class="whitespace-nowrap">الختمات الناقصة <span class="text-muted text-xs font-normal">(شهرياً)</span></label>
-              <input id="swal-missing-punches" type="number" class="premium-input" placeholder="عدد الختمات" value="${initialData.allowedMissingPunches}">
+              <div class="premium-form-group flex flex-col justify-end">
+                <label class="whitespace-nowrap">الختمات الناقصة <span class="text-muted text-xs font-normal">(شهرياً)</span></label>
+                <input id="swal-missing-punches" type="number" class="premium-input" placeholder="عدد الختمات" value="${initialData.allowedMissingPunches}">
+              </div>
+
+              <div class="premium-form-group flex flex-col justify-end">
+                <label class="whitespace-nowrap">بونص الختمات <span class="text-emerald-600 text-xs font-bold">(لهذا الشهر)</span></label>
+                <input id="swal-bonus-missing-punches" type="number" class="premium-input text-emerald-700 font-bold" placeholder="عدد إضافي" value="${initialData.bonusMissingPunches?.[new Date().toISOString().slice(0, 7)] || 0}">
+              </div>
             </div>
             
-            <div class="col-span-3 premium-form-group flex flex-col justify-end">
-              <label class="whitespace-nowrap">رصيد الإجازات السنوي</label>
-              <input id="swal-vacation-balance" type="number" class="premium-input" placeholder="رصيد الإجازات السنوي" value="${initialData.vacationBalance !== undefined && initialData.vacationBalance !== null && initialData.vacationBalance !== '' ? initialData.vacationBalance : 14}" ${!(initialData.allowedLeaveTypes || ['إجازة سنوية']).includes('إجازة سنوية') ? 'disabled' : ''}>
-            </div>
+            <div class="col-span-12 grid grid-cols-4 gap-4">
+              <div class="premium-form-group flex flex-col justify-end">
+                <label class="whitespace-nowrap">رصيد الإجازات السنوي</label>
+                <input id="swal-vacation-balance" type="number" class="premium-input" placeholder="رصيد الإجازات السنوي" value="${initialData.vacationBalance !== undefined && initialData.vacationBalance !== null && initialData.vacationBalance !== '' ? initialData.vacationBalance : 14}" ${!(initialData.allowedLeaveTypes || ['إجازة سنوية']).includes('إجازة سنوية') ? 'disabled' : ''}>
+              </div>
 
-            <div class="col-span-3 premium-form-group flex flex-col justify-end">
-              <label class="whitespace-nowrap">رصيد الإجازات المرضية</label>
-              <input id="swal-sick-balance" type="number" class="premium-input" placeholder="رصيد الإجازات المرضية" value="${initialData.sickLeaveBalance !== undefined && initialData.sickLeaveBalance !== null && initialData.sickLeaveBalance !== '' ? initialData.sickLeaveBalance : 14}" ${!(initialData.allowedLeaveTypes || ['إجازة مرضية']).includes('إجازة مرضية') ? 'disabled' : ''}>
+              <div class="premium-form-group flex flex-col justify-end">
+                <label class="whitespace-nowrap">رصيد الإجازات المرضية</label>
+                <input id="swal-sick-balance" type="number" class="premium-input" placeholder="رصيد الإجازات المرضية" value="${initialData.sickLeaveBalance !== undefined && initialData.sickLeaveBalance !== null && initialData.sickLeaveBalance !== '' ? initialData.sickLeaveBalance : 14}" ${!(initialData.allowedLeaveTypes || ['إجازة مرضية']).includes('إجازة مرضية') ? 'disabled' : ''}>
+              </div>
             </div>
 
             <div class="col-span-12 premium-form-group">
@@ -303,9 +312,9 @@ const AdminEmployees = ({ user }) => {
             <div class="col-span-12 premium-form-group">
               <label style="margin-bottom: 0.5rem; display: block;">صلاحيات أنواع الإجازة والمغادرة</label>
               <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                ${['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي'].map(type => `
+                ${['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي', 'مغادرة الدخان'].map(type => `
                   <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem;">
-                    <input type="checkbox" class="swal-leave-type" value="${type}" ${(initialData.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي']).includes(type) ? 'checked' : ''} style="width: 16px; height: 16px;" onchange="if(this.value === 'إجازة مرضية') { document.getElementById('swal-sick-balance').disabled = !this.checked; } if(this.value === 'إجازة سنوية') { document.getElementById('swal-vacation-balance').disabled = !this.checked; }" />
+                    <input type="checkbox" class="swal-leave-type" value="${type}" ${(initialData.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي', 'مغادرة الدخان']).includes(type) ? 'checked' : ''} style="width: 16px; height: 16px;" onchange="if(this.value === 'إجازة مرضية') { document.getElementById('swal-sick-balance').disabled = !this.checked; } if(this.value === 'إجازة سنوية') { document.getElementById('swal-vacation-balance').disabled = !this.checked; }" />
                     ${type}
                   </label>
                 `).join('')}
@@ -366,6 +375,7 @@ const AdminEmployees = ({ user }) => {
               ${globalSettings?.workLocations?.length > 0 ? `
                 <select id="swal-work-location" class="premium-input">
                   <option value="">-- جميع الفروع / غير محدد --</option>
+                  <option value="anywhere" ${initialData.workLocationId === 'anywhere' ? 'selected' : ''}>-- السماح بالبصمة من أي مكان (بدون قيود) --</option>
                   ${globalSettings.workLocations.map(loc => `<option value="${loc.id}" ${initialData.workLocationId === loc.id ? 'selected' : ''}>${loc.name}</option>`).join('')}
                 </select>
               ` : `
@@ -511,7 +521,10 @@ const AdminEmployees = ({ user }) => {
         const sickLeaveBalance = sBalanceRaw !== '' && sBalanceRaw !== undefined ? parseInt(sBalanceRaw) : 0;
         const allowedMissingPunches = missingPunchesRaw !== '' && missingPunchesRaw !== undefined ? parseInt(missingPunchesRaw) : 0;
         
-        
+        const bonusPunchesRaw = document.getElementById('swal-bonus-missing-punches')?.value;
+        const currentMonthStr = new Date().toISOString().slice(0, 7);
+        const bonusMissingPunches = { ...(initialData.bonusMissingPunches || {}) };
+        bonusMissingPunches[currentMonthStr] = bonusPunchesRaw !== '' && bonusPunchesRaw !== undefined ? parseInt(bonusPunchesRaw) : 0;
         const employmentStatus = document.getElementById('swal-employment-status')?.value || 'فعال';
         const hrNotes = document.getElementById('swal-hr-notes')?.value || '';
         
@@ -587,7 +600,7 @@ const AdminEmployees = ({ user }) => {
           return false;
         }
         return { 
-          id, name, jobTitle, department, directManager, phone, dateOfBirth, joinDate, basicSalary, transportationAllowance, employmentStatus, vacationBalance, sickLeaveBalance, allowedMissingPunches, allowedLeaveTypes, hrNotes, level, password, 
+          id, name, jobTitle, department, directManager, phone, dateOfBirth, joinDate, basicSalary, transportationAllowance, employmentStatus, vacationBalance, sickLeaveBalance, allowedMissingPunches, bonusMissingPunches, allowedLeaveTypes, hrNotes, level, password, 
           workShiftName, shiftStart, shiftEnd, workLocationId, hasSocialSecurity, socialSecuritySalary, isHazardousProfession,
           allowAdvances, useCustomAdvancePeriods, customAdvancePeriods,
           hasOverviewAccess, hasLiveAccess, hasEmployeesAccess, hasSalesAccess, 
