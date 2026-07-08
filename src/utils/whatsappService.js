@@ -82,7 +82,7 @@ export const sendWhatsAppNotification = async (phone, message, eventType = null)
       }
     }
 
-    await addDoc(collection(db, 'whatsapp_queue'), {
+    await addDoc(collection(db, 'whatsapp_queue_v2'), {
       phone,
       message,
       eventType: eventType || 'general',

@@ -460,6 +460,8 @@ const AdminSupervisorReports = ({ user }) => {
       const existingReport = reports.find(r => r.supervisorId === user.id && r.date === date);
       if (existingReport) {
         reportData.id = existingReport.id;
+      } else {
+        reportData.id = `sup_rep_${user.id}_${date}`;
       }
       await saveSupervisorReport(reportData);
 

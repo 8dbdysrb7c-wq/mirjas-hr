@@ -230,7 +230,8 @@ const HRLeaves = ({ user, refreshCounts }) => {
           moduleLabel: 'الموارد البشرية',
           title: newStatus === 'موافق' ? 'تمت الموافقة على طلبك' : 'تم رفض طلبك',
           message: `تم ${newStatus === 'موافق' ? 'قبول' : 'رفض'} طلب ${leave.type} الخاص بك.${newStatus === 'مرفوض' && actionReason ? `\nالسبب: ${actionReason}` : ''}`,
-          target: { tab: 'leaves' }
+          target: { tab: 'leaves' },
+          skipWhatsApp: true
         });
       }
 

@@ -712,7 +712,7 @@ const AdminLive = ({ user, onBack }) => {
             </div>
 
             {/* Save Button */}
-            <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '1.5rem', paddingBottom: '0.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '1.5rem', paddingBottom: '100px' }}>
               <button 
                 onClick={() => {
                   MySwal.fire({ title: 'تم الحفظ', text: 'تم حفظ التغييرات بنجاح', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });

@@ -340,7 +340,7 @@ export const createNotification = async (notification) => {
 
     await addDoc(collection(db, 'notifications'), payload);
 
-    if (notification.settingKey && globalSettings?.notifications?.[notification.settingKey]?.whatsapp) {
+    if (!notification.skipWhatsApp && notification.settingKey && globalSettings?.notifications?.[notification.settingKey]?.whatsapp) {
       try {
         const { sendWhatsAppNotification } = await import('../utils/whatsappService.js');
         const employeesRef = await getDocs(collection(db, 'employees'));

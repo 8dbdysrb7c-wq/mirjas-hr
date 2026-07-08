@@ -1710,8 +1710,135 @@ const AdminStock = ({ user, notificationTarget }) => {
 
     if (newQuantity !== undefined && newQuantity !== null && newQuantity !== '') {
       const parsedQty = parseInt(newQuantity);
+      showCancelButton: true,
+      confirmButtonText: isEdit ? 'تحديث البيانات' : 'حفظ الصنف الجديد',
+      cancelButtonText: 'إلغاء',
+      focusConfirm: false,
+      preConfirm: () => {
+        const data = {
+          itemNumber: document.getElementById('swal-itemNumber').value,
+          itemCode: document.getElementById('swal-itemCode').value,
+          name: document.getElementById('swal-name').value,
+          category: document.getElementById('swal-category').value,
+          warehouse: document.getElementById('swal-warehouse').value,
+          location: document.getElementById('swal-location').value,
+          spec: document.getElementById('swal-spec').value,
+          quantity: Number(document.getElementById('swal-quantity').value),
+          unit: document.getElementById('swal-unit').value,
+          minLimit: Number(document.getElementById('swal-minLimit').value),
+          lastMovement: document.getElementById('swal-lastMovement').value,
+          lastMovementDate: document.getElementById('swal-lastMovementDate').value,
+          lastRecipient: document.getElementById('swal-lastRecipient').value,
+          notes: document.getElementById('swal-notes').value,
+          id: isEdit ? item.id : null
+        };
+
+        if (!data.itemNumber || !data.name || !data.warehouse) {
+          Swal.showValidationMessage('يرجى ملء الاسم ورقم الصنف والمخزن');
+          return false;
+        }
+        if (data.itemCode && data.itemCode.trim().length !== 13) {
+          Swal.showValidationMessage('يجب أن يتكون رمز الصنف من 13 خانة بالضبط');
+          return false;
+        }
+
+        const existingInWarehouse = stock.find(s => 
+          s.itemNumber === data.itemNumber && 
+          s.warehouse === data.warehouse && 
+          s.spec === data.spec &&
+          s.id !== data.id
+        );
+        if (existingInWarehouse) {
+          Swal.showValidationMessage(`عذراً، يوجد بضاعة من هذا الصنف بنفس المواصفة/اللون مسبقاً في المستودع المختار (${data.warehouse})!`);
+          return false;
+        }
+
+        return data;
+      }
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        const res = await saveStockItem(result.value);
+        if (res) {
+          await addLog({
+            userName: user.name,
+            userId: user.id,
+            module: 'المخزون',
+            action: isEdit ? 'تعديل' : 'إضافة',
+            details: `${isEdit ? 'تعديل بيانات' : 'إضافة'} صنف مخزون: ${res.name} (${res.itemNumber})`
+          });
+          Swal.fire({
+            icon: 'success',
+            title: 'تم الحفظ بنجاح',
+            timer: 1500,
+          });
+          fetchData();
+        }
+      }
+    });
+  };
+
+  const handleQuickQuantityEdit = async (e, item) => {
+    e.stopPropagation();
+    const { value: newQuantity } = await MySwal.fire({
+      customClass: {
+        container: 'premium-modal-container',
+        popup: 'premium-modal-popup',
+        confirmButton: 'btn-premium-save',
+        cancelButton: 'btn-premium-cancel'
+      },
+      buttonsStyling: false,
+      title: 'تعديل سريع للكمية',
+      html: `<div style="font-size: 14px; margin-bottom: 10px;">أدخل الكمية الجديدة للصنف:<br><b style="color:var(--primary);">${item.name}</b><br><span style="color:#64748b;font-size:12px;">المستودع: ${item.warehouse}</span></div>`,
+      input: 'number',
+      inputValue: item.quantity,
+      inputAttributes: {
+        min: 0,
+        step: 1,
+        style: 'text-align: center; font-size: 1.5rem; font-weight: bold; border: 2px solid #e2e8f0; border-radius: 8px; padding: 10px;'
+      },
+      showCancelButton: true,
+      confirmButtonText: 'حفظ',
+      cancelButtonText: 'إلغاء'
+    });
+
+    if (newQuantity !== undefined && newQuantity !== null && newQuantity !== '') {
+      const parsedQty = parseInt(newQuantity);
       if (parsedQty >= 0) {
         await saveStockItem({ ...item, quantity: parsedQty, lastMovement: 'تعديل سريع', lastMovementDate: new Date().toISOString().split('T')[0] });
+        fetchData();
+        MySwal.fire({ icon: 'success', title: 'تم التحديث', timer: 1000, showConfirmButton: false });
+      }
+    }
+  };
+
+  const handleQuickMinLimitEdit = async (e, item) => {
+    e.stopPropagation();
+    const { value: newMinLimit } = await MySwal.fire({
+      customClass: {
+        container: 'premium-modal-container',
+        popup: 'premium-modal-popup',
+        confirmButton: 'btn-premium-save',
+        cancelButton: 'btn-premium-cancel'
+      },
+      buttonsStyling: false,
+      title: 'تعديل سريع للحد الأدنى',
+      html: `<div style="font-size: 14px; margin-bottom: 10px;">أدخل الحد الأدنى الجديد للصنف:<br><b style="color:var(--primary);">${item.name}</b><br><span style="color:#64748b;font-size:12px;">المستودع: ${item.warehouse}</span></div>`,
+      input: 'number',
+      inputValue: item.minLimit || 0,
+      inputAttributes: {
+        min: 0,
+        step: 1,
+        style: 'text-align: center; font-size: 1.5rem; font-weight: bold; border: 2px solid #e2e8f0; border-radius: 8px; padding: 10px;'
+      },
+      showCancelButton: true,
+      confirmButtonText: 'حفظ',
+      cancelButtonText: 'إلغاء'
+    });
+
+    if (newMinLimit !== undefined && newMinLimit !== null && newMinLimit !== '') {
+      const parsedLimit = parseInt(newMinLimit);
+      if (parsedLimit >= 0) {
+        await saveStockItem({ ...item, minLimit: parsedLimit });
         fetchData();
         MySwal.fire({ icon: 'success', title: 'تم التحديث', timer: 1000, showConfirmButton: false });
       }
@@ -2451,6 +2578,7 @@ const AdminStock = ({ user, notificationTarget }) => {
                   <th className="text-center">الموقع</th>
                   <th className="text-center">المواصفة</th>
                   <th className="text-center">الكمية</th>
+                  <th className="text-center">الحد الأدنى</th>
                   <th className="text-center">الوحدة</th>
                   <th className="text-center">الحالة</th>
                   <th className="text-center">إجراءات</th>
@@ -2491,8 +2619,8 @@ const AdminStock = ({ user, notificationTarget }) => {
                         <td className="text-sm text-center">
                           <div className="flex items-center justify-center gap-1 flex-wrap">
                             {(() => {
-                              const custodyItemLocs = assets.flatMap(a => (a.items || []).filter(i => i.name === group.name).flatMap(i => (i.location || '').split(/[,، -]/).filter(Boolean)));
-                              const locs = [...new Set([...group.locations.flatMap(loc => (loc.location || '').split(/[,، -]/).filter(Boolean)), ...custodyItemLocs])];
+                              const custodyItemLocs = assets.flatMap(a => (a.items || []).filter(i => i.name === group.name).flatMap(i => (i.location || '').split(/[,, -]/).filter(Boolean)));
+                              const locs = [...new Set([...group.locations.flatMap(loc => (loc.location || '').split(/[,, -]/).filter(Boolean)), ...custodyItemLocs])];
                               if (locs.length === 0) return <span className="text-muted">-</span>;
                               return locs.map((locStr, idx) => (
                                 <span key={idx} style={{ border: '1.5px solid #10b981', color: '#059669', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
@@ -2502,10 +2630,6 @@ const AdminStock = ({ user, notificationTarget }) => {
                             })()}
                           </div>
                         </td>
-                        <td className="text-sm text-center">{displaySpec}</td>
-                        <td className="text-center" onClick={(e) => {
-                          if (group.locations.length === 1 && canPerformAction(user, 'EDIT', 'STOCK', globalSettings)) {
-                            handleQuickQuantityEdit(e, group.locations[0]);
                           } else {
                             e.stopPropagation();
                             toggleRow(group.itemNumber);

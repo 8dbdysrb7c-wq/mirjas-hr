@@ -10,11 +10,11 @@ const db = getFirestore(firebaseApp);
 
 async function clearQueue() {
     console.log("جاري البحث عن الرسائل المعلقة في الطابور...");
-    const qSnap = await getDocs(collection(db, 'whatsapp_queue'));
+    const qSnap = await getDocs(collection(db, 'whatsapp_queue_v2'));
     let count = 0;
     
     for (const document of qSnap.docs) {
-        await deleteDoc(doc(db, 'whatsapp_queue', document.id));
+        await deleteDoc(doc(db, 'whatsapp_queue_v2', document.id));
         count++;
     }
     

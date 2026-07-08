@@ -707,29 +707,6 @@ const WhatsAppSettingsTab = ({ settings: globalSettings, setSettings: setGlobalS
                       noOptionsMessage={() => "لا توجد أقسام"}
                       isClearable={true}
                     />
-                    <button
-                      onClick={() => handleTestModuleMessage(mod.key)}
-                      style={{
-                        width: '100%',
-                        marginTop: '12px',
-                        padding: '8px 12px',
-                        borderRadius: '12px',
-                        border: '1px solid #1a8d9b',
-                        backgroundColor: '#f0f9fa',
-                        color: '#1a8d9b',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      <Send size={14} />
-                      <span>إرسال رسالة تجريبية لمرة واحدة</span>
-                    </button>
                   </div>
                 )}
 

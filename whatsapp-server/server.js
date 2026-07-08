@@ -5,7 +5,7 @@ const cors = require('cors');
 
 // Firebase Web SDK for listening
 const { initializeApp } = require('firebase/app');
-const { getFirestore, collection, query, where, onSnapshot, doc, updateDoc, setDoc, getDocs } = require('firebase/firestore');
+const { getFirestore, collection, query, where, onSnapshot, doc, updateDoc, setDoc, getDocs, runTransaction } = require('firebase/firestore');
 
 const firebaseConfig = {
     apiKey: "AIzaSyDrTFkfeZr7F2UFhubaxt0s4_VNwYC5R8Q",
@@ -24,7 +24,7 @@ app.use(cors());
 app.use(express.json());
 
 const client = new Client({
-    authStrategy: new LocalAuth({ clientId: 'mirjas_session_2' }),
+    authStrategy: new LocalAuth({ clientId: 'mirjas_session_8' }),
     puppeteer: {
         executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
@@ -65,23 +65,46 @@ client.on('ready', () => {
     connectionStatus = 'READY';
     updateFirebaseStatus('READY');
 
+    const fs = require('fs');
+    const path = require('path');
+    const cacheFile = path.join(__dirname, 'dedup_cache.json');
+    
     // Strict Rate Limiting and Deduplication State
     const messageQueue = [];
     const activeDocIds = new Set();
     let isProcessingQueue = false;
     let lastSentTime = 0; // Timestamp of the last sent message
-    const sentMessagesCache = new Map(); // phone_message => timestamp
+    let sentMessagesCache = new Map(); // phone_message => timestamp
+    
+    // Load cache from disk
+    try {
+        if (fs.existsSync(cacheFile)) {
+            const data = fs.readFileSync(cacheFile, 'utf8');
+            sentMessagesCache = new Map(JSON.parse(data));
+            console.log(`[Deduplication] Loaded ${sentMessagesCache.size} items from persistent cache.`);
+        }
+    } catch(e) { console.error('Error loading deduplication cache', e); }
+
+    const saveCacheToDisk = () => {
+        try {
+            fs.writeFileSync(cacheFile, JSON.stringify(Array.from(sentMessagesCache.entries())));
+        } catch(e) { console.error('Error saving cache', e); }
+    };
+
     const DEDUPLICATION_TTL = 12 * 60 * 60 * 1000; // 12 hours
     const RATE_LIMIT_DELAY = 10000; // 10 seconds
 
     // Garbage collection for cache every hour
     setInterval(() => {
         const now = Date.now();
+        let changed = false;
         for (const [key, timestamp] of sentMessagesCache.entries()) {
             if (now - timestamp > DEDUPLICATION_TTL) {
                 sentMessagesCache.delete(key);
+                changed = true;
             }
         }
+        if (changed) saveCacheToDisk();
     }, 60 * 60 * 1000);
 
     const processQueue = async () => {
@@ -105,7 +128,7 @@ client.on('ready', () => {
                 // 1. Deduplication check
                 if (sentMessagesCache.has(cacheKey)) {
                     console.log(`[Deduplication] Skipped duplicate message to ${phone}`);
-                    await updateDoc(doc(db, 'whatsapp_queue', docId), { status: 'skipped_duplicate', sentAt: new Date().toISOString() });
+                    await updateDoc(doc(db, 'whatsapp_queue_v2', docId), { status: 'skipped_duplicate', sentAt: new Date().toISOString() });
                     activeDocIds.delete(docId);
                     continue; // Skip rate limiter delay for skipped messages
                 }
@@ -123,16 +146,17 @@ client.on('ready', () => {
 
                 // 3. Add to deduplication cache BEFORE sending (to handle concurrent fail cases safely)
                 sentMessagesCache.set(cacheKey, Date.now());
+                saveCacheToDisk();
                 
                 // 4. Send Message
                 await client.sendMessage(chatId, message);
                 lastSentTime = Date.now(); // Update last sent time immediately after sending
                 
                 console.log(`[Success] Message sent successfully to ${phone}`);
-                await updateDoc(doc(db, 'whatsapp_queue', docId), { status: 'sent', sentAt: new Date().toISOString() });
+                await updateDoc(doc(db, 'whatsapp_queue_v2', docId), { status: 'sent', sentAt: new Date().toISOString() });
             } catch (error) {
                 console.error('[Error] Failed to send queued message:', error);
-                await updateDoc(doc(db, 'whatsapp_queue', docId), { status: 'failed', error: error.message, sentAt: new Date().toISOString() });
+                await updateDoc(doc(db, 'whatsapp_queue_v2', docId), { status: 'failed', error: error.message, sentAt: new Date().toISOString() });
             } finally {
                 activeDocIds.delete(docId);
             }
@@ -141,8 +165,8 @@ client.on('ready', () => {
         isProcessingQueue = false;
     };
 
-    console.log('Listening for pending messages in whatsapp_queue...');
-    const q = query(collection(db, 'whatsapp_queue'), where('status', '==', 'pending'));
+    console.log('Listening for pending messages in whatsapp_queue_v2...');
+    const q = query(collection(db, 'whatsapp_queue_v2'), where('status', '==', 'pending'));
     
     onSnapshot(q, async (snapshot) => {
         snapshot.docChanges().forEach(async (change) => {
@@ -155,15 +179,22 @@ client.on('ready', () => {
 
                     if (!data.phone || !data.message) {
                         activeDocIds.add(docId);
-                        await updateDoc(doc(db, 'whatsapp_queue', docId), { status: 'failed', error: 'Missing phone or message', sentAt: new Date().toISOString() });
+                        await updateDoc(doc(db, 'whatsapp_queue_v2', docId), { status: 'failed', error: 'Missing phone or message', sentAt: new Date().toISOString() });
                         activeDocIds.delete(docId);
                         return;
                     }
 
-                    // Immediately claim the document by setting it to processing
+                    // Immediately claim the document using a transaction to prevent race conditions with zombie servers
                     activeDocIds.add(docId);
                     try {
-                        await updateDoc(doc(db, 'whatsapp_queue', docId), { status: 'processing' });
+                        const docRef = doc(db, 'whatsapp_queue_v2', docId);
+                        await runTransaction(db, async (transaction) => {
+                            const docSnap = await transaction.get(docRef);
+                            if (!docSnap.exists() || docSnap.data().status !== 'pending') {
+                                throw new Error('Already claimed by another process');
+                            }
+                            transaction.update(docRef, { status: 'processing' });
+                        });
                         
                         // Push to our local queue
                         messageQueue.push({ docId, phone: data.phone, message: data.message });
@@ -171,8 +202,8 @@ client.on('ready', () => {
                         
                         // Trigger processing
                         processQueue();
-                    } catch (error) {
-                        console.error('Failed to mark message as processing:', error);
+                    } catch (err) {
+                        console.log(`[Queue] Document ${docId} skipped: ${err.message}`);
                         activeDocIds.delete(docId); // allow retry
                     }
                 }
@@ -230,9 +261,7 @@ onSnapshot(doc(db, 'whatsapp_config', 'status'), async (docSnap) => {
             currentQR = '';
             connectionStatus = 'DISCONNECTED';
             updateFirebaseStatus('DISCONNECTED');
-            try {
-                client.initialize();
-            } catch(e) {}
+            console.log('Please restart the Node.js server manually to log in again.');
         }
     }
 });
