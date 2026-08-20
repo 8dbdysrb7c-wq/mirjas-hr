@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CheckCircle, Clock, XCircle, Calendar, Plus, X, ArrowUpDown, ArrowUp, ArrowDown, Check, Undo2, Trash2, Eye, ChevronDown, ChevronUp, User } from 'lucide-react';
-import Select from 'react-select';
+import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
 import { getEmployees, getHRLeaves, saveHRLeave, deleteHRLeave, getGlobalSettings, getHRAttendance } from '../../store';
@@ -17,6 +17,7 @@ const HROvertime = ({ user, refreshCounts }) => {
   const [leaves, setLeaves] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [employees, setEmployees] = useState([]);
+  const [hrSettings, setHrSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
@@ -38,7 +39,9 @@ const HROvertime = ({ user, refreshCounts }) => {
   const [endDate, setEndDate] = useState(getLocalDateStr(new Date()));
   const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false);
 
-  const [smartModal, setSmartModal] = useState({ show: false, leave: null, attendance: null, deficitMins: 0, requestedMins: 0, loading: false });
+  const [smartModal, setSmartModal] = useState({ show: false, leave: null, attendance: null, deficitMins: 0, lateMins: 0, earlyMins: 0, requestedMins: 0, loading: false });
+  const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
 
   const openSmartApproval = async (leave) => {
     setSmartModal({ show: true, leave, attendance: null, deficitMins: 0, requestedMins: 0, loading: true });
@@ -56,13 +59,35 @@ const HROvertime = ({ user, refreshCounts }) => {
     // Fetch attendance for the employee on that day
     let attendanceData = null;
     let defMins = 0;
+    let lateMins = 0;
+    let earlyMins = 0;
     try {
       const attList = await getHRAttendance();
-      attendanceData = attList.find(a => String(a.employeeId) === String(leave.employeeId) && a.date === leave.date);
-      
       const emp = employees.find(e => String(e.id) === String(leave.employeeId) || String(e.employeeId) === String(leave.employeeId));
       let shiftStart = emp?.shiftStart || '08:00';
       let shiftEnd = emp?.shiftEnd || '16:00';
+      
+      const allAtts = attList.filter(a => {
+        const aEmpId = String(a.employeeId || '');
+        const aUserId = String(a.userId || '');
+        const aName = String(a.employeeName || '').trim();
+
+        const lEmpId = String(leave.employeeId || '');
+        const lName = String(leave.employeeName || '').trim();
+
+        const empId = emp ? String(emp.employeeId || '') : '';
+        const empDocId = emp ? String(emp.id || '') : '';
+        const empName = emp ? String(emp.name || '').trim() : '';
+
+        const matchId = (aEmpId && (aEmpId === lEmpId || aEmpId === empId || aEmpId === empDocId)) || 
+                        (aUserId && (aUserId === lEmpId || aUserId === empId || aUserId === empDocId));
+        
+        const matchName = (aName && aName !== '' && (aName === lName || aName === empName));
+
+        return (matchId || matchName) && a.date === leave.date;
+      });
+      
+      attendanceData = allAtts.find(a => a.timeIn && a.timeIn !== '--:--' && a.timeIn !== '') || allAtts[0];
       
       try {
         const settings = await getGlobalSettings();
@@ -77,21 +102,30 @@ const HROvertime = ({ user, refreshCounts }) => {
       const shiftMins = (seh * 60 + sem) - (ssh * 60 + ssm);
 
       if (attendanceData && attendanceData.timeIn && attendanceData.timeOut && attendanceData.timeOut !== '--:--') {
-        const [ah, am] = attendanceData.timeIn.split(':').map(Number);
-        const [oh, om] = attendanceData.timeOut.split(':').map(Number);
+        const parseTimeWithAMPM = (tStr) => {
+          if (!tStr) return { h: 0, m: 0 };
+          const cleaned = tStr.replace(/[^\d:]/g, '').trim();
+          let [h, m] = cleaned.split(':').map(Number);
+          
+          if (tStr.includes('م') || tStr.toLowerCase().includes('pm')) {
+            if (h < 12) h += 12;
+          } else if (tStr.includes('ص') || tStr.toLowerCase().includes('am')) {
+            if (h === 12) h = 0;
+          }
+          return { h: h || 0, m: m || 0 };
+        };
+        const { h: ah, m: am } = parseTimeWithAMPM(attendanceData.timeIn);
+        const { h: oh, m: om } = parseTimeWithAMPM(attendanceData.timeOut);
         
-        let lateMins = 0;
-        let earlyMins = 0;
-
         // Calculate late arrival
-        const actualStartMins = ah * 60 + am;
+        const actualStartMins = (ah || 0) * 60 + (am || 0);
         const shiftStartMins = ssh * 60 + ssm;
         if (actualStartMins > shiftStartMins) {
            lateMins = actualStartMins - shiftStartMins;
         }
 
         // Calculate early departure
-        const actualEndMins = oh * 60 + om;
+        const actualEndMins = (oh || 0) * 60 + (om || 0);
         const shiftEndMins = seh * 60 + sem;
         if (actualEndMins < shiftEndMins) {
            earlyMins = shiftEndMins - actualEndMins;
@@ -113,6 +147,8 @@ const HROvertime = ({ user, refreshCounts }) => {
       leave,
       attendance: attendanceData,
       deficitMins: defMins,
+      lateMins,
+      earlyMins,
       requestedMins: reqMins,
       loading: false
     });
@@ -128,8 +164,8 @@ const HROvertime = ({ user, refreshCounts }) => {
     let baseRate = isHoliday ? '1:1.5' : '1:1.25';
     if(leave.rate) baseRate = leave.rate; // Respect original if set explicitly
     
-    let compMins = 0; // Compensating (1:1)
-    let extraMins = 0; // Pure overtime
+    let compMins = 0; // Compensating (not payable)
+    let extraMins = 0; // Pure payable overtime
     
     if (deficitMins > 0) {
       if (requestedMins <= deficitMins) {
@@ -155,11 +191,15 @@ const HROvertime = ({ user, refreshCounts }) => {
       ...leave,
       notes: finalNotes,
       status: 'موافق',
-      rateDetails: {
-         compMins,
-         extraMins,
-         baseRate
-      }
+       rateDetails: {
+          compMins,
+          extraMins,
+          baseRate,
+          // Keep the attendance settlement auditable and prevent payroll from
+          // deducting the same covered lateness for a second time.
+          lateCoveredMins: Math.min(Number(smartModal.lateMins) || 0, compMins),
+          earlyCoveredMins: Math.min(Number(smartModal.earlyMins) || 0, Math.max(0, compMins - (Number(smartModal.lateMins) || 0)))
+       }
     };
     
     Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false });
@@ -170,8 +210,7 @@ const HROvertime = ({ user, refreshCounts }) => {
       try {
         const emp = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim() || String(e.name || '').trim() === String(leave.employeeName || '').trim());
         if (emp && emp.phone) {
-          let msg = `مرحباً ${emp.name}،\nتم الموافقة على طلب العمل الإضافي الخاص بك (بمعدل احتساب ذكي).`;
-          if (extraMins > 0) msg += `\nصافي الإضافي المعتمد: ${Math.floor(extraMins/60)} ساعة و ${extraMins%60} دقيقة.`;
+          let msg = `مرحباً ${emp.name}،\nتم الموافقة على طلب العمل الإضافي الخاص بك.`;
           msg += `\n-- الإدارة`;
           await sendWhatsAppNotification(emp.phone, msg, 'overtime');
         }
@@ -214,7 +253,7 @@ const HROvertime = ({ user, refreshCounts }) => {
     if (d === 'packaging' || d === 'مسطرة التغليف' || d === 'تغليف' || d === 'تغليف وتشطيب') return 'تغليف وتشطيب';
     if (d === 'cutting' || d === 'القص') return 'القص والخياطة';
     if (d === 'admin' || d === 'الإدارة' || d === 'الادارة') return 'الادارة';
-    if (d === 'sales' || d === 'المبيعات') return 'المبيعات';
+    if (d === 'sales' || d === 'المبيعات' || d === 'الطلبيات') return 'الطلبيات';
     return dept;
   };
 
@@ -273,11 +312,145 @@ const HROvertime = ({ user, refreshCounts }) => {
     return sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-primary" /> : <ArrowDown size={14} className="text-primary" />;
   };
 
+  const getOvertimeAmount = (leave) => {
+    if (leave.status === 'مرفوض') return 0;
+
+    const requestDate = leave.date || leave.startDate || getLocalDateStr(new Date());
+    const hasUnpaidDay = leaves.some(item => {
+      const approved = ['موافق', 'موافق عليه', 'مقبول', 'تمت الموافقة', 'تم التسليم'].includes(item.status);
+      const sameEmployee = String(item.employeeId || '').trim() === String(leave.employeeId || '').trim();
+      const coversDate = item.date === requestDate || (item.startDate && item.endDate && item.startDate <= requestDate && item.endDate >= requestDate);
+      return approved && sameEmployee && item.type === 'إجازة غير مدفوعة' && coversDate;
+    });
+    if (hasUnpaidDay) return 0;
+    
+    const emp = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim() || String(e.name || '').trim() === String(leave.employeeName || '').trim());
+    if (!emp) return 0;
+    
+    const basic = Number(emp.basicSalary) || 0;
+    if (basic <= 0) return 0;
+    
+    const [yStr, mStr] = requestDate.split('-');
+    const daysInMonth = new Date(parseInt(yStr, 10), parseInt(mStr, 10), 0).getDate();
+    
+    let workDays = hrSettings?.workDaysPerMonth || daysInMonth;
+    if (hrSettings?.workDaysStrategy === 'actual' || !hrSettings?.workDaysStrategy) {
+       workDays = daysInMonth;
+    } else if (hrSettings?.workDaysStrategy === 'custom' && hrSettings?.customWorkDays) {
+      const mIndex = parseInt(mStr, 10) - 1;
+      if (!isNaN(mIndex) && hrSettings.customWorkDays[mIndex]) {
+        workDays = hrSettings.customWorkDays[mIndex];
+      }
+    }
+    
+    const dailyRate = basic / workDays;
+    
+    let empStandardWorkHours = hrSettings?.standardWorkHours || 8;
+    if (emp.shiftStart && emp.shiftEnd) {
+      const [sh, sm] = emp.shiftStart.split(':').map(Number);
+      const [eh, em] = emp.shiftEnd.split(':').map(Number);
+      if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
+        let mins = (eh * 60 + em) - (sh * 60 + sm);
+        if (mins < 0) mins += 24 * 60;
+        empStandardWorkHours = mins / 60;
+        if (empStandardWorkHours <= 0) empStandardWorkHours = hrSettings?.standardWorkHours || 8;
+      }
+    }
+    
+    const hourlyRate = dailyRate / empStandardWorkHours;
+    
+    if (hrSettings?.overtimeCalculationMethod === 'fixed_amount') {
+       return hrSettings.overtimeFixedAmount || 10;
+    }
+    
+    let multiplier = 1.25;
+    const storedRate = leave.rate || leave?.rateDetails?.baseRate;
+    if (storedRate) {
+      const parts = String(storedRate).split(':');
+      if (parts.length === 2) {
+        multiplier = Number(parts[1]) || 1.25;
+      } else {
+        multiplier = Number(storedRate) || 1.25;
+      }
+    } else {
+      const d = new Date(requestDate);
+      const arabicDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+      const weekends = hrSettings?.weekendDays || ['الجمعة'];
+      const dayName = arabicDays[d.getDay()];
+      if (weekends.includes(dayName)) {
+        multiplier = hrSettings?.overtimeWeekendMultiplier || 1.50;
+      } else {
+        multiplier = hrSettings?.overtimeMultiplier || 1.25;
+      }
+    }
+    
+    let mins = Number(leave?.rateDetails?.extraMins);
+    if (!Number.isFinite(mins) && leave.startTime && leave.endTime) {
+      const [sh, sm] = leave.startTime.split(':').map(Number);
+      const [eh, em] = leave.endTime.split(':').map(Number);
+      mins = (eh * 60 + em) - (sh * 60 + sm);
+      if (mins < 0) mins += 24 * 60;
+      
+      if (hrSettings?.maxDailyOvertimeHours) {
+         const maxMins = hrSettings.maxDailyOvertimeHours * 60;
+         if (mins > maxMins) mins = maxMins;
+      }
+    }
+    
+    const hours = mins / 60;
+    return hours * hourlyRate * multiplier;
+  };
+
+  const getOvertimeDuration = (leave) => {
+    let mins = Number(leave?.rateDetails?.extraMins);
+    if (!Number.isFinite(mins) && leave.startTime && leave.endTime) {
+      const [sh, sm] = leave.startTime.split(':').map(Number);
+      const [eh, em] = leave.endTime.split(':').map(Number);
+      mins = (eh * 60 + em) - (sh * 60 + sm);
+      if (mins < 0) mins += 24 * 60;
+      
+      if (hrSettings?.maxDailyOvertimeHours) {
+         const maxMins = hrSettings.maxDailyOvertimeHours * 60;
+         if (mins > maxMins) mins = maxMins;
+      }
+    }
+    
+    const hours = Math.floor(mins / 60);
+    const remainingMins = mins % 60;
+    
+    if (hours > 0 && remainingMins > 0) {
+      return `${hours} س و ${remainingMins} د`;
+    } else if (hours > 0) {
+      return `${hours} ساعة`;
+    } else {
+      return `${remainingMins} دقيقة`;
+    }
+  };
+
+  const getOvertimeReason = (leave) => {
+    const notes = String(leave?.notes || '').trim();
+    if (!notes) return '-';
+    const reasonOnly = notes
+      .split(/--\s*تفاصيل الاحتساب الذكي\s*--/i)[0]
+      .replace(/[\s\-–—]+$/g, '')
+      .trim();
+    return reasonOnly || '-';
+  };
+
   const fetchData = async () => {
     setLoading(true);
-    const [leavesData, empsData] = await Promise.all([getHRLeaves(), getEmployees()]);
-    setLeaves(leavesData);
-    setEmployees(empsData);
+    try {
+      const [leavesData, empsData, settingsData] = await Promise.all([
+        getHRLeaves(),
+        getEmployees(),
+        getGlobalSettings()
+      ]);
+      setLeaves(leavesData);
+      setEmployees(empsData);
+      setHrSettings(settingsData);
+    } catch (err) {
+      console.error("Error fetching data:", err);
+    }
     setLoading(false);
   };
 
@@ -285,6 +458,8 @@ const HROvertime = ({ user, refreshCounts }) => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (isSavingRef.current) return;
+
     if (!formData.notes || formData.notes.trim() === '') {
       Swal.fire('تنبيه', 'الرجاء إدخال السبب / الملاحظات', 'warning');
       return;
@@ -310,6 +485,19 @@ const HROvertime = ({ user, refreshCounts }) => {
     const emp = employees.find(e => String(e.id || '').trim() === String(formData.employeeId || '').trim());
     if (!emp) {
       Swal.fire('خطأ', 'الرجاء اختيار موظف', 'error');
+      return;
+    }
+
+    // Check if duplicate overtime request exists
+    const isDuplicate = leaves.some(l => {
+      if (l.status === 'مرفوض') return false;
+      if (String(l.employeeId || '').trim() !== String(formData.employeeId || '').trim()) return false;
+      if (l.type !== 'بدل عمل إضافي' && l.type !== 'عمل إضافي') return false;
+      return l.date === formData.date && l.startTime === formData.startTime && l.endTime === formData.endTime;
+    });
+
+    if (isDuplicate) {
+      Swal.fire('خطأ', 'يوجد طلب عمل إضافي مماثل مسبقاً لهذا الموظف في نفس التاريخ والوقت!', 'error');
       return;
     }
 
@@ -339,15 +527,25 @@ const HROvertime = ({ user, refreshCounts }) => {
       return;
     }
     
-    await saveHRLeave({
-      ...formData,
-      employeeName: emp.name,
-      department: emp.department || 'غير محدد'
-    });
-    
-    Swal.fire('نجاح', 'تم تسجيل الطلب بنجاح', 'success');
-    setShowModal(false);
-    fetchData();
+    isSavingRef.current = true;
+    setIsSaving(true);
+    try {
+      await saveHRLeave({
+        ...formData,
+        employeeName: emp.name,
+        department: emp.department || 'غير محدد'
+      });
+      
+      Swal.fire('نجاح', 'تم تسجيل الطلب بنجاح', 'success');
+      setShowModal(false);
+      fetchData();
+    } catch (error) {
+      console.error(error);
+      Swal.fire('خطأ', 'حدث خطأ أثناء حفظ الطلب', 'error');
+    } finally {
+      isSavingRef.current = false;
+      setIsSaving(false);
+    }
   };
 
   const handleStatusChange = async (leave, newStatus) => {
@@ -379,7 +577,7 @@ const HROvertime = ({ user, refreshCounts }) => {
           if (emp && emp.phone) {
             const actionText = newStatus === 'موافق' ? 'الموافقة على' : 'رفض';
             let msg = `مرحباً ${emp.name}،\nتم ${actionText} طلب العمل الإضافي الخاص بك.`;
-            if (actionReason) msg += `\nملاحظات: ${actionReason}`;
+            if (actionReason) msg += `\nالملاحظات: ${actionReason}`;
             msg += `\n-- الإدارة`;
             await sendWhatsAppNotification(emp.phone, msg, 'overtime');
           }
@@ -619,7 +817,7 @@ const HROvertime = ({ user, refreshCounts }) => {
       </div>
 
       {/* Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '24px', marginBottom: '24px' }}>
         {/* Total (Rightmost) */}
         <div onClick={() => setFilterStatus('الكل')} style={{ cursor: 'pointer', opacity: filterStatus === 'الكل' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'الكل' ? '2px solid #3b82f6' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ textAlign: 'right' }}>
@@ -667,6 +865,27 @@ const HROvertime = ({ user, refreshCounts }) => {
             <X size={28} strokeWidth={2.5} />
           </div>
         </div>
+
+        {/* Total Overtime Value Card */}
+        {(() => {
+          const totalOvertimeValue = overtimeRequests
+            .filter(l => l.status === 'موافق' || l.status === 'مقبول')
+            .reduce((sum, leave) => sum + getOvertimeAmount(leave), 0);
+          return (
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e0e7ff', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ fontSize: '13px', fontWeight: '700', color: '#4f46e5', margin: '0 0 4px 0' }}>إجمالي قيمة الإضافي</p>
+                <h3 style={{ fontSize: '24px', fontWeight: '800', color: '#4f46e5', margin: 0 }}>
+                  {totalOvertimeValue.toFixed(2)} <span style={{ fontSize: '14px', fontWeight: 'bold' }}>JD</span>
+                </h3>
+                <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>للطلبات الموافق عليها</p>
+              </div>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#eef2ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <span style={{ fontSize: '20px', fontWeight: '900' }}>JD</span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="table-responsive">
@@ -682,6 +901,8 @@ const HROvertime = ({ user, refreshCounts }) => {
               </th>
               <th className="text-center">التاريخ والوقت</th>
               <th className="text-center">السبب / الملاحظات</th>
+              <th className="text-center">الإضافي المستحق</th>
+              <th className="text-center">قيمة العمل الإضافي</th>
               <th className="cursor-pointer hover:bg-gray-100 transition-colors" onClick={() =>handleSort('status')}>
                 <div className="flex items-center gap-2">الحالة {renderSortIcon('status')}</div>
               </th>
@@ -714,7 +935,17 @@ const HROvertime = ({ user, refreshCounts }) => {
                     </div>
                   )}
                 </td>
-                <td className="max-w-[200px] whitespace-normal text-sm text-center">{leave.notes}</td>
+                <td className="max-w-[200px] whitespace-normal text-sm text-center">{getOvertimeReason(leave)}</td>
+                <td className="text-center font-semibold text-slate-600 font-mono">
+                  {getOvertimeDuration(leave)}
+                </td>
+                <td className="text-center font-bold text-slate-700 font-mono" style={{ direction: 'ltr' }}>
+                  {leave.status === 'مرفوض' ? (
+                    <span style={{ textDecoration: 'line-through', color: '#94a3b8' }}>0.00 JD</span>
+                  ) : (
+                    <span>{getOvertimeAmount(leave).toFixed(2)} JD</span>
+                  )}
+                </td>
                 <td>
                   <span className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1 w-fit ${
                     leave.status === 'موافق' ? 'bg-emerald-50 text-emerald-600' :
@@ -820,7 +1051,7 @@ const HROvertime = ({ user, refreshCounts }) => {
               </div>
               <div style={{ padding: '1.25rem', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', flexShrink: 0, backgroundColor: '#fff', borderBottomLeftRadius: '0.5rem', borderBottomRightRadius: '0.5rem' }}>
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-outline">إلغاء</button>
-                <button type="submit" className="btn btn-primary">حفظ الطلب</button>
+                <button type="submit" disabled={isSaving} className="btn btn-primary">{isSaving ? 'جاري الحفظ...' : 'حفظ الطلب'}</button>
               </div>
             </form>
           </div>
@@ -861,7 +1092,7 @@ const HROvertime = ({ user, refreshCounts }) => {
                        </div>
                        <div>
                           <span style={{ color: '#64748b' }}>معدل الطلب:</span> 
-                          <span style={{ fontWeight: 'bold', background: '#e0e7ff', color: '#4f46e5', padding: '2px 8px', borderRadius: '12px', fontSize: '0.85rem', marginRight: '6px' }} dir="ltr">{smartModal.leave.rate || '1:1'}</span>
+                          <span style={{ fontWeight: 'bold', background: '#e0e7ff', color: '#4f46e5', padding: '2px 8px', borderRadius: '12px', fontSize: '0.85rem', marginRight: '6px' }} dir="ltr">{smartModal.leave.rate || '1:1.25'}</span>
                        </div>
                      </div>
                    </div>

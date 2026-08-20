@@ -2,12 +2,16 @@ import { db } from '../firebase';
 import { 
   collection, 
   getDocs, 
+  getDoc,
   doc, 
   setDoc, 
   deleteDoc, 
   query, 
   where
 } from 'firebase/firestore';
+import { syncProductionOrderToWIPStock, syncPreparationOrderToWIPStock } from './stock';
+import { cascadeCustomerNameUpdate } from './cascadeUpdates';
+import { triggerWhatsAppRouting } from './whatsappRouter';
 
 export const getCustomers = async () => {
   try {
@@ -30,10 +34,43 @@ export const getCustomers = async () => {
 
 export const saveCustomer = async (customer) => {
   try {
+    let oldName = null;
     const docRef = customer.id ? doc(db, 'customers', customer.id) : doc(collection(db, 'customers'));
+    
+    if (customer.id) {
+      const existingDoc = await getDoc(docRef);
+      if (existingDoc.exists()) {
+        oldName = existingDoc.data().name;
+      }
+    }
+
     const id = docRef.id;
-    const fullCustomer = { createdAt: new Date().toISOString(), status: 'نشط', ...customer, id };
+    let finalCustomerNumber = customer.customerNumber;
+
+    if (!customer.id) {
+      // Force generate ID for new customers to prevent duplicates from frontend
+      const type = customer.type || 'عميل';
+      const prefix = type === 'مورد' ? 'SUP-' : 'CLI-';
+      const allCusts = await getDocs(collection(db, 'customers'));
+      let maxNum = 0;
+      allCusts.forEach(d => {
+        const c = d.data();
+        if (c.customerNumber && c.customerNumber.startsWith(prefix)) {
+          const num = parseInt(c.customerNumber.replace(prefix, ''), 10);
+          if (num > maxNum) maxNum = num;
+        }
+      });
+      finalCustomerNumber = `${prefix}${String(maxNum + 1).padStart(4, '0')}`;
+    }
+
+    const fullCustomer = { createdAt: new Date().toISOString(), status: 'نشط', ...customer, customerNumber: finalCustomerNumber, id };
     await setDoc(docRef, fullCustomer);
+
+    // Trigger cascade update if name changed
+    if (oldName && oldName !== customer.name) {
+      cascadeCustomerNameUpdate(oldName, customer.name); // Async fire-and-forget
+    }
+
     return fullCustomer;
   } catch (error) {
     console.error("Error in saveCustomer:", error);
@@ -62,6 +99,16 @@ export const getOrders = async () => {
 export const saveOrder = async (order) => {
   try {
     let orderToSave = { ...order };
+    let isNew = !orderToSave.id;
+    let oldStatus = null;
+    if (!isNew) {
+      try {
+        const oldSnap = await getDoc(doc(db, 'orders', orderToSave.id));
+        if (oldSnap.exists()) {
+          oldStatus = oldSnap.data().status;
+        }
+      } catch (e) {}
+    }
     
     if (!orderToSave.id) {
       const orders = await getOrders();
@@ -78,6 +125,24 @@ export const saveOrder = async (order) => {
       await setDoc(doc(db, 'orders', orderToSave.id), orderToSave);
     }
     
+    await syncProductionOrderToWIPStock(orderToSave);
+
+    // Trigger WhatsApp notification
+    if (isNew) {
+      triggerWhatsAppRouting('production_sewing', 'create', {
+        orderNumber: orderToSave.orderNumber,
+        productName: orderToSave.productName || (orderToSave.items && orderToSave.items[0]?.productName) || 'صنف غير محدد',
+        quantity: orderToSave.quantity || (orderToSave.items && orderToSave.items[0]?.quantity) || '1',
+        employeeId: orderToSave.responsibleEmployeeId || ''
+      });
+    } else if (oldStatus !== orderToSave.status) {
+      triggerWhatsAppRouting('production_sewing', 'update', {
+        orderNumber: orderToSave.orderNumber,
+        status: orderToSave.status,
+        employeeId: orderToSave.responsibleEmployeeId || ''
+      });
+    }
+
     return orderToSave;
   } catch (error) {
     console.error("Error in saveOrder:", error);
@@ -87,9 +152,103 @@ export const saveOrder = async (order) => {
 
 export const deleteOrder = async (id) => {
   try {
-    await deleteDoc(doc(db, 'orders', id));
+    const docRef = doc(db, 'orders', id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const order = docSnap.data();
+      await syncProductionOrderToWIPStock({ ...order, status: 'ملغي' });
+
+      // Trigger cancel notification
+      triggerWhatsAppRouting('production_sewing', 'delete', {
+        orderNumber: order.orderNumber,
+        employeeId: order.responsibleEmployeeId || ''
+      });
+    }
+    await deleteDoc(docRef);
   } catch (error) {
     console.error("Error in deleteOrder:", error);
+  }
+};
+
+export const getPreparationOrders = async () => {
+  try {
+    const querySnapshot = await getDocs(collection(db, 'preparation_orders'));
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    console.error("Error in getPreparationOrders:", error);
+    return [];
+  }
+};
+
+export const savePreparationOrder = async (order) => {
+  try {
+    let orderToSave = { ...order };
+    let isNew = !orderToSave.id;
+    let oldOrder = null;
+    if (!isNew) {
+      const docSnap = await getDoc(doc(db, 'preparation_orders', orderToSave.id));
+      if (docSnap.exists()) {
+        oldOrder = docSnap.data();
+      }
+    }
+    
+    if (!orderToSave.id) {
+      const orders = await getPreparationOrders();
+      const maxNum = orders.reduce((max, o) => {
+        const match = String(o.orderNumber || '').match(/\d+/);
+        return match ? Math.max(max, parseInt(match[0], 10)) : max;
+      }, 0);
+      orderToSave.orderNumber = `PREP-${String(maxNum + 1).padStart(4, '0')}`;
+      
+      const docRef = doc(collection(db, 'preparation_orders'));
+      orderToSave.id = docRef.id;
+      await setDoc(docRef, orderToSave);
+    } else {
+      await setDoc(doc(db, 'preparation_orders', orderToSave.id), orderToSave);
+    }
+    
+    await syncPreparationOrderToWIPStock(orderToSave);
+
+    // Trigger WhatsApp notification for preparation production
+    if (isNew) {
+      triggerWhatsAppRouting('production_preparation', 'create', {
+        orderNumber: orderToSave.orderNumber,
+        productName: orderToSave.productName || (orderToSave.items && orderToSave.items[0]?.productName) || 'صنف غير محدد',
+        quantity: orderToSave.quantity || (orderToSave.items && orderToSave.items[0]?.quantity) || '1',
+        employeeId: orderToSave.responsibleEmployeeId || ''
+      });
+    } else if (oldOrder && oldOrder.status !== orderToSave.status) {
+      triggerWhatsAppRouting('production_preparation', 'update', {
+        orderNumber: orderToSave.orderNumber,
+        status: orderToSave.status,
+        employeeId: orderToSave.responsibleEmployeeId || ''
+      });
+    }
+
+    return orderToSave;
+  } catch (error) {
+    console.error("Error in savePreparationOrder:", error);
+    return null;
+  }
+};
+
+export const deletePreparationOrder = async (id) => {
+  try {
+    const docRef = doc(db, 'preparation_orders', id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const order = docSnap.data();
+      await syncPreparationOrderToWIPStock({ ...order, status: 'ملغي' });
+
+      // Trigger cancel notification for preparation production
+      triggerWhatsAppRouting('production_preparation', 'delete', {
+        orderNumber: order.orderNumber,
+        employeeId: order.responsibleEmployeeId || ''
+      });
+    }
+    await deleteDoc(docRef);
+  } catch (error) {
+    console.error("Error in deletePreparationOrder:", error);
   }
 };
 
@@ -98,11 +257,23 @@ export const updateOrderStatus = async (orderId, status) => {
     const orderRef = doc(db, 'orders', orderId);
     const docSnap = await getDoc(orderRef);
     if (docSnap.exists()) {
-      await setDoc(orderRef, { 
-        ...docSnap.data(), 
+      const oldOrder = docSnap.data();
+      const updatedOrder = { 
+        ...oldOrder, 
         status,
         statusUpdateDate: new Date().toISOString().split('T')[0]
-      }, { merge: true });
+      };
+      await setDoc(orderRef, updatedOrder, { merge: true });
+      await syncProductionOrderToWIPStock(updatedOrder);
+
+      // Trigger status change notification
+      if (oldOrder.status !== status) {
+        triggerWhatsAppRouting('production_sewing', 'update', {
+          orderNumber: oldOrder.orderNumber,
+          status,
+          employeeId: oldOrder.responsibleEmployeeId || ''
+        });
+      }
     }
   } catch (error) {
     console.error("Error in updateOrderStatus:", error);
@@ -122,6 +293,17 @@ export const getSalesOrders = async () => {
 export const saveSalesOrder = async (order) => {
   try {
     let orderToSave = { ...order };
+    let isNew = !orderToSave.id;
+    let oldStatus = null;
+    if (!isNew) {
+      try {
+        const oldSnap = await getDoc(doc(db, 'sales_orders', orderToSave.id));
+        if (oldSnap.exists()) {
+          oldStatus = oldSnap.data().status;
+        }
+      } catch (e) {}
+    }
+
     if (!orderToSave.id) {
       const orders = await getSalesOrders();
       const maxNum = orders.reduce((max, o) => {
@@ -139,6 +321,24 @@ export const saveSalesOrder = async (order) => {
     } else {
       await setDoc(doc(db, 'sales_orders', orderToSave.id), orderToSave);
     }
+
+    // Trigger WhatsApp notification
+    if (isNew) {
+      triggerWhatsAppRouting('orders', 'create', {
+        orderNumber: orderToSave.orderNumber,
+        totalPrice: orderToSave.totalPrice || '0',
+        customerName: orderToSave.customerName || 'غير محدد',
+        employeeId: orderToSave.salespersonId || ''
+      });
+    } else if (oldStatus !== orderToSave.status) {
+      triggerWhatsAppRouting('orders', 'update', {
+        orderNumber: orderToSave.orderNumber,
+        status: orderToSave.status,
+        totalPrice: orderToSave.totalPrice || '0',
+        employeeId: orderToSave.salespersonId || ''
+      });
+    }
+
     return orderToSave;
   } catch (error) {
     console.error("Error in saveSalesOrder:", error);
@@ -148,9 +348,60 @@ export const saveSalesOrder = async (order) => {
 
 export const deleteSalesOrder = async (id) => {
   try {
-    await deleteDoc(doc(db, 'sales_orders', id));
+    const docRef = doc(db, 'sales_orders', id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const order = docSnap.data();
+      triggerWhatsAppRouting('orders', 'delete', {
+        orderNumber: order.orderNumber,
+        employeeId: order.salespersonId || ''
+      });
+    }
+    await deleteDoc(docRef);
   } catch (error) {
     console.error("Error in deleteSalesOrder:", error);
+  }
+};
+
+// Drafts are intentionally stored outside sales_orders so they never receive an
+// official order number or enter production/stock workflows.
+export const getSalesOrderDrafts = async (userId) => {
+  if (!userId) return [];
+  try {
+    const snapshot = await getDocs(query(collection(db, 'sales_order_drafts'), where('userId', '==', String(userId))));
+    return snapshot.docs
+      .map(d => ({ ...d.data(), id: d.id }))
+      .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  } catch (error) {
+    console.error('Error fetching sales order drafts:', error);
+    return [];
+  }
+};
+
+export const saveSalesOrderDraft = async (draft) => {
+  try {
+    if (!draft?.id || !draft?.userId) return null;
+    const cleanDraft = JSON.parse(JSON.stringify({
+      ...draft,
+      userId: String(draft.userId),
+      updatedAt: new Date().toISOString()
+    }));
+    await setDoc(doc(db, 'sales_order_drafts', cleanDraft.id), cleanDraft);
+    return cleanDraft;
+  } catch (error) {
+    console.error('Error saving sales order draft:', error);
+    return null;
+  }
+};
+
+export const deleteSalesOrderDraft = async (id) => {
+  if (!id) return false;
+  try {
+    await deleteDoc(doc(db, 'sales_order_drafts', id));
+    return true;
+  } catch (error) {
+    console.error('Error deleting sales order draft:', error);
+    return false;
   }
 };
 

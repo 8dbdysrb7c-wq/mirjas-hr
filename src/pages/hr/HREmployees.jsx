@@ -4,6 +4,7 @@ import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
 import { getEmployees, saveEmployee, deleteEmployee, getDepartments, getGlobalSettings, getHRAssets } from '../../store';
 import Swal from 'sweetalert2';
+import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 
 const deptMap = {
   sewing: 'الخياطة',
@@ -11,7 +12,7 @@ const deptMap = {
   logistics: 'لوجستيات',
   packaging: 'تغليف',
   hr: 'الموارد البشرية',
-  sales: 'المبيعات',
+  sales: 'الطلبيات',
   production: 'الإنتاج',
   inventory: 'المخزون',
   delivery: 'التوصيل',
@@ -22,6 +23,25 @@ const getDeptName = (dept) => {
   if (!dept) return '-';
   const lowerDept = dept.toLowerCase();
   return deptMap[lowerDept] || dept;
+};
+
+const getNextAnnualRaiseDate = (joinDateStr) => {
+  if (!joinDateStr) return '-';
+  const joinDate = new Date(joinDateStr);
+  if (isNaN(joinDate.getTime())) return '-';
+  
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  
+  const nextRaise = new Date(joinDate);
+  nextRaise.setFullYear(now.getFullYear());
+  nextRaise.setHours(0, 0, 0, 0);
+  
+  if (nextRaise < now) {
+    nextRaise.setFullYear(now.getFullYear() + 1);
+  }
+  
+  return nextRaise.toISOString().split('T')[0];
 };
 
 const HREmployees = ({ user, onViewProfile }) => {
@@ -179,10 +199,9 @@ const HREmployees = ({ user, onViewProfile }) => {
     fetchData();
   };
 
-  const filteredEmployees = employees.filter(emp => 
-    emp.name?.toLowerCase().includes(search.toLowerCase()) || 
-    String(emp.id)?.toLowerCase().includes(search.toLowerCase()) ||
-    emp.jobTitle?.toLowerCase().includes(search.toLowerCase())
+  const debouncedSearch = useDebounce(search);
+  const filteredEmployees = employees.filter(emp =>
+    matchesSearch([emp.name, emp.id, emp.jobTitle, emp.department, emp.phone], debouncedSearch)
   ).sort((a, b) => {
     if (!sortConfig.key) return 0;
     let valA = a[sortConfig.key] || '';
@@ -385,6 +404,18 @@ const HREmployees = ({ user, onViewProfile }) => {
                     onChange={(dates, dateStr) => setFormData({...formData, joinDate: dateStr})} 
                     className="input-field" 
                     options={{ dateFormat: 'Y-m-d' }}
+                    placeholder="اختر التاريخ"
+                  />
+                </div>
+
+                <div className="input-group">
+                  <label>موعد الزيادة السنوية</label>
+                  <Flatpickr 
+                    value={formData.annualRaiseDate || getNextAnnualRaiseDate(formData.joinDate)} 
+                    onChange={(dates, dateStr) => setFormData({...formData, annualRaiseDate: dateStr})} 
+                    className="input-field bg-white" 
+                    options={{ dateFormat: 'Y-m-d' }}
+                    style={{ color: '#0f766e', fontWeight: 'bold' }}
                     placeholder="اختر التاريخ"
                   />
                 </div>

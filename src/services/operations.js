@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { syncToHRAttendance } from './hr';
 import { createActivityNotification, isAddAction, resolveModuleKeyFromLog, ACTIVITY_ITEM_LABELS } from './settings';
+import { triggerWhatsAppRouting } from './whatsappRouter';
 
 export const getReports = async () => {
   try {
@@ -329,6 +330,31 @@ export const saveSupervisorTask = async (task) => {
       };
     }
     await setDoc(docRef, fullTask, { merge: true });
+
+    // Send WhatsApp notifications
+    try {
+      if (!task.id) {
+        triggerWhatsAppRouting('tasks', 'create', {
+          employeeId: fullTask.assignedToId || fullTask.assignedTo || '',
+          employeeName: fullTask.assignedToName || 'غير محدد',
+          taskTitle: fullTask.title || 'مهمة جديدة',
+          dueDate: fullTask.dueDate || 'غير محدد'
+        });
+      } else {
+        const lastLog = fullTask.logs && fullTask.logs.length > 0 ? fullTask.logs[fullTask.logs.length - 1] : null;
+        const comment = lastLog ? lastLog.comment : 'تم تعديل تفاصيل المهمة';
+        triggerWhatsAppRouting('tasks', 'update', {
+          employeeId: fullTask.assignedToId || fullTask.assignedTo || '',
+          employeeName: fullTask.assignedToName || 'غير محدد',
+          taskTitle: fullTask.title || 'المهمة',
+          status: fullTask.status || 'معلق',
+          updateDetails: comment
+        });
+      }
+    } catch (e) {
+      console.error('[WhatsApp Routing] Error in saveSupervisorTask notification:', e);
+    }
+
     return { ...fullTask, id: docRef.id };
   } catch (error) {
     console.error("Error in saveSupervisorTask:", error);

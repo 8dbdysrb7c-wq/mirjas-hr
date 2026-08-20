@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { getEmployees, getHRAttendance, getHolidays, addLog, createNotification } from '../store';
+import { getEmployees, getHRAttendance, getHolidays, addLog, createNotification, getGlobalSettings } from '../store';
 import { sendWhatsAppNotification, sendTemplatedWhatsAppNotification } from '../utils/whatsappService';
 
 export const useAttendanceReminders = (isAdminOnline) => {
@@ -10,6 +10,10 @@ export const useAttendanceReminders = (isAdminOnline) => {
 
     const checkReminders = async () => {
       try {
+        const settings = await getGlobalSettings();
+        const remindersConfig = settings?.whatsappConfig?.reminders || {};
+        if (remindersConfig.enabled === false) return; // Reminders module is disabled globally
+
         const now = new Date();
         // Skip Fridays
         if (now.getDay() === 5) return;
@@ -54,31 +58,32 @@ export const useAttendanceReminders = (isAdminOnline) => {
               // Check if already checked in
               const hasCheckedIn = todayAttendance.some(a => String(a.employeeId) === String(emp.id) && a.type === 'دخول');
               if (!hasCheckedIn) {
-                sentReminders.current.add(key);
-                
-                // Send Notification
-                const msg = `تذكير: لم يتبق سوى 5 دقائق على موعد بدء الدوام. يرجى تسجيل الدخول.`;
-                await createNotification({
-                  settingKey: 'attendance',
-                  targetEmployeeId: emp.id,
-                  moduleKey: 'hr',
-                  moduleLabel: 'الموارد البشرية',
-                  title: 'تذكير تسجيل دخول',
-                  message: msg,
-                  target: { tab: 'hr_requests' }
-                });
-
-                  await sendTemplatedWhatsAppNotification(emp.phone, 'reminders', {
-                    name: emp.name,
-                    msg: msg
+                if (remindersConfig.triggers?.check_in !== false) {
+                  sentReminders.current.add(key);
+                  
+                  // Send Notification
+                  const msg = `تذكير: لم يتبق سوى 5 دقائق على موعد بدء الدوام. يرجى تسجيل الدخول.`;
+                  await createNotification({
+                    settingKey: 'attendance',
+                    targetEmployeeId: emp.id,
+                    moduleKey: 'hr',
+                    moduleLabel: 'الموارد البشرية',
+                    title: 'تذكير تسجيل دخول',
+                    message: msg,
+                    target: { tab: 'hr_requests' }
                   });
 
-                await addLog({
-                  action: 'إرسال تذكير تلقائي',
-                  module: 'الحضور والانصراف',
-                  details: `تم إرسال تذكير تسجيل دخول للموظف: ${emp.name} (بقي 5 دقائق)`,
-                  userName: 'النظام الآلي'
-                });
+                  await sendTemplatedWhatsAppNotification(emp.phone, 'reminders', 'check_in', {
+                    employeeName: emp.name
+                  });
+
+                  await addLog({
+                    action: 'إرسال تذكير تلقائي',
+                    module: 'الحضور والانصراف',
+                    details: `تم إرسال تذكير تسجيل دخول للموظف: ${emp.name} (بقي 5 دقائق)`,
+                    userName: 'النظام الآلي'
+                  });
+                }
               }
             }
           }
@@ -90,30 +95,31 @@ export const useAttendanceReminders = (isAdminOnline) => {
               // Check if already checked out
               const hasCheckedOut = todayAttendance.some(a => String(a.employeeId) === String(emp.id) && a.type === 'خروج');
               if (!hasCheckedOut) {
-                sentReminders.current.add(key);
-                
-                const msg = `تذكير: لم يتبق سوى 5 دقائق على موعد انتهاء الدوام. يرجى الاستعداد لتسجيل الخروج.`;
-                await createNotification({
-                  settingKey: 'attendance',
-                  targetEmployeeId: emp.id,
-                  moduleKey: 'hr',
-                  moduleLabel: 'الموارد البشرية',
-                  title: 'تذكير تسجيل خروج',
-                  message: msg,
-                  target: { tab: 'hr_requests' }
-                });
-
-                  await sendTemplatedWhatsAppNotification(emp.phone, 'reminders', {
-                    name: emp.name,
-                    msg: msg
+                if (remindersConfig.triggers?.check_out !== false) {
+                  sentReminders.current.add(key);
+                  
+                  const msg = `تذكير: لم يتبق سوى 5 دقائق على موعد انتهاء الدوام. يرجى الاستعداد لتسجيل الخروج.`;
+                  await createNotification({
+                    settingKey: 'attendance',
+                    targetEmployeeId: emp.id,
+                    moduleKey: 'hr',
+                    moduleLabel: 'الموارد البشرية',
+                    title: 'تذكير تسجيل خروج',
+                    message: msg,
+                    target: { tab: 'hr_requests' }
                   });
 
-                await addLog({
-                  action: 'إرسال تذكير تلقائي',
-                  module: 'الحضور والانصراف',
-                  details: `تم إرسال تذكير تسجيل خروج للموظف: ${emp.name} (بقي 5 دقائق)`,
-                  userName: 'النظام الآلي'
-                });
+                  await sendTemplatedWhatsAppNotification(emp.phone, 'reminders', 'check_out', {
+                    employeeName: emp.name
+                  });
+
+                  await addLog({
+                    action: 'إرسال تذكير تلقائي',
+                    module: 'الحضور والانصراف',
+                    details: `تم إرسال تذكير تسجيل خروج للموظف: ${emp.name} (بقي 5 دقائق)`,
+                    userName: 'النظام الآلي'
+                  });
+                }
               }
             }
           }

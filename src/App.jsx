@@ -5,7 +5,7 @@ import Login from './pages/Login';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import Swal from 'sweetalert2';
-import { getGlobalSettings, isAdmin, getEmployees } from './store';
+import { getGlobalSettings, isAdmin, getEmployees, getAttendanceLogs, saveAttendanceLog, getHRAttendance, saveHRAttendance, getMissingPunches, updateMissingPunchStatus } from './store';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(() => {
@@ -171,13 +171,6 @@ function App() {
 
   return (
     <>
-      {currentUser && (isAdmin(currentUser) || currentUser.role === 'مشرف') && !isPreviewMode && (
-        <button className="preview-floating-btn" onClick={togglePreviewMode} title="معاينة الهاتف (Mobile Preview)">
-          <Smartphone size={20} />
-          <span>معاينة الهاتف</span>
-        </button>
-      )}
-
       {isPreviewMode ? (
         <div className="preview-mode-overlay">
           <div className="preview-controls-bar">

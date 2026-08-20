@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Calendar, Search, LogOut, AlertTriangle, ChevronDown, Upload, FileMinus, X, User, Trash2, Clock, Check } from 'lucide-react';
-import Select from 'react-select';
+import Select from '../../components/SearchSelect';
 import HRDateFilter from '../../components/ui/HRDateFilter';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
-import { getEmployees, getHRAttendance, getGlobalSettings, saveHRViolation, getHRViolations, getHRLeaves } from '../../store';
+import { getEmployees, getHRAttendance, getGlobalSettings, saveHRViolation, getHRViolations, getHRLeaves, getAttendanceLogs, getReports, getSupervisorReports } from '../../store';
 import Swal from 'sweetalert2';
 
 const getLocalDateStr = (d) => {
@@ -13,9 +13,27 @@ const getLocalDateStr = (d) => {
   return localDate.toISOString().split('T')[0];
 };
 
+const formatTime12h = (timeStr) => {
+  if (!timeStr || timeStr === '--:--') return '--:--';
+  if (timeStr.includes('ص') || timeStr.includes('م') || timeStr.toLowerCase().includes('am') || timeStr.toLowerCase().includes('pm')) {
+    return timeStr;
+  }
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return timeStr;
+  let hours = parseInt(parts[0], 10);
+  const minutes = parts[1];
+  if (isNaN(hours)) return timeStr;
+  const suffix = hours >= 12 ? 'م' : 'ص';
+  const displayHours = hours % 12 || 12;
+  return `${displayHours}:${minutes} ${suffix}`;
+};
+
 const HRAttendanceAlerts = ({ user }) => {
   const [employees, setEmployees] = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [rawLogs, setRawLogs] = useState([]);
+  const [employeeReports, setEmployeeReports] = useState([]);
+  const [supervisorReports, setSupervisorReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(getLocalDateStr(new Date()));
   const [dateMode, setDateMode] = useState('month');
@@ -59,18 +77,24 @@ const HRAttendanceAlerts = ({ user }) => {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      const [emps, records, globSet, viols, lvs] = await Promise.all([
+      const [emps, records, globSet, viols, lvs, raw, empsReps, supsReps] = await Promise.all([
         getEmployees(), 
         getHRAttendance(),
         getGlobalSettings(),
         getHRViolations(),
-        getHRLeaves()
+        getHRLeaves(),
+        getAttendanceLogs(),
+        getReports(),
+        getSupervisorReports()
       ]);
-      setEmployees(emps);
+      setEmployees(emps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && !['غير فعال', 'مستقيل', 'منتهي خدمات'].includes(e.employmentStatus || e.status)));
       setAttendanceRecords(records);
       setSettings(globSet);
       setViolations(viols);
       setLeaves(lvs);
+      setRawLogs(raw);
+      setEmployeeReports(empsReps);
+      setSupervisorReports(supsReps);
       setLoading(false);
     };
     fetchData();
@@ -79,18 +103,160 @@ const HRAttendanceAlerts = ({ user }) => {
   useEffect(() => {
     if (loading) return;
 
+    // Helper to check if a record matches an employee
+    const findEmployee = (id, name) => {
+      const idStr = String(id || '').trim().toLowerCase();
+      const nameStr = String(name || '').trim().toLowerCase();
+      return employees.find(e => 
+        String(e.id).trim().toLowerCase() === idStr || 
+        String(e.name || '').trim().toLowerCase() === nameStr
+      );
+    };
+
+    // 1. Build a unified list of records combining processed attendance records, employee reports, supervisor reports, and raw logs
+    const recordsMap = new Map();
+
+    // 1a. Process actual attendance records
+    const isTimeEmpty = (t) => !t || t === '--:--';
+    
+    const normalizeDate = (dStr) => {
+      if (!dStr) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) return dStr;
+      const parts = dStr.split(/[-/]/);
+      if (parts.length === 3) {
+        if (parts[2].length === 4) { // DD-MM-YYYY or D-M-YYYY
+          return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+        if (parts[0].length === 4) { // YYYY-M-D
+          return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        }
+      }
+      return dStr;
+    };
+
+    const parseTime = (tStr) => {
+      if (!tStr) return 0;
+      const match = tStr.match(/(\d+):(\d+)/);
+      if (match) {
+        let h = parseInt(match[1], 10);
+        let m = parseInt(match[2], 10);
+        if (tStr.toLowerCase().includes('pm') || tStr.includes('م')) {
+           if (h < 12) h += 12;
+        } else if (tStr.toLowerCase().includes('am') || tStr.includes('ص')) {
+           if (h === 12) h = 0;
+        }
+        return h * 60 + m;
+      }
+      return 0;
+    };
+
+    attendanceRecords.forEach(r => {
+      if (r.isLeave) return;
+      const emp = findEmployee(r.employeeId, r.employeeName);
+      if (emp && r.date) {
+        const d = normalizeDate(r.date);
+        const key = `${emp.id}_${d}`;
+        let tIn = r.timeIn || '';
+        let tOut = r.timeOut || '';
+        if (!r.isLeave && !r.timeIn && r.time) {
+           tIn = r.time.includes('-') ? r.time.split('-')[0].trim() : r.time;
+        }
+        if (!r.isLeave && !r.timeOut && r.time && r.time.includes('-')) {
+           tOut = r.time.split('-')[1].trim();
+        }
+        recordsMap.set(key, { ...r, timeIn: tIn, timeOut: tOut, date: d, employeeId: emp.id, employeeName: emp.name });
+      }
+    });
+
+    // 1b. Process raw logs
+    rawLogs.forEach(log => {
+      const emp = findEmployee(log.employeeId, log.employeeName || log.name);
+      if (emp && log.date) {
+        const d = normalizeDate(log.date);
+        const key = `${emp.id}_${d}`;
+        const existing = recordsMap.get(key);
+        const logTimeIn = log.timeIn || log.time || '';
+        const logTimeOut = log.timeOut || '';
+        
+        if (existing) {
+          if (isTimeEmpty(existing.timeIn) && logTimeIn && logTimeIn !== '--:--') existing.timeIn = logTimeIn;
+          if (isTimeEmpty(existing.timeOut) && logTimeOut && logTimeOut !== '--:--') existing.timeOut = logTimeOut;
+        } else {
+          recordsMap.set(key, {
+            id: `raw-${log.id}`,
+            employeeId: emp.id,
+            employeeName: emp.name,
+            date: d,
+            timeIn: logTimeIn !== '--:--' ? logTimeIn : '',
+            timeOut: logTimeOut !== '--:--' ? logTimeOut : '',
+            status: log.status || 'مداوم'
+          });
+        }
+      }
+    });
+
+    // 1c. Process employee reports
+    employeeReports.forEach(r => {
+      const emp = findEmployee(r.userId, r.userName);
+      if (emp && r.date) {
+        const d = normalizeDate(r.date);
+        const key = `${emp.id}_${d}`;
+        const existing = recordsMap.get(key);
+        if (existing) {
+          if (isTimeEmpty(existing.timeIn) && r.timeIn && r.timeIn !== '--:--') existing.timeIn = r.timeIn;
+          if (isTimeEmpty(existing.timeOut) && r.timeOut && r.timeOut !== '--:--') existing.timeOut = r.timeOut;
+        } else {
+          recordsMap.set(key, {
+            id: `emprep-${r.id}`,
+            employeeId: emp.id,
+            employeeName: emp.name,
+            date: d,
+            timeIn: r.timeIn || '',
+            timeOut: r.timeOut || '',
+            status: 'مداوم'
+          });
+        }
+      }
+    });
+
+    // 1c. Process supervisor reports
+    supervisorReports.forEach(r => {
+      const emp = findEmployee(r.supervisorId, r.supervisorName);
+      if (emp && r.date) {
+        const d = normalizeDate(r.date);
+        const key = `${emp.id}_${d}`;
+        const existing = recordsMap.get(key);
+        if (existing) {
+          if (isTimeEmpty(existing.timeIn) && r.timeIn && r.timeIn !== '--:--') existing.timeIn = r.timeIn;
+          if (isTimeEmpty(existing.timeOut) && r.timeOut && r.timeOut !== '--:--') existing.timeOut = r.timeOut;
+        } else {
+          recordsMap.set(key, {
+            id: `suprep-${r.id}`,
+            employeeId: emp.id,
+            employeeName: emp.name,
+            date: d,
+            timeIn: r.timeIn || '',
+            timeOut: r.timeOut || '',
+            status: 'مداوم'
+          });
+        }
+      }
+    });
+
+    const finalRecordsList = Array.from(recordsMap.values());
+    window.debugFinalRecords = finalRecordsList;
+
     let earlyTargetRecords = [];
     let lateTargetRecords = [];
 
     if (dateMode === 'day') {
-      earlyTargetRecords = attendanceRecords.filter(r => r.date === selectedDate);
-      const currentMonth = selectedDate.substring(0, 7);
-      lateTargetRecords = attendanceRecords.filter(r => r.date && r.date.startsWith(currentMonth));
+      earlyTargetRecords = finalRecordsList.filter(r => r.date === selectedDate);
+      lateTargetRecords = finalRecordsList.filter(r => r.date === selectedDate);
     } else if (dateMode === 'month') {
-      earlyTargetRecords = attendanceRecords.filter(r => r.date && r.date.startsWith(selectedMonth));
+      earlyTargetRecords = finalRecordsList.filter(r => r.date && r.date.startsWith(selectedMonth));
       lateTargetRecords = earlyTargetRecords;
     } else if (dateMode === 'range') {
-      earlyTargetRecords = attendanceRecords.filter(r => r.date && r.date >= startDate && r.date <= endDate);
+      earlyTargetRecords = finalRecordsList.filter(r => r.date && r.date >= startDate && r.date <= endDate);
       lateTargetRecords = earlyTargetRecords;
     }
     
@@ -105,32 +271,67 @@ const HRAttendanceAlerts = ({ user }) => {
         const shift = settings.workShifts.find(s => s.name === emp.workShiftName);
         if (shift) { shiftStart = shift.startTime; shiftEnd = shift.endTime; }
       }
+
+      const empIdStr = String(emp.id).trim().toLowerCase();
+      const empNameStr = String(emp.name || '').trim().toLowerCase();
+
+      const isMatch = (id, name) => {
+        if (id && String(id).trim().toLowerCase() === empIdStr) return true;
+        if (name && empNameStr && String(name).trim().toLowerCase() === empNameStr) return true;
+        return false;
+      };
       
-      const [ssh, ssm] = shiftStart.split(':').map(Number);
-      const [seh, sem] = shiftEnd.split(':').map(Number);
+      const shiftStartMins = parseTime(shiftStart);
+      const shiftEndMins = parseTime(shiftEnd);
       
+      // Calculate repetitions for the current month
+      const currentMonthStr = selectedDate.substring(0, 7);
+      let monthlyEarlyCount = 0;
+      let monthlyLateCount = 0;
+      
+      const empMonthlyRecords = finalRecordsList.filter(r => isMatch(r.employeeId || r.userId, r.employeeName || r.userName) && r.date && r.date.startsWith(currentMonthStr));
+      empMonthlyRecords.forEach(rec => {
+        if (rec.timeOut && rec.timeOut !== '--:--') {
+          const actualEndMins = parseTime(rec.timeOut);
+          if (actualEndMins < shiftEndMins) {
+             const hasPerm = leaves.some(l => isMatch(l.employeeId, l.employeeName) && (l.status === 'موافق' || l.status === 'موافق عليه' || l.status === 'مقبول') && l.type && (l.type.startsWith('إجازة') || l.type === 'مغادرة خاصة' || l.type === 'مغادرة عمل' || l.type === 'مغادرة الدخان') && (l.date === rec.date || (rec.date >= l.startDate && rec.date <= l.endDate)));
+             if (!hasPerm) monthlyEarlyCount++;
+          }
+        }
+        if (rec.timeIn && rec.timeIn !== '--:--') {
+          const actualStartMins = parseTime(rec.timeIn);
+          if (actualStartMins > shiftStartMins + 15) { 
+              const hasPerm = leaves.some(l => isMatch(l.employeeId, l.employeeName) && (l.status === 'موافق' || l.status === 'موافق عليه' || l.status === 'مقبول') && (l.date === rec.date || (rec.date >= l.startDate && rec.date <= l.endDate)) && (l.type === 'إذن تأخير'));
+             if (!hasPerm) monthlyLateCount++;
+          }
+        }
+      });
+
       // Early Departures
-      const empEarlyRecords = earlyTargetRecords.filter(r => String(r.employeeId) === String(emp.id));
+      const empEarlyRecords = earlyTargetRecords.filter(r => isMatch(r.employeeId || r.userId, r.employeeName || r.userName));
       empEarlyRecords.forEach(record => {
         if (record.timeOut && record.timeOut !== '--:--') {
-          const [oh, om] = record.timeOut.split(':').map(Number);
-          const actualEndMins = oh * 60 + om;
-          const shiftEndMins = seh * 60 + sem;
+          const actualEndMins = parseTime(record.timeOut);
           
           if (actualEndMins < shiftEndMins) {
              const earlyMins = shiftEndMins - actualEndMins;
-             const viol = violations.find(v => (String(v.employeeId || '').trim() === String(emp.id || '').trim() || String(v.employeeName || '').trim() === String(emp.name || '').trim()) && v.date === record.date && v.type === 'مغادرة مبكرة');
+             const viol = violations.find(v => isMatch(v.employeeId, v.employeeName) && v.date === record.date && v.type === 'مغادرة مبكرة');
              
              const hasApprovedLeave = leaves.some(l => 
-                 String(l.employeeId) === String(emp.id) && 
-                 l.status !== 'مرفوض' &&
-                 (l.date === record.date || (record.date >= l.startDate && record.date <= l.endDate))
+                 isMatch(l.employeeId, l.employeeName) && 
+                  (l.status === 'موافق' || l.status === 'موافق عليه' || l.status === 'مقبول') &&
+                  l.type && (l.type.startsWith('إجازة') || l.type === 'مغادرة خاصة' || l.type === 'مغادرة عمل' || l.type === 'مغادرة الدخان') &&
+                  (l.date === record.date || (record.date >= l.startDate && record.date <= l.endDate))
              );
 
-                 if (!hasApprovedLeave) {
+             if (!hasApprovedLeave) {
                  let status = 'معلق';
                  if (viol) {
-                   status = viol.action === 'تجاهل' ? 'مرفوض' : 'موافق عليه';
+                   if (!viol.action || viol.action === 'معلق') {
+                     status = 'معلق';
+                   } else {
+                     status = viol.action === 'تجاهل' ? 'مرفوض' : 'موافق عليه';
+                   }
                  }
 
                  earlyList.push({
@@ -143,73 +344,59 @@ const HRAttendanceAlerts = ({ user }) => {
                    shiftEnd: shiftEnd,
                    status: status,
                    actionTaken: viol ? viol.action : null,
-                   deductionAmount: viol ? (viol.deductionAmount || 0) : 0
+                   deductionAmount: viol ? (viol.deductionAmount || 0) : 0,
+                   monthlyCount: monthlyEarlyCount
                  });
              }
           }
         }
       });
 
-      // Repeated Lates
-      let lateCount = 0;
-      const empLateRecords = lateTargetRecords.filter(r => String(r.employeeId) === String(emp.id));
-      empLateRecords.forEach(rec => {
-        if (rec.timeIn && rec.timeIn !== '--:--') {
-          const [ah, am] = rec.timeIn.split(':').map(Number);
-          const actualStartMins = ah * 60 + am;
-          const shiftStartMins = ssh * 60 + ssm;
-          if (actualStartMins > shiftStartMins + 15) { 
+      // Lates
+      const empLateRecords = lateTargetRecords.filter(r => isMatch(r.employeeId || r.userId, r.employeeName || r.userName));
+      empLateRecords.forEach(record => {
+        if (record.timeIn && record.timeIn !== '--:--') {
+          const actualStartMins = parseTime(record.timeIn);
+          if (actualStartMins > shiftStartMins + 5) { 
               const hasLatePermission = leaves.some(l => 
-                  String(l.employeeId) === String(emp.id) && 
-                  l.status !== 'مرفوض' &&
-                  (l.date === rec.date || (rec.date >= l.startDate && rec.date <= l.endDate)) &&
-                  (l.type === 'إذن تأخير' || l.type === 'مغادرة خاصة' || l.type === 'مغادرة عمل')
+                  isMatch(l.employeeId, l.employeeName) && 
+                  (l.status === 'موافق' || l.status === 'موافق عليه' || l.status === 'مقبول') &&
+                  l.type && (l.type.startsWith('إجازة') || l.type === 'إذن تأخير') && (l.date === record.date || (record.date >= l.startDate && record.date <= l.endDate))
               );
+              
+              window.debugAlerts = window.debugAlerts || {};
+              window.debugAlerts[emp.name] = { record, hasLatePermission, actualStartMins, shiftStartMins, leaves };
+
              if (!hasLatePermission) {
-                 lateCount++;
+                 const lateMins = actualStartMins - shiftStartMins;
+                 const viol = violations.find(v => isMatch(v.employeeId, v.employeeName) && v.date === record.date && v.type === 'تأخير');
+                 
+                 let status = 'معلق';
+                 if (viol) {
+                   if (!viol.action || viol.action === 'معلق') {
+                     status = 'معلق';
+                   } else {
+                     status = viol.action === 'تجاهل' ? 'مرفوض' : 'موافق عليه';
+                   }
+                 }
+
+                 lateList.push({
+                   id: emp.id,
+                   name: emp.name,
+                   department: emp.department || '-',
+                   date: record.date,
+                   timeIn: record.timeIn,
+                   lateMins: lateMins,
+                   shiftStart: shiftStart,
+                   status: status,
+                   actionTaken: viol ? viol.action : null,
+                   deductionAmount: viol ? (viol.deductionAmount || 0) : 0,
+                   monthlyCount: monthlyLateCount,
+                   violId: viol ? viol.id : null
+                 });
              }
           }
         }
-      });
-      
-      const currentMonth = selectedDate.substring(0, 7);
-      const empLateViols = violations.filter(v => 
-        String(v.employeeId) === String(emp.id) && 
-        v.type === 'تأخير' && 
-        v.date && 
-        (dateMode === 'day' ? v.date.startsWith(currentMonth) :
-         dateMode === 'month' ? v.date.startsWith(selectedMonth) :
-         v.date >= startDate && v.date <= endDate)
-      );
-
-      const lateViolsCount = empLateViols.length;
-      
-      // 1. If we want pending (unprocessed) lates
-      if (lateCount >= 3 && lateCount >= (lateViolsCount + 1) * 3) {
-        lateList.push({
-          id: emp.id,
-          name: emp.name,
-          department: emp.department || '-',
-          lateCount: lateCount,
-          status: 'معلق'
-        });
-      }
-
-      // 2. If we want processed lates
-      empLateViols.forEach(viol => {
-        const isRejected = (viol.action === 'تجاهل');
-        
-        lateList.push({
-          id: emp.id,
-          name: emp.name,
-          department: emp.department || '-',
-          lateCount: 3,
-          status: isRejected ? 'مرفوض' : 'موافق عليه',
-          actionTaken: viol.action,
-          deductionAmount: viol.deductionAmount || 0,
-          violId: viol.id,
-          date: viol.date
-        });
       });
     });
 
@@ -223,7 +410,7 @@ const HRAttendanceAlerts = ({ user }) => {
 
     setEarlyDepartures(earlyList.filter(a => filterStatus === 'الكل' || a.status === filterStatus));
     setRepeatedLates(lateList.filter(a => filterStatus === 'الكل' || a.status === filterStatus));
-  }, [dateMode, selectedDate, selectedMonth, startDate, endDate, attendanceRecords, employees, settings, loading, violations, leaves, filterStatus]);
+  }, [dateMode, selectedDate, selectedMonth, startDate, endDate, attendanceRecords, rawLogs, employeeReports, supervisorReports, employees, settings, loading, violations, leaves, filterStatus]);
 
   const handleIgnoreAlert = async (empData, type) => {
       setOpenDropdownId(null);
@@ -244,7 +431,7 @@ const HRAttendanceAlerts = ({ user }) => {
                   employeeId: empData.id,
                   employeeName: empData.name,
                   department: empData.department || 'غير محدد',
-                  date: type === 'early' ? empData.date : selectedDate,
+                  date: empData.date,
                   type: type === 'early' ? 'مغادرة مبكرة' : 'تأخير',
                   deductionAmount: 0,
                   reason: 'تم التجاهل من قبل الإدارة',
@@ -267,54 +454,25 @@ const HRAttendanceAlerts = ({ user }) => {
     let totalMins = 0;
     
     if (type === 'late') {
-       const currentMonth = dateMode === 'day' ? selectedDate.substring(0, 7) : 
-                           dateMode === 'month' ? selectedMonth : '';
-       
-       const empLateRecords = attendanceRecords.filter(r => 
-           String(r.employeeId) === String(empData.id) &&
-           (dateMode === 'range' ? (r.date >= startDate && r.date <= endDate) : (r.date && r.date.startsWith(currentMonth)))
-       );
-       
-       let shiftStart = employees.find(e => e.id === empData.id)?.shiftStart || '08:00';
-       if (employees.find(e => e.id === empData.id)?.workShiftName && settings?.workShifts) {
-          const s = settings.workShifts.find(x => x.name === employees.find(e => e.id === empData.id).workShiftName);
-          if (s) shiftStart = s.startTime;
-       }
-       const [ssh, ssm] = shiftStart.split(':').map(Number);
-       const shiftStartMins = ssh * 60 + ssm;
-       
-       let rows = '';
-       empLateRecords.forEach(rec => {
-           if (rec.timeIn && rec.timeIn !== '--:--') {
-               const [ah, am] = rec.timeIn.split(':').map(Number);
-               const actualStartMins = ah * 60 + am;
-               if (actualStartMins > shiftStartMins + 15) {
-                   const lateMins = actualStartMins - shiftStartMins;
-                   totalMins += lateMins;
-                   rows += `<tr>
-                     <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${rec.date}</td>
-                     <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;" dir="ltr">${rec.timeIn}</td>
-                     <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; color: #ef4444; font-weight: bold;">${lateMins} دقيقة</td>
-                   </tr>`;
-               }
-           }
-       });
-       
+       totalMins = empData.lateMins;
        tableHtml = `
-         <div style="margin-bottom: 15px; text-align: right; max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+         <div style="margin-bottom: 20px; text-align: right; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
            <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
-             <thead style="position: sticky; top: 0; background: #f8fafc; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+             <thead style="background: #f8fafc;">
                <tr>
                  <th style="padding: 10px 8px; text-align: right; color: #475569;">التاريخ</th>
-                 <th style="padding: 10px 8px; text-align: right; color: #475569;">وقت الحضور</th>
-                 <th style="padding: 10px 8px; text-align: right; color: #475569;">دقائق التأخير</th>
+                 <th style="padding: 10px 8px; text-align: right; color: #475569;">وقت الدخول</th>
+                 <th style="padding: 10px 8px; text-align: right; color: #475569;">التأخير</th>
                </tr>
              </thead>
-             <tbody>${rows}</tbody>
+             <tbody>
+               <tr>
+                 <td style="padding: 12px 8px; border-bottom: 1px solid #e2e8f0;">${empData.date}</td>
+                 <td style="padding: 12px 8px; border-bottom: 1px solid #e2e8f0;" dir="ltr">${empData.timeIn}</td>
+                 <td style="padding: 12px 8px; border-bottom: 1px solid #e2e8f0; color: #ef4444; font-weight: bold;">${empData.lateMins} دقيقة</td>
+               </tr>
+             </tbody>
            </table>
-         </div>
-         <div style="text-align: right; margin-bottom: 20px; font-weight: bold; color: #1e293b; background: #fef2f2; padding: 12px; border-radius: 8px; border: 1px solid #fee2e2;">
-           إجمالي التأخير: <span style="color: #ef4444; font-size: 1.1rem;">${totalMins} دقيقة</span> (${empData.lateCount} مرات)
          </div>
        `;
     } else if (type === 'early') {
@@ -391,12 +549,12 @@ const HRAttendanceAlerts = ({ user }) => {
           employeeId: empData.id,
           employeeName: empData.name,
           department: empData.department || 'غير محدد',
-          date: type === 'early' ? empData.date : selectedDate,
+          date: empData.date,
           type: type === 'early' ? 'مغادرة مبكرة' : 'تأخير',
           deductionAmount: Number(amount),
           reason: type === 'early' 
             ? `خصم إداري: مغادرة مبكرة بتاريخ ${empData.date} (${empData.earlyMins} دقيقة)`
-            : `خصم إداري: تأخير متكرر (${empData.lateCount} مرات بإجمالي ${totalMins} دقيقة)`,
+            : `خصم إداري: تأخير بتاريخ ${empData.date} (${empData.lateMins} دقيقة)`,
           action: 'خصم مالي',
         }, { name: user?.name || 'النظام' });
         
@@ -454,14 +612,13 @@ const HRAttendanceAlerts = ({ user }) => {
 
     empLateRecords.forEach(rec => {
       if (rec.timeIn && rec.timeIn !== '--:--') {
-        const [ah, am] = rec.timeIn.split(':').map(Number);
-        const actualStartMins = ah * 60 + am;
+        const actualStartMins = parseTime(rec.timeIn);
         if (actualStartMins > shiftStartMins + 15) {
           const hasLatePermission = leaves.some(l => 
               String(l.employeeId) === String(empId) && 
               l.status !== 'مرفوض' &&
               (l.date === rec.date || (rec.date >= l.startDate && rec.date <= l.endDate)) &&
-              (l.type === 'إذن تأخير' || l.type === 'مغادرة خاصة' || l.type === 'مغادرة عمل')
+              (l.type === 'إذن تأخير')
           );
           if (!hasLatePermission) {
             const lateMins = actualStartMins - shiftStartMins;
@@ -729,8 +886,8 @@ const HRAttendanceAlerts = ({ user }) => {
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div style={{ textAlign: 'left' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>تنبيهات التأخير المتكرر</h3>
-              <p style={{ color: '#64748b', fontSize: '0.85rem', margin: '4px 0 0 0' }}>موظفون تجاوزوا عدد فرص التأخير<br/>المسموح بها</p>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>تنبيهات التأخير</h3>
+              <p style={{ color: '#64748b', fontSize: '0.85rem', margin: '4px 0 0 0' }}>جميع حالات التأخير الصباحي<br/>والمتجاوزة للوقت المسموح</p>
             </div>
             <div style={{ background: '#fee2e2', padding: '16px', borderRadius: '50%', color: '#ef4444', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               <AlertTriangle size={32} />
@@ -761,8 +918,10 @@ const HRAttendanceAlerts = ({ user }) => {
                 <tr>
                   <th style={{ padding: '16px 24px', fontWeight: '600' }}>الموظف</th>
                   <th style={{ padding: '16px 24px', fontWeight: '600' }}>القسم</th>
+                  <th style={{ padding: '16px 24px', fontWeight: '600', textAlign: 'center' }}>التاريخ</th>
                   <th style={{ padding: '16px 24px', fontWeight: '600', textAlign: 'center' }}>وقت الخروج</th>
                   <th style={{ padding: '16px 24px', fontWeight: '600', textAlign: 'center' }}>الخروج المبكر</th>
+                  <th style={{ padding: '16px 24px', fontWeight: '600', textAlign: 'center' }}>تكرار (هذا الشهر)</th>
                   <th style={{ padding: '16px 24px', fontWeight: '600', textAlign: 'center' }}>نهاية الدوام</th>
                   <th style={{ padding: '16px 24px', fontWeight: '600', textAlign: 'center' }}>إجراء</th>
                 </tr>
@@ -774,10 +933,16 @@ const HRAttendanceAlerts = ({ user }) => {
                   <tr key={index} style={{ borderTop: '1px solid #f1f5f9', transition: 'all 0.2s' }}>
                     <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#1e293b' }}>{emp.name}</td>
                     <td style={{ padding: '16px 24px', color: '#64748b' }}>{emp.department}</td>
-                    <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#1e293b', textAlign: 'center' }} dir="ltr">{emp.timeOut}</td>
+                    <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#1e293b', textAlign: 'center' }}>{emp.date}</td>
+                    <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#1e293b', textAlign: 'center' }} dir="ltr">{formatTime12h(emp.timeOut)}</td>
                     <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#d97706', textAlign: 'center' }}>{emp.earlyMins} دقيقة</td>
+                    <td style={{ padding: '16px 24px', textAlign: 'center' }}>
+                      <span style={{ background: '#f1f5f9', color: '#475569', padding: '4px 10px', borderRadius: '12px', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                        {emp.monthlyCount} مرات
+                      </span>
+                    </td>
                     <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#1e293b', textAlign: 'center' }} dir="ltr">{emp.shiftEnd}</td>
-                    <td style={{ padding: '16px 24px', textAlign: 'center', position: 'relative', zIndex: openDropdownId === `early-${emp.id}` ? 30 : 1 }}>
+                    <td style={{ padding: '16px 24px', textAlign: 'center', position: 'relative', zIndex: openDropdownId === `early-${emp.id}-${emp.date}` ? 30 : 1 }}>
                       {emp.status !== 'معلق' ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                           <span style={{ 
@@ -798,28 +963,30 @@ const HRAttendanceAlerts = ({ user }) => {
                           )}
                         </div>
                       ) : (
-                        <>
-                          <button 
-                            onClick={() => setOpenDropdownId(openDropdownId === `early-${emp.id}` ? null : `early-${emp.id}`)}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#fffbeb', border: '1px solid #fde68a', color: '#d97706', padding: '8px 16px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem', width: '180px', justifycontent: 'space-between' }}
-                          >
-                             <ChevronDown size={16} /> تطبيق إجراء <Upload size={14} />
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
+                          <button onClick={() => handleIgnoreAlert(emp, 'early')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fef2f2', border: '1px solid #fecaca', color: '#ef4444', padding: '8px', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }} onMouseOver={(e) => e.currentTarget.style.background = '#fee2e2'} onMouseOut={(e) => e.currentTarget.style.background = '#fef2f2'} title="تجاهل الحالة">
+                            <Trash2 size={18} />
                           </button>
-                          
-                          {openDropdownId === `early-${emp.id}` && (
-                            <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', zIndex: 50, width: '200px', marginTop: '4px', overflow: 'hidden' }}>
-                               <button onClick={() => handleApplyDeduction(emp, 'early')} style={{ width: '100%', padding: '12px 16px', textAlign: 'right', background: 'transparent', border: 'none', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#d97706', fontWeight: '600' }} onMouseOver={(e) => e.currentTarget.style.background = '#fef3c7'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}>
-                                 <Upload size={14} /> تطبيق خصم من الراتب
-                               </button>
-                               <button onClick={() => handleRegisterPenalty(emp.name, 'مغادرة مبكرة', `تم تسجيل خروج مبكر للموظف بتاريخ ${selectedDate} في تمام الساعة ${emp.timeOut}، حيث غادر قبل نهاية دوامه بمقدار ${emp.earlyMins} دقيقة ولم يقم بتقديم طلب مغادرة أو إذن رسمي.`)} style={{ width: '100%', padding: '12px 16px', textAlign: 'right', background: 'transparent', border: 'none', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', fontWeight: '600' }} onMouseOver={(e) => e.currentTarget.style.background = '#fee2e2'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}>
-                                 <FileMinus size={14} /> تسجيل مخالفة
-                               </button>
-                               <button onClick={() => handleIgnoreAlert(emp, 'early')} style={{ width: '100%', padding: '12px 16px', textAlign: 'right', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b', fontWeight: '600' }} onMouseOver={(e) => e.currentTarget.style.background = '#f1f5f9'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}>
-                                 <Trash2 size={14} /> حذف / تجاهل
-                               </button>
-                            </div>
-                          )}
-                        </>
+                          <div style={{ position: 'relative' }}>
+                            <button 
+                              onClick={() => setOpenDropdownId(openDropdownId === `early-${emp.id}-${emp.date}` ? null : `early-${emp.id}-${emp.date}`)}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#fffbeb', border: '1px solid #fde68a', color: '#d97706', padding: '8px 16px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem', width: '140px', justifyContent: 'space-between' }}
+                            >
+                               تطبيق إجراء <ChevronDown size={16} />
+                            </button>
+                            
+                            {openDropdownId === `early-${emp.id}-${emp.date}` && (
+                              <div style={{ position: 'absolute', top: '100%', right: '0', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', zIndex: 50, width: '200px', marginTop: '4px', overflow: 'hidden' }}>
+                                 <button onClick={() => handleApplyDeduction(emp, 'early')} style={{ width: '100%', padding: '12px 16px', textAlign: 'right', background: 'transparent', border: 'none', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#d97706', fontWeight: '600' }} onMouseOver={(e) => e.currentTarget.style.background = '#fef3c7'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}>
+                                   <Upload size={14} /> تطبيق خصم من الراتب
+                                 </button>
+                                 <button onClick={() => handleRegisterPenalty(emp.name, 'مغادرة مبكرة', `تم تسجيل خروج مبكر للموظف بتاريخ ${emp.date} في تمام الساعة ${emp.timeOut}، حيث غادر قبل نهاية دوامه بمقدار ${emp.earlyMins} دقيقة، وبلغت تكرارات ذلك هذا الشهر ${emp.monthlyCount} مرات.`)} style={{ width: '100%', padding: '12px 16px', textAlign: 'right', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', fontWeight: '600' }} onMouseOver={(e) => e.currentTarget.style.background = '#fee2e2'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}>
+                                   <FileMinus size={14} /> تسجيل مخالفة
+                                 </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -829,16 +996,16 @@ const HRAttendanceAlerts = ({ user }) => {
           </div>
         </div>
 
-        {/* Repeated Lates Table */}
+        {/* Lates Table */}
         <div style={{ background: '#ffffff', border: '1px solid #f1f5f9', borderRadius: '16px', overflow: (openDropdownId && openDropdownId.startsWith('late-')) ? 'visible' : 'hidden', zIndex: (openDropdownId && openDropdownId.startsWith('late-')) ? 20 : 1, position: 'relative', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.02)' }}>
           <div style={{ padding: '16px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                <h3 style={{ fontWeight: 'bold', color: '#1e293b', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                 التأخير المتكرر ({filteredRepeatedLates.length})
+                 تنبيهات التأخير ({filteredRepeatedLates.length})
                </h3>
                <AlertTriangle size={18} style={{ color: '#ef4444' }} />
             </div>
-            <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>تجاوزوا 3 فرص تأخير</span>
+            <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>جميع حالات التأخير غير المبررة</span>
           </div>
           
           <div style={{ overflow: openDropdownId ? 'visible' : 'auto' }}>
@@ -847,27 +1014,29 @@ const HRAttendanceAlerts = ({ user }) => {
                 <tr>
                   <th style={{ padding: '16px 24px', fontWeight: '600' }}>الموظف</th>
                   <th style={{ padding: '16px 24px', fontWeight: '600' }}>القسم</th>
-                  <th style={{ padding: '16px 24px', fontWeight: '600', textAlign: 'center' }}>التأخيرات (غير مخصومة)</th>
+                  <th style={{ padding: '16px 24px', fontWeight: '600', textAlign: 'center' }}>التاريخ</th>
+                  <th style={{ padding: '16px 24px', fontWeight: '600', textAlign: 'center' }}>وقت الدخول</th>
+                  <th style={{ padding: '16px 24px', fontWeight: '600', textAlign: 'center' }}>التأخير</th>
+                  <th style={{ padding: '16px 24px', fontWeight: '600', textAlign: 'center' }}>تكرار (هذا الشهر)</th>
                   <th style={{ padding: '16px 24px', fontWeight: '600', textAlign: 'center' }}>إجراء</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredRepeatedLates.length === 0 ? (
-                  <tr><td colSpan="4" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>لا توجد حالات تأخير متكرر</td></tr>
+                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>لا توجد حالات تأخير</td></tr>
                 ) : filteredRepeatedLates.map((emp, index) => (
                   <tr key={index} style={{ borderTop: '1px solid #f1f5f9', transition: 'all 0.2s' }}>
                     <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#1e293b' }}>{emp.name}</td>
                     <td style={{ padding: '16px 24px', color: '#64748b' }}>{emp.department}</td>
-                    <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#ef4444', textAlign: 'center' }}>
-                       <button
-                         onClick={() => handleViewLateDetails(emp.id)}
-                         style={{ background: 'none', border: 'none', color: '#ef4444', fontWeight: 'bold', textDecoration: 'underline', cursor: 'pointer', outline: 'none', fontFamily: 'inherit', fontSize: '0.9rem' }}
-                         title="اضغط لعرض تفاصيل التواريخ والقيمة المالية"
-                       >
-                         {emp.lateCount} تأخيرات
-                       </button>
+                    <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#1e293b', textAlign: 'center' }}>{emp.date}</td>
+                    <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#1e293b', textAlign: 'center' }} dir="ltr">{formatTime12h(emp.timeIn)}</td>
+                    <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#ef4444', textAlign: 'center' }}>{emp.lateMins} دقيقة</td>
+                    <td style={{ padding: '16px 24px', textAlign: 'center' }}>
+                      <span style={{ background: '#f1f5f9', color: '#475569', padding: '4px 10px', borderRadius: '12px', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                        {emp.monthlyCount} مرات
+                      </span>
                     </td>
-                    <td style={{ padding: '16px 24px', textAlign: 'center', position: 'relative', zIndex: openDropdownId === `late-${emp.id}` ? 30 : 1 }}>
+                    <td style={{ padding: '16px 24px', textAlign: 'center', position: 'relative', zIndex: openDropdownId === `late-${emp.id}-${emp.date}` ? 30 : 1 }}>
                       {emp.status !== 'معلق' ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                           <span style={{ 
@@ -888,28 +1057,30 @@ const HRAttendanceAlerts = ({ user }) => {
                           )}
                         </div>
                       ) : (
-                        <>
-                          <button 
-                            onClick={() => setOpenDropdownId(openDropdownId === `late-${emp.id}` ? null : `late-${emp.id}`)}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#fef2f2', border: '1px solid #fecaca', color: '#ef4444', padding: '8px 16px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem', width: '180px', justifyContent: 'space-between' }}
-                          >
-                             <ChevronDown size={16} /> تطبيق إجراء <Upload size={14} />
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
+                          <button onClick={() => handleIgnoreAlert(emp, 'late')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fef2f2', border: '1px solid #fecaca', color: '#ef4444', padding: '8px', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }} onMouseOver={(e) => e.currentTarget.style.background = '#fee2e2'} onMouseOut={(e) => e.currentTarget.style.background = '#fef2f2'} title="تجاهل الحالة">
+                            <Trash2 size={18} />
                           </button>
-                          
-                          {openDropdownId === `late-${emp.id}` && (
-                            <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', zIndex: 50, width: '200px', marginTop: '4px', overflow: 'hidden' }}>
-                               <button onClick={() => handleApplyDeduction(emp, 'late')} style={{ width: '100%', padding: '12px 16px', textAlign: 'right', background: 'transparent', border: 'none', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', fontWeight: '600' }} onMouseOver={(e) => e.currentTarget.style.background = '#fee2e2'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}>
-                                 <Upload size={14} /> تطبيق خصم من الراتب
-                               </button>
-                               <button onClick={() => handleRegisterPenalty(emp.name, 'تأخير', `تجاوز الموظف الحد المسموح به للتأخير الصباحي خلال الشهر الحالي، حيث بلغ عدد مرات التأخير غير المبرر ${emp.lateCount} مرات.`)} style={{ width: '100%', padding: '12px 16px', textAlign: 'right', background: 'transparent', border: 'none', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', fontWeight: '600' }} onMouseOver={(e) => e.currentTarget.style.background = '#fee2e2'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}>
-                                 <FileMinus size={14} /> تسجيل مخالفة
-                               </button>
-                               <button onClick={() => handleIgnoreAlert(emp, 'late')} style={{ width: '100%', padding: '12px 16px', textAlign: 'right', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b', fontWeight: '600' }} onMouseOver={(e) => e.currentTarget.style.background = '#f1f5f9'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}>
-                                 <Trash2 size={14} /> حذف / تجاهل
-                               </button>
-                            </div>
-                          )}
-                        </>
+                          <div style={{ position: 'relative' }}>
+                            <button 
+                              onClick={() => setOpenDropdownId(openDropdownId === `late-${emp.id}-${emp.date}` ? null : `late-${emp.id}-${emp.date}`)}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#fef2f2', border: '1px solid #fecaca', color: '#ef4444', padding: '8px 16px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem', width: '140px', justifyContent: 'space-between' }}
+                            >
+                               تطبيق إجراء <ChevronDown size={16} />
+                            </button>
+                            
+                            {openDropdownId === `late-${emp.id}-${emp.date}` && (
+                              <div style={{ position: 'absolute', top: '100%', right: '0', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', zIndex: 50, width: '200px', marginTop: '4px', overflow: 'hidden' }}>
+                                 <button onClick={() => handleApplyDeduction(emp, 'late')} style={{ width: '100%', padding: '12px 16px', textAlign: 'right', background: 'transparent', border: 'none', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', fontWeight: '600' }} onMouseOver={(e) => e.currentTarget.style.background = '#fee2e2'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}>
+                                   <Upload size={14} /> تطبيق خصم من الراتب
+                                 </button>
+                                 <button onClick={() => handleRegisterPenalty(emp.name, 'تأخير', `تأخر الموظف عن العمل بتاريخ ${emp.date} بمقدار ${emp.lateMins} دقيقة، وبلغت تكرارات التأخير غير المبرر هذا الشهر ${emp.monthlyCount} مرات.`)} style={{ width: '100%', padding: '12px 16px', textAlign: 'right', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', fontWeight: '600' }} onMouseOver={(e) => e.currentTarget.style.background = '#fee2e2'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}>
+                                   <FileMinus size={14} /> تسجيل مخالفة
+                                 </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -1049,7 +1220,7 @@ const HRAttendanceAlerts = ({ user }) => {
                     viewLatesModal.lates.map((late, idx) => (
                       <tr key={idx} style={{ borderBottom: idx < viewLatesModal.lates.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
                         <td style={{ padding: '12px 16px', color: '#1e293b', fontWeight: '500' }}>{late.date}</td>
-                        <td style={{ padding: '12px 16px', color: '#64748b', textAlign: 'center' }} dir="ltr">{late.timeIn}</td>
+                        <td style={{ padding: '12px 16px', color: '#64748b', textAlign: 'center' }} dir="ltr">{formatTime12h(late.timeIn)}</td>
                         <td style={{ padding: '12px 16px', color: '#ef4444', fontWeight: 'bold', textAlign: 'center' }}>{late.lateMins} دقيقة</td>
                         <td style={{ padding: '12px 16px', color: '#10b981', fontWeight: 'bold', textAlign: 'center' }}>
                           {late.financialDeduction > 0 ? `${late.financialDeduction.toFixed(2)} د.أ` : '0.00 د.أ'}

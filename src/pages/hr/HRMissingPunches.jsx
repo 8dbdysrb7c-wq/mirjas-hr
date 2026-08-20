@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Clock, Check, X, Search, Filter, Fingerprint, Undo2, Trash2, User, ArrowUpDown, ArrowUp, ArrowDown, MessageCircle, Plus, Eye, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
-import { getMissingPunches, updateMissingPunchStatus, deleteMissingPunch, saveHRAuditLog, getEmployees, saveHRViolation, saveMissingPunch, getHRAttendance, saveHRAttendance, saveEmployee, getHRLeaves } from '../../store';
+import { getMissingPunches, updateMissingPunchStatus, deleteMissingPunch, saveHRAuditLog, getEmployees, saveHRViolation, saveMissingPunch, getHRAttendance, saveHRAttendance, saveEmployee, getHRLeaves, saveHRLeave } from '../../store';
 import Swal from 'sweetalert2';
-import { sendWhatsAppNotification } from '../../utils/whatsappService';
-import Select from 'react-select';
+import { sendWhatsAppNotification, sendTemplatedWhatsAppNotification } from '../../utils/whatsappService';
+import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import 'flatpickr/dist/themes/light.css';
 const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [year, setYear] = useState(() => parseInt(selectedMonth.split('-')[0]) || new Date().getFullYear());
-  
+
   const arabicMonths = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -34,7 +34,7 @@ const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
 
   return (
     <div className="custom-month-picker-container" style={{ position: 'relative', direction: 'rtl' }}>
-      <div 
+      <div
         onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
         style={{
           display: 'flex',
@@ -62,7 +62,7 @@ const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
       </div>
 
       {isOpen && (
-        <div 
+        <div
           style={{
             position: 'absolute',
             top: 'calc(100% + 6px)',
@@ -78,7 +78,7 @@ const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
           onClick={(e) => e.stopPropagation()}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
-            <button 
+            <button
               type="button"
               onClick={() => setYear(y => y - 1)}
               style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748b', fontWeight: 'bold' }}
@@ -86,7 +86,7 @@ const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
               &lt;
             </button>
             <span style={{ fontWeight: '800', color: '#1e293b', fontSize: '15px' }}>{year}</span>
-            <button 
+            <button
               type="button"
               onClick={() => setYear(y => y + 1)}
               disabled={year >= currentYear}
@@ -135,6 +135,47 @@ const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
   );
 };
 
+const timeToMinutes = (timeStr) => {
+  if (!timeStr || typeof timeStr !== 'string') return 0;
+
+  let cleanStr = timeStr.trim();
+  const isPM = cleanStr.includes('م') || cleanStr.toLowerCase().includes('pm');
+  const isAM = cleanStr.includes('ص') || cleanStr.toLowerCase().includes('am');
+
+  let digits = cleanStr.replace(/[^0-9:]/g, '');
+  const parts = digits.split(':');
+  if (parts.length < 2) return 0;
+
+  let hours = parseInt(parts[0], 10) || 0;
+  const minutes = parseInt(parts[1], 10) || 0;
+
+  if (isPM || isAM) {
+    if (isPM && hours !== 12) {
+      hours += 12;
+    }
+    if (isAM && hours === 12) {
+      hours = 0;
+    }
+  }
+
+  return hours * 60 + minutes;
+};
+
+const formatTime12h = (timeStr) => {
+  if (!timeStr || timeStr === '--:--') return '--:--';
+  if (timeStr.includes('ص') || timeStr.includes('م') || timeStr.toLowerCase().includes('am') || timeStr.toLowerCase().includes('pm')) {
+    return timeStr;
+  }
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return timeStr;
+  let hours = parseInt(parts[0], 10);
+  const minutes = parts[1];
+  if (isNaN(hours)) return timeStr;
+  const suffix = hours >= 12 ? 'م' : 'ص';
+  const displayHours = hours % 12 || 12;
+  return `${displayHours}:${minutes} ${suffix}`;
+};
+
 const HRMissingPunches = ({ user, refreshCounts }) => {
   const [punches, setPunches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -154,12 +195,16 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
     d.setDate(1);
     return getLocalDateStr(d);
   });
-  const [dateTo, setDateTo] = useState(() => getLocalDateStr(new Date()));
+  const [dateTo, setDateTo] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return getLocalDateStr(d);
+  });
   const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
   const [inlineTimes, setInlineTimes] = useState({});
 
   // 1. Add dateMode filter states for the redesign
-  const [dateMode, setDateMode] = useState('month');
+  const [dateMode, setDateMode] = useState('range');
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -170,7 +215,11 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
     d.setDate(1);
     return getLocalDateStr(d);
   });
-  const [endDate, setEndDate] = useState(() => getLocalDateStr(new Date()));
+  const [endDate, setEndDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return getLocalDateStr(d);
+  });
 
   // 2. Sync dateFrom and dateTo based on dateMode
   useEffect(() => {
@@ -214,7 +263,8 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
   const fetchPunches = async () => {
     setLoading(true);
     const data = await getMissingPunches();
-    const emps = await getEmployees();
+    const allEmps = await getEmployees();
+    const emps = allEmps.filter(e => e.name !== 'المدير العام' && e.id !== 'admin' && e.level !== 'admin' && !['غير فعال', 'مستقيل', 'منتهي خدمات'].includes(e.employmentStatus || e.status));
     const attendance = await getHRAttendance();
     const leaves = await getHRLeaves();
 
@@ -242,6 +292,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
         const hasLeave = leaves.some(l =>
           String(l.employeeId) === String(emp.id) &&
           (l.status === 'موافق' || l.status === 'مقبول') &&
+          l.type && l.type.startsWith('إجازة') &&
           ((l.date === dateStr) || (l.startDate <= dateStr && l.endDate >= dateStr))
         );
         if (hasLeave) return;
@@ -267,11 +318,19 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
 
     // 2. Detect Missing Check-out
     attendance.forEach(rec => {
+      if (rec.isLeave) return;
       const hasManual = data.some(p => String(p.employeeId) === String(rec.employeeId) && p.date === rec.date && p.type === 'خروج');
       if (hasManual) return;
 
+      const hasLeave = leaves.some(l =>
+        String(l.employeeId) === String(rec.employeeId) &&
+        (l.status === 'موافق' || l.status === 'موافق عليه' || l.status === 'مقبول') &&
+        l.type && l.type.startsWith('إجازة') &&
+        ((l.date === rec.date) || (l.startDate <= rec.date && l.endDate >= rec.date))
+      );
+
       if (rec.timeIn && (!rec.timeOut || rec.timeOut === '--:--') && rec.date >= dateFrom && rec.date <= dateTo) {
-        if (!['غائب', 'غياب غير مبرر', 'مغادرة مبكرة', 'إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'].includes(rec.status)) {
+        if (!['غائب', 'غياب غير مبرر', 'مغادرة مبكرة', 'إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'].includes(rec.status) && !hasLeave) {
           virtualPunches.push({
             id: `virtual_out_${rec.id}`,
             isVirtual: true,
@@ -290,9 +349,9 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
       }
     });
 
-    const combined = [...data, ...virtualPunches];
+    const combined = [...data, ...virtualPunches].filter(p => p.employeeName !== 'المدير العام' && p.employeeId !== 'admin');
     setPunches(combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
-    setEmployees(emps);
+    setEmployees(emps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && !['غير فعال', 'مستقيل', 'منتهي خدمات'].includes(e.employmentStatus || e.status)));
     setLoading(false);
   };
 
@@ -373,9 +432,13 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
             const allEmployees = await getEmployees();
             const selectedEmp = allEmployees.find(e => String(e.id || '').trim() === String(punch.employeeId || '').trim() || String(e.name || '').trim() === String(punch.employeeName || '').trim());
             if (selectedEmp && selectedEmp.phone) {
-              const statusMsg = newStatus === 'موافق عليه' ? 'الموافقة على ✅' : 'رفض ❌';
-              const msg = `مرحباً ${selectedEmp.name}،\nنعلمك بأنه تم ${statusMsg} طلب الختمة الناقصة الخاص بك (${punch.type}) لتاريخ ${punch.date}.${adminNote ? '\nملاحظة الإدارة: ' + adminNote : ''}`;
-              await sendWhatsAppNotification(selectedEmp.phone, msg, 'missing_punches');
+              const action = newStatus === 'موافق عليه' ? 'approve' : 'reject';
+              const notesVar = adminNote ? `الملاحظات: ${adminNote}` : '';
+              await sendTemplatedWhatsAppNotification(selectedEmp.phone, 'missing_punches', action, {
+                employeeName: selectedEmp.name,
+                date: punch.date || '',
+                notes: notesVar
+              });
             }
           } catch (err) {
             console.error("Failed to send WhatsApp message:", err);
@@ -440,7 +503,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
       let finalIn = outTimeIn || punch.attendanceRecord?.timeIn;
       let finalOut = outTimeOut || punch.attendanceRecord?.timeOut;
       if (finalIn && finalOut && finalIn !== '--:--' && finalOut !== '--:--') {
-        if (finalOut < finalIn) {
+        if (timeToMinutes(finalOut) < timeToMinutes(finalIn)) {
           Swal.fire('خطأ', 'لا يمكن أن يكون وقت الخروج قبل وقت الدخول!', 'error');
           return;
         }
@@ -540,6 +603,17 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
         updateData.notes = notesPrefix + 'حُسب كإجازة سنوية لاكتشاف غياب البصمة';
         shouldUpdateEmp = true;
         newEmpData.vacationBalance = vacBal - 1;
+
+        await saveHRLeave({
+          employeeId: punch.employeeId,
+          employeeName: punch.employeeName,
+          department: emp.department || 'غير محدد',
+          type: 'إجازة سنوية',
+          date: punch.date,
+          status: 'موافق',
+          notes: `تسوية بصمة ناقصة: حُسب كإجازة سنوية لاكتشاف غياب البصمة`,
+          createdAt: new Date().toISOString()
+        });
       } else if (action === 'sick') {
         updateData.status = 'إجازة مرضية';
         updateData.timeIn = '--:--';
@@ -547,11 +621,33 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
         updateData.notes = notesPrefix + 'حُسب كإجازة مرضية لاكتشاف غياب البصمة';
         shouldUpdateEmp = true;
         newEmpData.sickLeaveBalance = sickBal - 1;
+
+        await saveHRLeave({
+          employeeId: punch.employeeId,
+          employeeName: punch.employeeName,
+          department: emp.department || 'غير محدد',
+          type: 'إجازة مرضية',
+          date: punch.date,
+          status: 'موافق',
+          notes: `تسوية بصمة ناقصة: حُسب كإجازة مرضية لاكتشاف غياب البصمة`,
+          createdAt: new Date().toISOString()
+        });
       } else if (action === 'unpaid') {
         updateData.status = 'إجازة غير مدفوعة';
         updateData.timeIn = '--:--';
         updateData.timeOut = '--:--';
         updateData.notes = notesPrefix + 'حُسب كإجازة غير مدفوعة لاكتشاف غياب البصمة';
+
+        await saveHRLeave({
+          employeeId: punch.employeeId,
+          employeeName: punch.employeeName,
+          department: emp.department || 'غير محدد',
+          type: 'إجازة غير مدفوعة',
+          date: punch.date,
+          status: 'موافق',
+          notes: `تسوية بصمة ناقصة: حُسب كإجازة غير مدفوعة لاكتشاف غياب البصمة`,
+          createdAt: new Date().toISOString()
+        });
       } else if (action === 'violation') {
         updateData.status = 'غياب غير مبرر';
         updateData.timeIn = '--:--';
@@ -581,6 +677,24 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
           action === 'vacation' ? 'إجازة سنوية' :
             action === 'sick' ? 'إجازة مرضية' :
               action === 'unpaid' ? 'إجازة غير مدفوعة' : 'مخالفة مالية';
+
+      // Update missing punch record so it appears in the approved/rejected list
+      const finalStatus = action === 'violation' ? 'مرفوض' : 'موافق عليه';
+      if (punch.isVirtual) {
+        await saveMissingPunch({
+          employeeId: punch.employeeId,
+          employeeName: punch.employeeName,
+          date: punch.date,
+          time: punch.time || '--:--',
+          type: punch.type,
+          reason: punch.reason || 'بصمة تلقائية',
+          status: finalStatus,
+          adminNote: actionDesc,
+          createdAt: new Date().toISOString()
+        });
+      } else {
+        await updateMissingPunchStatus(punch.id, finalStatus, adminName, { ...punch, adminNote: actionDesc });
+      }
 
       await saveHRAuditLog({
         user: adminName,
@@ -748,7 +862,19 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
 
     const isDuplicate = punches.some(p => String(p.employeeId || '').trim() === String(newPunch.employeeId || '').trim() && p.date === newPunch.date && p.type === newPunch.type && p.status !== 'مرفوض');
     if (isDuplicate) {
-      return Swal.fire('خطأ', 'يوجد طلب ختمة ناقصة مسبقاً لهذا الموظف في نفس التاريخ ونفس النوع!', 'error');
+      const { isConfirmed } = await Swal.fire({
+        title: 'تنبيه: طلب مكرر',
+        text: 'يوجد طلب ختمة ناقصة مسبقاً لهذا الموظف في نفس التاريخ ونفس النوع! هل تريد إضافة الطلب الجديد على أي حال؟',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، أضف على أي حال',
+        cancelButtonText: 'إلغاء',
+        customClass: {
+          confirmButton: 'btn btn-primary',
+          cancelButton: 'btn btn-outline'
+        }
+      });
+      if (!isConfirmed) return;
     }
 
     Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false });
@@ -784,9 +910,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
     else matchStatus = p.status === filterStatus;
 
     let matchMonth = true;
-    if (filterStatus !== 'الكل') {
-      if (p.date && (p.date < dateFrom || p.date > dateTo)) matchMonth = false;
-    }
+    if (p.date && (p.date < dateFrom || p.date > dateTo)) matchMonth = false;
 
     return matchSearch && matchStatus && matchMonth;
   }).sort((a, b) => {
@@ -869,9 +993,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
   const statsPunches = punches.filter(p => {
     const matchSearch = searchTerm ? String(p.employeeId) === String(searchTerm) : true;
     let matchMonth = true;
-    if (filterStatus !== 'الكل') {
-      if (p.date && (p.date < dateFrom || p.date > dateTo)) matchMonth = false;
-    }
+    if (p.date && (p.date < dateFrom || p.date > dateTo)) matchMonth = false;
     return matchSearch && matchMonth;
   });
 
@@ -882,170 +1004,170 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
 
   return (
     <div style={{ fontFamily: 'Rubik, Tajawal, sans-serif', padding: '24px', backgroundColor: '#f8fafc', minHeight: '100vh', direction: 'rtl' }}>
-      
+
       {/* Title Row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', justifyContent: 'flex-start' }}>
-        <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#1e293b', margin: 0 }}>طلبات الختمات الناقصة</h2>
         <Fingerprint className="text-[#0ea5e9]" size={24} strokeWidth={2} />
+        <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#1e293b', margin: 0 }}>طلبات الختمات الناقصة</h2>
       </div>
 
       {/* Filters Row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
-        
+
         {/* Right Side: Filters Group */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          
+
           {/* 1. Mode Toggle */}
           <div style={{ display: 'flex', backgroundColor: '#ffffff', borderRadius: '10px', padding: '4px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', height: '44px', alignItems: 'center', gap: '4px' }}>
-             <button
-                type="button"
-                onClick={() => setDateMode('day')}
-                style={{
-                  padding: '6px 14px',
-                  fontSize: '13px',
-                  fontWeight: 'bold',
-                  borderRadius: '8px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  backgroundColor: dateMode === 'day' ? '#e0f2fe' : 'transparent',
-                  color: dateMode === 'day' ? '#0284c7' : '#64748b',
-                  transition: 'all 0.2s'
-                }}
-             >
-                يومي
-             </button>
-             <button
-                type="button"
-                onClick={() => setDateMode('month')}
-                style={{
-                  padding: '6px 14px',
-                  fontSize: '13px',
-                  fontWeight: 'bold',
-                  borderRadius: '8px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  backgroundColor: dateMode === 'month' ? '#e0f2fe' : 'transparent',
-                  color: dateMode === 'month' ? '#0284c7' : '#64748b',
-                  transition: 'all 0.2s'
-                }}
-             >
-                شهري
-             </button>
-             <button
-                type="button"
-                onClick={() => setDateMode('range')}
-                style={{
-                  padding: '6px 14px',
-                  fontSize: '13px',
-                  fontWeight: 'bold',
-                  borderRadius: '8px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  backgroundColor: dateMode === 'range' ? '#e0f2fe' : 'transparent',
-                  color: dateMode === 'range' ? '#0284c7' : '#64748b',
-                  transition: 'all 0.2s'
-                }}
-             >
-                فترة
-             </button>
+            <button
+              type="button"
+              onClick={() => setDateMode('day')}
+              style={{
+                padding: '6px 14px',
+                fontSize: '13px',
+                fontWeight: 'bold',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: dateMode === 'day' ? '#e0f2fe' : 'transparent',
+                color: dateMode === 'day' ? '#0284c7' : '#64748b',
+                transition: 'all 0.2s'
+              }}
+            >
+              يومي
+            </button>
+            <button
+              type="button"
+              onClick={() => setDateMode('month')}
+              style={{
+                padding: '6px 14px',
+                fontSize: '13px',
+                fontWeight: 'bold',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: dateMode === 'month' ? '#e0f2fe' : 'transparent',
+                color: dateMode === 'month' ? '#0284c7' : '#64748b',
+                transition: 'all 0.2s'
+              }}
+            >
+              شهري
+            </button>
+            <button
+              type="button"
+              onClick={() => setDateMode('range')}
+              style={{
+                padding: '6px 14px',
+                fontSize: '13px',
+                fontWeight: 'bold',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: dateMode === 'range' ? '#e0f2fe' : 'transparent',
+                color: dateMode === 'range' ? '#0284c7' : '#64748b',
+                transition: 'all 0.2s'
+              }}
+            >
+              فترة
+            </button>
           </div>
 
           {/* 2. Month/Date Picker */}
           {dateMode === 'month' && (
-             <MonthPicker selectedMonth={selectedMonth} setSelectedMonth={setSelectedMonth} />
+            <MonthPicker selectedMonth={selectedMonth} setSelectedMonth={setSelectedMonth} />
           )}
           {dateMode === 'day' && (
-             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0 12px', height: '44px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                <Calendar size={16} style={{ color: '#0ea5e9' }} />
-                <Flatpickr 
-                  value={selectedDate}
-                  onChange={(dates, dateStr) => setSelectedDate(dateStr)}
-                  options={{ dateFormat: 'Y-m-d' }}
-                  placeholder="اختر التاريخ"
-                  style={{ border: 'none', outline: 'none', width: '100px', fontSize: '13px', fontWeight: '700', color: '#334155', backgroundColor: 'transparent' }}
-                />
-             </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0 12px', height: '44px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+              <Calendar size={16} style={{ color: '#0ea5e9' }} />
+              <Flatpickr
+                value={selectedDate}
+                onChange={(dates, dateStr) => setSelectedDate(dateStr)}
+                options={{ dateFormat: 'Y-m-d' }}
+                placeholder="اختر التاريخ"
+                style={{ border: 'none', outline: 'none', width: '100px', fontSize: '13px', fontWeight: '700', color: '#334155', backgroundColor: 'transparent' }}
+              />
+            </div>
           )}
           {dateMode === 'range' && (
-             <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0 12px', height: '44px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8' }}>من</span>
-                  <Flatpickr 
-                    value={startDate}
-                    onChange={(dates, dateStr) => setStartDate(dateStr)}
-                    options={{ dateFormat: 'Y-m-d' }}
-                    style={{ width: '85px', border: 'none', outline: 'none', fontWeight: '700', fontSize: '12px', textAlign: 'center', color: '#334155' }}
-                  />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', borderRight: '1px solid #f1f5f9', paddingRight: '8px', marginRight: '8px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8' }}>إلى</span>
-                  <Flatpickr 
-                    value={endDate}
-                    onChange={(dates, dateStr) => setEndDate(dateStr)}
-                    options={{ dateFormat: 'Y-m-d' }}
-                    style={{ width: '85px', border: 'none', outline: 'none', fontWeight: '700', fontSize: '12px', textAlign: 'center', color: '#334155' }}
-                  />
-                </div>
-             </div>
+            <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0 12px', height: '44px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8' }}>من</span>
+                <Flatpickr
+                  value={startDate}
+                  onChange={(dates, dateStr) => setStartDate(dateStr)}
+                  options={{ dateFormat: 'Y-m-d' }}
+                  style={{ width: '85px', border: 'none', outline: 'none', fontWeight: '700', fontSize: '12px', textAlign: 'center', color: '#334155' }}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', borderRight: '1px solid #f1f5f9', paddingRight: '8px', marginRight: '8px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8' }}>إلى</span>
+                <Flatpickr
+                  value={endDate}
+                  onChange={(dates, dateStr) => setEndDate(dateStr)}
+                  options={{ dateFormat: 'Y-m-d' }}
+                  style={{ width: '85px', border: 'none', outline: 'none', fontWeight: '700', fontSize: '12px', textAlign: 'center', color: '#334155' }}
+                />
+              </div>
+            </div>
           )}
 
           {/* 3. Status */}
           <div style={{ position: 'relative' }}>
-             <select
-               value={filterStatus}
-               onChange={(e) => setFilterStatus(e.target.value)}
-               style={{
-                 height: '44px',
-                 minWidth: '150px',
-                 fontSize: '13px',
-                 fontWeight: 'bold',
-                 backgroundColor: '#ffffff',
-                 border: '1px solid #e2e8f0',
-                 borderRadius: '10px',
-                 paddingRight: '14px',
-                 paddingLeft: '32px',
-                 appearance: 'none',
-                 outline: 'none',
-                 cursor: 'pointer',
-                 color: '#334155',
-                 boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-               }}
-             >
-               <option value="الكل">كل الطلبات</option>
-               <option value="معلق">الطلبات المعلقة</option>
-               <option value="موافق عليه">الموافق عليها</option>
-               <option value="مرفوض">المرفوضة</option>
-             </select>
-             <ChevronDown size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              style={{
+                height: '44px',
+                minWidth: '150px',
+                fontSize: '13px',
+                fontWeight: 'bold',
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '10px',
+                paddingRight: '14px',
+                paddingLeft: '32px',
+                appearance: 'none',
+                outline: 'none',
+                cursor: 'pointer',
+                color: '#334155',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
+            >
+              <option value="الكل">كل الطلبات</option>
+              <option value="معلق">الطلبات المعلقة</option>
+              <option value="موافق عليه">الموافق عليها</option>
+              <option value="مرفوض">المرفوضة</option>
+            </select>
+            <ChevronDown size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
           </div>
 
           {/* 4. Employee ID */}
           <div style={{ width: '200px' }}>
-               <Select
-                 options={employeeIdOptions}
-                 value={employeeIdOptions.find(opt => opt.value === searchTerm) || null}
-                 onChange={(selected) => setSearchTerm(selected ? selected.value : '')}
-                 styles={{...customSelectStyles, control: (base) => ({...base, height: '44px', minHeight: '44px', borderRadius: '10px', border: '1px solid #e2e8f0'})}}
-                 placeholder="رقم الموظف..."
-                 isSearchable={true}
-                 isClearable={true}
-               />
+            <Select
+              options={employeeIdOptions}
+              value={employeeIdOptions.find(opt => opt.value === searchTerm) || null}
+              onChange={(selected) => setSearchTerm(selected ? selected.value : '')}
+              styles={{ ...customSelectStyles, control: (base) => ({ ...base, height: '44px', minHeight: '44px', borderRadius: '10px', border: '1px solid #e2e8f0' }) }}
+              placeholder="رقم الموظف..."
+              isSearchable={true}
+              isClearable={true}
+            />
           </div>
 
           {/* 5. Employee Name */}
           <div style={{ width: '280px', position: 'relative' }}>
-               <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, color: '#94a3b8', pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
-                 <User size={16} />
-               </div>
-               <Select
-                 options={employeeNameOptions}
-                 value={employeeNameOptions.find(opt => opt.value === searchTerm) || null}
-                 onChange={(selected) => setSearchTerm(selected ? selected.value : '')}
-                 styles={{...customSelectStyles, control: (base) => ({...base, height: '44px', minHeight: '44px', borderRadius: '10px', border: '1px solid #e2e8f0', paddingLeft: '24px'})}}
-                 placeholder="اسم الموظف..."
-                 isSearchable={true}
-                 isClearable={true}
-               />
+            <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, color: '#94a3b8', pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
+              <User size={16} />
+            </div>
+            <Select
+              options={employeeNameOptions}
+              value={employeeNameOptions.find(opt => opt.value === searchTerm) || null}
+              onChange={(selected) => setSearchTerm(selected ? selected.value : '')}
+              styles={{ ...customSelectStyles, control: (base) => ({ ...base, height: '44px', minHeight: '44px', borderRadius: '10px', border: '1px solid #e2e8f0', paddingLeft: '24px' }) }}
+              placeholder="اسم الموظف..."
+              isSearchable={true}
+              isClearable={true}
+            />
           </div>
 
         </div>
@@ -1078,7 +1200,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
 
       {/* Stats Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '24px' }}>
-        
+
         {/* Total (Rightmost) */}
         <div onClick={() => setFilterStatus('الكل')} style={{ cursor: 'pointer', opacity: filterStatus === 'الكل' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'الكل' ? '2px solid #3b82f6' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ textAlign: 'right' }}>
@@ -1197,10 +1319,10 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
                       {p.employeeName}
                     </td>
                     <td className="p-5 whitespace-nowrap text-slate-800 font-bold text-sm text-center">
-                       <div className="flex items-center justify-center gap-2">
-                         <span>{p.date}</span>
-                         <Calendar size={14} className="text-[#0f766e]" />
-                       </div>
+                      <div className="flex items-center justify-center gap-2">
+                        <span>{p.date}</span>
+                        <Calendar size={14} className="text-[#0f766e]" />
+                      </div>
                     </td>
                     <td className="p-5 whitespace-nowrap text-center text-sm font-bold text-slate-800">
                       {p.isVirtual ? 'الي' : 'يدوي'}
@@ -1214,12 +1336,12 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
                           </>
                         ) : (p.type === 'دخول' && !p.isVirtual) ? (
                           <>
-                            <span className="text-slate-800">{p.time}</span>
+                            <span className="text-slate-800">{formatTime12h(p.time)}</span>
                             <Clock size={14} className="text-slate-400" />
                           </>
                         ) : (
                           <>
-                            <span className={p.attendanceRecord?.timeIn ? 'text-slate-800' : 'text-slate-400'}>{p.attendanceRecord?.timeIn || '--:--'}</span>
+                            <span className={p.attendanceRecord?.timeIn ? 'text-slate-800' : 'text-slate-400'}>{formatTime12h(p.attendanceRecord?.timeIn)}</span>
                             <Clock size={14} className="text-slate-400" />
                           </>
                         )}
@@ -1234,12 +1356,12 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
                           </>
                         ) : (p.type === 'خروج' && !p.isVirtual) ? (
                           <>
-                            <span className="text-slate-800">{p.time}</span>
+                            <span className="text-slate-800">{formatTime12h(p.time)}</span>
                             <Clock size={14} className="text-slate-400" />
                           </>
                         ) : (
                           <>
-                            <span className={p.attendanceRecord?.timeOut ? 'text-slate-800' : 'text-slate-400'}>{p.attendanceRecord?.timeOut || '--:--'}</span>
+                            <span className={p.attendanceRecord?.timeOut ? 'text-slate-800' : 'text-slate-400'}>{formatTime12h(p.attendanceRecord?.timeOut)}</span>
                             <Clock size={14} className="text-slate-400" />
                           </>
                         )}
@@ -1313,28 +1435,28 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
 
         {/* Pagination Section */}
         {filteredPunches.length > 0 && (
-           <div className="flex items-center p-5 border-t border-slate-100 bg-white justify-between">
-             {/* Right Side: Page size */}
-             <div className="flex items-center gap-2">
-               <span className="text-sm font-bold text-slate-500">عرض</span>
-               <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-1.5 bg-white cursor-pointer hover:border-slate-300 transition-colors">
-                 <span className="text-sm font-bold text-slate-700">10</span>
-                 <ChevronDown size={14} className="text-slate-400" />
-               </div>
-             </div>
+          <div className="flex items-center p-5 border-t border-slate-100 bg-white justify-between">
+            {/* Right Side: Page size */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-slate-500">عرض</span>
+              <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-1.5 bg-white cursor-pointer hover:border-slate-300 transition-colors">
+                <span className="text-sm font-bold text-slate-700">10</span>
+                <ChevronDown size={14} className="text-slate-400" />
+              </div>
+            </div>
 
-             {/* Middle: Info */}
-             <div className="text-sm font-bold text-slate-500">
-               من 1 إلى {filteredPunches.length} من أصل {filteredPunches.length} طلب
-             </div>
+            {/* Middle: Info */}
+            <div className="text-sm font-bold text-slate-500">
+              من 1 إلى {filteredPunches.length} من أصل {filteredPunches.length} طلب
+            </div>
 
-             {/* Left Side: Buttons */}
-             <div className="flex items-center gap-2">
-               <button className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors font-bold">&laquo;</button>
-               <button className="w-8 h-8 flex items-center justify-center rounded border text-white font-bold shadow-sm" style={{ backgroundColor: '#0f766e', borderColor: '#0f766e' }}>1</button>
-               <button className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors font-bold">&raquo;</button>
-             </div>
-           </div>
+            {/* Left Side: Buttons */}
+            <div className="flex items-center gap-2">
+              <button className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors font-bold">&laquo;</button>
+              <button className="w-8 h-8 flex items-center justify-center rounded border text-white font-bold shadow-sm" style={{ backgroundColor: '#0f766e', borderColor: '#0f766e' }}>1</button>
+              <button className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors font-bold">&raquo;</button>
+            </div>
+          </div>
         )}
       </div>
 

@@ -28,6 +28,9 @@ export const StockReportTab = ({
               <div className="flex items-center gap-1 justify-center">التصنيف {getSortIcon('category')}</div>
             </th>
             <th>المستودع</th>
+            <th onClick={() => handleSort('location')} className="cursor-pointer hover:text-primary transition-colors">
+              <div className="flex items-center gap-1 justify-center">الموقع {getSortIcon('location')}</div>
+            </th>
             <th onClick={() => handleSort('quantity')} className="cursor-pointer hover:text-primary transition-colors">
               <div className="flex items-center gap-1 justify-center">الكمية {getSortIcon('quantity')}</div>
             </th>
@@ -46,6 +49,7 @@ export const StockReportTab = ({
               <td>{renderStockVariant(item)}</td>
               <td>{item.category || '---'}</td>
               <td>{item.warehouse || '---'}</td>
+              <td>{item.location || '---'}</td>
               <td>{item.quantity ?? 0}</td>
               <td>{item.unit || '---'}</td>
               <td>

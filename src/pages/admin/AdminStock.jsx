@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Flatpickr from 'react-flatpickr';
-import Select from 'react-select';
+import Select from '../../components/SearchSelect';
 import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import 'flatpickr/dist/themes/airbnb.css';
 import { Package, Plus, Search, Edit2, Trash2, Layers, AlertTriangle, ArrowUpDown, Filter, X, Save, History, User, MapPin, Box, Copy, ChevronDown, ChevronRight, Printer, FileText, Download, Upload, Calendar, ClipboardList, Eye, Palette } from 'lucide-react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
-import { getStock, saveStockItem, deleteStockItem, deleteMultipleStockItems, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStockVouchers, saveStockVoucher, deleteStockVoucher, getCustomers, saveCustomer, getEmployees, getSalesOrders, getMissions, canPerformStockAction, saveSalesOrder, getStocktakes, saveStocktake, approveStocktake, deleteStocktakeAndRevert, approveAuditVouchers, deleteDraftVouchers, revertAuditVouchers, getHRAssets } from '../../store';
+import { getStock, saveStockItem, deleteStockItem, deleteMultipleStockItems, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStockVouchers, saveStockVoucher, deleteStockVoucher, getCustomers, saveCustomer, getEmployees, getSalesOrders, getMissions, canPerformStockAction, saveSalesOrder, getStocktakes, saveStocktake, approveStocktake, deleteStocktakeAndRevert, approveAuditVouchers, deleteDraftVouchers, revertAuditVouchers, revertReceiptVouchers, savePreparationOrder, getHRAssets, getOrders, saveOrder, getPreparationOrders } from '../../store';
+import { advancedSearch, matchesSearch, useDebounce } from '../../utils/searchEngine';
+import { hasPermission } from '../../utils/permissions';
 
 const MySwal = withReactContent(Swal);
 
@@ -17,6 +19,7 @@ const AdminStock = ({ user, notificationTarget }) => {
   const [selectedItemForLocations, setSelectedItemForLocations] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const [sortConfig, setSortConfig] = useState({ key: 'itemNumber', direction: 'asc' });
   const [filters, setFilters] = useState({
     warehouse: '',
@@ -27,6 +30,8 @@ const AdminStock = ({ user, notificationTarget }) => {
   const [globalSettings, setGlobalSettings] = useState({});
   const [selectedItems, setSelectedItems] = useState([]);
   const [expandedRows, setExpandedRows] = useState([]);
+  const [productionTypeFilter, setProductionTypeFilter] = useState('all');
+  const [productionSubTab, setProductionSubTab] = useState('disbursement');
   const stockStatusFilterRef = useRef(null);
 
   // States for Vouchers
@@ -35,6 +40,7 @@ const AdminStock = ({ user, notificationTarget }) => {
   const [customers, setCustomers] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [salesOrders, setSalesOrders] = useState([]);
+  const [productionOrders, setProductionOrders] = useState([]);
   const [missions, setMissions] = useState([]);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   const [voucherType, setVoucherType] = useState('إدخال');
@@ -65,8 +71,8 @@ const AdminStock = ({ user, notificationTarget }) => {
   const [editingStocktakeId, setEditingStocktakeId] = useState(null);
   const [selectedStocktake, setSelectedStocktake] = useState(null);
   const [voucherFilterStatus, setVoucherFilterStatus] = useState('all');
-  const [auditFilterStatus, setAuditFilterStatus] = useState('all');
-  const [stocktakeFilterStatus, setStocktakeFilterStatus] = useState('all');
+  const [auditFilterStatus, setAuditFilterStatus] = useState('pending');
+  const [stocktakeFilterStatus, setStocktakeFilterStatus] = useState('pending');
   
   const DRAFT_KEY = 'mirjas_stocktake_draft';
 
@@ -374,15 +380,7 @@ const AdminStock = ({ user, notificationTarget }) => {
     fetchData();
   }, []);
 
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (!e.target.closest('.month-picker-container')) {
-        setIsMonthDropdownOpen(false);
-      }
-    };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, []);
+
 
   useEffect(() => {
     if (!showFilterModal) return;
@@ -414,7 +412,7 @@ const AdminStock = ({ user, notificationTarget }) => {
 
     const fetchData = async () => {
     setLoading(true);
-    const [stockData, settingsData, vouchersData, customersData, employeesData, salesData, missionsData, stocktakesData, assetsData] = await Promise.all([
+    const [stockData, settingsData, vouchersData, customersData, employeesData, salesData, missionsData, stocktakesData, assetsData, productionData, preparationData] = await Promise.all([
       getStock(),
       getGlobalSettings(),
       getStockVouchers(),
@@ -423,7 +421,9 @@ const AdminStock = ({ user, notificationTarget }) => {
       getSalesOrders(),
       getMissions(),
       getStocktakes(),
-      getHRAssets()
+      getHRAssets(),
+      getOrders(),
+      getPreparationOrders()
     ]);
 
     // Auto-sync locations
@@ -456,6 +456,13 @@ const AdminStock = ({ user, notificationTarget }) => {
     setCustomers(customersData || []);
     setEmployees(employeesData || []);
     setSalesOrders(salesData || []);
+    
+    const combinedProductionData = [
+      ...(productionData || []).map(o => ({ ...o, productionType: 'sewing' })),
+      ...(preparationData || []).map(o => ({ ...o, productionType: 'preparation' }))
+    ];
+    setProductionOrders(combinedProductionData);
+    
     setMissions(missionsData || []);
     setStocktakes(stocktakesData || []);
     setAssets(assetsData || []);
@@ -478,36 +485,44 @@ const AdminStock = ({ user, notificationTarget }) => {
     return { label: 'متوفر', color: 'bg-green-500', icon: '🟢' };
   };
 
-  const sortedStock = [...stock].sort((a, b) => {
-    if (!sortConfig.key) return 0;
-    const aValue = a[sortConfig.key] || '';
-    const bValue = b[sortConfig.key] || '';
-    
-    if (typeof aValue === 'number' && typeof bValue === 'number') {
-      return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
-    }
-    
-    const strA = String(aValue);
-    const strB = String(bValue);
-    
-    const cmp = strA.localeCompare(strB, 'ar', { numeric: true });
-    return sortConfig.direction === 'asc' ? cmp : -cmp;
-  });
+  const applySort = (arr) => {
+    return [...arr].sort((a, b) => {
+      if (!sortConfig.key) return 0;
+      let aValue = a[sortConfig.key];
+      let bValue = b[sortConfig.key];
+      
+      if (aValue === undefined || aValue === null) aValue = '';
+      if (bValue === undefined || bValue === null) bValue = '';
 
-  const filteredStock = sortedStock.filter(item => {
-    const matchesSearch = 
-      (item.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.itemNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.category || '').toLowerCase().includes(searchTerm.toLowerCase());
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+
+      if (!isNaN(aValue) && !isNaN(bValue) && aValue !== '' && bValue !== '') {
+        return sortConfig.direction === 'asc' ? Number(aValue) - Number(bValue) : Number(bValue) - Number(aValue);
+      }
+      
+      const strA = String(aValue);
+      const strB = String(bValue);
+      const cmp = strA.localeCompare(strB, 'ar', { numeric: true });
+      return sortConfig.direction === 'asc' ? cmp : -cmp;
+    });
+  };
+
+  const filteredStock = stock.filter(item => {
+    const searchMatches = matchesSearch(
+      [item.id, item.code, item.name, item.itemNumber, item.category, item.spec, item.warehouse],
+      debouncedSearchTerm
+    );
     
     const matchesWarehouse = !filters.warehouse || item.warehouse === filters.warehouse;
     const matchesCategory = !filters.category || item.category === filters.category;
     const matchesStatus = !filters.status || getStatus(item).label === filters.status;
 
-    return matchesSearch && matchesWarehouse && matchesCategory && matchesStatus;
+    return searchMatches && matchesWarehouse && matchesCategory && matchesStatus;
   });
 
-  const groupedStock = Object.values(filteredStock.reduce((acc, item) => {
+  let groupedStockRaw = Object.values(filteredStock.reduce((acc, item) => {
     if (!acc[item.itemNumber]) {
       acc[item.itemNumber] = {
         ...item,
@@ -520,6 +535,9 @@ const AdminStock = ({ user, notificationTarget }) => {
     }
     return acc;
   }, {}));
+
+  groupedStockRaw = groupedStockRaw.map(g => ({ ...g, statusLabel: getStatus({quantity: g.totalQuantity, minLimit: g.minLimit}).label, warehouse: g.locations[0]?.warehouse || '' }));
+  const groupedStock = applySort(groupedStockRaw);
 
   const handleSelectGroup = (itemNumber, locations) => {
     const allSelected = locations.every(loc => selectedItems.includes(loc.id));
@@ -547,7 +565,26 @@ const AdminStock = ({ user, notificationTarget }) => {
   const pendingAudits = vouchers.filter(v => v.status === 'مسودة' && v.orderNumber);
   const getDraftForOrder = (orderNumber) => pendingAudits.filter(v => v.orderNumber === orderNumber);
 
-  const ordersToAuditRaw = salesOrders.filter(o => o.status === 'تم التوصيل' || missions.find(m => m.salesOrderNumber === o.orderNumber && m.status === 'تم الإنجاز'));
+  const productionOrdersToAuditRaw = productionOrders.filter(o => o.status !== 'ملغى' && o.status !== 'ملغي' && !o.ignoredAudit);
+  const productionOrdersToAudit = productionOrdersToAuditRaw.map(o => {
+    const drafts = getDraftForOrder(o.orderNumber);
+    let responsibleUser = '-';
+    if (o.stockDeducted) {
+      const deductionVouchers = vouchers.filter(v => v.orderNumber === o.orderNumber && v.status === 'معتمد');
+      if (deductionVouchers.length > 0) responsibleUser = deductionVouchers[0].createdBy;
+    } else if (drafts.length > 0) {
+      responsibleUser = drafts[0].createdBy;
+    }
+    return { ...o, hasDraft: drafts.length > 0, draftCreatedBy: responsibleUser, isProduction: true };
+  }).sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
+
+  const ordersToAuditRaw = salesOrders.filter(o => {
+    if (o.ignoredAudit) return false;
+    // Explicitly exclude any production or preparation orders that might have been miscategorized
+    if (String(o.orderNumber || '').startsWith('PREP-') || String(o.orderNumber || '').startsWith('PRO-')) return false;
+    
+    return o.status === 'تم التوصيل' || missions.find(m => m.salesOrderNumber === o.orderNumber && m.status === 'تم الإنجاز');
+  });
   const ordersToAudit = ordersToAuditRaw.map(o => {
     const drafts = getDraftForOrder(o.orderNumber);
     // If it's already deducted, we might want to get the actual voucher creator, but for now we just show who drafted it if there's a draft
@@ -563,7 +600,8 @@ const AdminStock = ({ user, notificationTarget }) => {
     return { 
       ...o, 
       hasDraft: drafts.length > 0, 
-      draftCreatedBy: responsibleUser 
+      draftCreatedBy: responsibleUser,
+      isProduction: false 
     };
   }).sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
 
@@ -580,7 +618,19 @@ const AdminStock = ({ user, notificationTarget }) => {
       if (result.isConfirmed) {
         const success = await approveAuditVouchers(order.orderNumber);
         if (success) {
-          await saveSalesOrder({ ...order, stockDeducted: true });
+          if (order.isProduction) {
+            const updatedOrder = { ...order, stockDeducted: true };
+            delete updatedOrder.hasDraft;
+            delete updatedOrder.draftCreatedBy;
+            delete updatedOrder.isProduction;
+            if (order.productionType === 'preparation') {
+              await savePreparationOrder(updatedOrder);
+            } else {
+              await saveOrder(updatedOrder);
+            }
+          } else {
+            await saveSalesOrder({ ...order, stockDeducted: true });
+          }
           Swal.fire('تم!', 'تم اعتماد السند وخصم المخزون بنجاح.', 'success');
           fetchData(); // Refresh stock
         } else {
@@ -625,7 +675,19 @@ const AdminStock = ({ user, notificationTarget }) => {
       if (result.isConfirmed) {
         const success = await revertAuditVouchers(order.orderNumber);
         if (success) {
-          await saveSalesOrder({ ...order, stockDeducted: false });
+          if (order.isProduction) {
+            const updatedOrder = { ...order, stockDeducted: false };
+            delete updatedOrder.hasDraft;
+            delete updatedOrder.draftCreatedBy;
+            delete updatedOrder.isProduction;
+            if (order.productionType === 'preparation') {
+              await savePreparationOrder(updatedOrder);
+            } else {
+              await saveOrder(updatedOrder);
+            }
+          } else {
+            await saveSalesOrder({ ...order, stockDeducted: false });
+          }
           Swal.fire('تم!', 'تم إرجاع الكميات للمخزون وإلغاء الخصم بنجاح.', 'success');
           fetchData();
         } else {
@@ -635,30 +697,311 @@ const AdminStock = ({ user, notificationTarget }) => {
     });
   };
 
-  const handleOpenAudit = (order) => {
+  const handleRevertReceipt = async (order) => {
+    MySwal.fire({
+      title: 'تراجع عن استلام المنتجات؟',
+      text: 'سيتم إلغاء سند الإدخال وخصم الكميات المستلمة من المخزون. هل أنت متأكد؟',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'نعم، إلغاء الاستلام',
+      cancelButtonText: 'إلغاء',
+      confirmButtonColor: '#dc2626',
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        const success = await revertReceiptVouchers(order.orderNumber);
+        if (success) {
+          const updated = { ...order, stockReceived: false };
+          delete updated.hasDraft;
+          delete updated.draftCreatedBy;
+          delete updated.isProduction;
+          if (order.productionType === 'sewing') {
+            await saveOrder(updated);
+          } else if (order.productionType === 'preparation') {
+            await savePreparationOrder(updated);
+          }
+          Swal.fire('تم!', 'تم إلغاء الاستلام وتعديل المخزون بنجاح.', 'success');
+          fetchData();
+        } else {
+          Swal.fire('خطأ', 'حدث خطأ أثناء إلغاء الاستلام.', 'error');
+        }
+      }
+    });
+  };
+
+  const handleFixSingleDeduction = async (order) => {
+    MySwal.fire({
+      title: 'تأكيد إصلاح الخصم المعلق',
+      text: `سيتم اعتماد سند الخصم للطلبية رقم ${order.orderNumber} وتعديل كميات المخزون فوراً.`,
+      icon: 'info',
+      showCancelButton: true,
+      confirmButtonText: 'إصلاح واعتماد الخصم',
+      cancelButtonText: 'إلغاء',
+      confirmButtonColor: '#059669',
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        setLoading(true);
+        try {
+          const success = await approveAuditVouchers(order.orderNumber);
+          if (success) {
+            Swal.fire('تم!', 'تم اعتماد السند وتحديث كميات المخزون بنجاح.', 'success');
+            fetchData();
+          } else {
+            Swal.fire('خطأ', 'حدث خطأ أثناء اعتماد السند وتحديث المخزون.', 'error');
+          }
+        } catch (err) {
+          console.error(err);
+          Swal.fire('خطأ', 'حدث خطأ غير متوقع أثناء معالجة العملية.', 'error');
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+  };
+
+  const handleFixAllUnapplied = async () => {
+    const allToFix = [
+      ...ordersToAudit.filter(o => o.stockDeducted && vouchers.some(v => v.orderNumber === o.orderNumber && v.status === 'مسودة')),
+      ...productionOrdersToAudit.filter(o => o.stockDeducted && vouchers.some(v => v.orderNumber === o.orderNumber && v.status === 'مسودة'))
+    ];
+
+    if (allToFix.length === 0) return;
+
+    MySwal.fire({
+      title: 'إصلاح جميع الطلبيات المعلقة',
+      text: `سيتم ترحيل واعتماد سندات الخصم لـ ${allToFix.length} طلبية معلقة وتحديث كميات المخزون دفعة واحدة. هل أنت متأكد؟`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'نعم، إصلاح الكل',
+      cancelButtonText: 'إلغاء',
+      confirmButtonColor: '#dc2626',
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        setLoading(true);
+        try {
+          let count = 0;
+          for (const order of allToFix) {
+            const success = await approveAuditVouchers(order.orderNumber);
+            if (success) count++;
+          }
+          Swal.fire('نجاح!', `تم إصلاح وتحديث المخزون بنجاح لـ ${count} طلبية من أصل ${allToFix.length}.`, 'success');
+          fetchData();
+        } catch (err) {
+          console.error(err);
+          Swal.fire('خطأ', 'حدث خطأ أثناء معالجة الإصلاح الجماعي للكميات.', 'error');
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+  };
+
+  const handleIgnoreAudit = async (order) => {
+    MySwal.fire({
+      title: 'تجاهل الطلبية؟',
+      text: 'هل أنت متأكد أنك تريد تجاهل هذه الطلبية وإخفاءها من هذه القائمة؟',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'نعم، تجاهل',
+      cancelButtonText: 'إلغاء',
+      confirmButtonColor: '#dc2626',
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        if (order.isProduction) {
+          await saveOrder({ ...order, ignoredAudit: true });
+        } else {
+          await saveSalesOrder({ ...order, ignoredAudit: true });
+        }
+        Swal.fire('تم!', 'تم تجاهل الطلبية وإخفاؤها.', 'success');
+        fetchData();
+      }
+    });
+  };
+
+  const handlePreviewOrder = (order) => {
+    let itemsHtml = order.items && order.items.length > 0 
+      ? `
+        <div style="overflow-x-auto; border: 1px solid #e2e8f0; border-radius: 12px; margin-top: 15px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+          <table style="width: 100%; border-collapse: collapse; text-align: right; background-color: #fff; font-family: 'Tajawal', sans-serif;">
+            <thead style="background-color: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+              <tr>
+                <th style="padding: 12px 15px; color: #475569; font-size: 0.85rem; font-weight: 800;">📦 اسم الصنف</th>
+                <th style="padding: 12px 15px; color: #475569; font-size: 0.85rem; font-weight: 800; text-align: center; width: 100px;">🔢 الكمية</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${order.items.map((item, idx) => `
+                <tr style="border-bottom: 1px solid #f1f5f9; transition: background-color 0.2s;">
+                  <td style="padding: 12px 15px; color: #0f172a; font-size: 0.9rem; font-weight: 700;">${item.productName || item.name || 'بدون اسم'}</td>
+                  <td style="padding: 12px 15px; color: #0284c7; font-size: 0.95rem; font-weight: 800; text-align: center; background-color: #f0f9ff; font-family: monospace;">
+                    ${item.quantity}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `
+      : '<p style="text-align: center; color: #64748b; margin: 20px 0; font-weight: 800;">لا توجد أصناف في هذه الطلبية</p>';
+
+    MySwal.fire({
+      title: `
+        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; color: #25355a; font-family: 'Tajawal', sans-serif; font-weight: 800; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; width: 100%;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#25355a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>معاينة الطلبية #${order.orderNumber}</span>
+        </div>
+      `,
+      html: `
+        <div style="direction: rtl; text-align: right; font-family: 'Tajawal', sans-serif; padding: 5px;">
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 15px;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.01);">
+              <span style="font-size: 0.75rem; color: #64748b; font-weight: 800;">👤 العميل / البيان</span>
+              <span style="font-size: 0.9rem; color: #0f172a; font-weight: 800; line-height: 1.4;">${order.customerName || order.notes || 'بدون اسم'}</span>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.01);">
+              <span style="font-size: 0.75rem; color: #64748b; font-weight: 800;">📅 التاريخ</span>
+              <span style="font-size: 0.9rem; color: #0f172a; font-weight: 800;">${order.orderDate}</span>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.01);">
+              <span style="font-size: 0.75rem; color: #64748b; font-weight: 800;">✍️ المسؤول</span>
+              <span style="font-size: 0.9rem; color: #0f172a; font-weight: 800;">${order.draftCreatedBy || order.createdBy || '-'}</span>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.01);">
+              <span style="font-size: 0.75rem; color: #64748b; font-weight: 800;">⚙️ الحالة</span>
+              <div>
+                <span style="
+                  display: inline-block;
+                  padding: 2px 8px;
+                  border-radius: 6px;
+                  font-size: 0.75rem;
+                  font-weight: 800;
+                  background: ${order.status ? '#e0f2fe' : '#f1f5f9'};
+                  color: ${order.status ? '#0369a1' : '#475569'};
+                ">
+                  ${order.status || '---'}
+                </span>
+              </div>
+            </div>
+          </div>
+          ${itemsHtml}
+        </div>
+      `,
+      showConfirmButton: false,
+      showCloseButton: true,
+      customClass: {
+        popup: 'rounded-2xl',
+        closeButton: 'text-slate-400 hover:text-red-500 focus:outline-none'
+      },
+      width: '600px'
+    });
+  };
+
+  const normalize = (str) => {
+    if (!str) return '';
+    return str.replace(/أ|إ|آ/g, 'ا')
+              .replace(/ة/g, 'ه')
+              .replace(/ى/g, 'ي')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .toLowerCase();
+  };
+
+  const checkMatchScore = (s, targetItemNum, targetName) => {
+    if (targetItemNum && s.itemNumber === targetItemNum) return 100;
+    if (!targetName) return 0;
+    
+    const tName = normalize(targetName);
+    const sName = normalize(s.name);
+    const sSpec = normalize(s.spec);
+    
+    if (sName === tName) return 90;
+    
+    const tNameNoSpace = tName.replace(/\s+/g, '');
+    const sNameNoSpace = sName.replace(/\s+/g, '');
+    if (sNameNoSpace === tNameNoSpace) return 85;
+
+    if (sSpec && (`${sName} - ${sSpec}` === tName || `${sName} (${sSpec})` === tName || `${sName} ${sSpec}` === tName)) return 80;
+    
+    if (sName && tName.includes(sName)) {
+      if (!sSpec) return 70;
+      const specParts = sSpec.split('-').map(p => p.trim()).filter(Boolean);
+      if (specParts.every(part => tName.includes(part))) return 65;
+      return 60;
+    }
+    
+    if (sName && sName.includes(tName)) {
+      return Math.max(10, 50 - (sName.length - tName.length));
+    }
+    
+    return 0;
+  };
+
+  const findBestMatch = (stockList, warehouse, targetItemNum, targetName) => {
+    let bestMatch = null;
+    let bestScore = 0;
+    
+    for (const s of stockList) {
+      if (warehouse && s.warehouse !== warehouse) continue;
+      
+      const score = checkMatchScore(s, targetItemNum, targetName);
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = s;
+      }
+      if (bestScore === 100) break;
+    }
+    
+    return bestMatch;
+  };
+
+  const handleOpenAudit = async (order) => {
+    Swal.fire({
+      title: 'جاري تحميل الأرصدة...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+    
+    const latestStock = await getStock();
+    setStock(latestStock);
+    Swal.close();
+
     setAuditOrder(order);
     const drafts = getDraftForOrder(order.orderNumber);
     if (drafts.length > 0) {
-      const draftItems = drafts.flatMap(v => v.items.map(item => ({
-        ...item,
-        name: item.name,
-        quantity: Number(item.quantity) || 1,
-        warehouse: v.warehouse,
-        stockId: stock.find(s => s.itemNumber === item.itemNumber && s.warehouse === v.warehouse && s.name === item.name)?.id || '',
-        availableQuantity: stock.find(s => s.itemNumber === item.itemNumber && s.warehouse === v.warehouse && s.name === item.name)?.quantity || 0,
-        isExtra: !order.items.some(oi => (oi.productName || oi.name) === item.name)
-      })));
+      const draftItems = drafts.flatMap(v => v.items.map(item => {
+        const reconstructedName = item.spec ? `${item.name} - ${item.spec}` : item.name;
+        return {
+          ...item,
+          name: reconstructedName, // use reconstructed name so it matches the order item closely
+          quantity: Number(item.quantity) || 1,
+          warehouse: v.warehouse,
+          stockId: findBestMatch(latestStock, v.warehouse, item.itemNumber, reconstructedName)?.id || '',
+          availableQuantity: findBestMatch(latestStock, v.warehouse, item.itemNumber, reconstructedName)?.quantity || 0,
+          isExtra: !order.items.some(oi => (oi.productName || oi.name) === reconstructedName),
+          packagingType: item.packagingType || order.items.find(oi => (oi.productName || oi.name) === reconstructedName)?.packagingType || ''
+        };
+      }));
       setAuditItems(draftItems);
     } else {
-      const parsedItems = (order.items || []).map(item => ({
-        ...item,
-        name: item.productName || item.name || '',
-        quantity: Number(item.quantity) || 1,
-        warehouse: '',
-        stockId: '',
-        availableQuantity: 0,
-        isExtra: false
-      }));
+      const parsedItems = (order.items || []).map(item => {
+        const name = item.productName || item.name || '';
+        const itemNum = item.itemNumber || '';
+        const matchedStock = findBestMatch(latestStock, null, itemNum, name);
+        const warehouse = matchedStock ? matchedStock.warehouse : (globalSettings.warehouses?.[0] || '');
+        const stockId = matchedStock ? matchedStock.id : '';
+        const availableQty = matchedStock ? matchedStock.quantity : 0;
+        const unit = matchedStock ? matchedStock.unit : (item.unit || '');
+
+        return {
+          ...item,
+          name,
+          quantity: Number(item.quantity) || 1,
+          warehouse,
+          stockId,
+          availableQuantity: availableQty,
+          unit,
+          isExtra: false
+        };
+      });
       setAuditItems(parsedItems);
     }
     setShowAuditModal(true);
@@ -673,14 +1016,19 @@ const AdminStock = ({ user, notificationTarget }) => {
       const currentName = field === 'name' ? value : newItems[index].name;
       
       if (currentWarehouse) {
-        const selectedStock = stock.find(s => s.warehouse === currentWarehouse && s.name === currentName);
+        const selectedStock = findBestMatch(stock, currentWarehouse, newItems[index].itemNumber, currentName);
         if (selectedStock) {
           newItems[index].stockId = selectedStock.id;
           newItems[index].availableQuantity = selectedStock.quantity;
           newItems[index].unit = selectedStock.unit;
         } else {
+          const globalStock = findBestMatch(stock, null, newItems[index].itemNumber, currentName);
           newItems[index].stockId = '';
           newItems[index].availableQuantity = 0;
+          if (globalStock) {
+            newItems[index].itemNumber = globalStock.itemNumber;
+            newItems[index].unit = globalStock.unit;
+          }
         }
       }
     }
@@ -700,18 +1048,21 @@ const AdminStock = ({ user, notificationTarget }) => {
 
   const handleConfirmAudit = async () => {
     // Validate items
-    for (let i = 0; i < auditItems.length; i++) {
-      const item = auditItems[i];
+    const validItems = auditItems.filter(item => item.quantity > 0);
+    
+    if (validItems.length === 0) {
+      Swal.fire('خطأ', 'يرجى إضافة صنف واحد على الأقل لتأكيد الخصم', 'error');
+      return;
+    }
+
+    for (let i = 0; i < validItems.length; i++) {
+      const item = validItems[i];
       if (!item.warehouse) {
-        Swal.fire('خطأ', `يرجى تحديد المستودع للصنف في السطر ${i + 1}`, 'error');
+        Swal.fire('خطأ', `يرجى اختيار المستودع للصنف في السطر ${i + 1} (${item.name})`, 'error');
         return;
       }
-      if (!item.stockId) {
-        Swal.fire('خطأ', `يرجى تحديد الصنف المقابل في المخزون للسطر ${i + 1}`, 'error');
-        return;
-      }
-      if (Number(item.quantity) > Number(item.availableQuantity)) {
-        Swal.fire('خطأ', `الكمية المطلوبة في السطر ${i + 1} تتجاوز الكمية المتوفرة (${item.availableQuantity})`, 'error');
+      if (item.stockId && Number(item.quantity) > Number(item.availableQuantity)) {
+        Swal.fire('خطأ', `الكمية المطلوبة في السطر ${i + 1} (${item.name}) تتجاوز الكمية المتوفرة بالمستودع (${item.availableQuantity})`, 'error');
         return;
       }
     }
@@ -719,11 +1070,11 @@ const AdminStock = ({ user, notificationTarget }) => {
     setLoading(true);
     try {
       // Group by warehouse to create multiple vouchers if needed
-      const itemsByWarehouse = auditItems.reduce((acc, item) => {
+      const itemsByWarehouse = validItems.reduce((acc, item) => {
         if (!acc[item.warehouse]) acc[item.warehouse] = [];
         const stockItem = stock.find(s => s.id === item.stockId);
         acc[item.warehouse].push({
-          stockId: item.stockId,
+          stockId: item.stockId || '',
           itemNumber: stockItem?.itemNumber || '',
           name: stockItem?.name || item.name,
           spec: stockItem?.spec || '',
@@ -731,7 +1082,8 @@ const AdminStock = ({ user, notificationTarget }) => {
           quantity: Number(item.quantity),
           unit: stockItem?.unit || '',
           category: stockItem?.category || '',
-          minLimit: Number(stockItem?.minLimit || 0)
+          minLimit: Number(stockItem?.minLimit || 0),
+          packagingType: item.packagingType || ''
         });
         return acc;
       }, {});
@@ -744,11 +1096,13 @@ const AdminStock = ({ user, notificationTarget }) => {
       }, 0);
       const nextMisNumber = `MIS-${String(maxMis + 1).padStart(5, '0')} (${auditOrder.orderNumber})`;
 
+      const isDirectApprove = isAdmin(user);
+
       for (const [warehouse, wItems] of Object.entries(itemsByWarehouse)) {
         const payload = {
           voucherNumber: nextMisNumber,
           orderNumber: auditOrder.orderNumber,
-          status: 'مسودة',
+          status: isDirectApprove ? 'معتمد' : 'مسودة',
           date: new Date().toISOString().split('T')[0],
           warehouse,
           type: 'إخراج',
@@ -761,18 +1115,38 @@ const AdminStock = ({ user, notificationTarget }) => {
         await saveStockVoucher(payload);
       }
 
-      // Mark order as deducted
-      await saveSalesOrder({ ...auditOrder, stockDeducted: true });
+      // Mark order as deducted only if approved directly
+      if (isDirectApprove) {
+        const updatedOrder = { ...auditOrder, stockDeducted: true };
+        delete updatedOrder.hasDraft;
+        delete updatedOrder.draftCreatedBy;
+        delete updatedOrder.isProduction;
+        if (auditOrder.isProduction) {
+          if (auditOrder.productionType === 'preparation') {
+            await savePreparationOrder(updatedOrder);
+          } else {
+            await saveOrder(updatedOrder);
+          }
+        } else {
+          await saveSalesOrder(updatedOrder);
+        }
+      }
 
       await addLog({
         userName: user.name,
         userId: user.id,
         module: 'المخزون',
-        action: 'تدقيق وخصم',
-        details: `تدقيق وخصم طلبية ${auditOrder.orderNumber} من المخزون`
+        action: isDirectApprove ? 'تدقيق وخصم مباشر' : 'تقديم مسودة تدقيق',
+        details: isDirectApprove 
+          ? `تدقيق وخصم مباشر لطلبية ${auditOrder.orderNumber} من المخزون` 
+          : `تقديم مسودة خصم لطلبية ${auditOrder.orderNumber}`
       });
 
-      Swal.fire({ icon: 'success', title: 'تم تثبيت الخصم بنجاح', timer: 1500, showConfirmButton: false });
+      const successTitle = isDirectApprove 
+        ? 'تم خصم الكميات وتحديث المخزون بنجاح' 
+        : 'تم تقديم مسودة الخصم بنجاح وبانتظار موافقة المدير';
+
+      Swal.fire({ icon: 'success', title: successTitle, timer: 2000, showConfirmButton: false });
       setShowAuditModal(false);
       fetchData();
     } catch (err) {
@@ -1710,99 +2084,6 @@ const AdminStock = ({ user, notificationTarget }) => {
 
     if (newQuantity !== undefined && newQuantity !== null && newQuantity !== '') {
       const parsedQty = parseInt(newQuantity);
-      showCancelButton: true,
-      confirmButtonText: isEdit ? 'تحديث البيانات' : 'حفظ الصنف الجديد',
-      cancelButtonText: 'إلغاء',
-      focusConfirm: false,
-      preConfirm: () => {
-        const data = {
-          itemNumber: document.getElementById('swal-itemNumber').value,
-          itemCode: document.getElementById('swal-itemCode').value,
-          name: document.getElementById('swal-name').value,
-          category: document.getElementById('swal-category').value,
-          warehouse: document.getElementById('swal-warehouse').value,
-          location: document.getElementById('swal-location').value,
-          spec: document.getElementById('swal-spec').value,
-          quantity: Number(document.getElementById('swal-quantity').value),
-          unit: document.getElementById('swal-unit').value,
-          minLimit: Number(document.getElementById('swal-minLimit').value),
-          lastMovement: document.getElementById('swal-lastMovement').value,
-          lastMovementDate: document.getElementById('swal-lastMovementDate').value,
-          lastRecipient: document.getElementById('swal-lastRecipient').value,
-          notes: document.getElementById('swal-notes').value,
-          id: isEdit ? item.id : null
-        };
-
-        if (!data.itemNumber || !data.name || !data.warehouse) {
-          Swal.showValidationMessage('يرجى ملء الاسم ورقم الصنف والمخزن');
-          return false;
-        }
-        if (data.itemCode && data.itemCode.trim().length !== 13) {
-          Swal.showValidationMessage('يجب أن يتكون رمز الصنف من 13 خانة بالضبط');
-          return false;
-        }
-
-        const existingInWarehouse = stock.find(s => 
-          s.itemNumber === data.itemNumber && 
-          s.warehouse === data.warehouse && 
-          s.spec === data.spec &&
-          s.id !== data.id
-        );
-        if (existingInWarehouse) {
-          Swal.showValidationMessage(`عذراً، يوجد بضاعة من هذا الصنف بنفس المواصفة/اللون مسبقاً في المستودع المختار (${data.warehouse})!`);
-          return false;
-        }
-
-        return data;
-      }
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        const res = await saveStockItem(result.value);
-        if (res) {
-          await addLog({
-            userName: user.name,
-            userId: user.id,
-            module: 'المخزون',
-            action: isEdit ? 'تعديل' : 'إضافة',
-            details: `${isEdit ? 'تعديل بيانات' : 'إضافة'} صنف مخزون: ${res.name} (${res.itemNumber})`
-          });
-          Swal.fire({
-            icon: 'success',
-            title: 'تم الحفظ بنجاح',
-            timer: 1500,
-          });
-          fetchData();
-        }
-      }
-    });
-  };
-
-  const handleQuickQuantityEdit = async (e, item) => {
-    e.stopPropagation();
-    const { value: newQuantity } = await MySwal.fire({
-      customClass: {
-        container: 'premium-modal-container',
-        popup: 'premium-modal-popup',
-        confirmButton: 'btn-premium-save',
-        cancelButton: 'btn-premium-cancel'
-      },
-      buttonsStyling: false,
-      title: 'تعديل سريع للكمية',
-      html: `<div style="font-size: 14px; margin-bottom: 10px;">أدخل الكمية الجديدة للصنف:<br><b style="color:var(--primary);">${item.name}</b><br><span style="color:#64748b;font-size:12px;">المستودع: ${item.warehouse}</span></div>`,
-      input: 'number',
-      inputValue: item.quantity,
-      inputAttributes: {
-        min: 0,
-        step: 1,
-        style: 'text-align: center; font-size: 1.5rem; font-weight: bold; border: 2px solid #e2e8f0; border-radius: 8px; padding: 10px;'
-      },
-      showCancelButton: true,
-      confirmButtonText: 'حفظ',
-      cancelButtonText: 'إلغاء'
-    });
-
-    if (newQuantity !== undefined && newQuantity !== null && newQuantity !== '') {
-      const parsedQty = parseInt(newQuantity);
       if (parsedQty >= 0) {
         await saveStockItem({ ...item, quantity: parsedQty, lastMovement: 'تعديل سريع', lastMovementDate: new Date().toISOString().split('T')[0] });
         fetchData();
@@ -1845,19 +2126,77 @@ const AdminStock = ({ user, notificationTarget }) => {
     }
   };
 
-  const handleOpenVoucherModal = (type) => {
+  const handleOpenVoucherModal = (type, order = null) => {
     setVoucherType(type);
+
+    let initialItems = [
+      type === 'إدخال' 
+        ? { itemNumber: '', name: '', category: globalSettings.stockCategories?.[0] || '', spec: '', quantity: 1, unit: globalSettings.stockUnits?.[0] || '', minLimit: 0, isNewItem: false }
+        : { stockId: '', itemNumber: '', name: '', spec: '', quantity: 1, unit: '', location: '', availableQuantity: 0 }
+    ];
+
+    let defaultWarehouse = globalSettings.warehouses?.[0] || '';
+    let recipient = '';
+
+    if (order && type === 'إدخال') {
+      // Prefill for production receiving
+      initialItems = (order.items || []).map(item => {
+        const pName = item.productName || item.name || '';
+        const pSpec = item.colorModel || item.spec || '';
+        
+        let existingStock = stock.find(s => s.itemNumber === item.itemNumber);
+        
+        if (!existingStock) {
+          existingStock = stock.find(s => s.name === pName && (s.spec || '') === pSpec);
+        }
+        
+        if (!existingStock) {
+          existingStock = stock.find(s => {
+            const full1 = `${s.name} - ${s.spec || ''}`.trim();
+            const full2 = `${s.name} ${s.spec || ''}`.trim();
+            return full1 === pName || full2 === pName;
+          });
+        }
+        
+        if (!existingStock) {
+          const possibleMatches = stock.filter(s => pName.includes(s.name) && s.spec && pName.includes(s.spec));
+          if (possibleMatches.length > 0) {
+            existingStock = possibleMatches.reduce((best, current) => 
+              (current.spec.length > best.spec.length) ? current : best
+            );
+          }
+        }
+        
+        if (!existingStock) {
+          existingStock = stock.find(s => s.name === pName) || stock.find(s => pName.includes(s.name));
+        }
+
+        return {
+          stockId: existingStock ? existingStock.id : `new_${Date.now()}_${Math.random()}`,
+          itemNumber: existingStock ? existingStock.itemNumber : `PROD-${Date.now().toString().slice(-4)}`,
+          name: existingStock ? existingStock.name : pName,
+          category: existingStock ? existingStock.category : 'بضاعة جاهزة',
+          spec: existingStock ? existingStock.spec : pSpec,
+          quantity: Number(item.quantity) || 1,
+          unit: existingStock ? existingStock.unit : 'عدد',
+          minLimit: 0,
+          isNewItem: !existingStock
+        };
+      });
+      defaultWarehouse = '';
+      recipient = 'استلام إنتاج طلبية رقم ' + order.orderNumber;
+    }
+
     setVoucherForm({
       date: new Date().toISOString().split('T')[0],
-      warehouse: globalSettings.warehouses?.[0] || '',
+      warehouse: defaultWarehouse,
       destinationWarehouse: '',
-      recipient: '',
-      notes: '',
-      items: [
-        type === 'إدخال' 
-          ? { itemNumber: '', name: '', category: globalSettings.stockCategories?.[0] || '', spec: '', quantity: 1, unit: globalSettings.stockUnits?.[0] || '', minLimit: 0, isNewItem: false }
-          : { stockId: '', itemNumber: '', name: '', spec: '', quantity: 1, unit: '', location: '', availableQuantity: 0 }
-      ]
+      recipient: recipient,
+      notes: order ? order.orderNumber : '',
+      items: initialItems,
+      orderNumber: order ? order.orderNumber : '',
+      isProductionReceipt: order ? true : false,
+      productionType: order ? order.productionType : ''
     });
     setShowVoucherModal(true);
   };
@@ -1915,13 +2254,16 @@ const AdminStock = ({ user, notificationTarget }) => {
 
   const handleWarehouseChange = (e) => {
     const newWarehouse = e.target.value;
-    setVoucherForm(prev => ({
-      ...prev,
-      warehouse: newWarehouse,
-      items: [
+    setVoucherForm(prev => {
+      const newItems = voucherType === 'إدخال' ? prev.items : [
         { stockId: '', itemNumber: '', name: '', spec: '', quantity: 1, unit: '', location: '', availableQuantity: 0 }
-      ]
-    }));
+      ];
+      return {
+        ...prev,
+        warehouse: newWarehouse,
+        items: newItems
+      };
+    });
   };
 
   const handleSaveVoucher = async () => {
@@ -1959,7 +2301,7 @@ const AdminStock = ({ user, notificationTarget }) => {
 
     for (let i = 0; i < voucherForm.items.length; i++) {
       const item = voucherForm.items[i];
-      if (!item.stockId) {
+      if (!item.stockId && !item.name) {
         Swal.fire('خطأ', `يرجى اختيار الصنف في السطر ${i + 1}`, 'error');
         return;
       }
@@ -2005,6 +2347,22 @@ const AdminStock = ({ user, notificationTarget }) => {
         details: `إنشاء سند ${voucherType}: ${result.voucherNumber} في مستودع ${result.warehouse} يحتوي على ${result.items.length} أصناف`
       });
       
+      if (voucherForm.isProductionReceipt && voucherForm.orderNumber) {
+        const orderNum = voucherForm.orderNumber;
+        const pOrder = productionOrders.find(o => o.orderNumber === orderNum);
+        if (pOrder) {
+          const updated = { ...pOrder, stockReceived: true };
+          delete updated.hasDraft;
+          delete updated.draftCreatedBy;
+          delete updated.isProduction;
+          if (pOrder.productionType === 'sewing') {
+            await saveOrder(updated);
+          } else if (pOrder.productionType === 'preparation') {
+            await savePreparationOrder(updated);
+          }
+        }
+      }
+
       Swal.fire({
         icon: 'success',
         title: 'تم حفظ السند وتعديل الكميات بنجاح',
@@ -2139,11 +2497,10 @@ const AdminStock = ({ user, notificationTarget }) => {
   const filteredVouchers = (vouchers || [])
     .filter(v => {
       if (!v) return false;
-      const matchSearch = !voucherFilters.search || 
-        v.voucherNumber?.toLowerCase().includes(voucherFilters.search.toLowerCase()) ||
-        v.warehouse?.toLowerCase().includes(voucherFilters.search.toLowerCase()) ||
-        v.recipient?.toLowerCase().includes(voucherFilters.search.toLowerCase()) ||
-        v.createdBy?.toLowerCase().includes(voucherFilters.search.toLowerCase());
+      const matchSearch = matchesSearch(
+        [v.voucherNumber, v.warehouse, v.recipient, v.createdBy, v.notes, v.items],
+        voucherFilters.search
+      );
       const matchType = !voucherFilters.type || v.type === voucherFilters.type;
       const matchWarehouse = !voucherFilters.warehouse || v.warehouse === voucherFilters.warehouse;
       let matchDate = true;
@@ -2337,9 +2694,19 @@ const AdminStock = ({ user, notificationTarget }) => {
       icon: <AlertTriangle />,
       color: '#8b5cf6',
       bgLight: '#f3e8ff',
-      customBadge: `${ordersToAudit.length} طلبية`,
+      customBadge: `${ordersToAudit.filter(o => !o.stockDeducted).length} طلبية`,
       onClick: () => setActiveStockTab('audit'),
       isActive: activeStockTab === 'audit'
+    },
+    {
+      id: 'production',
+      label: 'صرف الإنتاج',
+      icon: <Package />,
+      color: '#ec4899',
+      bgLight: '#fce7f3',
+      customBadge: `${productionOrdersToAudit.filter(o => !o.stockDeducted).length} طلبية`,
+      onClick: () => setActiveStockTab('production'),
+      isActive: activeStockTab === 'production'
     },
     {
       id: 'stocktake',
@@ -2352,11 +2719,183 @@ const AdminStock = ({ user, notificationTarget }) => {
       isActive: activeStockTab === 'stocktake'
     }
   ];
+  const visibleNavItems = stockNavItems.filter(nav => {
+    if (nav.id === 'items') return hasPermission(user, 'stock_view', 'view');
+    if (nav.id.startsWith('vouchers_')) return hasPermission(user, 'stock_vouchers', 'view');
+    if (nav.id === 'audit') return hasPermission(user, 'stock_audit', 'view');
+    if (nav.id === 'production') return hasPermission(user, 'stock_production', 'view');
+    if (nav.id === 'stocktake') return hasPermission(user, 'stock_take', 'view');
+    return true;
+  });
+  const gridColumns = visibleNavItems.length || 1;
 
-  const visibleNavItems = stockNavItems;
-  const gridColumns = visibleNavItems.length;
+  const PremiumActionBtn = ({ title, icon, variant, onClick }) => {
+    let style = {};
+    let iconBg = '';
+    let iconColor = '';
+    
+    if (variant === 'receive') {
+      style = { background: '#25355a', color: '#ffffff', border: '1px solid #25355a' };
+      iconBg = '#3c4e78';
+      iconColor = '#ffffff';
+    } else if (variant === 'issue') {
+      style = { background: '#ffffff', color: '#5b2f0a', border: '1px solid #f97316' };
+      iconBg = '#f97316';
+      iconColor = '#ffffff';
+    } else if (variant === 'ignore') {
+      style = { background: '#fff1f2', color: '#9f1239', border: '1px solid #fecdd3' };
+      iconBg = '#ef4444';
+      iconColor = '#ffffff';
+    }
+
+    return (
+      <button 
+        onClick={onClick}
+        style={{
+          ...style,
+          padding: '0.15rem 0.25rem 0.15rem 0.5rem',
+          borderRadius: '8px',
+          fontWeight: 'bold',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          minWidth: '100px',
+          flex: 1,
+          boxShadow: '0 1px 2px -1px rgba(0,0,0,0.05)',
+          position: 'relative',
+          overflow: 'hidden',
+          transition: 'transform 0.2s',
+          cursor: 'pointer',
+          height: '28px'
+        }}
+        className="hover:scale-105 active:scale-95"
+      >
+        <div style={{ position: 'absolute', left: '-5px', top: '0', opacity: variant==='receive'? 0.15 : 0.6, color: variant==='receive'?'white':style.color }}>
+          <svg width="20" height="20" viewBox="0 0 40 40"><circle cx="10" cy="10" r="1.5" fill="currentColor"/><circle cx="20" cy="10" r="1.5" fill="currentColor"/><circle cx="30" cy="10" r="1.5" fill="currentColor"/><circle cx="10" cy="20" r="1.5" fill="currentColor"/><circle cx="20" cy="20" r="1.5" fill="currentColor"/><circle cx="30" cy="20" r="1.5" fill="currentColor"/><circle cx="10" cy="30" r="1.5" fill="currentColor"/><circle cx="20" cy="30" r="1.5" fill="currentColor"/><circle cx="30" cy="30" r="1.5" fill="currentColor"/></svg>
+        </div>
+        <div style={{ flex: 1, textAlign: 'center', zIndex: 1, fontSize: '0.7rem', whiteSpace: 'nowrap', padding: '0 4px' }}>{title}</div>
+        <div style={{ 
+          width: '20px', height: '20px', borderRadius: '50%', background: iconBg, color: iconColor, 
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, flexShrink: 0
+        }}>
+          <div style={{ transform: 'scale(0.85)', display: 'flex' }}>
+            {icon}
+          </div>
+        </div>
+      </button>
+    );
+  };
 
 
+  const handlePrintBarcode = (item) => {
+    let barcodeText = item.itemCode;
+    let printName = item.name;
+    
+    const isVariant = String(item.name).includes(' - ');
+    
+    // إذا كان صنف فرعي (لون/مقاس)، اسحب بيانات الأب دائماً لتتطابق الطباعة تماماً
+    if (isVariant) {
+      let parent = null;
+      
+      if (item.parentItemId) {
+        parent = stock.find(s => s.id === item.parentItemId);
+      }
+      
+      if (!parent) {
+        const pName = String(item.name).split(' - ')[0].trim();
+        parent = stock.find(s => String(s.name).trim() === pName);
+        if (!parent) {
+          printName = pName; // كبديل لاسم الأب
+        }
+      }
+      
+      // إذا وجدنا الأب، نطبع بيانات الأب تماماً
+      if (parent) {
+        printName = parent.name || printName;
+        barcodeText = parent.itemCode || parent.itemNumber || barcodeText;
+      }
+    }
+    
+    // محاولة أخيرة كبديل
+    if (!barcodeText || String(barcodeText).trim() === '') {
+      barcodeText = item.itemNumber;
+    }
+    if (!barcodeText) {
+      Swal.fire('خطأ', 'هذا الصنف لا يملك رمز باركود صالح', 'error');
+      return;
+    }
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html dir="rtl">
+        <head>
+          <title>طباعة باركود - ${printName}</title>
+          <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800&display=swap" rel="stylesheet">
+          <style>
+            @page {
+              size: 60mm 40mm;
+              margin: 0;
+            }
+            body { 
+              margin: 0; 
+              padding: 0; 
+              width: 60mm;
+              height: 40mm;
+              display: flex; 
+              flex-direction: column;
+              justify-content: center; 
+              align-items: center; 
+              background: #fff; 
+              font-family: 'Tajawal', sans-serif; 
+              text-align: center;
+              overflow: hidden;
+              box-sizing: border-box;
+            }
+            .barcode-container { 
+              width: 100%;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              padding: 2mm;
+            }
+            .item-name { 
+              font-size: 11px; 
+              font-weight: 800; 
+              margin-bottom: 2px; 
+              color: #000;
+              width: 50mm;
+              white-space: normal;
+              word-wrap: break-word;
+              line-height: 1.2;
+            }
+            img { 
+              width: 50mm; 
+              height: 16mm;
+              object-fit: fill;
+              display: block;
+              margin: 0 auto;
+            }
+            .barcode-text {
+              font-size: 12px;
+              font-weight: bold;
+              font-family: monospace;
+              letter-spacing: 2px;
+              margin-top: 1px;
+              color: #000;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="barcode-container">
+            <div class="item-name">${printName || ''}</div>
+            <img src="https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(barcodeText)}&scale=3" alt="Barcode" onload="window.setTimeout(function(){ window.print(); window.close(); }, 500);" onerror="alert('فشل تحميل الباركود. يرجى التحقق من الاتصال بالإنترنت.'); window.close();" />
+            <div class="barcode-text">${barcodeText}</div>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   return (
     <div className="animate-fade-in pb-10">
@@ -2371,41 +2910,45 @@ const AdminStock = ({ user, notificationTarget }) => {
         </div>
 
         {/* Actions Bar */}
-        {canPerformAction(user, 'ADD', 'STOCK', globalSettings) && (
-          <div className="flex items-center gap-2 flex-wrap no-print">
+        <div className="flex items-center gap-2 flex-wrap no-print">
+          {hasPermission(user, 'stock_view', 'add') && (
             <button
               onClick={() => handleOpenModal()}
               className="btn-stock-action btn-stock-add"
             >
               <Plus size={16} /> إضافة صنف جديد
             </button>
-            <button
-              onClick={() => handleOpenVoucherModal('إدخال')}
-              className="btn-stock-action btn-stock-in"
-            >
-              <Download size={16} /> سند إدخال
-            </button>
-            <button
-              onClick={() => handleOpenVoucherModal('إخراج')}
-              className="btn-stock-action btn-stock-out"
-            >
-              <Upload size={16} /> سند إخراج
-            </button>
-            <button
-              onClick={() => handleOpenVoucherModal('إتلاف')}
-              className="btn-stock-action btn-stock-damage"
-            >
-              <AlertTriangle size={16} /> سند إتلاف
-            </button>
-            <button
-              onClick={() => handleOpenVoucherModal('تحويل')}
-              className="btn-stock-action hover:opacity-90 transition-all"
-              style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', color: '#ffffff', border: 'none', boxShadow: '0 4px 10px rgba(99, 102, 241, 0.3)' }}
-            >
-              <ArrowUpDown size={16} /> تحويل بضائع من مخزون ل مخزون
-            </button>
-          </div>
-        )}
+          )}
+          {hasPermission(user, 'stock_vouchers', 'add') && (
+            <>
+              <button
+                onClick={() => handleOpenVoucherModal('إدخال')}
+                className="btn-stock-action btn-stock-in"
+              >
+                <Download size={16} /> سند إدخال
+              </button>
+              <button
+                onClick={() => handleOpenVoucherModal('إخراج')}
+                className="btn-stock-action btn-stock-out"
+              >
+                <Upload size={16} /> سند إخراج
+              </button>
+              <button
+                onClick={() => handleOpenVoucherModal('إتلاف')}
+                className="btn-stock-action btn-stock-damage"
+              >
+                <AlertTriangle size={16} /> سند إتلاف
+              </button>
+              <button
+                onClick={() => handleOpenVoucherModal('تحويل')}
+                className="btn-stock-action hover:opacity-90 transition-all"
+                style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', color: '#ffffff', border: 'none', boxShadow: '0 4px 10px rgba(99, 102, 241, 0.3)' }}
+              >
+                <ArrowUpDown size={16} /> تحويل بضائع من مخزون ل مخزون
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* ===== ACTION SQUARES BAR ===== */}
@@ -2489,7 +3032,14 @@ const AdminStock = ({ user, notificationTarget }) => {
               onChange={(e) => setFilters({...filters, warehouse: e.target.value})}
             >
               <option value="">جميع المستودعات</option>
-              {globalSettings.warehouses?.map(w => <option key={w} value={w}>{w}</option>)}
+              {/* Default explicitly requested warehouses to ensure they never disappear */}
+              <option value="مستودع إنتاج قيد الخياطة">مستودع إنتاج قيد الخياطة</option>
+              <option value="مستودع إنتاج قيد التحضير">مستودع إنتاج قيد التحضير</option>
+              <option disabled>──────────</option>
+              {/* Filter out the explicitly added ones from the mapped list to prevent duplicates, safe rendering */}
+              {(globalSettings?.warehouses || []).filter(w => w !== 'مستودع إنتاج قيد الخياطة' && w !== 'مستودع إنتاج قيد التحضير').map(w => (
+                <option key={w} value={w}>{w}</option>
+              ))}
             </select>
             <select 
               className="input-field text-sm" 
@@ -2523,12 +3073,12 @@ const AdminStock = ({ user, notificationTarget }) => {
               </button>
             )}
 
-            {selectedItems.length > 0 && canPerformAction(user, 'EDIT', 'STOCK', globalSettings) && (
+            {selectedItems.length > 0 && hasPermission(user, 'stock_view', 'edit') && (
               <button className="btn flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white mr-auto" onClick={handleBulkMerge}>
                 <Layers size={18} /> دمج وتوحيد ({selectedItems.length})
               </button>
             )}
-            {selectedItems.length > 0 && canPerformAction(user, 'DELETE', 'STOCK', globalSettings) && (
+            {selectedItems.length > 0 && hasPermission(user, 'stock_view', 'delete') && (
               <button className="btn btn-danger flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white" onClick={handleBulkDelete}>
                 <Trash2 size={18} /> حذف المحدد ({selectedItems.length})
               </button>
@@ -2573,14 +3123,30 @@ const AdminStock = ({ user, notificationTarget }) => {
                   <th onClick={() => handleSort('name')} className="cursor-pointer hover:bg-slate-50 transition-colors text-right w-1/4 pr-4">
                     <div className="flex items-center justify-start gap-2">الاسم <ArrowUpDown size={14} className="text-muted" /></div>
                   </th>
-                  <th className="text-center">التصنيف</th>
-                  <th className="text-center">المخزن</th>
-                  <th className="text-center">الموقع</th>
-                  <th className="text-center">المواصفة</th>
-                  <th className="text-center">الكمية</th>
-                  <th className="text-center">الحد الأدنى</th>
-                  <th className="text-center">الوحدة</th>
-                  <th className="text-center">الحالة</th>
+                  <th onClick={() => handleSort('category')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">التصنيف <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th onClick={() => handleSort('warehouse')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">المخزن <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th onClick={() => handleSort('location')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">الموقع <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th onClick={() => handleSort('spec')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">المواصفة <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th onClick={() => handleSort('totalQuantity')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">الكمية <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th onClick={() => handleSort('minLimit')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">الحد الأدنى <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th onClick={() => handleSort('unit')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">الوحدة <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th onClick={() => handleSort('statusLabel')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">الحالة <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
                   <th className="text-center">إجراءات</th>
                 </tr>
               </thead>
@@ -2630,18 +3196,24 @@ const AdminStock = ({ user, notificationTarget }) => {
                             })()}
                           </div>
                         </td>
+                        <td className="text-sm text-muted text-center">{displaySpec}</td>
+                        <td className="text-center" onClick={(e) => {
+                          if (group.locations.length === 1 && hasPermission(user, 'stock_view', 'edit')) {
+                            handleQuickQuantityEdit(e, group.locations[0]);
                           } else {
                             e.stopPropagation();
                             toggleRow(group.itemNumber);
                           }
                         }}>
                           <div className="flex flex-col items-center justify-center gap-1">
-                            <span className={`font-bold ${status.color.replace('bg-', 'text-')} flex items-center gap-1 ${group.locations.length === 1 && canPerformAction(user, 'EDIT', 'STOCK', globalSettings) ? 'cursor-pointer hover:opacity-80 px-2 py-0.5 bg-slate-100 rounded-lg transition-all' : ''}`} title={group.locations.length === 1 ? 'انقر لتعديل الكمية سريعاً' : ''}>
+                            <span className={`font-bold ${status.color.replace('bg-', 'text-')} flex items-center gap-1 ${group.locations.length === 1 && hasPermission(user, 'stock_view', 'edit') ? 'cursor-pointer hover:opacity-80 px-2 py-0.5 bg-slate-100 rounded-lg transition-all' : ''}`} title={group.locations.length === 1 ? 'انقر لتعديل الكمية سريعاً' : ''}>
                               {group.totalQuantity}
-                              {group.locations.length === 1 && canPerformAction(user, 'EDIT', 'STOCK', globalSettings) && <Edit2 size={12} className="text-muted" />}
+                              {group.locations.length === 1 && hasPermission(user, 'stock_view', 'edit') && <Edit2 size={12} className="text-muted" />}
                             </span>
-                            <div className="text-[10px] text-muted">الحد: {group.minLimit}</div>
                           </div>
+                        </td>
+                        <td className="text-center">
+                          <div className="text-sm font-bold text-slate-500">{group.minLimit}</div>
                         </td>
                         <td className="text-center text-sm">{group.unit}</td>
                         <td className="text-center">
@@ -2655,13 +3227,19 @@ const AdminStock = ({ user, notificationTarget }) => {
                               onClick={() => { setSelectedItemForLocations(group); setShowLocationsModal(true); }}>
                               <Eye size={16} strokeWidth={2} />
                             </button>
-                            {canPerformAction(user, 'ADD', 'STOCK', globalSettings) && (
+                            {hasPermission(user, 'stock_view', 'print') && (
+                              <button className="icon-btn" style={{ color: '#64748b', background: '#f1f5f9' }} title="طباعة الباركود"
+                                onClick={(e) => { e.stopPropagation(); handlePrintBarcode(group); }}>
+                                <Printer size={16} strokeWidth={2} />
+                              </button>
+                            )}
+                            {hasPermission(user, 'stock_view', 'add') && (
                               <button className="icon-btn icon-btn-add" title="إضافة لون/موقع آخر لنفس الصنف"
                                 onClick={() => handleOpenModal(group.locations[0], true)}>
                                 <Plus size={16} strokeWidth={2} />
                               </button>
                             )}
-                            {canPerformAction(user, 'DELETE', 'STOCK', globalSettings) && (
+                            {hasPermission(user, 'stock_view', 'delete') && (
                               <button className="icon-btn icon-btn-delete" title="حذف الصنف بالكامل"
                                 onClick={() => handleDeleteGroup(group.locations)}>
                                 <Trash2 size={16} strokeWidth={2} />
@@ -2670,7 +3248,15 @@ const AdminStock = ({ user, notificationTarget }) => {
                           </div>
                         </td>
                       </tr>
-                      {isExpanded && group.locations.map((loc, idx) => {
+                      {isExpanded && [...group.locations].sort((a, b) => {
+                        const strA = String(a.spec || '').trim();
+                        const strB = String(b.spec || '').trim();
+                        const isModelA = strA.startsWith('موديل');
+                        const isModelB = strB.startsWith('موديل');
+                        if (isModelA && !isModelB) return -1;
+                        if (!isModelA && isModelB) return 1;
+                        return strA.localeCompare(strB, undefined, { numeric: true, sensitivity: 'base' });
+                      }).map((loc, idx) => {
                         const isLocSelected = selectedItems.includes(loc.id);
                         const locStatus = getStatus(loc);
                         return (
@@ -2679,7 +3265,7 @@ const AdminStock = ({ user, notificationTarget }) => {
                               <input type="checkbox" className="w-4 h-4 cursor-pointer accent-primary" checked={isLocSelected} onChange={() => handleSelectItem(loc.id)} />
                             </td>
                             <td className="font-mono text-xs text-muted text-center">↳</td>
-                            <td className="font-mono text-sm text-muted text-center">-</td>
+                            <td className="font-mono text-sm text-muted text-center">{loc.itemCode || group.itemCode || '-'}</td>
                             <td className="text-sm text-muted text-right pr-4">تفاصيل الموقع {idx + 1}</td>
                             <td className="text-center"><span className="badge badge-info opacity-70">{loc.category}</span></td>
                             <td className="text-sm text-center">
@@ -2689,17 +3275,18 @@ const AdminStock = ({ user, notificationTarget }) => {
                             <td className="text-sm text-muted text-center">-</td>
                             <td className="text-sm text-muted text-center">{loc.spec}</td>
                             <td className="text-center" onClick={(e) => {
-                              if (canPerformAction(user, 'EDIT', 'STOCK', globalSettings)) {
+                              if (hasPermission(user, 'stock_view', 'edit')) {
                                 handleQuickQuantityEdit(e, loc);
                               }
                             }}>
                               <div className="flex justify-center">
-                                <span className={`font-bold ${locStatus.color.replace('bg-', 'text-')} flex items-center gap-1 ${canPerformAction(user, 'EDIT', 'STOCK', globalSettings) ? 'cursor-pointer hover:opacity-80 px-2 py-0.5 bg-white rounded-lg shadow-sm border border-slate-100 transition-all' : ''}`} title="انقر لتعديل الكمية سريعاً">
+                                <span className={`font-bold ${locStatus.color.replace('bg-', 'text-')} flex items-center gap-1 ${hasPermission(user, 'stock_view', 'edit') ? 'cursor-pointer hover:opacity-80 px-2 py-0.5 bg-white rounded-lg shadow-sm border border-slate-100 transition-all' : ''}`} title="انقر لتعديل الكمية سريعاً">
                                   {loc.quantity}
-                                  {canPerformAction(user, 'EDIT', 'STOCK', globalSettings) && <Edit2 size={12} className="text-muted" />}
+                                  {hasPermission(user, 'stock_view', 'edit') && <Edit2 size={12} className="text-muted" />}
                                 </span>
                               </div>
                             </td>
+                            <td className="text-sm text-muted text-center">-</td>
                             <td className="text-center text-sm text-muted">{loc.unit}</td>
                             <td className="text-center">
                               <div className="flex justify-center">
@@ -2708,12 +3295,18 @@ const AdminStock = ({ user, notificationTarget }) => {
                             </td>
                             <td className="text-center">
                               <div className="flex justify-center gap-2">
-                                {canPerformAction(user, 'EDIT', 'STOCK', globalSettings) && (
+                                {hasPermission(user, 'stock_view', 'edit') && (
                                   <button className="icon-btn icon-btn-edit" title="تعديل بيانات الموقع" onClick={() => handleOpenModal(loc)}>
                                     <Edit2 size={16} />
                                   </button>
                                 )}
-                                {canPerformAction(user, 'DELETE', 'STOCK', globalSettings) && (
+                                {hasPermission(user, 'stock_view', 'print') && (
+                                  <button className="icon-btn" style={{ color: '#64748b', background: '#f1f5f9' }} title="طباعة الباركود"
+                                    onClick={(e) => { e.stopPropagation(); handlePrintBarcode(loc); }}>
+                                    <Printer size={16} />
+                                  </button>
+                                )}
+                                {hasPermission(user, 'stock_view', 'delete') && (
                                   <button className="icon-btn icon-btn-delete" title="حذف" onClick={() => handleDelete(loc.id)}>
                                     <Trash2 size={16} />
                                   </button>
@@ -2811,8 +3404,8 @@ const AdminStock = ({ user, notificationTarget }) => {
                 onChange={e => setVoucherFilterStatus(e.target.value)}
               >
                 <option value="all">سجل جميع الطلبات</option>
-                <option value="pending">الطلبات المعلقة فقط</option>
-                <option value="approved">الطلبات الموافق عليها</option>
+                <option value="pending">طلبات غير مدققة</option>
+                <option value="approved">طلبات مدققة</option>
                 <option value="rejected">الطلبات المرفوضة</option>
               </select>
 
@@ -2841,19 +3434,31 @@ const AdminStock = ({ user, notificationTarget }) => {
             <table className="min-w-[900px]">
               <thead>
                 <tr>
-                  <th className="text-center">رقم السند</th>
-                  <th className="text-center">النوع</th>
-                  <th className="text-center">التاريخ</th>
-                  <th className="text-center">المستودع</th>
-                  <th className="text-center">المستلم/المسؤول</th>
+                  <th onClick={() => handleSort('voucherNumber')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">رقم السند <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th onClick={() => handleSort('type')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">النوع <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th onClick={() => handleSort('date')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">التاريخ <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th onClick={() => handleSort('warehouse')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">المستودع <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th onClick={() => handleSort('recipient')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">المستلم/المسؤول <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
                   <th className="text-center">عدد الأصناف</th>
-                  <th className="text-center">أُنشئ بواسطة</th>
+                  <th onClick={() => handleSort('createdBy')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">أُنشئ بواسطة <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
                   <th className="text-center">ملاحظات</th>
                   <th className="text-center">إجراءات</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredVouchers.map(v => (
+                {applySort(filteredVouchers).map(v => (
                   <tr key={v.id} className="hover:bg-slate-50 transition-colors">
                     <td className="text-center"><span className="font-mono text-xs font-bold text-primary">{v.voucherNumber}</span></td>
                     <td className="text-center">
@@ -2872,17 +3477,19 @@ const AdminStock = ({ user, notificationTarget }) => {
                       title={v.notes}>{v.notes || '-'}</td>
                     <td className="text-center">
                       <div className="flex justify-center gap-2">
-                        <button
-                          title="طباعة السند"
-                          className="icon-btn icon-btn-print"
-                          onClick={() => handlePrintVoucher(v)}
-                        ><Printer size={16} /></button>
+                        {hasPermission(user, 'stock_vouchers', 'print') && (
+                          <button
+                            title="طباعة السند"
+                            className="icon-btn icon-btn-print"
+                            onClick={() => handlePrintVoucher(v)}
+                          ><Printer size={16} /></button>
+                        )}
                         <button
                           title="عرض التفاصيل"
                           className="icon-btn icon-btn-view"
                           onClick={() => setSelectedVoucher(v)}
                         ><Eye size={16} /></button>
-                        {canPerformAction(user, 'DELETE', 'STOCK', globalSettings) && (
+                        {hasPermission(user, 'stock_vouchers', 'delete') && (
                           <button
                             title="حذف السند"
                             className="icon-btn icon-btn-delete"
@@ -2903,9 +3510,35 @@ const AdminStock = ({ user, notificationTarget }) => {
       )}
 
       {/* ===== TAB: AUDIT ===== */}
-      {activeStockTab === 'audit' && (
-        <>
-          <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex-wrap gap-2 mt-4">
+      {activeStockTab === 'audit' && (() => {
+        const unappliedAudits = ordersToAudit.filter(o => o.stockDeducted && vouchers.some(v => v.orderNumber === o.orderNumber && v.status === 'مسودة'));
+        const unappliedProductionAudits = productionOrdersToAudit.filter(o => o.stockDeducted && vouchers.some(v => v.orderNumber === o.orderNumber && v.status === 'مسودة'));
+        const totalUnapplied = unappliedAudits.length + unappliedProductionAudits.length;
+
+        return (
+          <>
+            {totalUnapplied > 0 && isAdmin(user) && (
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 mb-4 flex justify-between items-center flex-wrap gap-3 mt-4" style={{ direction: 'rtl' }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-rose-100 text-rose-700 rounded-full flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle size={20} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-rose-900 text-sm">تنبيه: وجود طلبيات مدققة لم تُخصم من المخزون فعلياً</h4>
+                    <p className="text-rose-700 text-xs mt-0.5">هناك {totalUnapplied} طلبية تم تدقيقها سابقاً ولكن لم يرحل خصمها الفعلي للمخزون بسبب بقاء السندات كـ "مسودات".</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={handleFixAllUnapplied}
+                  className="btn text-white font-bold text-xs"
+                  style={{ background: '#dc2626', padding: '0.6rem 1.2rem', borderRadius: '10px', border: 'none' }}
+                >
+                  إصلاح وخصم الجميع فوراً ({totalUnapplied})
+                </button>
+              </div>
+            )}
+
+            <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex-wrap gap-2 mt-4">
             <div>
               <h3 className="text-lg font-bold text-slate-800">طلبات خصم المخزون</h3>
               <p className="text-slate-500 text-xs mt-0.5">سجل متابعة خصم الطلبيات من المخزون واعتمادها</p>
@@ -2917,42 +3550,78 @@ const AdminStock = ({ user, notificationTarget }) => {
               onChange={e => setAuditFilterStatus(e.target.value)}
             >
               <option value="all">سجل جميع الطلبات</option>
-              <option value="pending">الطلبات المعلقة فقط</option>
-              <option value="approved">الطلبات الموافق عليها</option>
-              <option value="rejected">الطلبات المرفوضة</option>
+              <option value="pending">طلبات غير مدققة</option>
+              <option value="approved">طلبات مدققة</option>
             </select>
           </div>
           <div className="table-container glass-panel overflow-x-auto mt-4">
             <table className="min-w-[800px]">
               <thead>
                 <tr>
-                  <th>رقم الطلبية</th>
-                  <th>تاريخ الطلبية</th>
-                  <th>اسم العميل</th>
+                  <th onClick={() => handleSort('orderNumber')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">رقم الطلبية <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th onClick={() => handleSort('orderDate')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">تاريخ الطلبية <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th onClick={() => handleSort('customerName')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">اسم العميل <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
                   <th>عدد الأصناف</th>
-                  <th className="text-center">المسؤول</th>
+                  <th onClick={() => handleSort('draftCreatedBy')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">المسؤول <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
                   <th className="text-center">الحالة</th>
                   <th className="text-center">إجراءات</th>
                 </tr>
               </thead>
               <tbody>
-                {ordersToAudit.filter(o => {
+                {applySort(ordersToAudit.filter(o => {
                   if (auditFilterStatus === 'pending') return !o.stockDeducted;
                   if (auditFilterStatus === 'approved') return o.stockDeducted;
-                  if (auditFilterStatus === 'rejected') return false; // Rejected states are immediately deleted
+                  if (auditFilterStatus === 'rejected') return false;
                   return true;
-                }).map(order => (
+                })).map(order => (
                 <tr key={order.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="font-bold text-primary">{order.orderNumber}</td>
-                  <td>{order.orderDate}</td>
+                  <td className="font-bold text-primary text-center">{order.orderNumber}</td>
+                  <td className="text-center">{order.orderDate}</td>
                   <td className="font-semibold">{order.customerName || 'بدون اسم'}</td>
-                  <td><span className="badge badge-info">{order.items?.length || 0} أصناف</span></td>
+                  <td>
+                    <span 
+                      className="badge badge-info hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                      style={{ 
+                        cursor: 'pointer', 
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                      onClick={() => handlePreviewOrder(order)}
+                      title="اضغط لعرض تفاصيل الأصناف"
+                    >
+                      {order.items?.length || 0} أصناف
+                    </span>
+                  </td>
                   <td className="text-center text-sm font-semibold text-slate-600">
                     {order.draftCreatedBy}
                   </td>
                   <td className="text-center">
                     {order.stockDeducted ? (
-                      <span className="badge bg-emerald-100 text-emerald-800 font-bold">تم الخصم والاعتماد</span>
+                      vouchers.some(v => v.orderNumber === order.orderNumber && v.status === 'مسودة') ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="badge bg-rose-100 text-rose-800 font-bold">معلق (لم يخصم فعلياً!)</span>
+                          {isAdmin(user) && (
+                            <button
+                              onClick={() => handleFixSingleDeduction(order)}
+                              className="btn text-white text-[11px] mt-1 font-bold"
+                              style={{ padding: '3px 8px', borderRadius: '6px', background: '#059669', border: 'none' }}
+                            >
+                              إصلاح وخصم الآن
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="badge bg-emerald-100 text-emerald-800 font-bold">تم الخصم والاعتماد</span>
+                      )
                     ) : order.hasDraft ? (
                       <span className="badge bg-amber-100 text-amber-800 font-bold">بانتظار موافقة المدير</span>
                     ) : (
@@ -2962,7 +3631,9 @@ const AdminStock = ({ user, notificationTarget }) => {
                   <td className="text-center">
                     <div className="flex justify-center gap-2">
                       {order.stockDeducted ? (
-                        isAdmin(user) ? (
+                        vouchers.some(v => v.orderNumber === order.orderNumber && v.status === 'مسودة') ? (
+                          <span className="text-xs text-rose-500 font-bold px-2 py-1 bg-rose-50 rounded-lg">إصلاح معلق</span>
+                        ) : isAdmin(user) ? (
                           <button 
                             className="btn flex items-center justify-center gap-1"
                             style={{ background: '#dc2626', color: 'white', padding: '0.4rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 'bold' }}
@@ -2975,13 +3646,20 @@ const AdminStock = ({ user, notificationTarget }) => {
                           <span className="text-xs text-slate-400 font-bold px-2 py-1 bg-slate-50 rounded-lg">لا يوجد إجراء</span>
                         )
                       ) : !order.hasDraft ? (
-                        <button 
-                          className="btn flex items-center justify-center gap-1 mx-auto"
-                          style={{ background: 'var(--primary)', color: 'white', padding: '0.4rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 'bold' }}
-                          onClick={() => handleOpenAudit(order)}
-                        >
-                          <AlertTriangle size={14} /> تدقيق وخصم
-                        </button>
+                        <div className="flex gap-3 justify-center">
+                          <PremiumActionBtn 
+                            title="تدقيق وخصم" 
+                            variant="issue" 
+                            icon={<Upload size={16} />} 
+                            onClick={() => handleOpenAudit(order)} 
+                          />
+                          <PremiumActionBtn 
+                            title="تجاهل" 
+                            variant="ignore" 
+                            icon={<X size={16} strokeWidth={3} />} 
+                            onClick={() => handleIgnoreAudit(order)} 
+                          />
+                        </div>
                       ) : (
                         <>
                           <button 
@@ -3011,16 +3689,411 @@ const AdminStock = ({ user, notificationTarget }) => {
                           )}
                         </>
                       )}
+                      
+                      <button
+                        title="معاينة تفاصيل الطلبية"
+                        className="hover:scale-105 active:scale-95 transition-transform ms-1"
+                        style={{
+                          background: '#ffffff',
+                          color: '#64748b',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '8px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          height: '28px',
+                          width: '32px',
+                          cursor: 'pointer',
+                          boxShadow: '0 1px 2px -1px rgba(0,0,0,0.05)'
+                        }}
+                        onClick={() => handlePreviewOrder(order)}
+                      >
+                        <Eye size={15} />
+                      </button>
                     </div>
                   </td>
                 </tr>
               ))}
               {ordersToAudit.length === 0 && (
-                <tr><td colSpan="6" className="text-center p-10 text-muted italic">لا يوجد طلبيات بانتظار الخصم</td></tr>
+                <tr><td colSpan="7" className="text-center p-10 text-muted italic">لا يوجد طلبيات بانتظار الخصم</td></tr>
               )}
             </tbody>
           </table>
         </div>
+        </>
+      );
+    })()}
+
+      {/* ===== TAB: PRODUCTION ===== */}
+      {activeStockTab === 'production' && (
+        <>
+          {/* Two Big Separation Buttons */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 mt-4">
+            <button
+              onClick={() => setProductionSubTab('disbursement')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '14px',
+                padding: '16px 20px',
+                borderRadius: '16px',
+                border: productionSubTab === 'disbursement' ? '2.5px solid #ea580c' : '1.5px solid #e2e8f0',
+                backgroundColor: productionSubTab === 'disbursement' ? '#fff7ed' : '#ffffff',
+                color: productionSubTab === 'disbursement' ? '#c2410c' : '#64748b',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                boxShadow: productionSubTab === 'disbursement' ? '0 10px 15px -3px rgba(234, 88, 12, 0.12)' : 'none',
+                transform: productionSubTab === 'disbursement' ? 'scale(1.01)' : 'scale(1)'
+              }}
+            >
+              <div style={{
+                backgroundColor: productionSubTab === 'disbursement' ? '#ffedd5' : '#f1f5f9',
+                color: productionSubTab === 'disbursement' ? '#ea580c' : '#94a3b8',
+                padding: '12px',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Upload size={24} strokeWidth={2.5} />
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '17px', fontWeight: '900' }}>صرف المواد الخام للإنتاج</div>
+                <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '2px' }}>تدقيق وصرف المواد الأولية وبدء التصنيع</div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setProductionSubTab('receipt')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '14px',
+                padding: '16px 20px',
+                borderRadius: '16px',
+                border: productionSubTab === 'receipt' ? '2.5px solid #1e3a8a' : '1.5px solid #e2e8f0',
+                backgroundColor: productionSubTab === 'receipt' ? '#eff6ff' : '#ffffff',
+                color: productionSubTab === 'receipt' ? '#1d4ed8' : '#64748b',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                boxShadow: productionSubTab === 'receipt' ? '0 10px 15px -3px rgba(30, 58, 138, 0.12)' : 'none',
+                transform: productionSubTab === 'receipt' ? 'scale(1.01)' : 'scale(1)'
+              }}
+            >
+              <div style={{
+                backgroundColor: productionSubTab === 'receipt' ? '#dbeafe' : '#f1f5f9',
+                color: productionSubTab === 'receipt' ? '#1e3a8a' : '#94a3b8',
+                padding: '12px',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Download size={24} strokeWidth={2.5} />
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '17px', fontWeight: '900' }}>استلام المنتجات الجاهزة</div>
+                <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '2px' }}>إدخال المواد تامة الصنع لمستودع البضاعة الجاهزة</div>
+              </div>
+            </button>
+          </div>
+
+          <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex-wrap gap-4 mt-4">
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">
+                {productionSubTab === 'disbursement' ? 'صرف المواد الخام' : 'استلام المنتجات الجاهزة'}
+              </h3>
+              <p className="text-slate-500 text-xs mt-0.5">
+                {productionSubTab === 'disbursement' ? 'تدقيق وصرف مكونات طلبات الإنتاج من المواد الخام' : 'إثبات استلام وتوريد المنتجات النهائية للمستودعات'}
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-2 flex-wrap">
+              <button 
+                onClick={() => setProductionTypeFilter('all')}
+                style={{
+                  height: '40px', padding: '0 16px', borderRadius: '12px', fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap',
+                  border: productionTypeFilter === 'all' ? 'none' : '1px solid #e2e8f0',
+                  backgroundColor: productionTypeFilter === 'all' ? '#1a8d9b' : '#ffffff',
+                  color: productionTypeFilter === 'all' ? 'white' : '#475569',
+                  transition: 'all 0.2s',
+                  boxShadow: productionTypeFilter === 'all' ? '0 4px 6px -1px rgba(26,141,155,0.2)' : '0 1px 2px rgba(0,0,0,0.05)'
+                }}
+              >الكل</button>
+              <button 
+                onClick={() => setProductionTypeFilter('sewing')}
+                style={{
+                  height: '40px', padding: '0 16px', borderRadius: '12px', fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap',
+                  border: productionTypeFilter === 'sewing' ? 'none' : '1px solid #e2e8f0',
+                  backgroundColor: productionTypeFilter === 'sewing' ? '#1a8d9b' : '#ffffff',
+                  color: productionTypeFilter === 'sewing' ? 'white' : '#475569',
+                  transition: 'all 0.2s',
+                  boxShadow: productionTypeFilter === 'sewing' ? '0 4px 6px -1px rgba(26,141,155,0.2)' : '0 1px 2px rgba(0,0,0,0.05)'
+                }}
+              >طلبات إنتاج قيد الخياطة</button>
+              <button 
+                onClick={() => setProductionTypeFilter('preparation')}
+                style={{
+                  height: '40px', padding: '0 16px', borderRadius: '12px', fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap',
+                  border: productionTypeFilter === 'preparation' ? 'none' : '1px solid #e2e8f0',
+                  backgroundColor: productionTypeFilter === 'preparation' ? '#1a8d9b' : '#ffffff',
+                  color: productionTypeFilter === 'preparation' ? 'white' : '#475569',
+                  transition: 'all 0.2s',
+                  boxShadow: productionTypeFilter === 'preparation' ? '0 4px 6px -1px rgba(26,141,155,0.2)' : '0 1px 2px rgba(0,0,0,0.05)'
+                }}
+              >طلبات إنتاج قيد التحضير</button>
+
+              <select 
+                className="input-field text-sm" 
+                style={{ width: 'auto', minWidth: '150px', marginBottom: 0, height: '40px', borderRadius: '12px', padding: '0 1.5rem 0 0.8rem' }}
+                value={auditFilterStatus} 
+                onChange={e => setAuditFilterStatus(e.target.value)}
+              >
+                <option value="all">سجل جميع الطلبات</option>
+                <option value="pending">طلبات غير مدققة</option>
+                <option value="approved">طلبات مدققة</option>
+              </select>
+            </div>
+          </div>
+          <div className="table-container glass-panel overflow-x-auto mt-4">
+            <table className="min-w-[800px]">
+              <thead>
+                <tr>
+                  <th onClick={() => handleSort('orderNumber')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">رقم الإنتاج <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th onClick={() => handleSort('orderDate')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">تاريخ الطلبية <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th onClick={() => handleSort('customerName')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">العميل/البيان <ArrowUpDown size={14} className="text-muted" /></div>
+                  </th>
+                  <th>الأصناف المطلوبة</th>
+                  <th className="text-center">الكمية</th>
+                  <th className="text-center">الحالة</th>
+                  <th className="text-center" style={{ minWidth: '220px' }}>إجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const filteredOrders = applySort(productionOrdersToAudit.filter(o => {
+                    if (productionSubTab === 'disbursement') {
+                      if (auditFilterStatus === 'pending' && o.stockDeducted) return false;
+                      if (auditFilterStatus === 'approved' && !o.stockDeducted) return false;
+                    } else {
+                      if (auditFilterStatus === 'pending' && o.stockReceived) return false;
+                      if (auditFilterStatus === 'approved' && !o.stockReceived) return false;
+                    }
+                    if (productionTypeFilter !== 'all' && o.productionType !== productionTypeFilter) return false;
+                    return true;
+                  }));
+
+                  if (filteredOrders.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan="7" className="text-center p-10 text-muted italic">
+                          لا يوجد طلبيات بانتظار {productionSubTab === 'disbursement' ? 'الصرف' : 'الاستلام'}
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return filteredOrders.map(order => (
+                    <tr key={order.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="text-center">
+                        <div className="font-bold text-primary" style={{ fontSize: '15px' }}>{order.orderNumber}</div>
+                        <div className="mt-1">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${order.productionType === 'preparation' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {order.productionType === 'preparation' ? 'تحضير' : 'خياطة'}
+                          </span>
+                        </div>
+                        {order.salesOrderNumber && (
+                          <div className="font-bold mt-1.5 flex items-center justify-center gap-1" style={{ color: '#dc2626', fontSize: '13px' }}>
+                            📌 <span dir="ltr">{order.salesOrderNumber}</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="text-center">{order.orderDate}</td>
+                      <td className="font-semibold">{order.customerName || 'بدون اسم'}</td>
+                      <td>
+                        {order.items?.map((item, idx) => (
+                          <div key={idx} className="text-xs font-semibold text-slate-700 whitespace-nowrap mb-1">
+                            • {item.productName || item.name || 'بدون اسم'}
+                          </div>
+                        ))}
+                      </td>
+                      <td className="text-center">
+                        {order.items?.map((item, idx) => (
+                          <div key={idx} className="text-xs font-bold text-primary mb-1">
+                            {item.quantity}
+                          </div>
+                        ))}
+                      </td>
+                      <td className="text-center">
+                        {productionSubTab === 'disbursement' ? (
+                          order.stockDeducted ? (
+                            vouchers.some(v => v.orderNumber === order.orderNumber && v.status === 'مسودة') ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="badge bg-rose-100 text-rose-800 font-bold mb-1.5" style={{ display: 'inline-block', width: '90%', padding: '6px' }}>معلق (لم يخصم فعلياً!)</span>
+                                {isAdmin(user) && (
+                                  <button
+                                    onClick={() => handleFixSingleDeduction(order)}
+                                    className="btn text-white text-[11px] mb-1.5 font-bold"
+                                    style={{ padding: '3px 8px', borderRadius: '6px', background: '#059669', border: 'none', width: '90%' }}
+                                  >
+                                    إصلاح وخصم الآن
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="badge bg-emerald-100 text-emerald-800 font-bold mb-1.5" style={{ display: 'inline-block', width: '90%', padding: '6px' }}>تم صرف المواد</div>
+                            )
+                          ) : order.hasDraft ? (
+                            <span className="badge bg-amber-100 text-amber-800 font-bold" style={{ display: 'inline-block', width: '90%', padding: '6px' }}>بانتظار موافقة المدير</span>
+                          ) : (
+                            <span className="badge bg-slate-100 text-slate-800 font-bold" style={{ display: 'inline-block', width: '90%', padding: '6px' }}>بانتظار الصرف</span>
+                          )
+                        ) : (
+                          order.stockReceived ? (
+                            <div className="badge bg-blue-100 text-blue-800 font-bold mb-1.5" style={{ display: 'inline-block', width: '90%', padding: '6px' }}>تم استلام المنتجات</div>
+                          ) : (
+                            <span className="badge bg-slate-100 text-slate-800 font-bold" style={{ display: 'inline-block', width: '90%', padding: '6px' }}>بانتظار الاستلام</span>
+                          )
+                        )}
+                        {productionSubTab === 'disbursement' && order.draftCreatedBy !== '-' && !order.stockDeducted && (
+                          <div className="text-xs text-slate-500 mt-1">بواسطة: {order.draftCreatedBy}</div>
+                        )}
+                      </td>
+                      <td className="text-center">
+                        <div className="flex justify-center items-center gap-2 flex-wrap">
+                          {productionSubTab === 'disbursement' ? (
+                            /* Material Issuing Section */
+                            order.stockDeducted ? (
+                              vouchers.some(v => v.orderNumber === order.orderNumber && v.status === 'مسودة') ? (
+                                <span className="text-xs text-rose-500 font-bold px-2 py-1 bg-rose-50 rounded-lg">إصلاح معلق</span>
+                              ) : isAdmin(user) ? (
+                                <button 
+                                  className="btn flex items-center justify-center gap-1"
+                                  style={{ background: '#e11d48', color: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', border: 'none' }}
+                                  onClick={() => handleRevertDeduction(order)}
+                                  title="إلغاء الصرف وإرجاع المواد الخام للمخزون"
+                                >
+                                  <Trash2 size={13} /> تراجع عن الصرف
+                                </button>
+                              ) : (
+                                <span className="text-[11px] text-slate-400 font-bold px-2 py-1 bg-slate-50 rounded-lg">تم الصرف</span>
+                              )
+                            ) : order.hasDraft ? (
+                              <div className="flex items-center gap-1">
+                                <button 
+                                  className="btn flex items-center justify-center gap-1"
+                                  style={{ background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold' }}
+                                  onClick={() => handleOpenAudit(order)}
+                                >
+                                  <Edit2 size={13} /> تعديل الصرف
+                                </button>
+                                {isAdmin(user) && (
+                                  <>
+                                    <button 
+                                      className="btn flex items-center justify-center gap-1"
+                                      style={{ background: '#059669', color: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', border: 'none' }}
+                                      onClick={() => handleApproveDraft(order)}
+                                    >
+                                      اعتماد الصرف
+                                    </button>
+                                    <button 
+                                      className="btn flex items-center justify-center gap-1"
+                                      style={{ background: '#dc2626', color: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', border: 'none' }}
+                                      onClick={() => handleDeleteDraft(order.orderNumber)}
+                                      title="حذف مسودة الصرف"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            ) : (
+                              <>
+                                <PremiumActionBtn 
+                                  title="صرف المواد" 
+                                  variant="issue" 
+                                  icon={<Upload size={14} />} 
+                                  onClick={() => handleOpenAudit(order)} 
+                                />
+                                {!order.hasDraft && (
+                                  <PremiumActionBtn 
+                                    title="تجاهل" 
+                                    variant="ignore" 
+                                    icon={<X size={14} strokeWidth={3} />} 
+                                    onClick={() => handleIgnoreAudit(order)} 
+                                  />
+                                )}
+                              </>
+                            )
+                          ) : (
+                            /* Product Receipt Section */
+                            order.stockReceived ? (
+                              isAdmin(user) ? (
+                                <button 
+                                  className="btn flex items-center justify-center gap-1"
+                                  style={{ background: '#be123c', color: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', border: 'none' }}
+                                  onClick={() => handleRevertReceipt(order)}
+                                  title="إلغاء الاستلام وخصم المنتجات من المخزون"
+                                >
+                                  <Trash2 size={13} /> تراجع عن الاستلام
+                                </button>
+                              ) : (
+                                <span className="text-[11px] text-slate-400 font-bold px-2 py-1 bg-slate-50 rounded-lg">تم الاستلام</span>
+                              )
+                            ) : (
+                              <>
+                                <PremiumActionBtn 
+                                  title="استلام منتجات" 
+                                  variant="receive" 
+                                  icon={<Download size={14} />} 
+                                  onClick={() => handleOpenVoucherModal('إدخال', order)} 
+                                />
+                                <PremiumActionBtn 
+                                  title="تجاهل" 
+                                  variant="ignore" 
+                                  icon={<X size={14} strokeWidth={3} />} 
+                                  onClick={() => handleIgnoreAudit(order)} 
+                                />
+                              </>
+                            )
+                          )}
+
+                          {/* Preview Button */}
+                          <button
+                            title="معاينة تفاصيل الطلبية"
+                            className="hover:scale-105 active:scale-95 transition-transform ms-1"
+                            style={{
+                              background: '#ffffff',
+                              color: '#64748b',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '8px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              height: '28px',
+                              width: '32px',
+                              cursor: 'pointer',
+                              boxShadow: '0 1px 2px -1px rgba(0,0,0,0.05)'
+                            }}
+                            onClick={() => handlePreviewOrder(order)}
+                          >
+                            <Eye size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ));
+                })()}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 
@@ -3059,11 +4132,11 @@ const AdminStock = ({ user, notificationTarget }) => {
                     onChange={e => setStocktakeFilterStatus(e.target.value)}
                   >
                     <option value="all">سجل جميع الطلبات</option>
-                    <option value="pending">الطلبات المعلقة فقط</option>
-                    <option value="approved">الطلبات الموافق عليها</option>
+                    <option value="pending">طلبات غير مدققة</option>
+                    <option value="approved">طلبات مدققة</option>
                     <option value="rejected">الطلبات المرفوضة</option>
                   </select>
-                  {canPerformAction(user, 'ADD', 'STOCK', globalSettings) && (
+                  {hasPermission(user, 'stock_take', 'add') && (
                     <button
                       onClick={() => {
                         setStocktakeSetup({ warehouse: '', category: '' });
@@ -3081,9 +4154,15 @@ const AdminStock = ({ user, notificationTarget }) => {
                 <table className="min-w-[800px]">
                   <thead>
                     <tr>
-                      <th>التاريخ</th>
-                      <th>المستودع</th>
-                      <th>المسؤول عن الجرد</th>
+                      <th onClick={() => handleSort('date')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                        <div className="flex items-center justify-center gap-2">التاريخ <ArrowUpDown size={14} className="text-muted" /></div>
+                      </th>
+                      <th onClick={() => handleSort('warehouse')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                        <div className="flex items-center justify-center gap-2">المستودع <ArrowUpDown size={14} className="text-muted" /></div>
+                      </th>
+                      <th onClick={() => handleSort('createdBy')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                        <div className="flex items-center justify-center gap-2">المسؤول عن الجرد <ArrowUpDown size={14} className="text-muted" /></div>
+                      </th>
                       <th className="text-center">الأصناف المجردة</th>
                       <th className="text-center">الزيادة (+)</th>
                       <th className="text-center">العجز (-)</th>
@@ -3092,12 +4171,12 @@ const AdminStock = ({ user, notificationTarget }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {stocktakes.filter(st => {
+                    {applySort(stocktakes.filter(st => {
                       if (stocktakeFilterStatus === 'pending') return false; // Stocktakes in DB are always approved
                       if (stocktakeFilterStatus === 'approved') return true;
                       if (stocktakeFilterStatus === 'rejected') return false;
                       return true;
-                    }).map(st => (
+                    })).map(st => (
                       <tr key={st.id} className="hover:bg-slate-50 transition-colors">
                         <td className="font-semibold text-sm">
                           {st.createdAt ? new Date(st.createdAt).toLocaleDateString('en-GB') : st.date}
@@ -3130,7 +4209,7 @@ const AdminStock = ({ user, notificationTarget }) => {
                               onClick={() => handleViewStocktake(st)}
                             ><Eye size={16} /></button>
                             
-                            {st.status !== 'معتمد' && canPerformAction(user, 'EDIT', 'STOCK', globalSettings) && (
+                            {st.status !== 'معتمد' && hasPermission(user, 'stock_take', 'edit') && (
                               <button
                                 title="تعديل المسودة"
                                 className="icon-btn"
@@ -3484,7 +4563,9 @@ const AdminStock = ({ user, notificationTarget }) => {
             </div>
 
             <div className="flex gap-4">
-              <button className="btn btn-primary flex-1" onClick={() => handlePrintVoucher(selectedVoucher)}><Printer size={18} /> طباعة السند</button>
+              {hasPermission(user, 'stock_vouchers', 'print') && (
+                <button className="btn btn-primary flex-1" onClick={() => handlePrintVoucher(selectedVoucher)}><Printer size={18} /> طباعة السند</button>
+              )}
               <button className="btn btn-outline flex-1" onClick={() => setSelectedVoucher(null)}>إغلاق</button>
             </div>
           </div>
@@ -3663,12 +4744,17 @@ const AdminStock = ({ user, notificationTarget }) => {
                       <td className="text-muted font-bold text-xs">{idx + 1}</td>
                       <td>
                         {(() => {
-                          const options = stock.filter(s => s.warehouse === voucherForm.warehouse && (voucherType === 'إخراج' ? s.quantity > 0 : true))
+                          let options = stock.filter(s => (voucherType === 'إدخال' ? true : s.warehouse === voucherForm.warehouse) && (voucherType === 'إخراج' ? s.quantity > 0 : true))
                             .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ar'))
                             .map(s => ({
                             value: s.id,
                             label: `${s.itemNumber} - ${s.name}${s.spec ? ` (${s.spec})` : ''} | متوفر: ${s.quantity} ${s.unit}`
                           }));
+                          
+                          if (item.name && String(item.stockId).startsWith('new_')) {
+                            options.unshift({ value: item.stockId, label: `${item.itemNumber} - ${item.name} (صنف جديد)` });
+                          }
+                          
                           const selectedOption = options.find(o => o.value === item.stockId) || null;
                           return (
                             <Select
@@ -3772,7 +4858,7 @@ const AdminStock = ({ user, notificationTarget }) => {
                   طلبية رقم: <span className="text-primary">{auditOrder.orderNumber}</span> - العميل: <span className="text-primary">{auditOrder.customerName}</span>
                 </p>
                 <p className="text-slate-400 text-sm mt-1 font-semibold">
-                  سيتم إصدار سند برقم: <span className="text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-100" style={{ direction: 'ltr', display: 'inline-block' }}>
+                  سيتم إصدار سند إخراج مواد برقم: <span className="text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-100" style={{ direction: 'ltr', display: 'inline-block' }}>
                     MIS-{String((vouchers.filter(v => v.voucherNumber?.startsWith('MIS-')).reduce((max, v) => { const m = v.voucherNumber?.match(/MIS-(\d+)/); return m ? Math.max(max, parseInt(m[1], 10)) : max; }, 0)) + 1).padStart(5, '0')} ({auditOrder.orderNumber})
                   </span>
                 </p>
@@ -3802,7 +4888,8 @@ const AdminStock = ({ user, notificationTarget }) => {
                   <tr>
                     <th className="p-4 text-slate-700 font-black text-sm w-12 text-center">#</th>
                     <th className="p-4 text-slate-700 font-black text-sm">اسم الصنف</th>
-                    <th className="p-4 text-slate-700 font-black text-sm" style={{ width: '250px' }}>المستودع *</th>
+                    <th className="p-4 text-slate-700 font-black text-sm" style={{ width: '200px' }}>نوع التغليف</th>
+                    <th className="p-4 text-slate-700 font-black text-sm" style={{ width: '250px' }}>المستودع</th>
                     <th className="p-4 text-slate-700 font-black text-sm w-36 text-center">الكمية</th>
                     <th className="p-4 w-16 text-center"></th>
                   </tr>
@@ -3848,13 +4935,24 @@ const AdminStock = ({ user, notificationTarget }) => {
                       </td>
                       <td className="p-4">
                         {item.isExtra ? (
+                          <div className="h-10 flex items-center justify-center px-3 bg-slate-50 rounded-lg text-sm font-bold text-slate-400 border border-slate-200 border-dashed text-center">
+                            ---
+                          </div>
+                        ) : (
+                          <div className="font-bold text-slate-700 text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-center">
+                            {item.packagingType || 'بدون تغليف'}
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        {item.isExtra ? (
                           <div className="h-10 flex items-center justify-center px-3 bg-slate-100 rounded-lg text-sm font-bold text-slate-600 border border-slate-200 text-center">
                             {item.warehouse || 'سيتم تحديده تلقائياً'}
                           </div>
                         ) : (
                           <>
                             <Select
-                              options={globalSettings.warehouses ? globalSettings.warehouses.map(w => ({ value: w, label: w })) : []}
+                              options={Array.from(new Set([...(globalSettings.warehouses || []), ...stock.map(s => s.warehouse)])).filter(Boolean).map(w => ({ value: w, label: w }))}
                               value={item.warehouse ? { value: item.warehouse, label: item.warehouse } : null}
                               onChange={selected => updateAuditItem(idx, 'warehouse', selected ? selected.value : '')}
                               placeholder="اختر المستودع..."
@@ -3869,7 +4967,7 @@ const AdminStock = ({ user, notificationTarget }) => {
                               classNamePrefix="react-select"
                             />
                             {item.warehouse && !item.stockId && (
-                              <span className="text-xs text-red-500 font-bold mt-1.5 flex items-center gap-1"><AlertTriangle size={12}/> لا يوجد صنف مطابق!</span>
+                              <span className="text-xs text-amber-600 font-bold mt-1.5 flex items-center gap-1"><AlertTriangle size={12}/> غير مسجل مسبقاً بهذا المستودع (رصيد 0)</span>
                             )}
                           </>
                         )}
@@ -3879,8 +4977,8 @@ const AdminStock = ({ user, notificationTarget }) => {
                           <input type="number" min="1" max={item.availableQuantity || 9999}
                             className="input-field m-0 h-10 w-full text-center font-black text-lg text-slate-800 bg-white"
                             style={{ 
-                              borderColor: Number(item.quantity) > Number(item.availableQuantity) ? '#ef4444' : '#cbd5e1',
-                              boxShadow: Number(item.quantity) > Number(item.availableQuantity) ? '0 0 0 2px rgba(239,68,68,0.2)' : 'none',
+                              borderColor: (item.stockId && Number(item.quantity) > Number(item.availableQuantity)) ? '#ef4444' : '#cbd5e1',
+                              boxShadow: (item.stockId && Number(item.quantity) > Number(item.availableQuantity)) ? '0 0 0 2px rgba(239,68,68,0.2)' : 'none',
                               borderRadius: '10px'
                             }}
                             value={item.quantity} onChange={e => updateAuditItem(idx, 'quantity', e.target.value)} />
@@ -3892,7 +4990,6 @@ const AdminStock = ({ user, notificationTarget }) => {
                         </div>
                       </td>
                       <td className="p-4 text-center">
-                        {item.isExtra && (
                           <button onClick={() => removeAuditItem(idx)} 
                             className="text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all flex items-center justify-center mx-auto"
                             style={{ width: '38px', height: '38px', background: '#f1f5f9', border: 'none', borderRadius: '10px' }}
@@ -3900,7 +4997,6 @@ const AdminStock = ({ user, notificationTarget }) => {
                           >
                             <X size={20} strokeWidth={2.5} />
                           </button>
-                        )}
                       </td>
                     </tr>
                   ))}

@@ -47,13 +47,19 @@
 }
 
 .overview-grid.unified-grid {
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 24px;
   margin-bottom: 32px;
 }
 
 .hr-requests-grid {
   grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 1536px) {
+  .overview-grid.unified-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 @media (max-width: 1280px) {

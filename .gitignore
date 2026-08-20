@@ -3,6 +3,17 @@ dist/
 
 whatsapp-server/.wwebjs_auth/
 whatsapp-server/.wwebjs_cache/
+whatsapp-server/.env
+whatsapp-server/waha-sessions/
+.wwebjs_auth/
+.wwebjs_cache/
+wppconnect-server/
+
+# Local diagnostics and temporary repair artifacts
+scratch/
+debug_git.txt
+*_dump*.txt
+FIX_SUCCESS.txt
 
 brain/
 logs

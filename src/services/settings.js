@@ -55,9 +55,10 @@ export const defaultGlobalSettings = {
   logoUrl: "/logo-mrsleep.png",
   primaryColor: "#0f172a",
   itemStatuses: ["مخزون", "قيد التشغيل", "مباع", "تالف", "مفقود", "مرتجع"],
-  productionStatuses: ["لم يتم التنفيذ", "مرحلة القص", "مرحلة الخياطة", "مرحلة التغليف", "مرحلة المستودع", "منتهي", "ملغي"],
+  productionStatuses: ["لم يتم التنفيذ", "مرحلة القص", "مرحلة المستودع", "مرحلة الخياطة", "مرحلة التغليف", "منتهي", "ملغي"],
+  preparationStatuses: ["لم يتم التنفيذ", "تم استلام كرت الانتاج", "مرحلة المستودع", "مرحلة الحشوة", "مرحلة التطريز", "مرحلة التشطيب", "منتهي", "ملغي"],
   salesStatuses: ["جديد", "قيد التجهيز", "جاهز للتوصيل", "تم تسليمها للتوصيل", "تم التوصيل", "ملغي", "مرفوض"],
-  salesItemStatuses: ["جديد", "قيد التجهيز", "جاهز للتسليم", "تم التسليم", "مرتجع"],
+  salesItemStatuses: ["جديد", "قيد التجهيز", "جاهز للتسليم", "تم التسليم", "مرتجع", "قيد التحضير"],
   customerSectors: ["المستشفيات", "شركات خاصة", "شخصي", "مول", "اثاث مكتبي", "اثاث منزلي ومفروشات", "أطفال وبيبي", "ستائر", "مستلزمات طبية", "الحرامات", "الأدوات المنزلية", "الفنادق", "الشقق الفندقية", "بياضات", "الفرشات", "جمعيات ومنظمات", "حكومي", "جهة عسكرية", "الجامعات والمدارس"],
   stockLocations: Array.from({ length: 45 }, (_, i) => `A${i + 1}`),
   userTypes: [
@@ -80,7 +81,12 @@ export const defaultGlobalSettings = {
     overtimeMultiplier: 1.5,
     fullDayAbsenceDeduction: true
   },
-  notificationSettings: {}
+  notificationSettings: {},
+  quoteTaxRates: [0, 4, 16],
+  quoteValidities: ["أسبوع", "أسبوعين", "شهر", "شهرين", "حتى إشعار آخر"],
+  quoteTerms: ["الأسعار أعلاه لا تشمل ضريبة المبيعات", "الأسعار أعلاه تشمل ضريبة المبيعات", "التسليم في موقع العميل", "التوصيل مجاني داخل عمان", "الدفع نقداً عند الاستلام", "تخضع هذه الأسعار للتغيير دون إشعار مسبق"],
+  quoteStatuses: ["مسودة", "مرسل", "مقبول", "مرفوض", "ملغي"],
+  quotePriorities: ["منخفضة", "متوسطة", "عالية", "عاجلة جداً"]
 };
 
 export const NOTIFICATION_ROLE_OPTIONS = [
@@ -282,10 +288,17 @@ export const notificationMatchesUser = (notification, user, settings) => {
   if ((notification.excludedUserIds || []).includes(user.id)) return false;
   
   if (userRole === 'supervisor' && notification.targetEmployeeId) {
-    if (user.assignedEmployees && user.assignedEmployees.length > 0) {
-      const assignedIds = user.assignedEmployees.map(id => String(id).trim());
+    if (notification.settingKey === 'dailyReport') {
+      const assignedIds = (user.assignedEmployees || []).map(id => String(id).trim());
       if (!assignedIds.includes(String(notification.targetEmployeeId).trim())) {
         return false;
+      }
+    } else {
+      if (user.assignedEmployees && user.assignedEmployees.length > 0) {
+        const assignedIds = user.assignedEmployees.map(id => String(id).trim());
+        if (!assignedIds.includes(String(notification.targetEmployeeId).trim())) {
+          return false;
+        }
       }
     }
   }
@@ -324,6 +337,8 @@ export const createNotification = async (notification) => {
       category: notification.category || 'activity',
       moduleKey: notification.moduleKey || 'general',
       moduleLabel: notification.moduleLabel || 'النظام',
+      settingKey: notification.settingKey || '',
+      targetEmployeeId: notification.targetEmployeeId || '',
       title: notification.title || 'إشعار جديد',
       message: notification.message || '',
       visibleToAll: Boolean(notification.visibleToAll),
@@ -567,6 +582,46 @@ export const saveScoringConfig = async (config) => {
 
 export const getGlobalSettings = async () => {
   const data = await getDocData('settings', 'globalSettings', defaultGlobalSettings);
+  
+  if (data && Array.isArray(data.productionStatuses)) {
+    const statuses = [...data.productionStatuses];
+    const warehouseIdx = statuses.indexOf('مرحلة المستودع');
+    const cuttingIdx = statuses.indexOf('مرحلة القص');
+    if (warehouseIdx !== -1 && cuttingIdx !== -1 && warehouseIdx !== cuttingIdx + 1) {
+      statuses.splice(warehouseIdx, 1);
+      const newCuttingIdx = statuses.indexOf('مرحلة القص');
+      statuses.splice(newCuttingIdx + 1, 0, 'مرحلة المستودع');
+      data.productionStatuses = statuses;
+      await setDocData('settings', 'globalSettings', data);
+    }
+  }
+
+  if (data && Array.isArray(data.stockColors)) {
+    data.stockColors.sort((a, b) => {
+      const isModelA = String(a).trim().startsWith('موديل');
+      const isModelB = String(b).trim().startsWith('موديل');
+      if (isModelA && !isModelB) return -1;
+      if (!isModelA && isModelB) return 1;
+      return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }
+
+  if (data && Array.isArray(data.customerSectors)) {
+    data.customerSectors.sort((a, b) => String(a).localeCompare(String(b), 'ar', { sensitivity: 'base', numeric: true }));
+  }
+  if (data && Array.isArray(data.ammanAreas)) {
+    data.ammanAreas.sort((a, b) => String(a).localeCompare(String(b), 'ar', { sensitivity: 'base', numeric: true }));
+  }
+  if (data && Array.isArray(data.jordanianCities)) {
+    data.jordanianCities.sort((a, b) => {
+      const isAmmanA = String(a).trim() === 'عمان';
+      const isAmmanB = String(b).trim() === 'عمان';
+      if (isAmmanA && !isAmmanB) return -1;
+      if (!isAmmanA && isAmmanB) return 1;
+      return String(a).localeCompare(String(b), 'ar', { sensitivity: 'base', numeric: true });
+    });
+  }
+
   return {
     ...defaultGlobalSettings,
     ...data,
@@ -588,28 +643,65 @@ export const clearAllData = async () => {
 export const canPerformAction = (user, action, module, settings) => {
   if (!user) return false;
   if (isAdmin(user)) return true;
-  if (!settings || !settings.userTypes) return isAdmin(user);
   
-  const userLevel = user.level || '';
-  const typeConfig = settings.userTypes.find(t => t.name === userLevel);
+  // Convert old ALL CAPS module names to new module keys
+  const moduleMap = {
+    'MISSIONS': 'delivery',
+    'SALES': 'orders',
+    'CUSTOMERS': 'customers',
+    'SETTINGS': 'site_settings',
+    'STOCK': 'stock_view',
+    'EMPLOYEES': 'hr_employees',
+    'TASKS': 'supervisor_tasks',
+    'PREPARATION': 'preparation',
+    'QUOTES': 'quotes'
+  };
   
-  if (!typeConfig) return isAdmin(user); 
+  const mappedModule = moduleMap[module] || module;
+  const actionLower = String(action).toLowerCase();
   
-  const perms = typeConfig.permissions || {};
-  if (perms.isFullAdmin) return true;
-  
-  if (module === 'SETTINGS' || module === 'EMPLOYEES') {
-     return perms.isFullAdmin;
+  // 1. Check NEW granular user.permissions object (Absolute Source of Truth if present)
+  if (user.permissions && user.permissions[mappedModule] && typeof user.permissions[mappedModule][actionLower] !== 'undefined') {
+    return !!user.permissions[mappedModule][actionLower];
   }
-  if (module === 'STOCK' && userLevel === 'مشرف') {
-     return true;
+  
+  // 2. Fallback to legacy user boolean flags if no new permissions are set
+  const LEGACY_KEYS = {
+    'delivery': 'hasDeliveryAccess',
+    'orders': 'hasSalesAccess',
+    'preparation': 'hasPreparationAccess',
+    'production': 'hasProductionAccess',
+    'stock_view': 'hasStockAccess',
+    'hr_employees': 'hasEmployeesAccess',
+    'customers': 'hasCustomersAccess',
+    'site_settings': 'hasSettingsAccess',
+    'live': 'hasLiveAccess',
+    'rep_visits': 'hasRepVisitsAccess'
+  };
+  
+  const legacyKey = LEGACY_KEYS[mappedModule];
+  if (legacyKey && user[legacyKey]) {
+     return true; // Legacy flags granted full access implicitly
   }
 
-  if (action === 'ADD') return perms.canAdd;
-  if (action === 'EDIT') return perms.canEdit;
-  if (action === 'DELETE') return perms.canDelete;
-  if (action === 'VIEW') return true; 
-  
+  // 3. Fallback to legacy Global Settings (userTypes)
+  if (settings && settings.userTypes) {
+    const userLevel = user.level || '';
+    const typeConfig = settings.userTypes.find(t => t.name === userLevel);
+    
+    if (typeConfig) {
+      const perms = typeConfig.permissions || {};
+      if (perms.isFullAdmin) return true;
+      if (mappedModule === 'site_settings' || mappedModule === 'hr_employees') {
+         return perms.isFullAdmin;
+      }
+      if (action === 'ADD') return perms.canAdd;
+      if (action === 'EDIT') return perms.canEdit;
+      if (action === 'DELETE') return perms.canDelete;
+      if (action === 'VIEW') return true; 
+    }
+  }
+
   return false;
 };
 

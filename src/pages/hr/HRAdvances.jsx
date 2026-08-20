@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, Clock, XCircle, FileText, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Undo2, Trash2, DollarSign, Eye, ChevronDown, ChevronUp, User } from 'lucide-react';
-import Select from 'react-select';
+import { CheckCircle, Clock, XCircle, FileText, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Undo2, Trash2, DollarSign, Eye, ChevronDown, ChevronUp, User, Pencil } from 'lucide-react';
+import Select from '../../components/SearchSelect';
 import { getEmployees, getHRAdvances, saveHRAdvance, deleteHRAdvance, createNotification, getGlobalSettings } from '../../store';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
@@ -22,6 +22,9 @@ const HRAdvances = ({ user, refreshCounts }) => {
   const [filterStatus, setFilterStatus] = useState('معلق');
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [dateMode, setDateMode] = useState('month');
+  const [selectedRequestType, setSelectedRequestType] = useState('الكل');
+  const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
   const [selectedDate, setSelectedDate] = useState(getLocalDateStr(new Date()));
   const [startDate, setStartDate] = useState(getLocalDateStr(new Date()));
   const [endDate, setEndDate] = useState(getLocalDateStr(new Date()));
@@ -183,7 +186,7 @@ const HRAdvances = ({ user, refreshCounts }) => {
           moduleKey: 'hr',
           moduleLabel: 'الموارد البشرية',
           title: 'تمت الموافقة على طلب السلفة',
-          message: `تمت الموافقة على طلب السلفة الخاص بك بقيمة ${approvedAmount} د.أ${approvalNotes ? `\nملاحظات: ${approvalNotes}` : ''}`,
+          message: `تمت الموافقة على طلب السلفة الخاص بك.${approvalNotes ? `\nالملاحظات: ${approvalNotes}` : ''}`,
           target: { tab: 'advances' }
         });
         
@@ -233,7 +236,7 @@ const HRAdvances = ({ user, refreshCounts }) => {
     if (d === 'packaging' || d === 'مسطرة التغليف' || d === 'تغليف' || d === 'تغليف وتشطيب') return 'تغليف وتشطيب';
     if (d === 'cutting' || d === 'القص') return 'القص والخياطة';
     if (d === 'admin' || d === 'الإدارة' || d === 'الادارة') return 'الادارة';
-    if (d === 'sales' || d === 'المبيعات') return 'المبيعات';
+    if (d === 'sales' || d === 'المبيعات' || d === 'الطلبيات') return 'الطلبيات';
     return dept;
   };
 
@@ -302,11 +305,7 @@ const HRAdvances = ({ user, refreshCounts }) => {
       return;
     }
     
-    const todayStr = new Date().toISOString().split('T')[0];
-    if (formData.date < todayStr) {
-      Swal.fire('خطأ', 'لا يمكن تقديم طلب سلفة لتاريخ سابق', 'error');
-      return;
-    }
+    // Allowing HR to submit/edit advance requests for past dates if payroll isn't processed yet.
     
     const emp = employees.find(e => String(e.id) === String(formData.employeeId));
     if (!emp) {
@@ -322,12 +321,15 @@ const HRAdvances = ({ user, refreshCounts }) => {
       }
     }
     
-    await saveHRAdvance({
+    const advanceData = {
       ...formData,
       employeeName: emp.name,
-      department: emp.department || 'غير محدد',
-      createdAt: new Date().toISOString()
-    }, user);
+      department: emp.department || 'غير محدد'
+    };
+    if (!formData.id) {
+      advanceData.createdAt = new Date().toISOString();
+    }
+    await saveHRAdvance(advanceData, user);
     
     Swal.fire('نجاح', 'تم تقديم طلب السلفة بنجاح', 'success');
     setShowModal(false);
@@ -415,6 +417,21 @@ const HRAdvances = ({ user, refreshCounts }) => {
   const pendingCount = baseAdvances.filter(a => a.status === 'معلق' || a.status === 'قيد المراجعة').length;
   const approvedCount = baseAdvances.filter(a => a.status === 'موافق' || a.status === 'مقبول').length;
   const rejectedCount = baseAdvances.filter(a => a.status === 'مرفوض').length;
+  const getAdvanceDisplayAmount = (advance) => {
+    const amount = (advance.status === 'موافق' || advance.status === 'مقبول')
+      ? (advance.approvedAmount ?? advance.amount)
+      : advance.amount;
+    return Number(amount) || 0;
+  };
+  const sumAdvanceAmounts = (items) => items.reduce((sum, advance) => sum + getAdvanceDisplayAmount(advance), 0);
+  const formatAdvanceAmount = (amount) => new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(amount);
+  const totalAmount = sumAdvanceAmounts(baseAdvances);
+  const pendingAmount = sumAdvanceAmounts(baseAdvances.filter(a => a.status === 'معلق' || a.status === 'قيد المراجعة'));
+  const approvedAmount = sumAdvanceAmounts(baseAdvances.filter(a => a.status === 'موافق' || a.status === 'مقبول'));
+  const rejectedAmount = sumAdvanceAmounts(baseAdvances.filter(a => a.status === 'مرفوض'));
 
   const sortedAdvances = baseAdvances.filter(a => {
     if (filterStatus === 'الكل') return true;
@@ -535,7 +552,10 @@ const HRAdvances = ({ user, refreshCounts }) => {
         {/* Total (Rightmost) */}
         <div onClick={() => setFilterStatus('الكل')} style={{ cursor: 'pointer', opacity: filterStatus === 'الكل' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'الكل' ? '2px solid #3b82f6' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ textAlign: 'right' }}>
-            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>إجمالي الطلبات</p>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '4px', whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: 0 }}>إجمالي الطلبات</p>
+              <strong style={{ fontSize: '18px', fontWeight: '900', color: '#3b82f6' }}>{formatAdvanceAmount(totalAmount)} د.أ</strong>
+            </div>
             <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{totalCount}</h3>
             <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
           </div>
@@ -547,7 +567,10 @@ const HRAdvances = ({ user, refreshCounts }) => {
         {/* Pending */}
         <div onClick={() => setFilterStatus('معلق')} style={{ cursor: 'pointer', opacity: filterStatus === 'معلق' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'معلق' ? '2px solid #d97706' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ textAlign: 'right' }}>
-            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>طلبات معلقة</p>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '4px', whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: 0 }}>طلبات معلقة</p>
+              <strong style={{ fontSize: '18px', fontWeight: '900', color: '#d97706' }}>{formatAdvanceAmount(pendingAmount)} د.أ</strong>
+            </div>
             <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{pendingCount}</h3>
             <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
           </div>
@@ -559,7 +582,10 @@ const HRAdvances = ({ user, refreshCounts }) => {
         {/* Approved */}
         <div onClick={() => setFilterStatus('موافق')} style={{ cursor: 'pointer', opacity: filterStatus === 'موافق' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'موافق' ? '2px solid #10b981' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ textAlign: 'right' }}>
-            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>طلبات موافق عليها</p>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '4px', whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: 0 }}>طلبات موافق عليها</p>
+              <strong style={{ fontSize: '18px', fontWeight: '900', color: '#10b981' }}>{formatAdvanceAmount(approvedAmount)} د.أ</strong>
+            </div>
             <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{approvedCount}</h3>
             <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
           </div>
@@ -571,7 +597,10 @@ const HRAdvances = ({ user, refreshCounts }) => {
         {/* Rejected */}
         <div onClick={() => setFilterStatus('مرفوض')} style={{ cursor: 'pointer', opacity: filterStatus === 'مرفوض' ? 1 : 0.6, transition: 'all 0.2s', backgroundColor: '#ffffff', borderRadius: '16px', border: filterStatus === 'مرفوض' ? '2px solid #ef4444' : '1px solid #f1f5f9', boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.05)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ textAlign: 'right' }}>
-            <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: '0 0 4px 0' }}>طلبات مرفوضة</p>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '4px', whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', margin: 0 }}>طلبات مرفوضة</p>
+              <strong style={{ fontSize: '18px', fontWeight: '900', color: '#ef4444' }}>{formatAdvanceAmount(rejectedAmount)} د.أ</strong>
+            </div>
             <h3 style={{ fontSize: '28px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{rejectedCount}</h3>
             <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8', margin: '4px 0 0 0' }}>طلب</p>
           </div>
@@ -585,11 +614,15 @@ const HRAdvances = ({ user, refreshCounts }) => {
           <table className="table">
             <thead>
               <tr>
-                <th className="cursor-pointer hover:bg-gray-100 transition-colors text-center py-4" onClick={() => handleSort('createdAt')}>
-                  <div className="flex items-center justify-center gap-2">تاريخ الطلب {renderSortIcon('createdAt')}</div>
+                <th className="cursor-pointer hover:bg-gray-100 transition-colors py-4" style={{ textAlign: 'center' }} onClick={() => handleSort('createdAt')}>
+                  <div className="flex items-center justify-center gap-2 w-full" style={{ textAlign: 'center' }}>تاريخ الطلب {renderSortIcon('createdAt')}</div>
                 </th>
-                <th className="cursor-pointer hover:bg-gray-100 transition-colors text-center py-4" onClick={() =>handleSort('employeeName')}>
-                  <div className="flex items-center justify-center gap-2">الموظف {renderSortIcon('employeeName')}</div></th>
+                <th className="cursor-pointer hover:bg-gray-100 transition-colors py-4" style={{ textAlign: 'right', paddingRight: '24px' }} onClick={() =>handleSort('employeeName')}>
+                  <div className="flex items-center gap-2 w-full" style={{ justifyContent: 'flex-start', direction: 'rtl', textAlign: 'right' }}>
+                    <span>الموظف</span>
+                    {renderSortIcon('employeeName')}
+                  </div>
+                </th>
                 <th className="cursor-pointer hover:bg-gray-100 transition-colors text-center py-4" onClick={() =>handleSort('department')}>
                   <div className="flex items-center justify-center gap-2">القسم {renderSortIcon('department')}</div></th>
                 <th className="cursor-pointer hover:bg-gray-100 transition-colors text-center py-4" onClick={() =>handleSort('type')}>
@@ -607,8 +640,8 @@ const HRAdvances = ({ user, refreshCounts }) => {
                 const emp = employees.find(e => String(e.id || '').trim() === String(advance.employeeId || '').trim());
                 return (
                 <tr key={advance.id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="text-muted text-sm text-center align-middle py-3">{new Date(advance.createdAt).toLocaleDateString('en-GB')}</td>
-                  <td className="font-semibold text-center align-middle py-3">{advance.employeeName}</td>
+                  <td className="text-muted text-sm align-middle py-3" style={{ textAlign: 'center', direction: 'ltr' }}>{new Date(advance.createdAt).toLocaleDateString('en-GB')}</td>
+                  <td className="font-semibold text-right align-middle py-3 pr-6 whitespace-nowrap">{advance.employeeName}</td>
                   <td className="text-muted text-sm text-center align-middle py-3">{formatDepartmentName(emp?.department || advance.department)}</td>
                   <td className="text-center align-middle py-3">{advance.type}</td>
                   <td className="font-bold text-slate-800 text-center align-middle py-3">
@@ -644,6 +677,25 @@ const HRAdvances = ({ user, refreshCounts }) => {
                       </button>
                       {advance.status === 'معلق' ? (
                         <>
+                          <button onClick={() => {
+                            setFormData({
+                              id: advance.id,
+                              employeeId: employees.find(e => e.name === advance.employeeName)?.id || advance.employeeId || '',
+                              amount: advance.amount || '',
+                              reason: advance.reason || '',
+                              paymentMethod: advance.paymentMethod || 'تخصم من الراتب القادم',
+                              status: advance.status || 'معلق',
+                              date: advance.date || (advance.createdAt ? advance.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
+                              isInstallment: advance.isInstallment || false,
+                              installmentMonths: advance.installmentMonths || 1,
+                              installmentStartMonth: advance.installmentStartMonth || new Date().toISOString().substring(0, 7),
+                              installments: advance.installments || [],
+                              createdAt: advance.createdAt
+                            });
+                            setShowModal(true);
+                          }} className="icon-btn" style={{ color: '#8b5cf6', background: '#f5f3ff', borderColor: '#ddd6fe' }} title="تعديل الطلب">
+                            <Pencil size={18} strokeWidth={2} />
+                          </button>
                           <button onClick={() => handleApproveRequest(advance)} className="icon-btn icon-btn-success" title="موافقة">
                             <Check size={18} strokeWidth={2.5} />
                           </button>
@@ -794,15 +846,92 @@ const HRAdvances = ({ user, refreshCounts }) => {
                             }));
                           }} className="input-field" />
                         </div>
-                        <div>
+                        <div style={{ position: 'relative' }}>
                           <label>شهر بداية الخصم</label>
-                          <input type="month" value={formData.installmentStartMonth} onChange={e => {
-                            const sMonth = e.target.value;
-                            setFormData(prev => ({
-                              ...prev, installmentStartMonth: sMonth,
-                              installments: generateInstallments(prev.amount, prev.installmentMonths, sMonth)
-                            }));
-                          }} className="input-field" required />
+                          <div
+                            onClick={() => {
+                              if (!formData.installmentStartMonth) {
+                                setPickerYear(new Date().getFullYear());
+                              } else {
+                                setPickerYear(parseInt(formData.installmentStartMonth.split('-')[0]));
+                              }
+                              setIsMonthDropdownOpen(!isMonthDropdownOpen);
+                            }}
+                            className="input-field"
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: '#fff' }}
+                          >
+                            <span style={{ color: formData.installmentStartMonth ? '#1e293b' : '#94a3b8' }}>
+                              {formData.installmentStartMonth ? (() => {
+                                const [y, m] = formData.installmentStartMonth.split('-');
+                                const arabicMonths = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+                                return `${arabicMonths[parseInt(m) - 1]} ${y}`;
+                              })() : 'اختر شهر بداية الخصم'}
+                            </span>
+                            <Calendar size={16} color="#94a3b8" />
+                          </div>
+
+                          {isMonthDropdownOpen && (
+                            <div className="month-picker-popup"
+                              style={{
+                                position: 'absolute',
+                                bottom: 'calc(100% + 4px)',
+                                top: 'auto',
+                                left: '0',
+                                right: 'auto',
+                                width: '280px',
+                                backgroundColor: '#ffffff',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '12px',
+                                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+                                zIndex: 99999,
+                                overflow: 'hidden'
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '12px 16px', borderBottom: '1px solid #f1f5f9' }}>
+                                <button type="button" onClick={(e) => { e.stopPropagation(); setPickerYear(prev => prev + 1); }} style={{ padding: '4px', color: '#64748b', cursor: 'pointer', background: 'none', border: 'none' }}><ChevronUp size={20} /></button>
+                                <span style={{ fontWeight: 'bold', fontSize: '1.125rem', color: '#1e293b' }}>{pickerYear}</span>
+                                <button type="button" onClick={(e) => { e.stopPropagation(); setPickerYear(prev => prev - 1); }} style={{ padding: '4px', color: '#64748b', cursor: 'pointer', background: 'none', border: 'none' }}><ChevronDown size={20} /></button>
+                              </div>
+
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', padding: '16px' }}>
+                                {['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'].map((m, index) => {
+                                  const monthVal = `${pickerYear}-${(index + 1).toString().padStart(2, '0')}`;
+                                  const isSelected = formData.installmentStartMonth === monthVal;
+                                  const currentYear = new Date().getFullYear();
+                                  const currentMonth = new Date().getMonth() + 1;
+                                  const isCurrentMonth = currentYear === pickerYear && currentMonth === (index + 1);
+
+                                  return (
+                                    <button
+                                      key={monthVal}
+                                      type="button"
+                                      onClick={() => { 
+                                        setFormData(prev => ({
+                                          ...prev, installmentStartMonth: monthVal,
+                                          installments: generateInstallments(prev.amount, prev.installmentMonths, monthVal)
+                                        }));
+                                        setIsMonthDropdownOpen(false); 
+                                      }}
+                                      style={{
+                                        padding: '10px 4px',
+                                        borderRadius: '8px',
+                                        fontSize: '0.875rem',
+                                        fontWeight: 'bold',
+                                        transition: 'all 0.2s',
+                                        border: '1px solid',
+                                        borderColor: isCurrentMonth && !isSelected ? 'rgba(26, 141, 155, 0.2)' : 'transparent',
+                                        backgroundColor: isSelected ? '#1a8d9b' : isCurrentMonth ? 'rgba(26, 141, 155, 0.05)' : 'transparent',
+                                        color: isSelected ? '#ffffff' : isCurrentMonth ? '#1a8d9b' : '#475569',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      {m}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                       

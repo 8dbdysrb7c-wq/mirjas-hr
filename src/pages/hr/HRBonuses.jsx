@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Gift, Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, User } from 'lucide-react';
-import Select from 'react-select';
+import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
 import { getEmployees, getHRBonuses, saveHRBonus, deleteHRBonus } from '../../store';

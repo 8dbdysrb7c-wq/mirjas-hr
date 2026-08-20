@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Select from 'react-select';
+import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import 'flatpickr/dist/themes/airbnb.css';
@@ -7,10 +7,30 @@ import { FileText, Printer, Calendar, ChevronDown, ChevronUp, CheckCircle, Searc
 import { getEmployees, getHRViolations, getHRAttendance, getDepartments, getGlobalSettings, getHRLeaves, getHRAdvances, getMissingPunches, getHRBonuses, getHRSalaryArchive, getHRAssets, getStock } from '../../store';
 import { calculateSalaries as calculateSalariesLogic } from '../../utils/salaryCalculator';
 import html2pdf from 'html2pdf.js';
+import HRDateFilter from '../../components/ui/HRDateFilter';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 
 const MySwal = withReactContent(Swal);
+
+const getNextAnnualRaiseDate = (joinDateStr) => {
+  if (!joinDateStr) return '-';
+  const joinDate = new Date(joinDateStr);
+  if (isNaN(joinDate.getTime())) return '-';
+  
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  
+  const nextRaise = new Date(joinDate);
+  nextRaise.setFullYear(now.getFullYear());
+  nextRaise.setHours(0, 0, 0, 0);
+  
+  if (nextRaise < now) {
+    nextRaise.setFullYear(now.getFullYear() + 1);
+  }
+  
+  return nextRaise.toISOString().split('T')[0];
+};
 
 const formatVal = (val, showZeroAsDash = true) => {
   if (val === undefined || val === null || val === '') return '-';
@@ -18,6 +38,53 @@ const formatVal = (val, showZeroAsDash = true) => {
   if (isNaN(num)) return val;
   if (num === 0) return showZeroAsDash ? '-' : '0.00';
   return num.toFixed(2);
+};
+
+const parseTimeToMinutes = (timeStr) => {
+  if (!timeStr || timeStr === '--:--' || String(timeStr).trim() === '-' || String(timeStr).trim() === '') return null;
+  let str = String(timeStr).trim();
+  let isPM = false;
+  let isAM = false;
+
+  if (str.includes('م') || str.toLowerCase().includes('pm')) {
+    isPM = true;
+    str = str.replace(/م|pm/gi, '').trim();
+  } else if (str.includes('ص') || str.toLowerCase().includes('am')) {
+    isAM = true;
+    str = str.replace(/ص|am/gi, '').trim();
+  }
+
+  const parts = str.split(':').map(p => parseInt(p.trim(), 10));
+  if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+
+  let hours = parts[0];
+  const minutes = parts[1];
+
+  if (isPM && hours < 12) hours += 12;
+  if (isAM && hours === 12) hours = 0;
+
+  return hours * 60 + minutes;
+};
+
+const getDailyWorkedHours = (att) => {
+  if (!att) return '-';
+  if (att.workedHours && !isNaN(Number(att.workedHours))) {
+    return Number(att.workedHours).toFixed(1);
+  }
+  if (att.workHours && !isNaN(Number(att.workHours))) {
+    return Number(att.workHours).toFixed(1);
+  }
+  
+  const inMins = parseTimeToMinutes(att.timeIn);
+  const outMins = parseTimeToMinutes(att.timeOut);
+  
+  if (inMins !== null && outMins !== null) {
+    let diff = outMins - inMins;
+    if (diff < 0) diff += 24 * 60; // Handle overnight shifts
+    const hours = diff / 60;
+    return hours.toFixed(1);
+  }
+  return '-';
 };
 
 const HRSalaryReports = ({ user, isNested }) => {
@@ -78,6 +145,12 @@ const HRSalaryReports = ({ user, isNested }) => {
       if (aVal === null || aVal === undefined) aVal = '';
       if (bVal === null || bVal === undefined) bVal = '';
 
+      if (sortConfig.key === 'workedHours') {
+        const aHrs = parseFloat(getDailyWorkedHours(a)) || 0;
+        const bHrs = parseFloat(getDailyWorkedHours(b)) || 0;
+        return sortConfig.direction === 'asc' ? aHrs - bHrs : bHrs - aHrs;
+      }
+
       if (sortConfig.key === 'employeeName' || sortConfig.key === 'name') {
         return sortConfig.direction === 'asc' 
           ? String(aVal).localeCompare(String(bVal), 'ar') 
@@ -116,12 +189,16 @@ const HRSalaryReports = ({ user, isNested }) => {
   const [salaryPeriods, setSalaryPeriods] = useState([]);
   const [assets, setAssets] = useState([]);
   const [stockItems, setStockItems] = useState([]);
+  const [petitions, setPetitions] = useState([]);
 
   // Archive Filters (for advances, overtime, leaves, missing punches)
   const [archiveSearch, setArchiveSearch] = useLocalStorageState('hr_archiveSearch', '');
   const [archiveStatus, setArchiveStatus] = useLocalStorageState('hr_archiveStatus', 'all');
   const [archiveDateFrom, setArchiveDateFrom] = useLocalStorageState('hr_archiveDateFrom', '');
   const [archiveDateTo, setArchiveDateTo] = useLocalStorageState('hr_archiveDateTo', '');
+  const [archiveDateMode, setArchiveDateMode] = useLocalStorageState('hrsr_archiveDateMode', 'month');
+  const [archiveSelectedDate, setArchiveSelectedDate] = useLocalStorageState('hrsr_archiveSelectedDate', `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${new Date().getDate().toString().padStart(2, '0')}`);
+  const [archiveFilterType, setArchiveFilterType] = useLocalStorageState('hrsr_archiveFilterType', 'الكل');
   const [assetCategoryFilter, setAssetCategoryFilter] = useLocalStorageState('hr_assetCategoryFilter', 'all');
   const [assetJobTitleFilter, setAssetJobTitleFilter] = useLocalStorageState('hr_assetJobTitleFilter', 'all');
   const [showAssetFilters, setShowAssetFilters] = useLocalStorageState('hr_showAssetFilters', false);
@@ -140,6 +217,7 @@ const HRSalaryReports = ({ user, isNested }) => {
     jobTitle: true,
     department: true,
     joinDate: true,
+    annualRaiseDate: true,
     basicSalary: true,
     phone: true,
     directManager: true,
@@ -173,7 +251,7 @@ const HRSalaryReports = ({ user, isNested }) => {
 
   const fetchData = async () => {
     setLoading(true);
-    const [emps, viols, atts, lvs, depts, glbSettings, hols, advs, periods, mps, bns, hrAssets, stockData] = await Promise.all([
+    const [emps, viols, atts, lvs, depts, glbSettings, hols, advs, periods, mps, bns, hrAssets, stockData, petsData] = await Promise.all([
       getEmployees(),
       getHRViolations(),
       getHRAttendance(),
@@ -186,7 +264,8 @@ const HRSalaryReports = ({ user, isNested }) => {
       import('../../store').then(m => m.getMissingPunches()),
       import('../../store').then(m => m.getHRBonuses()),
       getHRAssets(),
-      getStock()
+      getStock(),
+      import('../../store').then(m => m.getHRPetitions())
     ]);
     setEmployees(emps);
     setViolations(viols);
@@ -201,6 +280,7 @@ const HRSalaryReports = ({ user, isNested }) => {
     setBonuses(bns || []);
     setAssets(hrAssets || []);
     setStockItems(stockData || []);
+    setPetitions(petsData || []);
     if (emps.length > 0) setSelectedEmployeeId(emps[0].id);
     setLoading(false);
   };
@@ -387,10 +467,17 @@ const HRSalaryReports = ({ user, isNested }) => {
 
         document.getElementById('btn-print').onclick = () => {
            const html = getHtmlTable();
-           const win = window.open('', '_blank');
-           win.document.write(html);
-           win.document.close();
-           setTimeout(() => { win.print(); }, 200);
+           const printPortal = document.getElementById('print-portal');
+           if (printPortal) {
+              printPortal.innerHTML = html;
+              window.print();
+              setTimeout(() => { printPortal.innerHTML = ''; }, 100);
+           } else {
+              const win = window.open('', '_blank');
+              win.document.write(html);
+              win.document.close();
+              setTimeout(() => { win.print(); }, 200);
+           }
         };
         
         document.getElementById('btn-excel').onclick = () => {
@@ -494,10 +581,8 @@ const HRSalaryReports = ({ user, isNested }) => {
         confirmButton: 'btn btn-primary',
         cancelButton: 'btn btn-outline'
       },
-      width: '800px'
-    }).then((result) => {
-      if (result.isConfirmed) {
-        // Find unchecked indices
+      width: '800px',
+      preConfirm: () => {
         const uncheckedIndices = headers
           .filter(h => !document.getElementById(`col-check-${h.index}`).checked)
           .map(h => h.index);
@@ -516,17 +601,30 @@ const HRSalaryReports = ({ user, isNested }) => {
           });
         });
 
-        // Execute Export
-        setTimeout(() => {
-          executeExport(format);
+        if (format === 'print') {
+          window.print();
+          // Restore columns immediately after print dialog returns
+          hiddenCells.forEach(item => {
+            item.cell.style.display = item.origDisplay;
+          });
+          return true;
+        } else {
+          return { hiddenCells };
+        }
+      }
+    }).then((result) => {
+      if (result.isConfirmed && format !== 'print') {
+        const { hiddenCells } = result.value || {};
+        executeExport(format);
 
-          // Restore hidden columns
+        // Restore hidden columns after download
+        if (hiddenCells) {
           setTimeout(() => {
             hiddenCells.forEach(item => {
               item.cell.style.display = item.origDisplay;
             });
           }, 500);
-        }, 100);
+        }
       }
     });
   };
@@ -717,15 +815,19 @@ const HRSalaryReports = ({ user, isNested }) => {
 
         {/* Tab Selection */}
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-          gap: '16px',
-          marginBottom: '32px'
+          display: 'flex',
+          flexWrap: 'nowrap',
+          gap: '12px',
+          marginBottom: '32px',
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          padding: '8px 0 16px'
         }}>
           {[
             { id: 'slip', label: 'قسيمة راتب', desc: 'تفاصيل راتب موظف محدد', icon: <User size={28} strokeWidth={1.5} /> },
             { id: 'sheet', label: 'إجمالي الرواتب', desc: 'كشف رواتب لجميع الموظفين', icon: <Briefcase size={28} strokeWidth={1.5} /> },
             { id: 'advances', label: 'كشف السلف', desc: 'السلف، الموافقات، الخصومات', icon: <DollarSign size={28} strokeWidth={1.5} /> },
+            { id: 'petitions', label: 'سجل الاستدعاءات', desc: 'الاستدعاءات، الشكاوى، الطلبات', icon: <FileText size={28} strokeWidth={1.5} /> },
             { id: 'missing-punches', label: 'الختمات الناقصة', desc: 'الختمات المنسية والمخالفات', icon: <Fingerprint size={28} strokeWidth={1.5} /> },
             { id: 'leaves', label: 'الإجازات والمغادرات', desc: 'أرصدة، موافقات، مغادرات', icon: <Calendar size={28} strokeWidth={1.5} /> },
             { id: 'overtime', label: 'العمل الإضافي', desc: 'طلبات العمل الإضافي، ساعات', icon: <Clock size={28} strokeWidth={1.5} /> },
@@ -755,7 +857,9 @@ const HRSalaryReports = ({ user, isNested }) => {
                   transform: isActive ? 'translateY(-8px)' : 'translateY(0)',
                   position: 'relative',
                   overflow: 'hidden',
-                  minHeight: '100px'
+                  minHeight: '100px',
+                  minWidth: '118px',
+                  flex: '1 0 118px'
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
@@ -945,7 +1049,7 @@ const HRSalaryReports = ({ user, isNested }) => {
                 </select>
               </div>
             </div>
-          ) : activeReportTab === 'missing-punches' || activeReportTab === 'advances' || activeReportTab === 'leaves' || activeReportTab === 'overtime' || activeReportTab === 'attendance' || activeReportTab === 'violations-bonuses' ? (
+          ) : activeReportTab === 'missing-punches' || activeReportTab === 'advances' || activeReportTab === 'petitions' || activeReportTab === 'leaves' || activeReportTab === 'overtime' || activeReportTab === 'attendance' || activeReportTab === 'violations-bonuses' ? (
             <div className="flex-1 flex flex-wrap gap-8 items-center">
               <div className="flex items-center gap-3">
                 <Search color="#94a3b8" size={20} className="shrink-0" />
@@ -984,33 +1088,40 @@ const HRSalaryReports = ({ user, isNested }) => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Calendar color="#3b82f6" size={18} />
-                <div className="flex items-center gap-2">
-                  <Flatpickr
-                    value={archiveDateFrom}
-                    onChange={(dates, dateStr) => setArchiveDateFrom(dateStr)}
-                    className="bg-transparent border-none outline-none text-slate-800 font-bold placeholder-slate-400 w-24 cursor-pointer"
-                    style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: '0.95rem', color: '#1e293b', fontWeight: 'bold', cursor: 'pointer', boxShadow: 'none', padding: 0 }}
-                    options={{ locale: Arabic, dateFormat: 'Y-m-d' }}
-                    placeholder="من تاريخ"
-                  />
-                  <span className="text-slate-400">-</span>
-                  <Flatpickr
-                    value={archiveDateTo}
-                    onChange={(dates, dateStr) => setArchiveDateTo(dateStr)}
-                    className="bg-transparent border-none outline-none text-slate-800 font-bold placeholder-slate-400 w-24 cursor-pointer"
-                    style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: '0.95rem', color: '#1e293b', fontWeight: 'bold', cursor: 'pointer', boxShadow: 'none', padding: 0 }}
-                    options={{ locale: Arabic, dateFormat: 'Y-m-d' }}
-                    placeholder="إلى تاريخ"
-                  />
-                </div>
-                {(archiveDateFrom || archiveDateTo) && (
-                  <button onClick={() => { setArchiveDateFrom(''); setArchiveDateTo(''); }} className="text-slate-400 hover:text-rose-500 flex items-center justify-center transition-colors" style={{ background: 'transparent' }}>
-                    <X size={16} strokeWidth={3} />
-                  </button>
-                )}
+              <div className="flex flex-wrap gap-3 items-center">
+                <HRDateFilter 
+                  mode={archiveDateMode}
+                  setMode={setArchiveDateMode}
+                  date={archiveSelectedDate}
+                  setDate={setArchiveSelectedDate}
+                  month={selectedMonth}
+                  setMonth={setSelectedMonth}
+                  startDate={archiveDateFrom}
+                  setStartDate={setArchiveDateFrom}
+                  endDate={archiveDateTo}
+                  setEndDate={setArchiveDateTo}
+                  allowedModes={['day', 'month', 'range']}
+                />
               </div>
+
+              {activeReportTab === 'leaves' && (
+                <div className="flex items-center gap-2">
+                  <Filter color="#3b82f6" size={18} />
+                  <select
+                    value={archiveFilterType}
+                    onChange={e => setArchiveFilterType(e.target.value)}
+                    style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: '0.95rem', color: '#1e293b', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    <option value="الكل">الكل (نوع الطلب)</option>
+                    <option value="إجازة سنوية">إجازة سنوية</option>
+                    <option value="إجازة غير مدفوعة">إجازة غير مدفوعة</option>
+                    <option value="إجازة مرضية">إجازة مرضية</option>
+                    <option value="مغادرة خاصة">مغادرة خاصة</option>
+                    <option value="مغادرة عمل">مغادرة عمل</option>
+                    <option value="مغادرة الدخان">مغادرة الدخان</option>
+                  </select>
+                </div>
+              )}
 
               {activeReportTab !== 'attendance' && activeReportTab !== 'violations-bonuses' && (
                 <div className="flex items-center gap-2">
@@ -1528,6 +1639,30 @@ const HRSalaryReports = ({ user, isNested }) => {
               <tbody>
                 {(() => {
                   let flatData = [];
+                  const normalizeMonthKey = (value) => {
+                    const rawValue = String(value || '').trim();
+                    const yearFirst = rawValue.match(/^(\d{4})-(\d{1,2})/);
+                    if (yearFirst) return `${yearFirst[1]}-${yearFirst[2].padStart(2, '0')}`;
+                    const monthFirst = rawValue.match(/^(\d{1,2})-(\d{4})$/);
+                    if (monthFirst) return `${monthFirst[2]}-${monthFirst[1].padStart(2, '0')}`;
+                    return '';
+                  };
+                  const matchesSelectedPeriod = (entry) => {
+                    const entryMonth = normalizeMonthKey(entry.month || entry.date);
+                    if (archiveDateMode === 'day') {
+                      return /^\d{4}-\d{2}-\d{2}$/.test(entry.date || '') && entry.date === archiveSelectedDate;
+                    }
+                    if (archiveDateMode === 'month') return entryMonth === selectedMonth;
+                    if (archiveDateMode === 'range') {
+                      const comparableDate = /^\d{4}-\d{2}-\d{2}$/.test(entry.date || '')
+                        ? entry.date
+                        : (entryMonth ? `${entryMonth}-01` : '');
+                      if (!comparableDate) return false;
+                      if (archiveDateFrom && comparableDate < archiveDateFrom) return false;
+                      if (archiveDateTo && comparableDate > archiveDateTo) return false;
+                    }
+                    return true;
+                  };
                   const filteredEmps = employees.filter(emp => {
                     if (selectedDepartment !== 'all' && emp.department !== (departments[selectedDepartment] || selectedDepartment) && emp.department !== selectedDepartment) return false;
                     if (archiveSearch) {
@@ -1539,44 +1674,78 @@ const HRSalaryReports = ({ user, isNested }) => {
                     return true;
                   });
                   filteredEmps.forEach(emp => {
-                    const empAdvances = advances.filter(a => {
+                    advances.filter(a => {
                       if (String(a.employeeId).trim() !== String(emp.id).trim() && String(a.employeeName).trim() !== String(emp.name).trim()) return false;
-                      if (archiveDateFrom && archiveDateTo) return a.date >= archiveDateFrom && a.date <= archiveDateTo;
-                      if (archiveDateFrom) return a.date >= archiveDateFrom;
-                      if (archiveDateTo) return a.date <= archiveDateTo;
-                      if (a.isInstallment && a.installments && a.installments.length > 0) {
-                        return a.installments.some(inst => inst.month === selectedMonth) || a.date?.startsWith(selectedMonth);
-                      }
-                      return a.date?.startsWith(selectedMonth);
-                    }).filter(a => archiveStatus === 'all' ? true : a.status === archiveStatus);
-                    if (empAdvances.length === 0) {
-                      flatData.push({ id: `dummy-${emp.id}`, emp, date: '-', amount: 0, status: '-', notes: '-' });
-                    } else {
-                      empAdvances.forEach(adv => {
-                        let displayAmount = adv.amount;
-                        let displayNotes = adv.reason || '-';
-                        if (!archiveDateFrom && !archiveDateTo && adv.isInstallment && adv.installments && adv.installments.length > 0) {
-                          const dueInst = adv.installments.find(inst => inst.month === selectedMonth);
-                          if (dueInst) {
-                            displayAmount = dueInst.amount;
-                            displayNotes = `قسط شهر ${selectedMonth} (من إجمالي ${adv.amount} د.أ) | ${adv.reason || ''}`;
-                          }
-                        }
-                        flatData.push({ id: adv.id, emp, adv, date: adv.date, amount: displayAmount, status: adv.status, notes: displayNotes });
-                      });
-                    }
+                      return true;
+                    }).forEach(adv => {
+                      const installments = Array.isArray(adv.installments) ? adv.installments : [];
+                      const entries = installments.length > 0
+                        ? installments.map((inst, index) => {
+                            const installmentMonth = normalizeMonthKey(inst.month || inst.date || inst.dueDate || inst.paymentDate);
+                            const installmentDate = inst.date || inst.dueDate || inst.paymentDate || installmentMonth;
+                            return {
+                              id: `${adv.id}-installment-${index}`,
+                              emp,
+                              adv,
+                              date: installmentDate,
+                              month: installmentMonth,
+                              amount: Number(inst.amount) || 0,
+                              status: inst.status || adv.status,
+                              notes: `قسط شهر ${installmentMonth || inst.month} (من إجمالي ${adv.amount} د.أ)${adv.reason ? ` | ${adv.reason}` : ''}`
+                            };
+                          })
+                        : [{
+                            id: adv.id,
+                            emp,
+                            adv,
+                            date: adv.date,
+                            month: normalizeMonthKey(adv.date),
+                            amount: Number(adv.amount) || 0,
+                            status: adv.status,
+                            notes: adv.reason || '-'
+                          }];
+
+                      entries
+                        .filter(matchesSelectedPeriod)
+                        .filter(entry => archiveStatus === 'all' || entry.status === archiveStatus)
+                        .forEach(entry => flatData.push(entry));
+                    });
                   });
-                  return sortData(flatData, {
+                  const sortedData = sortData(flatData, {
                     employeeId: d => d.emp.employeeId || d.emp.id,
                     employeeName: d => d.emp.name,
                     date: d => d.date,
                     amount: d => d.amount,
                     status: d => d.status
-                  }).map((d, i) => (
+                  });
+                  if (sortedData.length === 0) {
+                    const selectedEmployee = archiveSearch
+                      ? employees.find(emp => String(emp.id).trim() === String(archiveSearch).trim())
+                      : null;
+                    const selectedEmployeeHasAnyAdvance = selectedEmployee
+                      ? advances.some(advance =>
+                          String(advance.employeeId).trim() === String(selectedEmployee.id).trim()
+                          || String(advance.employeeName || '').trim() === String(selectedEmployee.name || '').trim()
+                        )
+                      : false;
+                    const emptyMessage = selectedEmployee
+                      ? (selectedEmployeeHasAnyAdvance
+                          ? `لا توجد سلف للموظف ${selectedEmployee.name} ضمن الفترة المحددة`
+                          : `الموظف ${selectedEmployee.name} لم يأخذ أي سلفة`)
+                      : 'لا توجد سلف مطابقة للفلاتر المحددة';
+                    return (
+                      <tr>
+                        <td colSpan="7" style={{ padding: '32px 12px', color: '#94a3b8', textAlign: 'center', fontWeight: 'bold' }}>
+                          {emptyMessage}
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return sortedData.map((d, i) => (
                     <tr key={d.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <td style={{ padding: '12px', color: '#64748b', textAlign: 'center' }}>{i + 1}</td>
                       <td style={{ padding: '12px', color: '#64748b', textAlign: 'center', direction: 'ltr' }}>{d.emp.employeeId || d.emp.id}</td>
-                      <td style={{ padding: '12px', fontWeight: 'bold', color: '#0f172a' }}>{d.emp.name}</td>
+                      <td style={{ padding: '12px', fontWeight: 'bold', color: '#0f172a', whiteSpace: 'nowrap' }}>{d.emp.name}</td>
                       <td style={{ padding: '12px', color: '#475569', textAlign: 'center' }}>{d.date}</td>
                       <td style={{ padding: '12px', fontWeight: 'bold', color: '#64748b', textAlign: 'center' }}>{d.amount} د.أ</td>
                       <td style={{ padding: '12px', color: '#475569', textAlign: 'center' }}>{d.status}</td>
@@ -1630,10 +1799,15 @@ const HRSalaryReports = ({ user, isNested }) => {
                 {(() => {
                   const data = missingPunches
                     .filter(p => {
-                      if (archiveDateFrom && archiveDateTo) return p.date >= archiveDateFrom && p.date <= archiveDateTo;
-                      if (archiveDateFrom) return p.date >= archiveDateFrom;
-                      if (archiveDateTo) return p.date <= archiveDateTo;
-                      return p.date?.startsWith(selectedMonth);
+                      if (archiveDateMode === 'day') return p.date === archiveSelectedDate;
+                      if (archiveDateMode === 'month') return p.date?.startsWith(selectedMonth);
+                      if (archiveDateMode === 'range') {
+                        if (archiveDateFrom && archiveDateTo) return p.date >= archiveDateFrom && p.date <= archiveDateTo;
+                        if (archiveDateFrom) return p.date >= archiveDateFrom;
+                        if (archiveDateTo) return p.date <= archiveDateTo;
+                        return true;
+                      }
+                      return true;
                     })
                   .filter(p => archiveStatus === 'all' ? true : p.status === archiveStatus)
                   .filter(p => {
@@ -1701,12 +1875,19 @@ const HRSalaryReports = ({ user, isNested }) => {
                 {(() => {
                   const data = leaves
                     .filter(l => l.type !== 'بدل عمل إضافي')
+                    .filter(l => archiveFilterType === 'الكل' ? true : l.type === archiveFilterType)
                   .filter(l => {
                     const lDate = l.date || l.startDate;
-                    if (archiveDateFrom && archiveDateTo) return lDate >= archiveDateFrom && lDate <= archiveDateTo;
-                    if (archiveDateFrom) return lDate >= archiveDateFrom;
-                    if (archiveDateTo) return lDate <= archiveDateTo;
-                    return lDate?.startsWith(selectedMonth);
+                    if (!lDate) return false;
+                    if (archiveDateMode === 'day') return lDate === archiveSelectedDate;
+                    if (archiveDateMode === 'month') return lDate.startsWith(selectedMonth);
+                    if (archiveDateMode === 'range') {
+                      if (archiveDateFrom && archiveDateTo) return lDate >= archiveDateFrom && lDate <= archiveDateTo;
+                      if (archiveDateFrom) return lDate >= archiveDateFrom;
+                      if (archiveDateTo) return lDate <= archiveDateTo;
+                      return true;
+                    }
+                    return true;
                   })
                   .filter(l => archiveStatus === 'all' ? true : l.status === archiveStatus)
                   .filter(l => {
@@ -1775,10 +1956,15 @@ const HRSalaryReports = ({ user, isNested }) => {
                   const data = leaves
                     .filter(l => l.type === 'بدل عمل إضافي')
                   .filter(l => {
-                    if (archiveDateFrom && archiveDateTo) return l.date >= archiveDateFrom && l.date <= archiveDateTo;
-                    if (archiveDateFrom) return l.date >= archiveDateFrom;
-                    if (archiveDateTo) return l.date <= archiveDateTo;
-                    return l.date?.startsWith(selectedMonth);
+                    if (archiveDateMode === 'day') return l.date === archiveSelectedDate;
+                    if (archiveDateMode === 'month') return l.date?.startsWith(selectedMonth);
+                    if (archiveDateMode === 'range') {
+                      if (archiveDateFrom && archiveDateTo) return l.date >= archiveDateFrom && l.date <= archiveDateTo;
+                      if (archiveDateFrom) return l.date >= archiveDateFrom;
+                      if (archiveDateTo) return l.date <= archiveDateTo;
+                      return true;
+                    }
+                    return true;
                   })
                   .filter(l => archiveStatus === 'all' ? true : l.status === archiveStatus)
                   .filter(l => {
@@ -1837,7 +2023,8 @@ const HRSalaryReports = ({ user, isNested }) => {
               </div>
             </div>
 
-            <table style={{ width: '100%', fontSize: '0.875rem', textAlign: 'right', borderCollapse: 'collapse' }}>
+            <div style={{ width: '100%', overflowX: 'auto' }}>
+            <table style={{ width: '100%', minWidth: '1100px', fontSize: '0.82rem', textAlign: 'right', borderCollapse: 'collapse', tableLayout: 'auto' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
                   <th style={{ padding: '12px', color: '#475569', width: '40px', textAlign: 'center' }}>#</th>
@@ -1846,6 +2033,7 @@ const HRSalaryReports = ({ user, isNested }) => {
                   <th style={{ padding: '12px', color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('date')}>التاريخ {getSortIcon('date')}</th>
                   <th style={{ padding: '12px', color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('timeIn')}>وقت الدخول {getSortIcon('timeIn')}</th>
                   <th style={{ padding: '12px', color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('timeOut')}>وقت الخروج {getSortIcon('timeOut')}</th>
+                  <th style={{ padding: '12px', color: '#0f766e', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('workedHours')}>ساعات الدوام {getSortIcon('workedHours')}</th>
                   <th style={{ padding: '12px', color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('overtimeHours')}>إضافي {getSortIcon('overtimeHours')}</th>
                   <th style={{ padding: '12px', color: '#475569', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('status')}>الحالة {getSortIcon('status')}</th>
                   <th style={{ padding: '12px', color: '#475569' }}>الملاحظات</th>
@@ -1853,19 +2041,116 @@ const HRSalaryReports = ({ user, isNested }) => {
               </thead>
               <tbody>
                 {(() => {
-                  let filteredAtt = attendance.filter(a => {
-                    if (archiveDateFrom && archiveDateTo) return a.date >= archiveDateFrom && a.date <= archiveDateTo;
-                    if (archiveDateFrom) return a.date >= archiveDateFrom;
-                    if (archiveDateTo) return a.date <= archiveDateTo;
-                    return a.date?.startsWith(selectedMonth);
+                  const filteredAtt = attendance.filter(a => {
+                    if (archiveDateMode === 'day') return a.date === archiveSelectedDate;
+                    if (archiveDateMode === 'month') return a.date?.startsWith(selectedMonth);
+                    if (archiveDateMode === 'range') {
+                      if (archiveDateFrom && archiveDateTo) return a.date >= archiveDateFrom && a.date <= archiveDateTo;
+                      if (archiveDateFrom) return a.date >= archiveDateFrom;
+                      if (archiveDateTo) return a.date <= archiveDateTo;
+                      return true;
+                    }
+                    return true;
                   });
                   
-                  if (!archiveDateFrom && !archiveDateTo && !archiveSearch) {
-                    const uniqueDates = [...new Set(filteredAtt.map(a => a.date).filter(Boolean))].sort().reverse().slice(0, 3);
-                    filteredAtt = filteredAtt.filter(a => uniqueDates.includes(a.date));
-                  }
+                  // Firestore may contain a punch row and separate request/log
+                  // rows for the same employee and date. Keep one daily row,
+                  // preferring the row that contains actual punch times.
+                  const dailyRows = new Map();
+                  filteredAtt.forEach(att => {
+                    if (!att.date) return;
+                    const emp = employees.find(e => String(e.id || '').trim() === String(att.employeeId || '').trim() || String(e.name || '').trim() === String(att.employeeName || '').trim());
+                    const employeeKey = String(emp?.id || att.employeeId || att.employeeName || '').trim();
+                    if (!employeeKey) return;
+                    const key = `${employeeKey}|${att.date}`;
+                    const hasIn = parseTimeToMinutes(att.timeIn) !== null;
+                    const hasOut = parseTimeToMinutes(att.timeOut) !== null;
+                    const score = (hasIn ? 4 : 0) + (hasOut ? 4 : 0) + (att.status ? 2 : 0) + (att.actualHours ? 1 : 0);
+                    const existing = dailyRows.get(key);
+                    if (!existing || score > existing._score) {
+                      dailyRows.set(key, {
+                        ...att,
+                        employeeId: emp?.id || att.employeeId,
+                        employeeName: emp?.name || att.employeeName,
+                        status: existing?.status === 'إجازة غير مدفوعة' ? existing.status : att.status,
+                        _score: score
+                      });
+                    } else if (att.status === 'إجازة غير مدفوعة' && existing.status !== 'إجازة غير مدفوعة') {
+                      dailyRows.set(key, { ...existing, status: att.status });
+                    }
+                  });
 
-                  const data = filteredAtt.filter(a => {
+                  const approvedStatuses = ['موافق', 'موافق عليه', 'مقبول', 'تمت الموافقة', 'تم التسليم'];
+                  const departureTypes = ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان', 'إذن تأخير', 'خروج مبكر'];
+                  const departureNotes = new Map();
+                  const fullDayLeaveStatus = new Map();
+                  const isDateInsideArchiveFilter = date => {
+                    if (!date) return false;
+                    if (archiveDateMode === 'day') return date === archiveSelectedDate;
+                    if (archiveDateMode === 'month') return date.startsWith(selectedMonth);
+                    if (archiveDateMode === 'range') {
+                      if (archiveDateFrom && date < archiveDateFrom) return false;
+                      if (archiveDateTo && date > archiveDateTo) return false;
+                    }
+                    return true;
+                  };
+                  leaves.forEach(leave => {
+                    if (!approvedStatuses.includes(leave.status)) return;
+                    const emp = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim() || String(e.name || '').trim() === String(leave.employeeName || '').trim());
+                    const employeeKey = String(emp?.id || leave.employeeId || leave.employeeName || '').trim();
+                    if (!employeeKey) return;
+
+                    const leaveDates = [];
+                    if (leave.date) {
+                      leaveDates.push(leave.date);
+                    } else if (leave.startDate) {
+                      const endDate = leave.endDate || leave.startDate;
+                      const cursor = new Date(`${leave.startDate}T12:00:00`);
+                      const end = new Date(`${endDate}T12:00:00`);
+                      while (cursor <= end) {
+                        leaveDates.push(cursor.toLocaleDateString('en-CA'));
+                        cursor.setDate(cursor.getDate() + 1);
+                      }
+                    }
+
+                    leaveDates.forEach(leaveDate => {
+                      if (!isDateInsideArchiveFilter(leaveDate)) return;
+                      const key = `${employeeKey}|${leaveDate}`;
+                      if (departureTypes.includes(leave.type)) {
+                        const time = leave.startTime && leave.endTime ? ` (${leave.startTime}–${leave.endTime})` : '';
+                        const label = `${leave.type}${time}`;
+                        const current = departureNotes.get(key) || [];
+                        if (!current.includes(label)) departureNotes.set(key, [...current, label]);
+                      } else if (String(leave.type || '').startsWith('إجازة')) {
+                        fullDayLeaveStatus.set(key, leave.type);
+                      }
+                    });
+                  });
+
+                  // A full-day approved leave must appear even when there is
+                  // no punch document for that employee/date.
+                  fullDayLeaveStatus.forEach((leaveType, key) => {
+                    if (dailyRows.has(key)) return;
+                    const separator = key.lastIndexOf('|');
+                    const employeeKey = key.slice(0, separator);
+                    const leaveDate = key.slice(separator + 1);
+                    const emp = employees.find(e => String(e.id || '').trim() === employeeKey || String(e.name || '').trim() === employeeKey);
+                    dailyRows.set(key, {
+                      employeeId: emp?.id || employeeKey,
+                      employeeName: emp?.name || employeeKey,
+                      date: leaveDate,
+                      timeIn: '',
+                      timeOut: '',
+                      status: leaveType,
+                      _score: 0
+                    });
+                  });
+
+                  const data = [...dailyRows.entries()].map(([key, row]) => ({
+                    ...row,
+                    status: fullDayLeaveStatus.get(key) || row.status,
+                    reportNotes: fullDayLeaveStatus.get(key) || (departureNotes.get(key) || []).join('، ') || '-'
+                  })).filter(a => {
                     if (!archiveSearch) return true;
                     const empName = (a.employeeName || '').toLowerCase();
                     const empId = (a.employeeId || '').toLowerCase();
@@ -1878,25 +2163,31 @@ const HRSalaryReports = ({ user, isNested }) => {
                     if (selectedDepartment === 'all') return true;
                     return emp.department === (departments[selectedDepartment] || selectedDepartment) || emp.department === selectedDepartment;
                   });
-                  return sortData(data).map((att, index) => {
+                  const orderedData = sortConfig.key
+                    ? sortData(data)
+                    : [...data].sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.employeeName || '').localeCompare(String(b.employeeName || ''), 'ar'));
+                  return orderedData.map((att, index) => {
                     const emp = employees.find(e => String(e.id).trim() === String(att.employeeId || '').trim() || String(e.name).trim() === String(att.employeeName || '').trim());
+                    const dailyHours = getDailyWorkedHours(att);
                     return (
-                      <tr key={att.id || index} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <tr key={`${att.employeeId || att.employeeName}-${att.date}`} style={{ borderBottom: '1px solid #e2e8f0', background: index % 2 === 0 ? '#ffffff' : '#f8fafc', verticalAlign: 'middle' }}>
                         <td style={{ padding: '12px', color: '#64748b', textAlign: 'center' }}>{index + 1}</td>
                         <td style={{ padding: '12px', color: '#64748b', textAlign: 'center', direction: 'ltr' }}>{att.employeeId || emp?.employeeId || emp?.id || '-'}</td>
-                        <td style={{ padding: '12px', fontWeight: 'bold', color: '#0f172a' }}>{att.employeeName || emp?.name}</td>
-                        <td style={{ padding: '12px', color: '#475569', textAlign: 'center' }}>{att.date}</td>
+                        <td style={{ padding: '12px', fontWeight: 'bold', color: '#0f172a', whiteSpace: 'nowrap', minWidth: '190px' }}>{att.employeeName || emp?.name}</td>
+                        <td style={{ padding: '12px', color: '#475569', textAlign: 'center', whiteSpace: 'nowrap' }} dir="ltr">{att.date}</td>
                         <td style={{ padding: '12px', color: '#475569', textAlign: 'center', fontWeight: 'bold' }} dir="ltr">{(att.timeIn || '').trim() || '-'}</td>
                         <td style={{ padding: '12px', color: '#475569', textAlign: 'center', fontWeight: 'bold' }} dir="ltr">{(att.timeOut || '').trim() || '-'}</td>
+                        <td style={{ padding: '12px', color: dailyHours !== '-' ? '#0f766e' : '#94a3b8', textAlign: 'center', fontWeight: 'bold' }}>{dailyHours !== '-' ? `${dailyHours} ساعة` : '-'}</td>
                         <td style={{ padding: '12px', color: '#475569', textAlign: 'center' }}>{att.overtimeHours ? `${att.overtimeHours} ساعة` : '-'}</td>
                         <td style={{ padding: '12px', color: '#475569', textAlign: 'center' }}>{att.status}</td>
-                        <td style={{ padding: '12px', color: '#64748b' }}>{att.notes || '-'}</td>
+                        <td style={{ padding: '12px', color: '#64748b', minWidth: '230px', lineHeight: 1.7 }}>{att.reportNotes}</td>
                       </tr>
                     );
                   });
                 })()}
               </tbody>
             </table>
+            </div>
           </div>
           
         )}
@@ -1906,11 +2197,11 @@ const HRSalaryReports = ({ user, isNested }) => {
             <div className="no-print mb-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
               <h3 className="font-bold text-slate-700 mb-3 text-sm">تخصيص أعمدة التقرير:</h3>
               <div className="premium-checkbox-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '12px' }}>
-                {Object.keys(employeeReportFields).map(key => {
+                {(() => {
                   const labelMap = {
-                    id: 'الرقم الوظيفي', name: 'اسم الموظف', department: 'القسم الوظيفي', jobTitle: 'المسمى الوظيفي', joinDate: 'تاريخ التعيين', basicSalary: 'الراتب الأساسي', transportation: 'بدل مواصلات', phone: 'رقم الهاتف', directManager: 'المدير المباشر', annualLeaveBalance: 'رصيد الإجازات السنوي', sickLeaveBalance: 'رصيد الإجازات المرضي', socialSecurity: 'الضمان الاجتماعي', shiftPeriod: 'فترة الدوام', status: 'الحالة'
+                    id: 'الرقم الوظيفي', name: 'اسم الموظف', department: 'القسم الوظيفي', jobTitle: 'المسمى الوظيفي', joinDate: 'تاريخ التعيين', annualRaiseDate: 'موعد الزيادة السنوية', basicSalary: 'الراتب الأساسي', transportation: 'بدل مواصلات', phone: 'رقم الهاتف', directManager: 'المدير المباشر', annualLeaveBalance: 'رصيد الإجازات السنوي', sickLeaveBalance: 'رصيد الإجازات المرضي', socialSecurity: 'الضمان الاجتماعي', shiftPeriod: 'فترة الدوام', status: 'الحالة'
                   };
-                  return (
+                  return Object.keys(labelMap).map(key => (
                     <label key={key} className="premium-checkbox-item hover:border-primary/40 hover:bg-slate-100/50 hover:shadow-sm" style={{ flexDirection: 'row', justifyContent: 'flex-start', height: '48px', textAlign: 'right', gap: '8px', display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '8px 12px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', transition: 'all 0.2s', color: '#1e293b' }}>
                       <input 
                         type="checkbox" 
@@ -1919,10 +2210,10 @@ const HRSalaryReports = ({ user, isNested }) => {
                         className="cursor-pointer"
                         style={{ width: '18px', height: '18px', accentColor: '#1e293b' }} 
                       />
-                      <span style={{ fontSize: '0.8rem', lineHeight: '1.2', fontWeight: '600' }}>{labelMap[key] || key}</span>
+                      <span style={{ fontSize: '0.8rem', lineHeight: '1.2', fontWeight: '600' }}>{labelMap[key]}</span>
                     </label>
-                  );
-                })}
+                  ));
+                })()}
               </div>
             </div>
           <div className="bg-white printable-card print-no-border" style={{
@@ -1958,6 +2249,7 @@ const HRSalaryReports = ({ user, isNested }) => {
                   {employeeReportFields.department && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('department')}>القسم {getSortIcon('department')}</th>}
                   {employeeReportFields.jobTitle && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('jobTitle')}>المسمى الوظيفي {getSortIcon('jobTitle')}</th>}
                   {employeeReportFields.joinDate && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('joinDate')}>تاريخ التعيين {getSortIcon('joinDate')}</th>}
+                  {employeeReportFields.annualRaiseDate && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('annualRaiseDate')}>موعد الزيادة السنوية {getSortIcon('annualRaiseDate')}</th>}
                   {employeeReportFields.basicSalary && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('basicSalary')}>الراتب الأساسي {getSortIcon('basicSalary')}</th>}
                   {employeeReportFields.transportationAllowance && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('transportationAllowance')}>بدل مواصلات {getSortIcon('transportationAllowance')}</th>}
                   {employeeReportFields.phone && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('phone')}>رقم الهاتف {getSortIcon('phone')}</th>}
@@ -1980,6 +2272,7 @@ const HRSalaryReports = ({ user, isNested }) => {
                       {employeeReportFields.department && <td style={{ padding: '12px' }}>{departments[emp.department] || emp.department}</td>}
                       {employeeReportFields.jobTitle && <td style={{ padding: '12px' }}>{emp.jobTitle}</td>}
                       {employeeReportFields.joinDate && <td style={{ padding: '12px' }}>{emp.joinDate}</td>}
+                      {employeeReportFields.annualRaiseDate && <td style={{ padding: '12px', textAlign: 'center', color: '#0f766e', fontWeight: 'bold' }}>{emp.annualRaiseDate || getNextAnnualRaiseDate(emp.joinDate)}</td>}
                       {employeeReportFields.basicSalary && <td style={{ padding: '12px', fontWeight: 'bold', textAlign: 'center' }}>{Number(emp.basicSalary || 0).toLocaleString()}</td>}
                       {employeeReportFields.transportationAllowance && <td style={{ padding: '12px', fontWeight: 'bold' }}>{Number(emp.transportationAllowance || 0).toLocaleString()}</td>}
                       {employeeReportFields.phone && <td style={{ padding: '12px', direction: 'ltr', textAlign: 'right' }}>{emp.phone}</td>}
@@ -2047,9 +2340,15 @@ const HRSalaryReports = ({ user, isNested }) => {
                   .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt))
                   .filter(item => {
                     const d = item.date || item.createdAt?.split('T')[0];
-                    if (archiveDateFrom && archiveDateTo) return d >= archiveDateFrom && d <= archiveDateTo;
-                    if (archiveDateFrom) return d >= archiveDateFrom;
-                    if (archiveDateTo) return d <= archiveDateTo;
+                    if (!d) return false;
+                    if (archiveDateMode === 'day') return d === archiveSelectedDate;
+                    if (archiveDateMode === 'month') return d.startsWith(selectedMonth);
+                    if (archiveDateMode === 'range') {
+                      if (archiveDateFrom && archiveDateTo) return d >= archiveDateFrom && d <= archiveDateTo;
+                      if (archiveDateFrom) return d >= archiveDateFrom;
+                      if (archiveDateTo) return d <= archiveDateTo;
+                      return true;
+                    }
                     return true;
                   })
                   .filter(item => archiveStatus === 'all' || item.recordType === archiveStatus)
@@ -2178,6 +2477,88 @@ const HRSalaryReports = ({ user, isNested }) => {
             </table>
           </div>
           
+        )}
+
+        {activeReportTab === 'petitions' && (
+          <div className="bg-white printable-card print-no-border" style={{
+            direction: 'rtl', padding: '40px', border: '1px solid #e2e8f0', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '1px solid #cbd5e1', paddingBottom: '20px', marginBottom: '32px' }}>
+              <div>
+                <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#0f172a', marginBottom: '8px' }}>سجل الاستدعاءات والطلبات</h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#64748b', fontSize: '0.875rem' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Calendar size={16} /> {(archiveDateFrom || archiveDateTo) ? `تاريخ: ${archiveDateFrom} - ${archiveDateTo}` : 'جميع التواريخ'}</span>
+                  <span>|</span>
+                  <span style={{ color: '#1a8d9b' }}>{selectedDepartment === 'all' ? 'جميع الأقسام' : (departments[selectedDepartment] || selectedDepartment)}</span>
+                </div>
+              </div>
+              <div style={{ textAlign: 'left' }}>
+                {settings?.logoUrl ? (
+                  <img src={settings.logoUrl} alt="Logo" style={{ maxHeight: '48px', objectFit: 'contain', marginBottom: '8px', mixBlendMode: 'multiply' }} />
+                ) : (
+                  <h2 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#1a8d9b', margin: 0, letterSpacing: '-0.5px' }}>{settings?.siteName || 'M I R J A S'}</h2>
+                )}
+                <p style={{ color: '#64748b', fontSize: '0.75rem', margin: 0 }}>تقرير الموارد البشرية - الاستدعاءات</p>
+              </div>
+            </div>
+
+            <table style={{ width: '100%', fontSize: '0.875rem', textAlign: 'right', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f8fafc', color: '#475569', fontWeight: 'bold' }}>
+                  <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('employeeId')}>الرقم الوظيفي {getSortIcon('employeeId')}</th>
+                  <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('employeeName')}>اسم الموظف {getSortIcon('employeeName')}</th>
+                  <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('date')}>تاريخ التقديم {getSortIcon('date')}</th>
+                  <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('type')}>نوع الطلب {getSortIcon('type')}</th>
+                  <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1' }}>التفاصيل</th>
+                  <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('status')}>الحالة {getSortIcon('status')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const data = petitions
+                    .filter(item => {
+                      const d = item.date || item.createdAt?.split('T')[0];
+                      if (!d) return false;
+                      if (archiveDateMode === 'day') return d === archiveSelectedDate;
+                      if (archiveDateMode === 'month') return d.startsWith(selectedMonth);
+                      if (archiveDateMode === 'range') {
+                        if (archiveDateFrom && archiveDateTo) return d >= archiveDateFrom && d <= archiveDateTo;
+                        if (archiveDateFrom) return d >= archiveDateFrom;
+                        if (archiveDateTo) return d <= archiveDateTo;
+                        return true;
+                      }
+                      return true;
+                    })
+                  .filter(item => archiveStatus === 'all' || item.status === archiveStatus)
+                  .filter(item => {
+                    const empName = (item.employeeName || '').toLowerCase();
+                    const empId = (item.employeeId || '').toLowerCase();
+                    const s = archiveSearch.toLowerCase();
+                    return empName.includes(s) || String(empId).trim() === String(s).trim();
+                  })
+                  .filter(item => {
+                    const emp = employees.find(e => String(e.id || '').trim() === String(item.employeeId || '').trim() || String(e.name || '').trim() === String(item.employeeName || '').trim());
+                    if (!emp) return false;
+                    if (selectedDepartment === 'all') return true;
+                    return emp.department === (departments[selectedDepartment] || selectedDepartment) || emp.department === selectedDepartment;
+                  });
+                  return sortData(data).map((item, index) => {
+                    const emp = employees.find(e => String(e.id || '').trim() === String(item.employeeId || '').trim() || String(e.name || '').trim() === String(item.employeeName || '').trim());
+                    return (
+                      <tr key={item.id || index} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '12px', color: '#64748b', textAlign: 'center', direction: 'ltr' }}>{item.employeeId || emp?.employeeId || emp?.id || '-'}</td>
+                        <td style={{ padding: '12px', fontWeight: 'bold', color: '#0f172a' }}>{item.employeeName || emp?.name}</td>
+                        <td style={{ padding: '12px', color: '#475569' }}>{item.date || item.createdAt?.split('T')[0] || '-'}</td>
+                        <td style={{ padding: '12px', color: '#475569' }}>{item.type || item.category || 'استدعاء'}</td>
+                        <td style={{ padding: '12px', color: '#64748b' }}>{item.details || item.reason || '-'}</td>
+                        <td style={{ padding: '12px', fontWeight: 'bold', color: item.status === 'موافق عليه' ? '#10b981' : item.status === 'مرفوض' ? '#dc2626' : '#f59e0b' }}>{item.status || 'قيد المراجعة'}</td>
+                      </tr>
+                    );
+                  });
+                })()}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

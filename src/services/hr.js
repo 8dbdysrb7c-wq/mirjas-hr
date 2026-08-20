@@ -11,9 +11,17 @@ import {
   addDoc,
   limit,
   orderBy,
-  updateDoc
+  updateDoc,
+  writeBatch
 } from 'firebase/firestore';
 import { getGlobalSettings, createNotification } from './settings';
+import { triggerWhatsAppRouting } from './whatsappRouter';
+import {
+  getOfficialAbsenceMinutes,
+  isLongApprovedDeparture,
+  isPolicyEffective,
+  MAX_PARTIAL_ABSENCE_MINUTES
+} from '../utils/attendancePolicy';
 
 export const saveHRAuditLog = async (logData) => {
   try {
@@ -56,7 +64,7 @@ export const getHRSalaryPeriods = async () => {
 export const saveHRSalaryPeriod = async (periodId, status, userContext) => {
   try {
     const docRef = doc(db, 'hr_salary_periods', periodId);
-    await setDoc(docRef, { status, updatedAt: new Date().toISOString() }, { merge: true });
+    await setDoc(docRef, { month: periodId, status, updatedAt: new Date().toISOString() }, { merge: true });
     
     if (userContext) {
       let actionLabel = 'تغيير حالة الدورة';
@@ -82,14 +90,36 @@ export const saveHRSalaryPeriod = async (periodId, status, userContext) => {
 
 export const archiveHRSalaryPeriod = async (periodId, salaryData, userContext) => {
   try {
-    await saveHRSalaryPeriod(periodId, 'archived', userContext);
+    if (!periodId || !Array.isArray(salaryData) || salaryData.length === 0) {
+      throw new Error('لا توجد بيانات رواتب صالحة للترحيل');
+    }
+
+    const batch = writeBatch(db);
+    const periodRef = doc(db, 'hr_salary_periods', periodId);
     const archiveRef = doc(db, 'hr_salary_archives', periodId);
-    await setDoc(archiveRef, {
+    const now = new Date().toISOString();
+    // Firestore rejects undefined values nested inside salary rows. Persist a
+    // clean snapshot so one optional calculation field cannot abort archiving.
+    const cleanSalaryData = JSON.parse(JSON.stringify(salaryData));
+
+    batch.set(periodRef, { month: periodId, status: 'archived', updatedAt: now }, { merge: true });
+    batch.set(archiveRef, {
       periodId,
-      salaryData,
-      archivedAt: new Date().toISOString(),
-      archivedBy: userContext.name || userContext
+      salaryData: cleanSalaryData,
+      archivedAt: now,
+      archivedBy: userContext?.name || userContext || 'غير معروف'
     });
+    await batch.commit();
+
+    if (userContext) {
+      await saveHRAuditLog({
+        user: userContext.name || userContext,
+        action: 'ترحيل رواتب',
+        module: 'الرواتب',
+        description: `تم ترحيل وإغلاق رواتب شهر ${periodId}`,
+        timestamp: now
+      });
+    }
     return true;
   } catch (error) {
     console.error("Error archiving salary period:", error);
@@ -99,9 +129,13 @@ export const archiveHRSalaryPeriod = async (periodId, salaryData, userContext) =
 
 export const unarchiveHRSalaryPeriod = async (periodId, userContext) => {
   try {
+    const batch = writeBatch(db);
     const archiveRef = doc(db, 'hr_salary_archives', periodId);
-    await deleteDoc(archiveRef);
-    await saveHRSalaryPeriod(periodId, 'open', userContext);
+    const periodRef = doc(db, 'hr_salary_periods', periodId);
+    const now = new Date().toISOString();
+    batch.delete(archiveRef);
+    batch.set(periodRef, { month: periodId, status: 'open', updatedAt: now }, { merge: true });
+    await batch.commit();
     
     if (userContext) {
       await saveHRAuditLog({
@@ -109,7 +143,7 @@ export const unarchiveHRSalaryPeriod = async (periodId, userContext) => {
          action: 'إلغاء ترحيل رواتب (طوارئ)',
          module: 'الرواتب',
          description: `تم إلغاء ترحيل رواتب شهر ${periodId} وحذف النسخة المحفوظة`,
-         timestamp: new Date().toISOString()
+         timestamp: now
       });
     }
     return true;
@@ -197,6 +231,7 @@ export const syncToHRAttendance = async (userId, userName, date, timeIn, timeOut
     if (empSnap.exists()) {
       const empData = empSnap.data();
       const shiftStart = empData.shiftStart || '08:00';
+      const shiftEnd = empData.shiftEnd || '16:00';
       const [shiftH, shiftM] = shiftStart.split(':').map(Number);
       
       const [inH, inM] = timeIn.split(':').map(Number);
@@ -241,6 +276,11 @@ export const syncToHRAttendance = async (userId, userName, date, timeIn, timeOut
           }
         }
       }
+
+      const officialAbsenceMinutes = getOfficialAbsenceMinutes({ timeIn, timeOut, shiftStart, shiftEnd });
+      if (isPolicyEffective(date) && officialAbsenceMinutes > MAX_PARTIAL_ABSENCE_MINUTES) {
+        calculatedStatus = 'إجازة غير مدفوعة';
+      }
     }
 
     const payload = {
@@ -253,7 +293,15 @@ export const syncToHRAttendance = async (userId, userName, date, timeIn, timeOut
       actualHours: parseFloat(actualHours.toFixed(2)),
       overtimeHours: parseFloat(overtimeHours.toFixed(2)),
       lateMinutes: lateMinutes,
-      notes: 'تم سحب الدوام وحساب الساعات تلقائياً'
+      officialAbsenceMinutes: getOfficialAbsenceMinutes({
+        timeIn,
+        timeOut,
+        shiftStart: empSnap.exists() ? (empSnap.data().shiftStart || '08:00') : '08:00',
+        shiftEnd: empSnap.exists() ? (empSnap.data().shiftEnd || '16:00') : '16:00'
+      }),
+      notes: calculatedStatus === 'إجازة غير مدفوعة'
+        ? 'إجازة غير مدفوعة آلياً لتجاوز الغياب داخل الدوام الرسمي 3 ساعات'
+        : 'تم سحب الدوام وحساب الساعات تلقائياً'
     };
 
     if (attSnap.exists()) {
@@ -287,6 +335,27 @@ export const saveHRAttendance = async (attendance, userContext = null) => {
     const docRef = attendance.id ? doc(db, 'hr_attendance', attendance.id) : doc(collection(db, 'hr_attendance'));
     const data = { ...attendance, updatedAt: new Date().toISOString() };
     await setDoc(docRef, data, { merge: true });
+
+    // Also sync with attendance_logs collection to ensure attendance lookup finds punches instantly
+    const empKey = String(attendance.employeeId || attendance.userId || '').trim();
+    if (empKey && attendance.date) {
+      try {
+        const logDocRef = doc(db, 'attendance_logs', `${empKey}_${attendance.date}`);
+        await setDoc(logDocRef, {
+          employeeId: attendance.employeeId || empKey,
+          userId: attendance.userId || empKey,
+          employeeName: attendance.employeeName || '',
+          date: attendance.date,
+          timeIn: attendance.timeIn || '',
+          timeOut: attendance.timeOut || '',
+          status: attendance.status || 'مداوم',
+          notes: attendance.notes || '',
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (logErr) {
+        console.error("Error syncing to attendance_logs:", logErr);
+      }
+    }
     
     if (userContext) {
        await saveHRAuditLog({
@@ -307,42 +376,218 @@ export const saveHRAttendance = async (attendance, userContext = null) => {
 
 export const getHRAttendanceByDateRange = async (dateFrom, dateTo) => {
   try {
+    let conditions = [];
+    if (dateFrom) conditions.push(where('date', '>=', dateFrom));
+    if (dateTo) conditions.push(where('date', '<=', dateTo));
+    
     const q = query(
       collection(db, 'hr_attendance'),
-      where('date', '>=', dateFrom),
-      where('date', '<=', dateTo),
+      ...conditions,
       orderBy('date', 'desc')
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const attendanceRecords = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // Fetch attendance logs for the same range to merge fingerprint logs
+    let logConditions = [];
+    if (dateFrom) logConditions.push(where('date', '>=', dateFrom));
+    if (dateTo) logConditions.push(where('date', '<=', dateTo));
+    
+    const logQ = query(
+      collection(db, 'attendance_logs'),
+      ...logConditions
+    );
+    const logSnapshot = await getDocs(logQ);
+    const attendanceLogs = logSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // Helper functions for matching
+    const matchRecordAndLog = (rec, log) => {
+      const matchUserId = rec.userId && log.userId && String(rec.userId).trim() === String(log.userId).trim();
+      
+      const normRecEmpId = normalizeEmpId(rec.employeeId || rec.id);
+      const normLogEmpId = normalizeEmpId(log.employeeId || log.id);
+      const matchEmpId = normRecEmpId && normLogEmpId && normRecEmpId === normLogEmpId;
+      
+      const normRecName = normalizeArabic(rec.employeeName || rec.name);
+      const normLogName = normalizeArabic(log.employeeName || log.name || log.userName);
+      const matchName = normRecName && normLogName && normRecName === normLogName;
+      
+      return (matchUserId || matchEmpId || matchName) && rec.date === log.date;
+    };
+
+    // 1. Merge logs into existing hr_attendance records
+    attendanceRecords.forEach(rec => {
+      const match = attendanceLogs.find(log => matchRecordAndLog(rec, log));
+      if (match) {
+        const tIn = match.timeIn || match.time || '';
+        const tOut = match.timeOut || '';
+        
+        if (tIn && (!rec.timeIn || rec.timeIn === '--:--' || rec.timeIn === '')) {
+          rec.timeIn = tIn;
+          if (rec.status === 'لم يسجل دخول' || !rec.status) {
+            rec.status = 'مداوم';
+          }
+        }
+        if (tOut && (!rec.timeOut || rec.timeOut === '--:--' || rec.timeOut === '')) {
+          rec.timeOut = tOut;
+        }
+      }
+    });
+
+    // 2. Add logs that don't have a corresponding hr_attendance record
+    attendanceLogs.forEach(log => {
+      const exists = attendanceRecords.some(rec => matchRecordAndLog(rec, log));
+      if (!exists) {
+        attendanceRecords.push({
+          id: log.id,
+          userId: log.userId || '',
+          employeeId: log.employeeId || '',
+          employeeName: log.employeeName || log.userName || '',
+          date: log.date,
+          timeIn: log.timeIn || log.time || '',
+          timeOut: log.timeOut || '',
+          status: log.status || 'مداوم',
+          notes: log.notes || 'حضور تلقائي عبر البصمة/التقرير'
+        });
+      }
+    });
+
+    return attendanceRecords;
   } catch (error) {
     console.error("Error in getHRAttendanceByDateRange:", error);
     return [];
   }
 };
 
+function normalizeEmpId(id) {
+  return String(id || '').toUpperCase().replace(/^EMP-0*/i, '').trim();
+}
+
+function normalizeArabic(str) {
+  return String(str || '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export const getEmployeeAttendanceByDate = async (userId, employeeId, dateStr, employeeName = '') => {
   try {
-    const q = query(
-      collection(db, 'hr_attendance'),
-      where('date', '==', dateStr)
-    );
-    const snapshot = await getDocs(q);
+    // 1. Fetch hr_attendance without orderBy
+    const hrQ = query(collection(db, 'hr_attendance'), where('date', '==', dateStr));
+    const hrSnap = await getDocs(hrQ);
+    const hrRecords = hrSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // 2. Fetch attendance_logs without orderBy
+    const logsQ = query(collection(db, 'attendance_logs'), where('date', '==', dateStr));
+    const logsSnap = await getDocs(logsQ);
+    const logRecords = logsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // 3. Fetch employee_reports
+    const empReportsQ = query(collection(db, 'employee_reports'), where('date', '==', dateStr));
+    const empReportsSnap = await getDocs(empReportsQ);
+    const empReports = empReportsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // 4. Fetch supervisor_reports
+    const supReportsQ = query(collection(db, 'supervisor_reports'), where('date', '==', dateStr));
+    const supReportsSnap = await getDocs(supReportsQ);
+    const supReports = supReportsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
     const targetUserId = String(userId || '').trim();
     const targetEmpId = String(employeeId || '').trim();
     const targetName = String(employeeName || '').trim();
     
-    const doc = snapshot.docs.find(d => {
-      const data = d.data();
-      const matchUserId = targetUserId && String(data.userId || '').trim() === targetUserId;
-      const matchEmpId = targetEmpId && String(data.employeeId || '').trim() === targetEmpId;
-      const matchName = targetName && String(data.employeeName || '').trim() === targetName;
-      return matchUserId || matchEmpId || matchName;
-    });
-    
-    if (doc) {
-      return { id: doc.id, ...doc.data() };
+    const isMatch = (data) => {
+      if (data.isLeave) return false;
+      
+      const dataUserId = String(data.userId || data.employeeId || data.id || '').trim();
+      const dataEmpId = String(data.employeeId || data.userId || data.id || data.empId || '').trim();
+      const dataName = String(data.employeeName || data.name || data.userName || data.user || '').trim();
+      
+      if (targetUserId && (dataUserId === targetUserId || dataEmpId === targetUserId)) {
+        return true;
+      }
+      
+      if (targetEmpId) {
+        const normTargetEmpId = normalizeEmpId(targetEmpId);
+        const normDataEmpId = normalizeEmpId(dataEmpId);
+        if (normTargetEmpId && normDataEmpId && normTargetEmpId === normDataEmpId) return true;
+      }
+      
+      if (targetName && dataName) {
+        const normTargetName = normalizeArabic(targetName);
+        const normDataName = normalizeArabic(dataName);
+        if (normTargetName && normDataName && normTargetName === normDataName) return true;
+        
+        // Smart fallback: Check if the first two words match (e.g. "جهاد بركات" vs "جهاد بركات فلاح المهيرات")
+        const targetWords = normTargetName.split(' ').filter(w => w.length > 0);
+        const dataWords = normDataName.split(' ').filter(w => w.length > 0);
+        if (targetWords.length >= 2 && dataWords.length >= 2) {
+          if (targetWords[0] === dataWords[0] && targetWords[1] === dataWords[1]) {
+             return true;
+          }
+        }
+      }
+      
+      return false;
+    };
+
+    const isSupMatch = (data) => {
+      if (isMatch(data)) return true;
+      const dataUserId = String(data.supervisorId || '').trim();
+      const dataName = String(data.supervisorName || '').trim();
+      if (targetUserId && dataUserId === targetUserId) return true;
+      if (targetEmpId && normalizeEmpId(targetEmpId) === normalizeEmpId(dataUserId)) return true;
+      if (targetName && dataName && normalizeArabic(targetName) === normalizeArabic(dataName)) return true;
+      return false;
+    };
+
+    const matchingLogs = logRecords.filter(l => isMatch(l));
+    const bestLog = matchingLogs.find(l => l.timeIn && l.timeIn !== '--:--') || matchingLogs[0] || null;
+
+    const matchingHR = hrRecords.filter(r => isMatch(r));
+    const bestHR = matchingHR.find(r => r.timeIn && r.timeIn !== '--:--') || matchingHR[0] || null;
+
+    const matchingEmpRep = empReports.filter(r => isMatch(r));
+    const bestEmpRep = matchingEmpRep.find(r => r.timeIn && r.timeIn !== '--:--') || matchingEmpRep[0] || null;
+
+    const matchingSupRep = supReports.filter(r => isSupMatch(r));
+    const bestSupRep = matchingSupRep.find(r => r.timeIn && r.timeIn !== '--:--') || matchingSupRep[0] || null;
+
+    let merged = {
+      id: `${targetEmpId || targetUserId}_${dateStr}`,
+      userId: targetUserId,
+      employeeId: targetEmpId,
+      employeeName: targetName,
+      date: dateStr,
+      timeIn: '',
+      timeOut: '',
+      status: 'لم يسجل دخول',
+      notes: ''
+    };
+
+    if (bestHR) merged = { ...merged, ...bestHR };
+
+    if (!merged.timeIn || merged.timeIn === '--:--') {
+      merged.timeIn = (bestLog && (bestLog.timeIn || bestLog.time || bestLog.punchIn)) || 
+                      (bestEmpRep && bestEmpRep.timeIn) || 
+                      (bestSupRep && bestSupRep.timeIn) || '';
+      if (merged.timeIn && (merged.status === 'لم يسجل دخول' || !merged.status)) {
+        merged.status = 'مداوم';
+      }
     }
+
+    if (!merged.timeOut || merged.timeOut === '--:--') {
+      merged.timeOut = (bestLog && (bestLog.timeOut || bestLog.punchOut)) || 
+                       (bestEmpRep && bestEmpRep.timeOut) || 
+                       (bestSupRep && bestSupRep.timeOut) || '';
+    }
+
+    if (merged.timeIn || merged.timeOut || bestHR || bestLog || bestEmpRep || bestSupRep) {
+       return merged;
+    }
+
     return null;
   } catch (error) {
     console.error("Error in getEmployeeAttendanceByDate:", error);
@@ -367,6 +612,28 @@ export const saveHRAdvance = async (advance, userContext = null) => {
     const data = { ...advance, updatedAt: new Date().toISOString() };
     if (!advance.id) data.createdAt = new Date().toISOString();
     await setDoc(docRef, data, { merge: true });
+
+    // Send WhatsApp notifications
+    try {
+      if (!advance.id) {
+        triggerWhatsAppRouting('advances', 'create', {
+          employeeName: advance.employeeName,
+          amount: advance.amount,
+          reason: advance.reason || 'سلفة شخصية'
+        });
+      } else if (advance.status === 'موافق' || advance.status === 'مرفوض') {
+        const friendlyStatus = advance.status === 'موافق' ? 'قبول والموافقة على' : 'رفض';
+        const friendlyReason = advance.status === 'مرفوض' ? (advance.rejectionReason || 'لا يوجد') : (advance.approvalReason || 'تم الاعتماد');
+        triggerWhatsAppRouting('advances', 'approve', {
+          employeeName: advance.employeeName,
+          amount: advance.approvedAmount || advance.amount,
+          status: friendlyStatus,
+          reason: friendlyReason
+        });
+      }
+    } catch (e) {
+      console.error('[WhatsApp Routing] Error triggering advance notification:', e);
+    }
 
     if (userContext) {
        await saveHRAuditLog({
@@ -405,6 +672,87 @@ export const deleteHRAdvance = async (id, userContext = null) => {
     return true;
   } catch (error) {
     console.error("Error in deleteHRAdvance:", error);
+    throw error;
+  }
+};
+export const getHRPetitions = async () => {
+  try {
+    const q = query(collection(db, 'hr_petitions'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(p => p.status !== 'محذوف');
+  } catch (error) {
+    console.error("Error in getHRPetitions:", error);
+    return [];
+  }
+};
+
+export const saveHRPetition = async (petition, userContext = null) => {
+  try {
+    const data = { ...petition };
+    if (!data.createdAt) {
+      data.createdAt = new Date().toISOString();
+    }
+    
+    let docRef;
+    if (data.id) {
+      docRef = doc(db, 'hr_petitions', data.id);
+      await setDoc(docRef, data, { merge: true });
+    } else {
+      docRef = await addDoc(collection(db, 'hr_petitions'), data);
+    }
+
+    if (userContext) {
+       await saveHRAuditLog({
+          user: userContext.name || userContext,
+          action: data.id ? 'تعديل استدعاء' : 'تقديم استدعاء',
+          module: 'الاستدعاءات',
+          description: `الموظف: ${data.employeeName}`,
+          timestamp: new Date().toISOString()
+       });
+    }
+
+    // Send WhatsApp notification if newly created
+    if (!petition.id) {
+       try {
+         const settings = await getGlobalSettings();
+         if (settings?.whatsapp?.notifyPetitions) {
+           await triggerWhatsAppRouting('petitions', { 
+              name: data.employeeName, 
+              title: data.title 
+           }, 'استدعاء جديد');
+         }
+       } catch (e) {
+         console.error('WhatsApp notification error for petition:', e);
+       }
+    }
+
+    return { ...data, id: docRef.id };
+  } catch (error) {
+    console.error("Error in saveHRPetition:", error);
+    throw error;
+  }
+};
+
+export const deleteHRPetition = async (id, userContext = null) => {
+  try {
+    await updateDoc(doc(db, 'hr_petitions', id), {
+      status: 'محذوف',
+      deletedAt: new Date().toISOString()
+    });
+    
+    if (userContext) {
+       await saveHRAuditLog({
+          user: userContext.name || userContext,
+          action: 'حذف استدعاء',
+          module: 'الاستدعاءات',
+          description: `تم حذف الاستدعاء رقم ${id}`,
+          timestamp: new Date().toISOString()
+       });
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error in deleteHRPetition:", error);
     throw error;
   }
 };
@@ -539,10 +887,12 @@ export const deleteHRViolation = async (id, userContext = null, violationDate = 
 
 export const getHRViolationsByDateRange = async (dateFrom, dateTo) => {
   try {
+    let conditions = [];
+    if (dateFrom) conditions.push(where('date', '>=', dateFrom));
+    if (dateTo) conditions.push(where('date', '<=', dateTo));
     const q = query(
       collection(db, 'hr_violations'),
-      where('date', '>=', dateFrom),
-      where('date', '<=', dateTo),
+      ...conditions,
       orderBy('date', 'desc')
     );
     const querySnapshot = await getDocs(q);
@@ -575,6 +925,68 @@ export const saveHRLeave = async (leave, userContext = null) => {
     const data = { ...leave, updatedAt: new Date().toISOString() };
     if (!leave.id) data.createdAt = new Date().toISOString();
     await setDoc(docRef, data, { merge: true });
+
+    // An approved departure longer than three hours is an unpaid day from the
+    // policy effective date, regardless of time worked after the official shift.
+    if (isLongApprovedDeparture(data)) {
+      const leaveDate = data.date || data.startDate;
+      const attendanceQuery = query(
+        collection(db, 'hr_attendance'),
+        where('employeeId', '==', data.employeeId),
+        where('date', '==', leaveDate)
+      );
+      const attendanceSnap = await getDocs(attendanceQuery);
+      const batch = writeBatch(db);
+      attendanceSnap.docs.forEach(attendanceDoc => {
+        batch.set(attendanceDoc.ref, {
+          status: 'إجازة غير مدفوعة',
+          notes: 'إجازة غير مدفوعة آلياً لأن مدة المغادرة المعتمدة تجاوزت 3 ساعات',
+          automaticUnpaidLeave: true,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      });
+      if (!attendanceSnap.empty) await batch.commit();
+    }
+
+    // Send WhatsApp notifications
+    try {
+      if (leave.type === 'بدل عمل إضافي') {
+        if (!leave.id) {
+          triggerWhatsAppRouting('overtime', 'create', {
+            employeeName: leave.employeeName,
+            date: leave.date,
+            reason: leave.notes || 'لا يوجد'
+          });
+        } else if (leave.status === 'موافق' || leave.status === 'مرفوض') {
+          triggerWhatsAppRouting('overtime', 'approve', {
+            employeeName: leave.employeeName,
+            date: leave.date,
+            status: leave.status === 'موافق' ? 'قبول' : 'رفض',
+            reason: leave.rejectionReason || leave.notes || 'تم الاعتماد'
+          });
+        }
+      } else {
+        // Standard leaves/permissions
+        if (!leave.id) {
+          triggerWhatsAppRouting('leaves', 'create', {
+            employeeName: leave.employeeName,
+            leaveType: leave.type,
+            days: leave.days || 1,
+            startDate: leave.startDate || leave.date
+          });
+        } else if (leave.status === 'موافق' || leave.status === 'مرفوض') {
+          triggerWhatsAppRouting('leaves', 'approve', {
+            employeeName: leave.employeeName,
+            leaveType: leave.type,
+            days: leave.days || 1,
+            startDate: leave.startDate || leave.date,
+            status: leave.status === 'موافق' ? 'موافقة وقبول' : 'رفض'
+          });
+        }
+      }
+    } catch (e) {
+      console.error('[WhatsApp Routing] Error in saveHRLeave notification:', e);
+    }
 
     if (userContext) {
        await saveHRAuditLog({

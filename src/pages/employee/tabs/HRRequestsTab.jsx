@@ -1,31 +1,26 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import Flatpickr from 'react-flatpickr';
-import { Arabic } from 'flatpickr/dist/l10n/ar.js';
-import 'flatpickr/dist/themes/light.css';
-import { FileText, RefreshCw, Eye, Edit2, Trash2 } from 'lucide-react';
+import { FileText, RefreshCw, Eye, Edit2, Trash2, X } from 'lucide-react';
 import { TableContainer, TableHead, TableRow, TableHeader, TableBody, TableCell, Badge } from '../../../components/ui';
-
-const getLocalDateStr = (d) => {
-  if (!d) return '';
-  const offset = d.getTimezoneOffset();
-  const localDate = new Date(d.getTime() - (offset * 60 * 1000));
-  return localDate.toISOString().split('T')[0];
-};
+import HRDateFilter from '../../../components/ui/HRDateFilter';
 
 export const HRRequestsTab = ({ 
   user, 
   myLeaves, 
   missingPunches, 
   myReports, 
-  myAdvances, 
+  myAdvances,
+  myPetitions,
   handleViewReportDetails, 
   handleEditRequest, 
   handleDeleteRequest 
 }) => {
-  const [showReqFilters, setShowReqFilters] = useState(false);
-  const [reqFilterDateFrom, setReqFilterDateFrom] = useState('');
-  const [reqFilterDateTo, setReqFilterDateTo] = useState('');
+  const [dateMode, setDateMode] = useState('month');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().substring(0, 7));
+  const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+
   const [reqFilterType, setReqFilterType] = useState('');
   const [reqFilterStatus, setReqFilterStatus] = useState('');
 
@@ -58,17 +53,22 @@ export const HRRequestsTab = ({
     ...myLeaves.filter(l => l.status !== 'محذوف' && l.status !== 'deleted').map(l => ({ id: l.id, type: l.type, date: l.startDate || l.date || l.createdAt?.split('T')[0], status: normalizeReqStatus(l.status), details: l.notes ? `السبب: ${cleanNotes(l.notes)}` : '', adminNote: getAdminNoteOnly(l.notes), originalReq: l, modelType: 'leave' })),
     ...missingPunches.filter(p => String(p.employeeId) === String(user.id) && p.status !== 'محذوف' && p.status !== 'deleted').map(p => ({ id: p.id, type: `ختمة ناقصة (${p.type})`, date: p.date || p.createdAt?.split('T')[0], status: normalizeReqStatus(p.status), details: p.reason || p.time || '', adminNote: p.adminNote || '', originalReq: p, modelType: 'punch' })),
     ...myReports.filter(r => r.status !== 'محذوف' && r.status !== 'deleted').map(r => ({ id: r.id, type: 'تقرير عمل يومي', date: r.date || r.createdAt?.split('T')[0], status: r.supervisorRating ? 'تم التقييم' : 'معلق', details: r.supervisorRating ? `تقييم المشرف: ${r.supervisorRating} (${Math.round(r.finalScore || 0)}%)` : 'معلق (بانتظار المشرف)', adminNote: r.supervisorNotes || '', originalReq: r, modelType: 'report' })),
-    ...myAdvances.filter(a => a.status !== 'محذوف' && a.status !== 'deleted').map(a => ({ id: a.id, type: a.type, date: a.date || a.createdAt?.split('T')[0], status: normalizeReqStatus(a.status), details: a.reason ? `${a.amount} د.أ - ${a.reason}` : `${a.amount} د.أ`, adminNote: a.status === 'مرفوض' ? (a.rejectionReason || '') : (a.approvalReason || ''), originalReq: a, modelType: 'advance' }))
+    ...myAdvances.filter(a => a.status !== 'محذوف' && a.status !== 'deleted').map(a => ({ id: a.id, type: a.type, date: a.date || a.createdAt?.split('T')[0], status: normalizeReqStatus(a.status), details: a.reason ? `${a.amount} د.أ - ${a.reason}` : `${a.amount} د.أ`, adminNote: a.status === 'مرفوض' ? (a.rejectionReason || '') : (a.approvalReason || ''), originalReq: a, modelType: 'advance' })),
+    ...(myPetitions || []).filter(p => p.status !== 'محذوف' && p.status !== 'deleted').map(p => ({ id: p.id, type: 'طلب استدعاء', date: p.date || p.createdAt?.split('T')[0], status: normalizeReqStatus(p.status), details: p.title ? `${p.title}` : '', adminNote: p.status === 'مرفوض' ? (p.rejectionReason || '') : (p.approvalReason || ''), originalReq: p, modelType: 'petition' }))
   ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
   const filteredRequests = allRequests.filter(req => {
     let matchDate = true;
-    if (reqFilterDateFrom) {
-      matchDate = matchDate && (req.date >= reqFilterDateFrom);
+    const reqDate = req.date || '';
+    if (reqDate) {
+      const pMonth = reqDate.substring(0, 7);
+      if (dateMode === 'day' && reqDate !== selectedDate) matchDate = false;
+      if (dateMode === 'month' && pMonth !== selectedMonth) matchDate = false;
+      if (dateMode === 'range' && (reqDate < startDate || reqDate > endDate)) matchDate = false;
+    } else {
+      matchDate = false;
     }
-    if (reqFilterDateTo) {
-      matchDate = matchDate && (req.date <= reqFilterDateTo);
-    }
+
     let matchStatus = true;
     if (reqFilterStatus) {
       matchStatus = (req.status === reqFilterStatus);
@@ -86,71 +86,61 @@ export const HRRequestsTab = ({
         <h3 className="text-xl font-bold flex items-center gap-2 text-slate-800">
           <FileText className="text-primary" /> سجل الطلبات المقدمة
         </h3>
-        <button 
-          onClick={() => setShowReqFilters(!showReqFilters)} 
-          className={`btn flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow-md ${showReqFilters ? 'btn-primary' : 'btn-primary'}`}
-          style={{
-            padding: '10px 24px',
-            borderRadius: '12px',
-            fontWeight: 'bold',
-            fontSize: '15px',
-            border: 'none',
-            color: 'white',
-            backgroundColor: 'var(--primary)'
-          }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-          <span>{showReqFilters ? 'إخفاء التصفية' : 'تصفية'}</span>
-        </button>
       </div>
 
-      {showReqFilters && (
-        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-600">من تاريخ</label>
-            <Flatpickr className="input-field bg-white" value={reqFilterDateFrom} onChange={([d]) => setReqFilterDateFrom(getLocalDateStr(d))} options={{ locale: Arabic, dateFormat: 'Y-m-d', disableMobile: true }} placeholder="اختر تاريخ البداية" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-600">إلى تاريخ</label>
-            <Flatpickr className="input-field bg-white" value={reqFilterDateTo} onChange={([d]) => setReqFilterDateTo(getLocalDateStr(d))} options={{ locale: Arabic, dateFormat: 'Y-m-d', disableMobile: true }} placeholder="اختر تاريخ النهاية" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-600">نوع الطلب</label>
-            <select className="input-field" value={reqFilterType} onChange={(e) => setReqFilterType(e.target.value)}>
-              <option value="">الكل</option>
-              <option value="إجازة">إجازة</option>
-              <option value="عمل إضافي">عمل إضافي</option>
-              <option value="مغادرة">مغادرة</option>
-              <option value="تقرير عمل يومي">تقرير عمل يومي</option>
-              <option value="سلفة">سلفة</option>
-              <option value="ختمة ناقصة">ختمة ناقصة</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-600">الحالة</label>
-            <select className="input-field" value={reqFilterStatus} onChange={(e) => setReqFilterStatus(e.target.value)}>
-              <option value="">الكل</option>
-              <option value="تمت الموافقة">تمت الموافقة</option>
-              <option value="مرفوض">مرفوض</option>
-              <option value="معلق">معلق</option>
-            </select>
-          </div>
-          <div className="col-span-1 md:col-span-2 lg:col-span-4 flex justify-center mt-4 w-full">
+      <div className="flex flex-col md:flex-row items-start md:items-center gap-4 mb-4 bg-slate-50 p-4 rounded-xl border border-slate-200" style={{ direction: 'rtl' }}>
+        <div className="w-full md:w-auto overflow-x-auto pb-1">
+          <HRDateFilter 
+            mode={dateMode}
+            setMode={setDateMode}
+            date={selectedDate}
+            setDate={setSelectedDate}
+            month={selectedMonth}
+            setMonth={setSelectedMonth}
+            startDate={startDate}
+            setStartDate={setStartDate}
+            endDate={endDate}
+            setEndDate={setEndDate}
+            allowedModes={['day', 'month', 'range']}
+          />
+        </div>
+
+        <div className="flex flex-wrap md:flex-row items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
+          <select className="input-field shrink-0" style={{ minWidth: '130px', height: '42px', flex: 1, padding: '0 8px' }} value={reqFilterType} onChange={(e) => setReqFilterType(e.target.value)}>
+            <option value="">جميع الأنواع</option>
+            <option value="إجازة">إجازة</option>
+            <option value="عمل إضافي">عمل إضافي</option>
+            <option value="مغادرة">مغادرة</option>
+            <option value="تقرير عمل يومي">تقرير عمل يومي</option>
+            <option value="سلفة">سلفة</option>
+            <option value="ختمة ناقصة">ختمة ناقصة</option>
+            <option value="طلب استدعاء">طلب استدعاء</option>
+          </select>
+
+          <select className="input-field shrink-0" style={{ minWidth: '130px', height: '42px', flex: 1, padding: '0 8px' }} value={reqFilterStatus} onChange={(e) => setReqFilterStatus(e.target.value)}>
+            <option value="">جميع الحالات</option>
+            <option value="تمت الموافقة">تمت الموافقة</option>
+            <option value="مرفوض">مرفوض</option>
+            <option value="معلق">معلق</option>
+          </select>
+
+          {(reqFilterType || reqFilterStatus || dateMode !== 'month' || selectedMonth !== new Date().toISOString().substring(0, 7)) && (
             <button 
               onClick={() => {
-                const d = new Date(); d.setDate(d.getDate() - 3);
-                setReqFilterDateFrom(getLocalDateStr(d));
-                setReqFilterDateTo('');
+                setDateMode('month');
+                setSelectedMonth(new Date().toISOString().substring(0, 7));
                 setReqFilterStatus('');
                 setReqFilterType('');
               }}
-              className="btn btn-sm btn-primary flex items-center gap-2 justify-center shadow-md px-6"
+              className="btn flex items-center justify-center bg-red-50 text-red-500 rounded-lg border border-red-100 hover:bg-red-100 hover:text-red-600 transition-colors shadow-sm"
+              style={{ height: '42px', padding: '0 16px', minWidth: '42px' }}
+              title="إعادة ضبط"
             >
-              <RefreshCw size={16} /> إعادة ضبط الفلاتر
+              <X size={20} /> <span className="md:hidden mr-2">إعادة ضبط</span>
             </button>
-          </div>
+          )}
         </div>
-      )}
+      </div>
       
       <TableContainer className="bg-white rounded-[16px] shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">

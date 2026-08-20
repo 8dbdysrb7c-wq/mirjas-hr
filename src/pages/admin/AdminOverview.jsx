@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { getEmployees, getOrders, getSalesOrders, getMissions, getSupervisorReports, getSmokingLogs, isAdmin, getAttendanceLogs, getReports, getHRLeaves, getHRAdvances, getMissingPunches } from '../../store';
-import { ChevronLeft, UserCheck, UserX, Clock, ClipboardList, TrendingUp, CheckCircle2, ShieldCheck, Activity, FileText, Users, CalendarPlus, LogOut, DollarSign, Fingerprint, Search } from 'lucide-react';
+import { getEmployees, getOrders, getSalesOrders, getMissions, getSupervisorReports, getSmokingLogs, isAdmin, getAttendanceLogs, getReports, getHRLeaves, getHRAdvances, getMissingPunches, getRepVisits, getPreparationOrders, saveRepVisit, getHRPetitions } from '../../store';
+import { ChevronLeft, UserCheck, UserX, Clock, ClipboardList, TrendingUp, CheckCircle2, ShieldCheck, Activity, FileText, Users, CalendarPlus, LogOut, DollarSign, Fingerprint, Search, MapPin } from 'lucide-react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import OrderTrackerModal from '../../components/OrderTrackerModal';
@@ -70,7 +70,7 @@ const CircularProgress = ({ percentage, color }) => {
 const AdminOverview = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
-    production: { active: 0, delayed: 0, todayCompleted: 0 },
+    production: { active: 0, delayed: 0, todayCompleted: 0, sewing: 0, preparation: 0 },
     delivery: { active: 0, delayed: 0 },
     sales: { active: 0, delayed: 0, todayCompleted: 0 },
     employees: { total: 0, present: 0, absent: 0, late: 0 },
@@ -79,17 +79,61 @@ const AdminOverview = ({ onNavigate }) => {
     employeeReports: { submitted: 0, required: 0 },
     smokingArea: { status: 'unknown' },
     quality: 0,
-    hrPending: { leaves: 0, missions: 0, overtime: 0, advances: 0, missingPunches: 0 }
+    hrPending: { leaves: 0, missions: 0, overtime: 0, advances: 0, missingPunches: 0, petitions: 0 },
+    repVisits: { today: 0, total: 0 }
   });
 
   const [showTrackerModal, setShowTrackerModal] = useState(false);
   const [trackerSearchTerm, setTrackerSearchTerm] = useState('');
 
   useEffect(() => {
+    const updateTargetVisits = async () => {
+      try {
+        const visits = await getRepVisits();
+        const targets = [
+          "sleep way",
+          "سويس للمفروشات",
+          "بريق الأواني",
+          "معرض وهبة",
+          "الخطيب مول",
+          "مفروشات جاسر",
+          "الخولي هوم",
+          "سليب كير",
+          "قصر الصنوبر",
+          "معرض النابلسي",
+          "ناردين هوم",
+          "خميس الالفي"
+        ].map(n => n.trim().toLowerCase());
+
+        let count = 0;
+        for (const visit of visits) {
+          const name = (visit.customerName || '').trim().toLowerCase();
+          const match = targets.some(target => name.includes(target) || target.includes(name));
+          if (match && visit.visitType !== 'first_visit') {
+            await saveRepVisit({ ...visit, visitType: 'first_visit' });
+            count++;
+          }
+        }
+        if (count > 0) {
+          Swal.fire({
+            icon: 'success',
+            title: 'تم تحديث الزيارات بنجاح',
+            text: `تم تعديل ${count} زيارات من متابعة إلى أول زيارة بنجاح.`,
+            confirmButtonColor: '#1a8d9b'
+          });
+        }
+      } catch (err) {
+        console.error("Error updating visits:", err);
+      }
+    };
+    updateTargetVisits();
+  }, []);
+
+  useEffect(() => {
     let isMounted = true;
     const fetchData = async () => {
       setLoading(true);
-      const [prodOrd, salesOrd, emps, missions, supReports, sLogs, allAttLogs, empReports, hrLeaves, advances, missingPunches] = await Promise.all([
+      const [prodOrd, salesOrd, emps, missions, supReports, sLogs, allAttLogs, empReports, hrLeaves, advances, missingPunches, repVisits, prepOrd, petitions] = await Promise.all([
         getOrders(),
         getSalesOrders(),
         getEmployees(),
@@ -100,7 +144,10 @@ const AdminOverview = ({ onNavigate }) => {
         getReports(),
         getHRLeaves(),
         getHRAdvances(),
-        getMissingPunches()
+        getMissingPunches(),
+        getRepVisits(),
+        getPreparationOrders(),
+        getHRPetitions()
       ]);
 
       if (!isMounted) return;
@@ -110,12 +157,14 @@ const AdminOverview = ({ onNavigate }) => {
       threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
       // --- Production ---
-      const activeProd = prodOrd.filter(o => o.status !== 'منتهي');
+      const activeProd = prodOrd.filter(o => o.status !== 'منتهي' && o.status !== 'ملغي');
       const delayedProd = activeProd.filter(o => {
         if (o.executionStatus === 'متعثر') return true;
         const createdAt = new Date(o.createdAt || new Date());
         return createdAt < threeDaysAgo;
       }).length;
+      const prepProdCount = prepOrd.filter(o => o.status !== 'منتهي' && o.status !== 'ملغي').length;
+      const sewingProdCount = activeProd.filter(o => o.status !== 'قيد التحضير' && o.status !== 'إنتاج قيد التحضير').length;
       const todayCompletedProd = prodOrd.filter(o => o.status === 'منتهي' && o.statusUpdateDate === todayKey).length;
 
       // --- Delivery ---
@@ -128,7 +177,7 @@ const AdminOverview = ({ onNavigate }) => {
       }).length;
 
       // --- Sales ---
-      const activeSales = salesOrd.filter(o => !['تم التوصيل', 'ملغي', 'مرفوض', 'منتهي'].includes(o.status));
+      const activeSales = salesOrd.filter(o => !['تم التوصيل', 'ملغي', 'مرفوض', 'منتهي', 'تم التسليم للتوصيل', 'تم تسليمها للتوصيل', 'قيد التوصيل'].includes(o.status));
       const delayedSales = activeSales.filter(o => {
         const createdAt = new Date(o.createdAt || new Date());
         return createdAt < threeDaysAgo;
@@ -225,15 +274,19 @@ const AdminOverview = ({ onNavigate }) => {
       const todayEmpReports = empReports.filter(r => r.date === todayKey);
 
       const pendingLeaves = hrLeaves.filter(l => l.status === 'معلق' && ['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'].includes(l.type)).length;
-      const pendingMissions = hrLeaves.filter(l => l.status === 'معلق' && ['مغادرة خاصة', 'مغادرة عمل'].includes(l.type)).length;
+      const pendingMissions = hrLeaves.filter(l => l.status === 'معلق' && ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(l.type)).length;
       const pendingOvertime = hrLeaves.filter(l => l.status === 'معلق' && l.type === 'بدل عمل إضافي').length;
       const pendingAdvances = advances ? advances.filter(a => a.status === 'معلق').length : 0;
       const pendingMissingPunches = missingPunches ? missingPunches.filter(p => p.status === 'معلق' || p.status === 'قيد المراجعة').length : 0;
+      const pendingPetitions = petitions ? petitions.filter(p => p.status === 'قيد المراجعة' || p.status === 'معلق').length : 0;
+
+      const todayVisits = repVisits ? repVisits.filter(v => v.date === todayKey).length : 0;
+      const totalVisits = repVisits ? repVisits.length : 0;
 
       const regularEmpsCount = normalEmps.filter(e => !allSupervisors.some(s => s.id === e.id)).length;
 
       setData({
-        production: { active: activeProd.length, delayed: delayedProd, todayCompleted: todayCompletedProd },
+        production: { active: activeProd.length, delayed: delayedProd, todayCompleted: todayCompletedProd, sewing: sewingProdCount, preparation: prepProdCount },
         delivery: { active: activeMissions.length, delayed: delayedMissions },
         sales: { active: activeSales.length, delayed: delayedSales, todayCompleted: todayCompletedSales },
         employees: { 
@@ -254,7 +307,8 @@ const AdminOverview = ({ onNavigate }) => {
         employeeReports: { submitted: todayEmpReports.length, required: regularEmpsCount },
         smokingArea: { status: smokingStatus },
         quality: qualityScore,
-        hrPending: { leaves: pendingLeaves, missions: pendingMissions, overtime: pendingOvertime, advances: pendingAdvances, missingPunches: pendingMissingPunches }
+        hrPending: { leaves: pendingLeaves, missions: pendingMissions, overtime: pendingOvertime, advances: pendingAdvances, missingPunches: pendingMissingPunches, petitions: pendingPetitions },
+        repVisits: { today: todayVisits, total: totalVisits }
       });
 
       setLoading(false);
@@ -312,15 +366,27 @@ const AdminOverview = ({ onNavigate }) => {
       {/* Unified 4x4 Grid for all 16 cards */}
       <div className="overview-grid unified-grid">
         
-        {/* 1 */}
+        {/* 1 - Sewing */}
         <div className="stat-card prod-theme">
           <div className="icon-wrapper">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15h16"/><path d="M6 15v2"/><path d="M10 15v2"/><path d="M14 15v2"/><path d="M18 15v2"/><rect x="2" y="8" width="8" height="7" rx="1"/><rect x="14" y="5" width="8" height="10" rx="1"/><path d="M6 8V6a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v2"/></svg>
           </div>
-          <h3 className="stat-title">طلبات قيد الانتاج</h3>
-          <div className="stat-number"><AnimatedNumber value={data.production.active} /></div>
-          <div className="stat-pill">{data.production.delayed} متعثر</div>
-          <button className="card-button" onClick={() => onNavigate && onNavigate('production-orders')}>
+          <h3 className="stat-title">طلبات إنتاج قيد الخياطة</h3>
+          <div className="stat-number"><AnimatedNumber value={data.production.sewing} /></div>
+          <button className="card-button" onClick={() => onNavigate && onNavigate('production-orders')} style={{ marginTop: 'auto' }}>
+            <span>عرض التفاصيل</span>
+            <ChevronLeft size={16} />
+          </button>
+        </div>
+
+        {/* 1.5 - Preparation */}
+        <div className="stat-card" style={{ background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)', borderColor: '#fde68a' }}>
+          <div className="icon-wrapper" style={{ backgroundColor: '#fde68a', color: '#d97706' }}>
+            <ClipboardList size={28} />
+          </div>
+          <h3 className="stat-title">طلبات إنتاج قيد التحضير</h3>
+          <div className="stat-number"><AnimatedNumber value={data.production.preparation} /></div>
+          <button className="card-button" onClick={() => onNavigate && onNavigate('preparation-orders')} style={{ marginTop: 'auto' }}>
             <span>عرض التفاصيل</span>
             <ChevronLeft size={16} />
           </button>
@@ -538,6 +604,36 @@ const AdminOverview = ({ onNavigate }) => {
           <div className="stat-pill">طلبات معلقة</div>
           <button className="card-button" onClick={() => onNavigate && onNavigate({ tab: 'hr', subTab: 'missing-punches' })}>
             <span>عرض الطلبات</span>
+            <ChevronLeft size={16} />
+          </button>
+        </div>
+
+        {/* 17 */}
+        <div className="stat-card" style={{ background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)', borderColor: '#fecaca' }}>
+          <div className="icon-wrapper" style={{ backgroundColor: '#fecaca', color: '#dc2626' }}>
+            <FileText size={28} />
+          </div>
+          <h3 className="stat-title">الاستدعاءات والطلبات</h3>
+          <div className="stat-number"><AnimatedNumber value={data.hrPending.petitions} /></div>
+          <div className="stat-pill">طلبات معلقة</div>
+          <button className="card-button" onClick={() => onNavigate && onNavigate({ tab: 'hr', subTab: 'petitions' })}>
+            <span>عرض الطلبات</span>
+            <ChevronLeft size={16} />
+          </button>
+        </div>
+
+        {/* 18 */}
+        <div className="stat-card" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', borderColor: '#bfdbfe' }}>
+          <div className="icon-wrapper" style={{ backgroundColor: '#bfdbfe', color: '#2563eb' }}>
+            <MapPin size={28} />
+          </div>
+          <h3 className="stat-title">زيارات المندوبين</h3>
+          <div className="stat-number"><AnimatedNumber value={data.repVisits?.today || 0} /></div>
+          <div className="stat-pill" style={{ color: '#1d4ed8', backgroundColor: 'rgba(37, 99, 235, 0.1)' }}>
+            إجمالي الزيارات: {data.repVisits?.total || 0}
+          </div>
+          <button className="card-button" onClick={() => onNavigate && onNavigate('rep-visits')}>
+            <span>عرض التفاصيل</span>
             <ChevronLeft size={16} />
           </button>
         </div>

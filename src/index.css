@@ -3416,6 +3416,63 @@ tr:hover td {
   background-color: #fafbfc; /* Subtle hover effect for rows */
 }
 
+/* Phone Preview Mode Explicit Unconditional Mobile Table Layout styling */
+.preview-device-frame.phone .table-container {
+  overflow-x: visible;
+  margin: 0;
+  padding: 0;
+}
+.preview-device-frame.phone table:not(.modal-table), 
+.preview-device-frame.phone table:not(.modal-table) thead, 
+.preview-device-frame.phone table:not(.modal-table) tbody, 
+.preview-device-frame.phone table:not(.modal-table) th, 
+.preview-device-frame.phone table:not(.modal-table) td, 
+.preview-device-frame.phone table:not(.modal-table) tr { 
+  display: block; 
+}
+.preview-device-frame.phone table:not(.modal-table) thead tr { 
+  position: absolute;
+  top: -9999px;
+  left: -9999px;
+}
+.preview-device-frame.phone table:not(.modal-table) tr {
+  background: white;
+  border: 1px solid var(--surface-border);
+  border-radius: 16px;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  box-shadow: var(--shadow);
+}
+.preview-device-frame.phone table:not(.modal-table) td { 
+  border: none;
+  border-bottom: 1px solid #f8fafc; 
+  position: relative;
+  padding-right: 45%; 
+  text-align: left !important;
+  min-height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.preview-device-frame.phone table:not(.modal-table) td:last-child {
+  border-bottom: 0;
+}
+.preview-device-frame.phone table:not(.modal-table) td::before { 
+  position: absolute;
+  right: 0.75rem;
+  width: 40%; 
+  padding-left: 10px; 
+  white-space: nowrap;
+  font-weight: bold;
+  color: var(--text-muted);
+  content: attr(data-label);
+  text-align: right;
+}
+.preview-device-frame.phone table:not(.modal-table) td:not([data-label]) {
+  padding-right: 0.75rem;
+  justify-content: center;
+}
+
 @media (max-width: 1024px) {
   .table-container {
     overflow-x: visible;
@@ -3423,22 +3480,22 @@ tr:hover td {
     padding: 0;
   }
 
-  table, 
-  table thead, 
-  table tbody, 
-  table th, 
-  table td, 
-  table tr { 
+  table:not(.modal-table), 
+  table:not(.modal-table) thead, 
+  table:not(.modal-table) tbody, 
+  table:not(.modal-table) th, 
+  table:not(.modal-table) td, 
+  table:not(.modal-table) tr { 
     display: block; 
   }
 
-  table thead tr { 
+  table:not(.modal-table) thead tr { 
     position: absolute;
     top: -9999px;
     left: -9999px;
   }
 
-  table tr {
+  table:not(.modal-table) tr {
     background: white;
     border: 1px solid var(--surface-border);
     border-radius: 16px;
@@ -3447,7 +3504,7 @@ tr:hover td {
     box-shadow: var(--shadow);
   }
 
-  table td { 
+  table:not(.modal-table) td { 
     border: none;
     border-bottom: 1px solid #f8fafc; 
     position: relative;
@@ -3459,11 +3516,11 @@ tr:hover td {
     justify-content: flex-end;
   }
 
-  table td:last-child {
+  table:not(.modal-table) td:last-child {
     border-bottom: 0;
   }
 
-  table td::before { 
+  table:not(.modal-table) td::before { 
     position: absolute;
     right: 0.75rem;
     width: 40%; 
@@ -3475,8 +3532,7 @@ tr:hover td {
     text-align: right;
   }
 
-  /* Specific fix for tables without data-label attribute to use fallback or just display centered */
-  table td:not([data-label]) {
+  table:not(.modal-table) td:not([data-label]) {
     padding-right: 0.75rem;
     justify-content: center;
   }
@@ -3670,7 +3726,239 @@ tr:hover td {
 }
 
 .modal-content.wide {
-  max-width: 800px;
+  max-width: 1800px;
+  width: 98%;
+}
+
+/* Fix table rendering inside modals (prevents collapsing to block cards on tablet/mobile screens) */
+.modal-content table {
+  display: table !important;
+  width: 100% !important;
+}
+.modal-content table thead {
+  display: table-header-group !important;
+}
+.modal-content table tbody {
+  display: table-row-group !important;
+}
+.modal-content table tr {
+  display: table-row !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  border: none !important;
+  margin-bottom: 0 !important;
+}
+.modal-content table th,
+.modal-content table td {
+  display: table-cell !important;
+  position: static !important;
+  padding: 8px !important;
+  border: 1px solid #cbd5e1 !important;
+  text-align: center !important;
+  width: auto !important;
+}
+.modal-content table td::before,
+.modal-content table th::before {
+  display: none !important;
+  content: none !important;
+}
+
+/* Scoped widths for Production and Preparation order item modals */
+.production-items-modal .modal-table,
+.preparation-items-modal .modal-table {
+  min-width: 1300px !important;
+}
+
+.production-items-modal .modal-table th:nth-child(1), .production-items-modal .modal-table td:nth-child(1),
+.preparation-items-modal .modal-table th:nth-child(1), .preparation-items-modal .modal-table td:nth-child(1) {
+  width: 50px !important;
+  min-width: 50px !important;
+}
+
+.production-items-modal .modal-table th:nth-child(2), .production-items-modal .modal-table td:nth-child(2),
+.preparation-items-modal .modal-table th:nth-child(2), .preparation-items-modal .modal-table td:nth-child(2) {
+  width: 300px !important;
+  min-width: 300px !important;
+}
+
+.production-items-modal .modal-table th:nth-child(3), .production-items-modal .modal-table td:nth-child(3),
+.preparation-items-modal .modal-table th:nth-child(3), .preparation-items-modal .modal-table td:nth-child(3) {
+  width: 180px !important;
+  min-width: 180px !important;
+}
+
+.production-items-modal .modal-table th:nth-child(4), .production-items-modal .modal-table td:nth-child(4),
+.preparation-items-modal .modal-table th:nth-child(4), .preparation-items-modal .modal-table td:nth-child(4) {
+  width: 65px !important;
+  min-width: 65px !important;
+}
+
+.production-items-modal .modal-table th:nth-child(5), .production-items-modal .modal-table td:nth-child(5),
+.preparation-items-modal .modal-table th:nth-child(5), .preparation-items-modal .modal-table td:nth-child(5) {
+  width: 90px !important;
+  min-width: 90px !important;
+}
+
+.production-items-modal .modal-table th:nth-child(6), .production-items-modal .modal-table td:nth-child(6),
+.preparation-items-modal .modal-table th:nth-child(6), .preparation-items-modal .modal-table td:nth-child(6) {
+  width: 65px !important;
+  min-width: 65px !important;
+}
+
+.production-items-modal .modal-table th:nth-child(7), .production-items-modal .modal-table td:nth-child(7),
+.preparation-items-modal .modal-table th:nth-child(7), .preparation-items-modal .modal-table td:nth-child(7) {
+  width: 180px !important;
+  min-width: 180px !important;
+}
+
+.production-items-modal .modal-table th:nth-child(8), .production-items-modal .modal-table td:nth-child(8),
+.preparation-items-modal .modal-table th:nth-child(8), .preparation-items-modal .modal-table td:nth-child(8) {
+  width: 200px !important;
+  min-width: 200px !important;
+}
+
+.production-items-modal .modal-table th:nth-child(9), .production-items-modal .modal-table td:nth-child(9),
+.preparation-items-modal .modal-table th:nth-child(9), .preparation-items-modal .modal-table td:nth-child(9) {
+  width: 125px !important;
+  min-width: 125px !important;
+}
+
+.production-items-modal .modal-table th:nth-child(10), .production-items-modal .modal-table td:nth-child(10),
+.preparation-items-modal .modal-table th:nth-child(10), .preparation-items-modal .modal-table td:nth-child(10) {
+  width: 45px !important;
+  min-width: 45px !important;
+}
+
+/* Preparation modal has 7 columns (the production table has 10).
+   Keep all columns visible and prevent obsolete production widths from
+   stretching the actions column or squeezing the form controls. */
+.preparation-items-modal .modal-table {
+  width: 100% !important;
+  min-width: 1050px !important;
+  table-layout: fixed !important;
+}
+
+.preparation-items-modal .modal-table th,
+.preparation-items-modal .modal-table td {
+  min-width: 0 !important;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+.preparation-items-modal .modal-table th:nth-child(1),
+.preparation-items-modal .modal-table td:nth-child(1) { width: 8% !important; }
+
+.preparation-items-modal .modal-table th:nth-child(2),
+.preparation-items-modal .modal-table td:nth-child(2) { width: 31% !important; }
+
+.preparation-items-modal .modal-table th:nth-child(3),
+.preparation-items-modal .modal-table td:nth-child(3) { width: 9% !important; }
+
+.preparation-items-modal .modal-table th:nth-child(4),
+.preparation-items-modal .modal-table td:nth-child(4) { width: 18% !important; }
+
+.preparation-items-modal .modal-table th:nth-child(5),
+.preparation-items-modal .modal-table td:nth-child(5) { width: 18% !important; }
+
+.preparation-items-modal .modal-table th:nth-child(6),
+.preparation-items-modal .modal-table td:nth-child(6) { width: 12% !important; }
+
+.preparation-items-modal .modal-table th:nth-child(7),
+.preparation-items-modal .modal-table td:nth-child(7) {
+  width: 4% !important;
+  padding-inline: 0.25rem !important;
+}
+
+.preparation-items-modal .modal-table td:nth-child(2) .select__single-value,
+.preparation-items-modal .modal-table td:nth-child(4) .select__single-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Production modal has 10 columns. Fit the complete row inside the desktop
+   modal so status and delete actions never start outside the visible area. */
+.production-items-modal .modal-table {
+  width: 100% !important;
+  min-width: 1000px !important;
+  table-layout: fixed !important;
+}
+
+.production-items-modal .modal-table th,
+.production-items-modal .modal-table td {
+  min-width: 0 !important;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+.production-items-modal .modal-table th:nth-child(1),
+.production-items-modal .modal-table td:nth-child(1) { width: 5% !important; }
+
+.production-items-modal .modal-table th:nth-child(2),
+.production-items-modal .modal-table td:nth-child(2) { width: 25% !important; }
+
+.production-items-modal .modal-table th:nth-child(3),
+.production-items-modal .modal-table td:nth-child(3) { width: 14% !important; }
+
+.production-items-modal .modal-table th:nth-child(4),
+.production-items-modal .modal-table td:nth-child(4) { width: 7% !important; }
+
+.production-items-modal .modal-table th:nth-child(5),
+.production-items-modal .modal-table td:nth-child(5) { width: 6% !important; }
+
+.production-items-modal .modal-table th:nth-child(6),
+.production-items-modal .modal-table td:nth-child(6) { width: 5% !important; }
+
+.production-items-modal .modal-table th:nth-child(7),
+.production-items-modal .modal-table td:nth-child(7) { width: 10% !important; }
+
+.production-items-modal .modal-table th:nth-child(8),
+.production-items-modal .modal-table td:nth-child(8) { width: 13% !important; }
+
+.production-items-modal .modal-table th:nth-child(9),
+.production-items-modal .modal-table td:nth-child(9) { width: 11% !important; }
+
+.production-items-modal .modal-table th:nth-child(10),
+.production-items-modal .modal-table td:nth-child(10) {
+  width: 4% !important;
+  padding-inline: 0.25rem !important;
+}
+
+.production-items-modal .modal-table td:nth-child(9) select {
+  font-size: 0.72rem !important;
+  padding-inline: 0.25rem !important;
+}
+
+/* One compact typography scale for every production-table column. */
+.production-items-modal .modal-table th,
+.production-items-modal .modal-table td,
+.production-items-modal .modal-table td input,
+.production-items-modal .modal-table td select,
+.production-items-modal .modal-table td button,
+.production-items-modal .modal-table td [class*="-singleValue"],
+.production-items-modal .modal-table td [class*="-placeholder"],
+.production-items-modal .modal-table td [class*="-Input"] {
+  font-size: 0.72rem !important;
+  line-height: 1.25 !important;
+}
+
+.production-items-modal .modal-table th,
+.production-items-modal .modal-table td {
+  padding: 0.35rem !important;
+}
+
+.production-items-modal .modal-table td input,
+.production-items-modal .modal-table td select {
+  padding-inline: 0.3rem !important;
+}
+
+.production-items-modal .modal-table td input,
+.preparation-items-modal .modal-table td input,
+.production-items-modal .modal-table td select,
+.preparation-items-modal .modal-table td select {
+  width: 100% !important;
 }
 
 /* Modal Table - Keep horizontal on mobile to save vertical space */
@@ -3875,6 +4163,10 @@ tr:hover td {
     align-items: stretch;
   }
 
+  .premium-modal-actions {
+    margin-top: 12px !important;
+  }
+
   .btn-premium-save,
   .btn-premium-cancel,
   .btn-premium-confirm-delete,
@@ -3952,6 +4244,30 @@ tr:hover td {
   border-color: #f87171 !important;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(239,68,68,0.15);
+}
+
+.btn-premium-copy {
+  background: #ffffff !important;
+  color: #64748b !important;
+  border: 1.5px solid #e2e8f0 !important;
+  padding: 0.5rem !important;
+  border-radius: 12px !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.btn-premium-copy:hover {
+  background: #eff6ff !important;
+  color: #2563eb !important;
+  border-color: #3b82f6 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37,99,235,0.15);
 }
 
 .btn-premium-edit {
@@ -5941,4 +6257,704 @@ textarea.form-input-premium {
 
 .btn-export-item:active {
   transform: translateY(0) scale(0.95) !important;
+}
+
+/* ========================
+   DAILY REPORT TAB STYLES
+   ======================== */
+.dr-container {
+  max-width: 480px !important;
+  margin: 0 auto !important;
+  padding: 1rem 1rem 6rem 1rem !important;
+  direction: rtl !important;
+}
+
+.dr-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin-bottom: 1.5rem !important;
+  margin-top: 0.5rem !important;
+}
+
+.dr-header-btn-main {
+  width: 3rem !important;
+  height: 3rem !important;
+  background-color: var(--primary) !important;
+  color: white !important;
+  border-radius: 1rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(26, 141, 155, 0.2) !important;
+  cursor: pointer !important;
+}
+
+.dr-header-btn-sec {
+  width: 3rem !important;
+  height: 3rem !important;
+  background-color: white !important;
+  color: var(--primary) !important;
+  border-radius: 1rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 1px solid var(--surface-border) !important;
+  box-shadow: var(--shadow) !important;
+  cursor: pointer !important;
+}
+
+.dr-header-title {
+  text-align: center !important;
+}
+
+.dr-header-title h2 {
+  font-size: 1.25rem !important;
+  font-weight: 800 !important;
+  color: var(--text-main) !important;
+  margin: 0 0 0.1rem 0 !important;
+}
+
+.dr-header-title p {
+  font-size: 0.75rem !important;
+  color: var(--text-muted) !important;
+  margin: 0 !important;
+}
+
+.dr-card {
+  background: white !important;
+  border-radius: 20px !important;
+  padding: 1.25rem !important;
+  margin-bottom: 1rem !important;
+  box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid var(--surface-border) !important;
+}
+
+.dr-card-amber {
+  background: #f0f9fa !important; /* Soft cyan/teal matching system spirit */
+  border-radius: 20px !important;
+  padding: 1.25rem !important;
+  margin-bottom: 1rem !important;
+  border: 1px solid #cfeef1 !important; /* Soft border */
+}
+
+.dr-card-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important; /* Align right in RTL */
+  gap: 0.5rem !important;
+  font-weight: 700 !important;
+  font-size: 0.9rem !important;
+  margin-bottom: 1rem !important;
+}
+
+.dr-card-header.text-teal {
+  color: var(--primary) !important;
+}
+
+.dr-card-header.text-amber {
+  color: var(--primary-dark) !important; /* Teal/dark matching break section */
+}
+
+.dr-field {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.4rem !important;
+  width: 100% !important;
+}
+
+.dr-field label {
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  color: var(--text-muted) !important;
+  text-align: right !important;
+}
+
+.dr-input {
+  width: 100% !important;
+  height: 2.75rem !important;
+  background-color: #f8fafc !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  text-align: center !important;
+  font-weight: 700 !important;
+  color: var(--text-main) !important;
+  padding: 0 1rem !important;
+  outline: none !important;
+  font-size: 0.95rem !important;
+  transition: all 0.2s !important;
+}
+
+.dr-input:focus {
+  border-color: var(--primary) !important;
+  background-color: white !important;
+}
+
+.dr-row {
+  display: flex !important;
+  gap: 1rem !important;
+  position: relative !important;
+}
+
+.dr-row-divider {
+  position: absolute !important;
+  left: 50% !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: 1px !important;
+  background-color: #f1f5f9 !important;
+  transform: translateX(-50%) !important;
+}
+
+.dr-row-divider-amber {
+  position: absolute !important;
+  left: 50% !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: 1px !important;
+  background-color: #cfeef1 !important;
+  transform: translateX(-50%) !important;
+}
+
+.dr-half-col {
+  width: 50% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+}
+
+.dr-time-display {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.4rem !important;
+  font-weight: 700 !important;
+  background: #f8fafc !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 12px !important;
+  width: 100% !important;
+  border: 1px solid #f1f5f9 !important;
+  color: var(--text-main) !important;
+}
+
+.dr-time-label-green {
+  color: var(--success) !important;
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  margin-bottom: 0.4rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.3rem !important;
+}
+
+.dr-time-label-red {
+  color: var(--danger) !important;
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  margin-bottom: 0.4rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.3rem !important;
+}
+
+/* Phone Section Styles */
+.dr-phone-toggle {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+  cursor: pointer !important;
+  margin-bottom: 1.25rem !important;
+  justify-content: flex-start !important; /* Align right in RTL */
+}
+
+.dr-phone-checkbox {
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+  border-radius: 4px !important;
+  border: 1.5px solid #cbd5e1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.2s !important;
+}
+
+.dr-phone-toggle input:checked + .dr-phone-checkbox {
+  background-color: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+
+.dr-phone-toggle input {
+  display: none !important;
+}
+
+.dr-phone-checkbox svg {
+  color: white !important;
+  width: 0.8rem !important;
+  height: 0.8rem !important;
+}
+
+.dr-phone-counter-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  background-color: #f8fafc !important;
+  padding: 0.5rem !important;
+  border-radius: 16px !important;
+  border: 1px solid #f1f5f9 !important;
+}
+
+.dr-counter-btn {
+  width: 2rem !important;
+  height: 2rem !important;
+  border-radius: 8px !important;
+  border: none !important;
+  background-color: white !important;
+  color: var(--primary) !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  font-weight: bold !important;
+}
+
+.dr-counter-val {
+  width: 3rem !important;
+  border: none !important;
+  background: transparent !important;
+  text-align: center !important;
+  font-weight: 800 !important;
+  font-size: 1.1rem !important;
+  color: var(--text-main) !important;
+  outline: none !important;
+}
+
+.dr-phone-counter-label {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  color: var(--text-muted) !important;
+}
+
+/* Tasks */
+.dr-task-card {
+  position: relative !important;
+  background: #ffffff !important;
+  border: 1.5px solid #e2e8f0 !important;
+  border-radius: 16px !important;
+  padding: 1.25rem !important;
+  margin-bottom: 1.5rem !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02) !important;
+}
+
+.dr-task-badge {
+  position: absolute !important;
+  top: -12px !important;
+  right: 15px !important;
+  width: 26px !important;
+  height: 26px !important;
+  background-color: var(--success) !important;
+  color: white !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-weight: 800 !important;
+  font-size: 0.85rem !important;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3) !important;
+  border: 2px solid white !important;
+  z-index: 10 !important;
+}
+
+.dr-task-item {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.75rem !important;
+}
+
+.dr-task-select {
+  width: 100% !important;
+  height: 2.75rem !important;
+  background-color: #f8fafc !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  padding: 0 1rem !important;
+  font-weight: 700 !important;
+  color: var(--text-main) !important;
+  outline: none !important;
+  font-size: 0.9rem !important;
+  transition: all 0.2s !important;
+  cursor: pointer !important;
+}
+
+.dr-task-select:focus {
+  border-color: var(--primary) !important;
+  background-color: white !important;
+}
+
+.dr-task-buttons {
+  display: flex !important;
+  gap: 0.5rem !important;
+  margin-top: 0.5rem !important;
+}
+
+.dr-btn-delete {
+  width: 33.33% !important;
+  height: 2.75rem !important;
+  border-radius: 12px !important;
+  border: 1px solid #fecaca !important;
+  color: #ef4444 !important;
+  background-color: #fef2f2 !important;
+  font-weight: 700 !important;
+  font-size: 0.9rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.4rem !important;
+  cursor: pointer !important;
+}
+
+.dr-btn-add {
+  width: 66.67% !important;
+  height: 2.75rem !important;
+  border-radius: 12px !important;
+  border: 1px solid var(--primary-light) !important;
+  color: var(--primary) !important;
+  background-color: rgba(26, 141, 155, 0.05) !important;
+  font-weight: 700 !important;
+  font-size: 0.9rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.4rem !important;
+  cursor: pointer !important;
+}
+
+.dr-btn-add:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+.dr-textarea {
+  width: 100% !important;
+  background-color: white !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  padding: 0.75rem 1rem !important;
+  font-weight: 700 !important;
+  color: var(--text-main) !important;
+  outline: none !important;
+  font-size: 0.95rem !important;
+  resize: none !important;
+  min-height: 100px !important;
+  transition: all 0.2s !important;
+}
+
+.dr-textarea:focus {
+  border-color: var(--primary) !important;
+}
+
+.dr-btn-submit {
+  width: 100% !important;
+  height: 3.25rem !important;
+  background-color: #0f766e !important;
+  color: white !important;
+  font-weight: 800 !important;
+  font-size: 1rem !important;
+  border-radius: 1rem !important;
+  border: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  box-shadow: 0 4px 14px rgba(15, 118, 110, 0.3) !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
+}
+
+.dr-btn-submit:active {
+  transform: scale(0.98) !important;
+}
+
+/* Custom responsive classes for Order Form */
+.order-dates-grid {
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+@media (min-width: 768px) {
+  .order-dates-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+}
+.preview-device-frame.phone .order-dates-grid {
+  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+}
+.preview-device-frame.phone .order-dates-grid > div {
+  grid-column: span 1 / span 1 !important;
+}
+
+.items-header-container {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 10px;
+}
+@media (min-width: 768px) {
+  .items-header-container {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+.preview-device-frame.phone .items-header-container {
+  flex-direction: column-reverse !important;
+  align-items: flex-start !important;
+}
+
+.items-header-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+@media (min-width: 768px) {
+  .items-header-buttons {
+    display: flex;
+    gap: 8px;
+    width: auto;
+  }
+}
+.preview-device-frame.phone .items-header-buttons {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  width: 100% !important;
+}
+
+/* Make buttons smaller on mobile and mobile preview */
+@media (max-width: 767px) {
+  .items-header-buttons button {
+    height: 36px !important;
+    font-size: 0.8rem !important;
+    padding: 0 8px !important;
+  }
+}
+.preview-device-frame.phone .items-header-buttons button {
+  height: 36px !important;
+  font-size: 0.8rem !important;
+  padding: 0 8px !important;
+}
+
+/* ========================
+   GLOBAL PRINT STYLES
+   ======================== */
+@media print {
+  @page { margin: 0; size: A4 portrait; }
+  html, body { 
+    background: white !important; 
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    direction: ltr !important; /* FIX CHROME RTL CLIPPING BUG */
+  }
+  
+  /* HIDE THE HEAVY APP TO SPEED UP MOBILE PRINTING (45s -> 1s) */
+  #root { display: none !important; }
+  .swal2-container { display: none !important; }
+  .no-print { display: none !important; }
+  
+  /* SHOW THE PRINT PORTAL */
+  #print-portal { 
+    display: block !important; 
+    direction: ltr !important; /* FIX CHROME RTL CLIPPING BUG */
+  }
+  
+  /* LAYOUT ENFORCEMENT */
+  .order-print-layout, .sales-print-layout, .statement-print-layout { 
+    display: block !important; 
+    background: white; 
+    margin: 0 !important; 
+    width: 1150px !important; 
+    min-width: 1150px !important;
+    max-width: 1150px !important;
+    padding: 1.5cm !important;
+    box-sizing: border-box !important;
+    zoom: 0.68 !important; /* AUTO SCALE TO A4 (1150 * 0.68 = 782px) */
+    direction: rtl !important; /* RESTORE RTL FOR CONTENT */
+  }
+
+  .order-print-layout table, .sales-print-layout table, .statement-print-layout table {
+    display: table !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  .order-print-layout thead, .sales-print-layout thead, .statement-print-layout thead {
+    display: table-header-group !important;
+  }
+  .order-print-layout tbody, .sales-print-layout tbody, .statement-print-layout tbody {
+    display: table-row-group !important;
+  }
+  .order-print-layout tr, .sales-print-layout tr, .statement-print-layout tr {
+    display: table-row !important;
+  }
+  .order-print-layout th, .order-print-layout td,
+  .sales-print-layout th, .sales-print-layout td,
+  .statement-print-layout th, .statement-print-layout td {
+    display: table-cell !important;
+    position: static !important;
+  }
+  .print-items-table th, .print-items-table td {
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+    padding-right: 18px !important;
+    padding-left: 12px !important;
+  }
+  .order-print-layout thead tr, .sales-print-layout thead tr, .statement-print-layout thead tr {
+    position: static !important;
+    display: table-row !important;
+  }
+}
+
+/* --- AI Added Responsive Utilities --- */
+.hidden { display: none !important; }
+
+@media (min-width: 768px) {
+  .md\:hidden { display: none !important; }
+  .md\:block { display: block !important; }
+  .md\:flex-row { flex-direction: row !important; }
+  .md\:items-center { align-items: center !important; }
+  .md\:max-w-\[250px\] { max-width: 250px !important; }
+  .md\:w-auto { width: auto !important; }
+}
+
+/* ===================================================
+   QUOTATION PRINT & PDF SHARE UNIFIED STYLES
+   =================================================== */
+.quote-print-layout { 
+  display: block !important; 
+  background: white !important; 
+  margin: 0 auto !important; 
+  width: 800px !important; 
+  min-width: 800px !important;
+  max-width: 800px !important;
+  padding: 1.5cm !important;
+  box-sizing: border-box !important;
+  direction: rtl !important;
+}
+
+.quote-print-layout table {
+  display: table !important;
+  width: 100% !important;
+  border-collapse: collapse !important;
+}
+.quote-print-layout thead {
+  display: table-header-group !important;
+}
+.quote-print-layout tbody {
+  display: table-row-group !important;
+}
+.quote-print-layout tr {
+  display: table-row !important;
+}
+.quote-print-layout th, .quote-print-layout td {
+  display: table-cell !important;
+  position: static !important;
+}
+.quote-print-layout thead tr {
+  position: static !important;
+  display: table-row !important;
+}
+
+.quote-print-layout td:not(:nth-child(2)),
+.quote-print-layout th:not(:nth-child(2)),
+.quote-print-layout td:not(:nth-child(2)) div,
+.quote-print-layout th:not(:nth-child(2)) div {
+  text-align: center !important;
+}
+.quote-print-layout td:nth-child(2),
+.quote-print-layout th:nth-child(2),
+.quote-print-layout td:nth-child(2) div,
+.quote-print-layout th:nth-child(2) div {
+  text-align: right !important;
+}
+
+/* STATEMENT PRINT LAYOUT ALIGNMENT */
+/* Inline styles inside handlePrint drive the exact print cell alignments */
+
+/* GLOBAL PORTAL RTL CLIPPING FIX FOR PDF GENERATION */
+#print-portal {
+  direction: ltr !important;
+}
+
+/* ===================================================
+   GLOBAL PRINT FIXES
+   =================================================== */
+@media print {
+  /* Reset all main wrappers to auto height and visible overflow */
+  html, body, .admin-layout, .admin-content, .admin-main-wrap, .print-table-container, .print-table-wrapper {
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    background: white !important;
+    border: none !important;
+    border-radius: 0 !important;
+    direction: rtl !important;
+  }
+  
+  /* Hide the sidebar entirely */
+  .admin-sidebar, .sidebar-overlay {
+    display: none !important;
+  }
+  
+  /* Hide elements with .no-print class */
+  .no-print, .mobile-bottom-nav {
+    display: none !important;
+  }
+
+  /* Make sure the content area takes full width */
+  .admin-content {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Keep table rows from breaking awkwardly */
+  table { 
+    page-break-inside: auto; 
+    width: 100% !important; 
+    direction: rtl !important;
+  }
+  tr { 
+    page-break-inside: avoid; 
+    page-break-after: auto; 
+  }
+}
+
+/* Ensure Print Portal takes over only when active */
+@media print {
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  body:has(#print-portal > *) #root {
+    display: none !important;
+  }
+  
+  #print-portal {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+}
+
+@media screen {
+  #print-portal {
+    display: none !important;
+  }
 }

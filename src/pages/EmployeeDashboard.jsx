@@ -1,9 +1,21 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { RefreshCw, Settings, LogOut, Plus, Globe, Trash2, Edit2, Save, Phone, Clock, Calendar, FileText, X, Camera, Home, ShoppingCart, ShoppingBag, Menu, MoreHorizontal, Eye, Truck, CheckCircle2, Navigation, MapPin, CheckCircle, Info, SunMoon, Mic, MicOff, ClipboardCheck, Layers, Activity, Fingerprint, DollarSign, Folder, PieChart, Users, Filter , ArrowUpDown} from 'lucide-react';
-import { getHRAdvances, saveHRAdvance, deleteHRAdvance, deleteReport, addLog, getDepartments, getTasksData, getReports, saveReport, getScoringConfig, getMissions, saveEmployee, updateMissionStatus, getGlobalSettings, getHRLeaves, saveHRLeave, deleteHRLeave, getMissingPunches, saveMissingPunch, deleteMissingPunch, saveHRAttendance, getEmployeeAttendanceByDate, getEmployees, createNotification } from '../store';
+import { RefreshCw, Settings, LogOut, Plus, Globe, Trash2, Edit2, Save, Phone, Clock, Calendar, FileText, X, Camera, Home, ShoppingCart, ShoppingBag, Menu, MoreHorizontal, Eye, Truck, CheckCircle2, Navigation, MapPin, CheckCircle, Info, SunMoon, Mic, MicOff, ClipboardCheck, Layers, Activity, Fingerprint, DollarSign, Folder, PieChart, Users, Filter, ArrowUpDown } from 'lucide-react';
+import { 
+  getDepartments, getTasksData, saveReport, getReports, getMissions, getGlobalSettings, saveEmployee,
+  getSalesOrders, getOrders, getSupervisorTasks,
+  getEmployeeAttendanceByDate, saveHRAttendance,
+  getHRLeaves, saveHRLeave, deleteHRLeave, getMissingPunches, saveMissingPunch, getHRAdvances, saveHRAdvance,
+  getHRPetitions, saveHRPetition,
+  addLog,
+  getRepVisits,
+  createNotification,
+  getScoringConfig
+} from '../store';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Circle } from 'react-leaflet';
 import { sendWhatsAppNotification } from '../utils/whatsappService';
+import { triggerWhatsAppRouting } from '../services/whatsappRouter';
+import { hasPermission } from '../utils/permissions';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import Flatpickr from 'react-flatpickr';
@@ -11,6 +23,9 @@ import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import 'flatpickr/dist/themes/light.css';
 import AdminProduction from './admin/AdminProduction';
 import AdminSales from './admin/AdminSales';
+import AdminQuotes from './admin/AdminQuotes';
+import AdminPriceLists from './admin/AdminPriceLists';
+import AdminPreparation from './admin/AdminPreparation';
 import AdminSupervisorReports from './admin/AdminSupervisorReports';
 import AdminSupervisorTasks from './admin/AdminSupervisorTasks';
 import AdminLive from './admin/AdminLive';
@@ -21,6 +36,7 @@ import { MissionsTab } from './employee/tabs/MissionsTab';
 import { MissingPunchesTab } from './employee/tabs/MissingPunchesTab';
 import { HRRequestsTab } from './employee/tabs/HRRequestsTab';
 import RepVisitsTab from './employee/tabs/RepVisitsTab';
+import { RepVisitHistoryTab } from './employee/tabs/RepVisitHistoryTab';
 
 
 import AdminStock from './admin/AdminStock';
@@ -37,9 +53,23 @@ const MySwal = withReactContent(Swal);
 
 const getLocalDateStr = (d) => {
   if (!d) return '';
-  const offset = d.getTimezoneOffset();
-  const localDate = new Date(d.getTime() - (offset * 60 * 1000));
-  return localDate.toISOString().split('T')[0];
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const formatTimeArabic = (timeStr) => {
+  if (!timeStr || timeStr === '--:--') return '--:--';
+  if (timeStr.includes('صباح') || timeStr.includes('مساء')) return timeStr;
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return timeStr;
+  let hours = parseInt(parts[0], 10);
+  const minutes = parts[1];
+  if (isNaN(hours)) return timeStr;
+  const ampm = hours >= 12 ? 'مساءً' : 'صباحاً';
+  const displayHours = hours % 12 || 12;
+  return `${displayHours}:${minutes} ${ampm}`;
 };
 
 const notifyHR = async (message) => {
@@ -51,24 +81,24 @@ const notifyHR = async (message) => {
         await sendWhatsAppNotification(admin.phone, message, 'attendance');
       }
     }
-  } catch(e) { console.error('Error notifying HR', e); }
+  } catch (e) { console.error('Error notifying HR', e); }
 };
 
 const MOBILE_BREAKPOINT = 1024;
 
 const SewingMachineIcon = ({ size = 24, color = "currentColor", className = "" }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    width={size} 
-    height={size} 
-    viewBox="0 0 200 200" 
-    fill={color} 
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 200 200"
+    fill={color}
     className={className}
   >
     {/* Base plates */}
     <rect x="20" y="160" width="160" height="10" rx="2" />
     <rect x="25" y="150" width="140" height="10" />
-    
+
     {/* Main Body Silhouette */}
     <path d="
       M 140 150 
@@ -83,55 +113,55 @@ const SewingMachineIcon = ({ size = 24, color = "currentColor", className = "" }
       C 50 90, 70 85, 90 85 
       C 110 85, 120 90, 120 110 
       V 150 
-      Z" 
+      Z"
     />
-    
+
     {/* Left-side thread lever */}
     <path d="M 35 100 C 20 100, 20 90, 35 90 Z" />
-    
+
     {/* Center circle detail */}
     <circle cx="125" cy="95" r="8" fill="transparent" stroke={color} strokeWidth="3" />
-    
+
     {/* Spool pins on top */}
     <rect x="110" y="50" width="6" height="20" rx="3" />
     <path d="M 105 58 H 121 V 61 H 105 Z" />
     <rect x="42" y="55" width="4" height="10" rx="2" />
-    
+
     {/* Thread swoops (using thin paths) */}
     <path d="M 110 55 C 80 60, 60 50, 44 55" fill="none" stroke={color} strokeWidth="1" />
-    
+
     {/* Needle & foot */}
     <rect x="43" y="130" width="3" height="20" />
     <rect x="38" y="147" width="13" height="3" />
-    
+
     {/* Back thread guide */}
     <rect x="33" y="115" width="2" height="15" />
     <circle cx="34" cy="115" r="3" />
-    
+
     {/* Wheel Connector */}
     <rect x="140" y="75" width="10" height="20" />
-    
+
     {/* Hand Wheel (Vertical block) */}
     <rect x="146" y="60" width="10" height="50" rx="5" />
     <rect x="142" y="70" width="4" height="30" />
-    
+
     {/* Crank mechanism */}
     <path d="M 151 85 H 160 V 105 H 180 C 195 105, 195 95, 180 95 H 165 V 80 H 151 Z" />
   </svg>
 );
 
 const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
-  const R = 6371; 
-  const dLat = (lat2 - lat1) * (Math.PI / 180);  
-  const dLon = (lon2 - lon1) * (Math.PI / 180); 
-  const a = 
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
     Math.sin(dLon / 2) * Math.sin(dLon / 2)
-    ; 
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); 
-  const d = R * c; 
-  return d * 1000; 
+    ;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c;
+  return d * 1000;
 };
 
 const defaultTimePickerOptions = { enableTime: true, noCalendar: true, dateFormat: "h:i K", locale: Arabic, disableMobile: true };
@@ -145,13 +175,12 @@ const LiveClock = () => {
   }, []);
 
   return (
-    <div className="text-left shrink-0">
-      <div className="text-xl font-bold tracking-tight text-slate-800 font-mono" dir="ltr">
-        {liveTime.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace('ص','').replace('م','')} 
-        <span className="text-xs font-normal ml-1 text-slate-500">{liveTime.getHours() >= 12 ? 'م' : 'ص'}</span>
+    <div className="text-left shrink-0" style={{ paddingLeft: '1.5rem' }}>
+      <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#1e293b', letterSpacing: '0.05em' }} dir="ltr">
+        {liveTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
       </div>
-      <div className="text-[11px] text-slate-400 mt-1">
-        {liveTime.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+      <div className="text-[11px] text-slate-400 mt-1" style={{ fontSize: '11px', fontWeight: '500', color: '#64748b' }} dir="ltr">
+        {liveTime.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
       </div>
     </div>
   );
@@ -164,7 +193,7 @@ const CustomFolder = ({ size, style }) => (
   <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" style={style}>
     <defs>
       <filter id="folderShadow" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="5" stdDeviation="4" floodColor="#126a75" floodOpacity="0.4"/>
+        <feDropShadow dx="0" dy="5" stdDeviation="4" floodColor="#126a75" floodOpacity="0.4" />
       </filter>
       <linearGradient id="folderGrad" x1="0%" y1="0%" x2="0%" y2="100%">
         <stop offset="0%" stopColor="#2dd4bf" />
@@ -186,7 +215,7 @@ const CustomReport = ({ size, style }) => (
   <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" style={style}>
     <defs>
       <filter id="reportShadow" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="2" dy="5" stdDeviation="3" floodColor="#0f766e" floodOpacity="0.3"/>
+        <feDropShadow dx="2" dy="5" stdDeviation="3" floodColor="#0f766e" floodOpacity="0.3" />
       </filter>
     </defs>
     <g filter="url(#reportShadow)">
@@ -205,7 +234,7 @@ const CustomCalendar = ({ size, style }) => (
   <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" style={style}>
     <defs>
       <filter id="calShadow" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="5" stdDeviation="3" floodColor="#0f766e" floodOpacity="0.3"/>
+        <feDropShadow dx="0" dy="5" stdDeviation="3" floodColor="#0f766e" floodOpacity="0.3" />
       </filter>
     </defs>
     <g filter="url(#calShadow)">
@@ -221,7 +250,7 @@ const CustomCalendar = ({ size, style }) => (
       <rect x="25" y="34" width="6" height="6" rx="1.5" fill="#115e59" />
       <rect x="34" y="34" width="6" height="6" rx="1.5" fill="#115e59" />
       <rect x="43" y="34" width="6" height="6" rx="1.5" fill="#115e59" />
-      
+
       <rect x="16" y="44" width="6" height="6" rx="1.5" fill="#115e59" />
       <rect x="25" y="44" width="6" height="6" rx="1.5" fill="#115e59" />
       <rect x="34" y="44" width="6" height="6" rx="1.5" fill="#115e59" />
@@ -229,13 +258,13 @@ const CustomCalendar = ({ size, style }) => (
     </g>
   </svg>
 );
-const DashboardCard = ({ icon: Icon, title, onClick, disabled, iconType = 'solid', isMobile }) => {
+const DashboardCard = ({ icon: Icon, title, onClick, disabled, iconType = 'solid', isMobile, badgeCount }) => {
   const [isHovered, setIsHovered] = useState(false);
-  
+
   // iconType can be: 'solid', 'solid-bg', 'ring'
-  
+
   return (
-    <button 
+    <button
       onClick={onClick}
       disabled={disabled}
       onMouseEnter={() => setIsHovered(true)}
@@ -259,6 +288,29 @@ const DashboardCard = ({ icon: Icon, title, onClick, disabled, iconType = 'solid
         overflow: 'hidden'
       }}
     >
+      {/* Badge Count */}
+      {typeof badgeCount === 'number' && badgeCount > 0 && (
+        <div style={{
+          position: 'absolute',
+          top: '12px',
+          right: '12px',
+          backgroundColor: '#ef4444',
+          color: '#ffffff',
+          borderRadius: '50%',
+          minWidth: '20px',
+          height: '20px',
+          padding: '0 4px',
+          fontSize: '11px',
+          fontWeight: '900',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)',
+          zIndex: 20
+        }}>
+          {badgeCount}
+        </div>
+      )}
       {/* Decorative Dots Background like the mockup */}
       <div style={{ position: 'absolute', top: '15%', right: '15%', width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#b2dfdb', opacity: 0.6 }}></div>
       <div style={{ position: 'absolute', top: '25%', right: '28%', width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#80cbc4', opacity: 0.4 }}></div>
@@ -275,7 +327,7 @@ const DashboardCard = ({ icon: Icon, title, onClick, disabled, iconType = 'solid
         justifyContent: 'center',
         marginBottom: '0.75rem',
       }}>
-        
+
         {/* Background Circle / Ring logic */}
         {iconType === 'custom' && (
           <div style={{
@@ -295,7 +347,7 @@ const DashboardCard = ({ icon: Icon, title, onClick, disabled, iconType = 'solid
             background: 'radial-gradient(circle, rgba(26, 141, 155, 0.08) 0%, rgba(26, 141, 155, 0.02) 60%, transparent 70%)',
           }}></div>
         )}
-        
+
         {iconType === 'solid-bg' && (
           <div style={{
             position: 'absolute',
@@ -329,41 +381,41 @@ const DashboardCard = ({ icon: Icon, title, onClick, disabled, iconType = 'solid
         )}
 
         {/* The Icon itself */}
-        <div style={{ 
-            position: 'relative', 
-            zIndex: 10,
-            transform: isHovered && !disabled ? 'scale(1.1)' : 'scale(1)',
-            transition: 'transform 0.3s ease'
+        <div style={{
+          position: 'relative',
+          zIndex: 10,
+          transform: isHovered && !disabled ? 'scale(1.1)' : 'scale(1)',
+          transition: 'transform 0.3s ease'
         }}>
           {iconType === 'custom' ? (
-             <Icon size={56} style={{ filter: 'none' }} />
+            <Icon size={56} style={{ filter: 'none' }} />
           ) : (
-             <Icon 
-              size={iconType === 'solid-bg' ? 32 : 36} 
-              color={iconType === 'solid-bg' ? "#ffffff" : "#126a75"} 
-              fill={iconType === 'solid' ? "#1a8d9b" : "none"} 
+            <Icon
+              size={iconType === 'solid-bg' ? 32 : 36}
+              color={iconType === 'solid-bg' ? "#ffffff" : "#126a75"}
+              fill={iconType === 'solid' ? "#1a8d9b" : "none"}
               strokeWidth={iconType === 'solid-bg' ? 2.5 : 1.5}
-              style={{ 
+              style={{
                 filter: iconType !== 'solid-bg' ? 'drop-shadow(0 2px 4px rgba(26, 141, 155, 0.2))' : 'none',
                 opacity: iconType === 'solid' ? 0.9 : 1
-              }} 
+              }}
             />
           )}
         </div>
       </div>
-      
+
       <span style={{
-position: 'relative',
-zIndex: 10,
-fontWeight: '800',
-fontSize: isMobile ? '12px' : '15px',
-color: '#126a75',
-textAlign: 'center',
-whiteSpace: 'normal', 
-lineHeight: '1.3',
-marginBottom: '0.4rem'
-}}>{title}</span>
-      
+        position: 'relative',
+        zIndex: 10,
+        fontWeight: '800',
+        fontSize: isMobile ? '12px' : '15px',
+        color: '#126a75',
+        textAlign: 'center',
+        whiteSpace: 'normal',
+        lineHeight: '1.3',
+        marginBottom: '0.4rem'
+      }}>{title}</span>
+
       <div style={{
         width: '20px',
         height: '3px',
@@ -393,13 +445,126 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
   const _allowed = user?.allowedLeaveTypes;
   const allowedLeaveTypes = Array.isArray(_allowed) ? _allowed : (typeof _allowed === 'string' ? [_allowed] : ALL_LEAVE_TYPES);
 
-    const [activeTab, setActiveTab] = useState(() => {
+  const [activeTab, setActiveTab] = useState(() => {
     return sessionStorage.getItem('employeeActiveTab') || 'home';
   });
 
   useEffect(() => {
     sessionStorage.setItem('employeeActiveTab', activeTab);
   }, [activeTab]);
+
+  const [pendingTasksCount, setPendingTasksCount] = useState(0);
+  const [pendingSalesOrdersCount, setPendingSalesOrdersCount] = useState(0);
+  const [pendingProductionCount, setPendingProductionCount] = useState(0);
+  const [pendingPreparationCount, setPendingPreparationCount] = useState(0);
+  const [pendingMissionsCount, setPendingMissionsCount] = useState(0);
+  const [pendingDeliveryMissionsCount, setPendingDeliveryMissionsCount] = useState(0);
+  const [pendingStockAuditsCount, setPendingStockAuditsCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchCounts = async () => {
+      try {
+        const isEmployer = user.id === 'admin' || String(user.name).includes('مشهور') || String(user.name).includes('انس') || String(user.name).includes('أنس') || user.name === 'المدير العام';
+
+        const promises = [
+          getSupervisorTasks(),
+          getMissions()
+        ];
+
+        let salesIdx = -1;
+        let prodIdx = -1;
+
+        if (hasPermission(user, 'orders') || hasPermission(user, 'stock') || isEmployer) {
+          salesIdx = promises.length;
+          promises.push(getSalesOrders());
+        }
+        if (hasPermission(user, 'production') || isEmployer) {
+          prodIdx = promises.length;
+          promises.push(getOrders());
+        }
+        
+        let prepIdx = -1;
+        if (hasPermission(user, 'preparation') || isEmployer) {
+          prepIdx = promises.length;
+          promises.push(getPreparationOrders());
+        }
+
+        const results = await Promise.all(promises);
+
+        // 1. Tasks
+        const fetchedTasks = results[0] || [];
+        let myTasks = [];
+        if (isEmployer) {
+          myTasks = fetchedTasks;
+        } else {
+          myTasks = fetchedTasks.filter(t => {
+            const isAssignedDirectly = String(t.assigneeId) === String(user.id);
+            const isAssignedInArray = Array.isArray(t.assigneeIds) && t.assigneeIds.map(String).includes(String(user.id));
+            return isAssignedDirectly || isAssignedInArray;
+          });
+        }
+        setPendingTasksCount(myTasks.filter(t => t.status !== 'مكتملة').length);
+
+        // 2. Missions
+        const fetchedMissions = results[1] || [];
+        const myMissions = fetchedMissions.filter(m =>
+          String(m.assignedEmployeeId || '').trim() === String(user.id || '').trim() ||
+          String(m.assignedEmployeeName || '').trim() === String(user.name || '').trim()
+        );
+        setMissions(myMissions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+
+        setPendingMissionsCount(myMissions.filter(m => m.status !== 'تم الانجاز' && m.status !== 'تم الإنجاز' && m.status !== 'ملغية' && m.status !== 'ملغي' && m.status !== 'ملغاة').length);
+        setPendingDeliveryMissionsCount(fetchedMissions.filter(m => m.status !== 'تم الانجاز' && m.status !== 'تم الإنجاز' && m.status !== 'ملغية' && m.status !== 'ملغي' && m.status !== 'ملغاة').length);
+
+        // 3. Sales / Orders
+        let salesOrders = [];
+        if (salesIdx !== -1) {
+          salesOrders = results[salesIdx] || [];
+          const pendingSales = salesOrders.filter(o => o.status !== 'منتهي' && o.status !== 'تم التوصيل' && o.status !== 'ملغي' && o.status !== 'تم التسليم للتوصيل' && o.status !== 'تم تسليمها للتوصيل' && o.status !== 'قيد التوصيل').length;
+          setPendingSalesOrdersCount(pendingSales);
+        }
+
+        // 4. Production
+        if (prodIdx !== -1) {
+          const productionOrders = results[prodIdx] || [];
+          const pendingProd = productionOrders.filter(o => o.status !== 'منتهي' && o.status !== 'منتهية' && o.status !== 'ملغي' && o.status !== 'ملغية' && o.status !== 'ملغاة').length;
+          setPendingProductionCount(pendingProd);
+        }
+
+        if (prepIdx !== -1) {
+          const preparationOrders = results[prepIdx] || [];
+          const pendingPrep = preparationOrders.filter(o => o.status !== 'منتهي' && o.status !== 'منتهية' && o.status !== 'ملغي' && o.status !== 'ملغية' && o.status !== 'ملغاة').length;
+          setPendingPreparationCount(pendingPrep);
+        }
+
+        // 5. Stock Audits
+        if (salesIdx !== -1) {
+          const pendingStockAudits = salesOrders.filter(o =>
+            (o.status === 'تم التوصيل' || fetchedMissions.some(m => m.salesOrderNumber === o.orderNumber && m.status === 'تم الإنجاز')) &&
+            !o.stockDeducted
+          ).length;
+          setPendingStockAuditsCount(pendingStockAudits);
+        }
+
+      } catch (err) {
+        console.error('Error fetching dashboard counts:', err);
+      }
+
+      // Fetch attendance in an isolated block to guarantee it runs regardless of other dashboard count failures
+      try {
+        const todayStr = getLocalDateStr(new Date());
+        const att = await getEmployeeAttendanceByDate(user.id, user.employeeId || user.id, todayStr, user.name);
+        setTodayAttendance(att || null);
+      } catch (attErr) {
+        console.error('Error fetching attendance in fetchCounts:', attErr);
+      }
+    };
+
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 15000);
+    return () => clearInterval(interval);
+  }, [user, activeTab]);
 
   const [gpsSettings, setGpsSettings] = useState(null);
   const [todayAttendance, setTodayAttendance] = useState(null);
@@ -441,17 +606,41 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
 
   useEffect(() => {
     const fetchSettingsAndAttendance = async () => {
-      const [settings, emps] = await Promise.all([getGlobalSettings(), getEmployees()]);
-      setEmployees(emps);
-      setGpsSettings({
-        workLocations: settings.workLocations || [],
-        // Fallback for old single location if workLocations array is empty
-        legacy: { lat: settings.companyLat, lng: settings.companyLng, radius: settings.companyRadius || 500 }
-      });
+      try {
+        const [settings, emps] = await Promise.all([getGlobalSettings(), getEmployees()]);
+        setGlobalSettings(settings);
+        setEmployees(emps);
+        setGpsSettings({
+          workLocations: settings.workLocations || [],
+          // Fallback for old single location if workLocations array is empty
+          legacy: { lat: settings.companyLat, lng: settings.companyLng, radius: settings.companyRadius || 500 }
+        });
 
-      const todayStr = getLocalDateStr(new Date());
-      const att = await getEmployeeAttendanceByDate(user.id, user.employeeId || user.id, todayStr, user.name);
-      setTodayAttendance(att);
+        // Synchronize employee changes in real-time
+        const updatedUser = emps.find(e => e.id === user.id);
+        if (updatedUser && JSON.stringify(updatedUser) !== JSON.stringify(user)) {
+          if (typeof onUpdateUser === 'function') {
+            onUpdateUser(updatedUser);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching global settings/employees on mount:', err);
+      }
+
+      try {
+        const todayStr = getLocalDateStr(new Date());
+        let att = await getEmployeeAttendanceByDate(user.id, user.employeeId || user.id, todayStr, user.name);
+        
+        // Retry once if null, to handle Firebase cache initialization race conditions on mount
+        if (!att) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          att = await getEmployeeAttendanceByDate(user.id, user.employeeId || user.id, todayStr, user.name);
+        }
+        
+        setTodayAttendance(att || null);
+      } catch (attErr) {
+        console.error('Error fetching attendance on mount:', attErr);
+      }
     };
     fetchSettingsAndAttendance();
   }, [user.id]);
@@ -482,10 +671,10 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
     const processLocation = async (empLat, empLng) => {
       let isAllowed = false;
       let minDistance = Infinity;
-      
+
       const currentSettings = await getGlobalSettings();
       let locationsToCheck = currentSettings.workLocations || [];
-      
+
       // Fallback to legacy single location if no workLocations defined
       if (locationsToCheck.length === 0 && currentSettings.companyLat) {
         locationsToCheck = [{
@@ -518,8 +707,8 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
           allowedLocations = locationsToCheck.filter(loc => loc.id === user.workLocationId);
         } else {
           const userAllowedIds = user.allowedWorkLocations || ['all'];
-          allowedLocations = userAllowedIds.includes('all') 
-            ? locationsToCheck 
+          allowedLocations = userAllowedIds.includes('all')
+            ? locationsToCheck
             : locationsToCheck.filter(loc => userAllowedIds.includes(loc.id));
         }
 
@@ -553,15 +742,16 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       try {
         // Always fetch the latest record before saving to prevent duplicates from stale state
         const latestAtt = await getEmployeeAttendanceByDate(user.id, user.employeeId || user.id, todayStr, user.name);
-        
+
         if (actionType === 'in') {
           if (latestAtt && latestAtt.timeIn && latestAtt.timeIn !== '--:--') {
-             setIsCheckingInOut(false);
-             Swal.fire('تنبيه', 'لقد قمت بتسجيل الدخول مسبقاً لهذا اليوم.', 'info');
-             return;
+            setIsCheckingInOut(false);
+            Swal.fire('تنبيه', 'لقد قمت بتسجيل الدخول مسبقاً لهذا اليوم.', 'info');
+            return;
           }
           const newRecord = {
             ...(latestAtt || todayAttendance || {}),
+            id: (latestAtt && latestAtt.id) || (todayAttendance && todayAttendance.id) || undefined,
             employeeId: user.employeeId || user.id,
             userId: user.id,
             employeeName: user.name,
@@ -574,25 +764,29 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
           await saveHRAttendance(newRecord);
         } else if (actionType === 'out') {
           if (latestAtt && latestAtt.timeOut && latestAtt.timeOut !== '--:--') {
-             setIsCheckingInOut(false);
-             Swal.fire('تنبيه', 'لقد قمت بتسجيل الخروج مسبقاً لهذا اليوم.', 'info');
-             return;
+            setIsCheckingInOut(false);
+            Swal.fire('تنبيه', 'لقد قمت بتسجيل الخروج مسبقاً لهذا اليوم.', 'info');
+            return;
           }
           if (latestAtt && latestAtt.timeIn && latestAtt.timeIn !== '--:--') {
-             const [inH, inM] = latestAtt.timeIn.split(':').map(Number);
-             const checkInDate = new Date();
-             checkInDate.setHours(inH, inM, 0, 0);
-             
-             const diffMs = new Date() - checkInDate;
-             const diffMins = diffMs / (1000 * 60);
-             if (diffMins < 5) {
+            const rawIn = String(latestAtt.timeIn).replace(/[^0-9:]/g, '');
+            const parts = rawIn.split(':').map(Number);
+            if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+              const checkInDate = new Date();
+              checkInDate.setHours(parts[0], parts[1], 0, 0);
+
+              const diffMs = new Date() - checkInDate;
+              const diffMins = diffMs / (1000 * 60);
+              if (diffMins > 0 && diffMins < 5) {
                 setIsCheckingInOut(false);
                 Swal.fire('غير مسموح', 'لا يمكن تسجيل الخروج قبل مرور 5 دقائق من تسجيل الدخول لتجنب نقرات الدبل كليك بالخطأ.', 'warning');
                 return;
-             }
+              }
+            }
           }
           const record = {
             ...(latestAtt || todayAttendance || {}),
+            id: (latestAtt && latestAtt.id) || (todayAttendance && todayAttendance.id) || undefined,
             employeeId: user.employeeId || user.id,
             userId: user.id,
             employeeName: user.name,
@@ -613,7 +807,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
 
         const updatedAtt = await getEmployeeAttendanceByDate(user.id, user.employeeId || user.id, todayStr, user.name);
         setTodayAttendance(updatedAtt);
-        
+
         setIsFlash(true);
         setTimeout(() => setIsFlash(false), 1000);
 
@@ -671,9 +865,10 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
   const [myLeaves, setMyLeaves] = useState([]);
   const [myAdvances, setMyAdvances] = useState([]);
   const [missingPunches, setMissingPunches] = useState([]);
+  const [repVisits, setRepVisits] = useState([]);
   const [showMissingPunchModal, setShowMissingPunchModal] = useState(false);
   const [missingPunchForm, setMissingPunchForm] = useState({ date: '', type: 'دخول', time: '', reason: '' });
-    const [showAdvanceModal, setShowAdvanceModal] = useState(false);
+  const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [advanceForm, setAdvanceForm] = useState({
     type: 'سلفة شخصية', date: new Date().toISOString().split('T')[0], amount: '', reason: '', paymentMethod: 'خصم من الراتب القادم', status: 'معلق'
   });
@@ -681,46 +876,78 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
   const [leaveFormData, setLeaveFormData] = useState({
     type: 'إجازة سنوية', startDate: '', endDate: '', date: '', startTime: '', endTime: '', notes: '', status: 'معلق'
   });
-
-  const { calculatedVacationBalance, calculatedSickBalance } = useMemo(() => {
-  let usedVacation = 0;
-  let usedSick = 0;
-  
-  myLeaves.forEach(leave => {
-    if (leave.status === 'مرفوض') return; // Do not count rejected leaves
-    if (leave.type !== 'إجازة سنوية' && leave.type !== 'إجازة مرضية') return;
-    
-    let days = 1;
-    if (leave.startDate && leave.endDate) {
-      const start = new Date(leave.startDate);
-      const end = new Date(leave.endDate);
-      if (!isNaN(start) && !isNaN(end)) {
-        days = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1);
-      }
-    } else if (leave.date) {
-      days = 1;
-    }
-    
-    if (leave.type === 'إجازة سنوية') usedVacation += days;
-    if (leave.type === 'إجازة مرضية') usedSick += days;
+  const [myPetitions, setMyPetitions] = useState([]);
+  const [showPetitionModal, setShowPetitionModal] = useState(false);
+  const [petitionFormData, setPetitionFormData] = useState({
+    title: '', text: '', status: 'معلق'
   });
 
-  const initVacation = parseInt(user.vacationBalance) || 0;
-  const initSick = parseInt(user.sickLeaveBalance) || 0;
+  const { annualVacationBalance, accruedVacationBalance, usedVacationThisYear, calculatedVacationBalance, calculatedSickBalance } = useMemo(() => {
+    const parsedVac = parseFloat(user.vacationBalance);
+    const vacBal = !isNaN(parsedVac) && parsedVac >= 0 ? parsedVac : 14;
+    const parsedSick = parseFloat(user.sickLeaveBalance);
+    const annualSick = !isNaN(parsedSick) && parsedSick >= 0 ? parsedSick : 14;
 
-  return {
-    calculatedVacationBalance: initVacation - usedVacation,
-    calculatedSickBalance: initSick - usedSick
-  };
-}, [myLeaves, user.vacationBalance, user.sickLeaveBalance]);
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth1Based = now.getMonth() + 1; // 1 to 12 (Jan = 1, Aug = 8)
+    const currentDay = now.getDate();
+    const daysInMonth = new Date(currentYear, currentMonth1Based, 0).getDate();
 
-const userRoles = useMemo(() =>
+    // Remaining months in the year from current month to December (e.g., Aug..Dec = 5 months)
+    const remainingMonthsInYear = Math.max(1, (12 - currentMonth1Based) + 1);
+    const monthlyRateOfRemaining = vacBal / remainingMonthsInYear;
+
+    // Available amount for the current month (e.g., 1.40 days for 7 days over 5 months)
+    const accruedVac = monthlyRateOfRemaining;
+
+    let pendingVacation = 0;
+    let pendingSick = 0;
+
+    myLeaves.forEach(leave => {
+      if (leave.status !== 'معلق') return;
+      if (leaveFormData?.id && String(leave.id) === String(leaveFormData.id)) return;
+
+      if (leave.type !== 'إجازة سنوية' && leave.type !== 'إجازة مرضية') return;
+
+      let days = 1;
+      if (leave.startDate && leave.endDate) {
+        const start = new Date(leave.startDate);
+        const end = new Date(leave.endDate);
+        if (!isNaN(start) && !isNaN(end)) {
+          days = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1);
+        }
+      } else if (leave.date) {
+        days = 1;
+      }
+
+      if (leave.type === 'إجازة سنوية') {
+        pendingVacation += days;
+      }
+      if (leave.type === 'إجازة مرضية') {
+        pendingSick += days;
+      }
+    });
+
+    const availableVac = Math.max(0, accruedVac - pendingVacation);
+    const availableSick = Math.max(0, annualSick - pendingSick);
+
+    return {
+      annualVacationBalance: vacBal,
+      accruedVacationBalance: accruedVac,
+      usedVacationThisYear: pendingVacation,
+      calculatedVacationBalance: availableVac,
+      calculatedSickBalance: availableSick
+    };
+  }, [myLeaves, user.vacationBalance, user.sickLeaveBalance, leaveFormData?.id]);
+
+  const userRoles = useMemo(() =>
     user.roles && user.roles.length > 0 ? user.roles : (user.role ? [user.role] : []),
     [user.roles, user.role]
   );
   const isSuperAdmin = user.role === 'admin' || user.level === 'admin' || user.level === 'إدارة' || user.id === 'admin';
   const isSupervisor = user.level === 'supervisor' || user.level === 'مشرف' || user.level === 'مشرف قسم';
-  const canViewSupervisorReports = user.hasSupervisorReportsAccess === true || (user.hasSupervisorReportsAccess !== false && isSupervisor);
+  const canViewSupervisorReports = hasPermission(user, 'supervisor_reports', 'view');
 
   const userTitle = useMemo(() => {
     const rawLevel = String(user.level || user.role || '').trim();
@@ -802,7 +1029,7 @@ const userRoles = useMemo(() =>
           else if (req.modelType === 'punch') await deleteMissingPunch(req.id);
           else if (req.modelType === 'advance') await deleteHRAdvance(req.id);
           else if (req.modelType === 'report') await deleteReport(req.id);
-          
+
           MySwal.fire('تم الحذف', 'تم حذف الطلب بنجاح.', 'success').then(() => window.location.reload());
         } catch (error) {
           console.error(error);
@@ -869,15 +1096,17 @@ const userRoles = useMemo(() =>
 
   useEffect(() => {
     const fetchData = async () => {
-      const [depts, tasks, reports, mData, sData, leavesData, punchesData, advancesData] = await Promise.all([
+      const [depts, tasks, reports, mData, sData, leavesData, punchesData, advancesData, repVisitsData, petitionsData] = await Promise.all([
         getDepartments(),
         getTasksData(),
         getReports(),
         getMissions(),
         getGlobalSettings(),
-        getHRLeaves(), 
+        getHRLeaves(),
         getMissingPunches(),
-        getHRAdvances()
+        getHRAdvances(),
+        getRepVisits(),
+        getHRPetitions()
       ]);
       setDepartments(depts);
       setTasksData(tasks);
@@ -887,6 +1116,8 @@ const userRoles = useMemo(() =>
       setMyLeaves(leavesData.filter(l => String(l.employeeId) === String(user.id) || l.employeeName === user.name));
       setMissingPunches(punchesData.filter(p => String(p.employeeId) === String(user.id) || p.employeeName === user.name));
       setMyAdvances(advancesData.filter(a => String(a.employeeId) === String(user.id) || a.employeeName === user.name));
+      setRepVisits(repVisitsData.filter(v => String(v.userId) === String(user.id) || v.userName === user.name));
+      setMyPetitions(petitionsData.filter(p => String(p.employeeId) === String(user.id) || p.employeeName === user.name));
     };
     fetchData();
   }, [user.id, user.name]);
@@ -904,7 +1135,7 @@ const userRoles = useMemo(() =>
       const fetchData = async () => {
         const existing = allReports.find(r => String(r.userId || '').trim() === String(user.id || '').trim() && r.date === date);
         const att = await getEmployeeAttendanceByDate(user.id, user.employeeId || user.id, date, user.name);
-        
+
         if (existing) {
           setTimeIn(existing.timeIn || att?.timeIn || '');
           setTimeOut(existing.timeOut || att?.timeOut || '');
@@ -927,19 +1158,19 @@ const userRoles = useMemo(() =>
           }));
           setTasks(loadedTasks.length > 0 ? loadedTasks : [{ id: Math.random().toString(36).substr(2, 9), name: '', operation: '', count: '', department: userRoles[0] || '', notes: '' }]);
         } else {
-          setTimeIn(att?.timeIn || ''); 
-          setTimeOut(att?.timeOut || ''); 
+          setTimeIn(att?.timeIn || '');
+          setTimeOut(att?.timeOut || '');
           setBreakTimeFrom('13:00'); setBreakTimeTo('13:30');
           setPhoneSafe(false); setPhoneUsages(0); setNotes('');
           const validRoles = userRoles.filter(r => departments[r]);
           const defaultDept = validRoles[0] || Object.keys(departments)[0] || '';
-          setTasks([{ 
-            id: Math.random().toString(36).substr(2, 9), 
-            name: '', 
-            operation: '', 
-            count: '', 
-            department: defaultDept, 
-            notes: '' 
+          setTasks([{
+            id: Math.random().toString(36).substr(2, 9),
+            name: '',
+            operation: '',
+            count: '',
+            department: defaultDept,
+            notes: ''
           }]);
         }
       };
@@ -982,6 +1213,10 @@ const userRoles = useMemo(() =>
   };
 
   const handleViewReportDetails = (report) => {
+    const isToday = report.date === todayAttendance?.date;
+    const timeInDisp = report.timeIn || (isToday ? todayAttendance?.timeIn : '') || '---';
+    const timeOutDisp = report.timeOut || (isToday ? todayAttendance?.timeOut : '') || '---';
+
     MySwal.fire({
       customClass: {
         container: 'premium-modal-container',
@@ -1008,9 +1243,9 @@ const userRoles = useMemo(() =>
             </div>
             <div style="display: flex; gap: 8px; justify-content: flex-start; margin-bottom: 4px;">
                <span style="font-weight: 800; color: #1f2937;">وقت الدخول:</span>
-               <span>${report.timeIn || '---'}</span>
+               <span>${formatTimeArabic(timeInDisp)}</span>
                <span style="font-weight: 800; color: #1f2937; margin-right: 8px;">| وقت الخروج:</span>
-               <span>${report.timeOut || '---'}</span>
+               <span>${formatTimeArabic(timeOutDisp)}</span>
             </div>
             <div style="display: flex; gap: 8px; justify-content: flex-start;">
                <span style="font-weight: 800; color: #1f2937;">استخدام الهاتف:</span>
@@ -1060,10 +1295,10 @@ const userRoles = useMemo(() =>
     if (!target) return;
     const nextTab = target.tab || (
       target.moduleKey === 'reports' ? 'history' :
-      target.moduleKey === 'delivery' ? (canViewMissions ? 'missions' : 'add') :
-      target.moduleKey === 'sales' ? 'sales' :
-      target.moduleKey === 'production' ? 'production' :
-      'add'
+        target.moduleKey === 'delivery' ? (canViewMissions ? 'missions' : 'add') :
+          target.moduleKey === 'sales' ? 'sales' :
+            target.moduleKey === 'production' ? 'production' :
+              'add'
     );
     setActiveTab(nextTab);
     setIsSidebarOpen(false);
@@ -1080,15 +1315,15 @@ const userRoles = useMemo(() =>
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const enableCutoff = isSupervisor 
+    const enableCutoff = isSupervisor
       ? (globalSettings?.hrSettings?.enableSupervisorReportCutoff !== false)
       : (globalSettings?.hrSettings?.enableDailyReportCutoff !== false);
 
     if (enableCutoff) {
-      let cutoffSetting = isSupervisor 
+      let cutoffSetting = isSupervisor
         ? (globalSettings?.hrSettings?.supervisorReportCutoffTime ?? '23:00')
         : (globalSettings?.hrSettings?.dailyReportCutoffTime ?? '22:00');
-      
+
       if (typeof cutoffSetting === 'number') {
         cutoffSetting = `${String(cutoffSetting).padStart(2, '0')}:00`;
       }
@@ -1152,8 +1387,8 @@ const userRoles = useMemo(() =>
         const tOut = parseTime(timeOut);
         let tBreak = 0;
         if (breakTimeFrom && breakTimeTo) {
-           tBreak = parseTime(breakTimeTo) - parseTime(breakTimeFrom);
-           if (tBreak < 0) tBreak += 24;
+          tBreak = parseTime(breakTimeTo) - parseTime(breakTimeFrom);
+          if (tBreak < 0) tBreak += 24;
         }
         let total = tOut - tIn;
         if (total < 0) total += 24;
@@ -1163,7 +1398,7 @@ const userRoles = useMemo(() =>
       const evaluatedTasks = tasks.filter(t => t.name && t.count).map(task => {
         const taskDeptTasks = tasksData[task.department] || [];
         const taskDef = taskDeptTasks.find(d => d.name === task.name);
-        
+
         let min = 0, max = 0, hrMin = 0, hrMax = 0;
         const range = taskDef?.ops[task.operation];
         if (range) {
@@ -1173,9 +1408,9 @@ const userRoles = useMemo(() =>
         }
 
         const count = parseInt(task.count) || 0;
-        
+
         const expectedAveragePerHour = (hrMin + hrMax) / 2;
-        
+
         let earnedHours = 0;
         if (expectedAveragePerHour > 0) {
           earnedHours = count / expectedAveragePerHour;
@@ -1185,9 +1420,9 @@ const userRoles = useMemo(() =>
       });
 
       let phonePenalty = phoneSafe ? (phoneUsages * scoringConfig.phoneSafePenalty) : scoringConfig.phoneUnsafeBase + (phoneUsages * scoringConfig.phoneUnsafePenalty);
-      
+
       const totalEarnedHours = evaluatedTasks.reduce((acc, curr) => acc + (curr.earnedHours || 0), 0);
-      
+
       let efficiencyScore = 0;
       if (actualHours > 0) {
         efficiencyScore = (totalEarnedHours / actualHours) * 100;
@@ -1199,10 +1434,10 @@ const userRoles = useMemo(() =>
       else if (finalScore >= 75) finalRating = 'جيد جداً';
       else if (finalScore >= 60) finalRating = 'جيد';
 
-      const reportDept = departments[selectedDeptKey] || 
-                         departments[userRoles.find(r => departments[r])] || 
-                         departments[Object.keys(departments)[0]] || 
-                         'غير محدد';
+      const reportDept = departments[selectedDeptKey] ||
+        departments[userRoles.find(r => departments[r])] ||
+        departments[Object.keys(departments)[0]] ||
+        'غير محدد';
 
       const reportData = {
         userId: user.id,
@@ -1229,7 +1464,7 @@ const userRoles = useMemo(() =>
       );
 
       await saveReport(reportData);
-      
+
       await createNotification({
         settingKey: 'dailyReport',
         targetEmployeeId: user.id,
@@ -1238,6 +1473,12 @@ const userRoles = useMemo(() =>
         title: 'تقرير عمل يومي جديد',
         message: `الموظف: ${user.name}\nالتاريخ: ${date}\nحالة التقرير: معلق (بانتظار تقييم المشرف)`,
         target: { tab: 'history' }
+      });
+
+      triggerWhatsAppRouting('daily_report', 'create', {
+        employeeId: user.id,
+        employeeName: user.name,
+        date: date
       });
 
       if (isNewReport) {
@@ -1271,16 +1512,7 @@ const userRoles = useMemo(() =>
     setter(now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
   };
   const handleUpdateMissionStatus = async (missionId, status) => {
-    const { value: note } = await MySwal.fire({
-      title: 'إضافة ملاحظة (اختياري)',
-      input: 'text',
-      inputPlaceholder: 'اكتب ملاحظة هنا...',
-      showCancelButton: true,
-      confirmButtonText: 'تحديث الحالة',
-      cancelButtonText: 'إلغاء'
-    });
-
-    await updateMissionStatus(missionId, status, note || '');
+    await updateMissionStatus(missionId, status, '');
     const mission = missions.find(m => m.id === missionId);
 
     if (mission) {
@@ -1330,7 +1562,7 @@ const userRoles = useMemo(() =>
     }
   }, [notificationTarget, myReports]);
 
-  const myMissingPunches = missingPunches.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const myMissingPunches = missingPunches.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   const currentMonthStr = (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -1341,16 +1573,17 @@ const userRoles = useMemo(() =>
     const now = new Date();
     return pDate.getMonth() === now.getMonth() && pDate.getFullYear() === now.getFullYear();
   }).length;
-  
+
   const bonusPunches = user.bonusMissingPunches?.[currentMonthStr] || 0;
   const userMissingPunchQuota = (user.allowedMissingPunches ?? 0) + bonusPunches;
   const remainingPunches = Math.max(0, userMissingPunchQuota - currentMonthPunchesCount);
 
   const [isRequestSubmitting, setIsRequestSubmitting] = useState(false);
+  const isRequestSubmittingRef = useRef(false);
 
   const handleSaveMissingPunch = async (e) => {
     e.preventDefault();
-    if (isRequestSubmitting) return;
+    if (isRequestSubmittingRef.current) return;
 
     if (!missingPunchForm.date || missingPunchForm.date.trim() === '') {
       MySwal.fire('تنبيه', 'الرجاء اختيار تاريخ الختمة الناقصة', 'warning');
@@ -1376,6 +1609,7 @@ const userRoles = useMemo(() =>
       return;
     }
 
+    isRequestSubmittingRef.current = true;
     setIsRequestSubmitting(true);
     try {
       await saveMissingPunch({
@@ -1390,12 +1624,12 @@ const userRoles = useMemo(() =>
           if (lower === 'packaging' || lower === 'مسطرة التغليف' || lower === 'تغليف' || lower === 'تغليف وتشطيب') return 'تغليف وتشطيب';
           if (lower === 'cutting' || lower === 'القص') return 'القص والخياطة';
           if (lower === 'admin' || lower === 'الإدارة' || lower === 'الادارة') return 'الادارة';
-          if (lower === 'sales' || lower === 'المبيعات') return 'المبيعات';
+          if (lower === 'sales' || lower === 'المبيعات') return 'الطلبيات';
           return d;
         })(),
         status: 'قيد المراجعة'
       });
-      
+
       await createNotification({
         settingKey: 'missingPunch',
         targetEmployeeId: user.id,
@@ -1405,7 +1639,7 @@ const userRoles = useMemo(() =>
         message: `الموظف: ${user.name}\nالنوع: ${missingPunchForm.type}\nالتاريخ: ${missingPunchForm.date}\nالوقت: ${missingPunchForm.time}`,
         target: { tab: 'hr_requests' }
       });
-      
+
       MySwal.fire('نجاح', 'تم إرسال طلب الختمة الناقصة بنجاح', 'success');
       setShowMissingPunchModal(false);
       setMissingPunchForm({ date: '', type: 'دخول', time: '', reason: '' });
@@ -1415,20 +1649,67 @@ const userRoles = useMemo(() =>
       console.error(error);
       MySwal.fire('خطأ', 'حدث خطأ أثناء إرسال الطلب', 'error');
     } finally {
+      isRequestSubmittingRef.current = false;
       setIsRequestSubmitting(false);
     }
   };
 
   const handleSaveLeaveRequest = async (e) => {
     e.preventDefault();
-    if (isRequestSubmitting) return;
+    if (isRequestSubmittingRef.current) return;
 
     if (!leaveFormData.notes || leaveFormData.notes.trim() === '') {
       MySwal.fire('تنبيه', 'الرجاء إدخال السبب / الملاحظات لإتمام الطلب', 'warning');
       return;
     }
-    
+
+    if (!leaveFormData.id) {
+      if (leaveFormData.type === 'إجازة سنوية') {
+        let requestedDays = 1;
+        if (leaveFormData.startDate && leaveFormData.endDate) {
+          const start = new Date(leaveFormData.startDate);
+          const end = new Date(leaveFormData.endDate);
+          if (!isNaN(start) && !isNaN(end)) {
+            requestedDays = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1);
+          }
+        }
+        if (calculatedVacationBalance <= 0) {
+          MySwal.fire('مرفوض', 'لا يمكن تقديم الطلب بسبب استهلاك كامل الرصيد المتاح للإجازات السنوية حتى تاريخ اليوم.', 'error');
+          return;
+        }
+        if (requestedDays > calculatedVacationBalance) {
+          MySwal.fire(
+            'مرفوض',
+            `عدد أيام الإجازة المطلوبة (${requestedDays} أيام) يتجاوز الرصيد المتاح لك حتى اليوم (${calculatedVacationBalance.toFixed(2)} يوم).`,
+            'error'
+          );
+          return;
+        }
+      }
+      if (leaveFormData.type === 'إجازة مرضية' && calculatedSickBalance <= 0) {
+        MySwal.fire('مرفوض', 'لا يمكن تقديم الطلب بسبب استهلاك كامل رصيد الإجازات المرضية.', 'error');
+        return;
+      }
+    }
+
     const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر', 'بدل عمل إضافي', 'مغادرة الدخان'].includes(leaveFormData.type);
+
+    // Check if duplicate request exists
+    const isDuplicate = myLeaves.some(l => {
+      if (l.status === 'مرفوض') return false;
+      if (l.type !== leaveFormData.type) return false;
+      if (isDept) {
+        return l.date === leaveFormData.date && l.startTime === leaveFormData.startTime && l.endTime === leaveFormData.endTime;
+      } else {
+        return l.startDate === leaveFormData.startDate && l.endDate === leaveFormData.endDate;
+      }
+    });
+
+    if (isDuplicate) {
+      MySwal.fire('خطأ', 'لقد قمت بتقديم طلب مماثل مسبقاً وهو قيد المراجعة أو مقبول!', 'error');
+      return;
+    }
+
     if (isDept) {
       if (!leaveFormData.date || !leaveFormData.startTime || !leaveFormData.endTime) {
         MySwal.fire('تنبيه', 'الرجاء إدخال التاريخ ووقت البداية والنهاية للمغادرة', 'warning');
@@ -1438,7 +1719,7 @@ const userRoles = useMemo(() =>
         MySwal.fire('خطأ', 'لا يمكن أن يكون وقت النهاية قبل أو يساوي وقت البداية. يجب أن يكون نطاق الطلب خلال يوم واحد فقط.', 'error');
         return;
       }
-      
+
       if (leaveFormData.type === 'مغادرة الدخان') {
         const todayStr = getLocalDateStr(new Date());
         if (leaveFormData.date !== todayStr) {
@@ -1446,7 +1727,7 @@ const userRoles = useMemo(() =>
           return;
         }
       }
-      
+
       let shiftStart = user.shiftStart || '08:00';
       let shiftEnd = user.shiftEnd || '16:00';
       try {
@@ -1458,7 +1739,7 @@ const userRoles = useMemo(() =>
             shiftEnd = shift.endTime;
           }
         }
-      } catch(e){}
+      } catch (e) { }
 
       const [sHours, sMins] = leaveFormData.startTime.split(':').map(Number);
       const [eHours, eMins] = leaveFormData.endTime.split(':').map(Number);
@@ -1469,7 +1750,7 @@ const userRoles = useMemo(() =>
       const reqEndMins = eHours * 60 + eMins;
       const shiftStartMins = shiftStartH * 60 + shiftStartM;
       const shiftEndMins = shiftEndH * 60 + shiftEndM;
-      
+
       const diffMins = reqEndMins - reqStartMins;
 
       if (leaveFormData.type === 'مغادرة الدخان') {
@@ -1513,6 +1794,7 @@ const userRoles = useMemo(() =>
       }
     }
 
+    isRequestSubmittingRef.current = true;
     setIsRequestSubmitting(true);
     try {
       await saveHRLeave({
@@ -1527,11 +1809,11 @@ const userRoles = useMemo(() =>
           if (lower === 'packaging' || lower === 'مسطرة التغليف' || lower === 'تغليف' || lower === 'تغليف وتشطيب') return 'تغليف وتشطيب';
           if (lower === 'cutting' || lower === 'القص') return 'القص والخياطة';
           if (lower === 'admin' || lower === 'الإدارة' || lower === 'الادارة') return 'الادارة';
-          if (lower === 'sales' || lower === 'المبيعات') return 'المبيعات';
+          if (lower === 'sales' || lower === 'المبيعات') return 'الطلبيات';
           return d;
         })()
       });
-      
+
       const settingKeyMap = {
         'إجازة سنوية': 'leaves',
         'إجازة مرضية': 'leaves',
@@ -1554,7 +1836,7 @@ const userRoles = useMemo(() =>
         message: `الموظف: ${user.name}\nالملاحظات: ${leaveFormData.notes || 'لا يوجد'}`,
         target: { tab: 'hr_requests' }
       });
-      
+
       MySwal.fire('نجاح', 'تم إرسال الطلب بنجاح', 'success');
       setShowLeaveModal(false);
       setLeaveFormData({ type: allowedLeaveTypes[0] || 'إجازة سنوية', startDate: '', endDate: '', duration: '', notes: '', status: 'معلق' });
@@ -1564,6 +1846,7 @@ const userRoles = useMemo(() =>
       console.error(error);
       MySwal.fire('خطأ', 'حدث خطأ أثناء إرسال الطلب', 'error');
     } finally {
+      isRequestSubmittingRef.current = false;
       setIsRequestSubmitting(false);
     }
   };
@@ -1587,15 +1870,25 @@ const userRoles = useMemo(() =>
             leaveFormData={leaveFormData}
             setLeaveFormData={setLeaveFormData}
             setShowLeaveModal={setShowLeaveModal}
+            calculatedVacationBalance={calculatedVacationBalance}
+            calculatedSickBalance={calculatedSickBalance}
             handleTabChange={handleTabChange}
             user={user}
             setShowAdvanceModal={setShowAdvanceModal}
             canViewMissions={canViewMissions}
             isSupervisor={isSupervisor}
             canViewSupervisorReports={canViewSupervisorReports}
+            setShowPetitionModal={setShowPetitionModal}
             remainingPunches={remainingPunches}
             bonusPunches={bonusPunches}
             setShowMissingPunchModal={setShowMissingPunchModal}
+            pendingTasksCount={pendingTasksCount}
+            pendingSalesOrdersCount={pendingSalesOrdersCount}
+            pendingProductionCount={pendingProductionCount}
+            pendingPreparationCount={pendingPreparationCount}
+            pendingMissionsCount={pendingMissionsCount}
+            pendingDeliveryMissionsCount={pendingDeliveryMissionsCount}
+            pendingStockAuditsCount={pendingStockAuditsCount}
           />
         );
 
@@ -1671,6 +1964,7 @@ const userRoles = useMemo(() =>
             missingPunches={missingPunches}
             myReports={myReports}
             myAdvances={myAdvances}
+            myPetitions={myPetitions}
             handleViewReportDetails={handleViewReportDetails}
             handleEditRequest={handleEditRequest}
             handleDeleteRequest={handleDeleteRequest}
@@ -1686,8 +1980,20 @@ const userRoles = useMemo(() =>
           />
         );
 
+      case 'rep-visits-history':
+        return (
+          <RepVisitHistoryTab
+            myVisits={repVisits}
+            isMobile={isMobile}
+            onBack={() => handleTabChange('home')}
+          />
+        );
+
+      case 'quotes': return <AdminQuotes user={user} />;
+      case 'pricelists': return <AdminPriceLists user={user} />;
       case 'sales': return <AdminSales user={user} />;
       case 'production': return <AdminProduction user={user} notificationTarget={notificationTarget} />;
+      case 'preparation': return <AdminPreparation user={user} />;
       case 'supervisor-tasks': return <AdminSupervisorTasks user={user} />;
       case 'supervisor-reports': return <AdminSupervisorReports user={user} />;
       case 'live': return <AdminLive user={user} />;
@@ -1707,7 +2013,7 @@ const userRoles = useMemo(() =>
     <div className="w-full h-full" style={{ maxWidth: '100%' }}>
 
       {/* Mobile Bottom Nav via CSS classes */}
-      <div className="modern-bottom-nav no-print lg:hidden overflow-x-auto hide-scrollbar" style={{ justifyContent: 'flex-start', gap: '1rem', paddingLeft: '1rem', paddingRight: '1rem' }}>
+      <div className="modern-bottom-nav no-print lg:hidden overflow-x-auto hide-scrollbar" style={{ justifyContent: 'center', gap: '1rem', paddingLeft: '1rem', paddingRight: '1rem' }}>
         <div className={`modern-nav-item shrink-0 ${activeTab === 'home' ? 'active' : ''}`} onClick={() => handleTabChange('home')}>
           <Home size={22} /> <span>الرئيسية</span>
         </div>
@@ -1752,11 +2058,11 @@ const userRoles = useMemo(() =>
             </div>
             <p className="text-muted text-xs">حساب موظف</p>
           </div>
-            <div className="admin-sidebar-grid">
-              <div className={`admin-sidebar-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => handleTabChange('home')}>
-                <Home size={22} /> <span>الرئيسية</span>
-              </div>
+          <div className="admin-sidebar-grid">
+            <div className={`admin-sidebar-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => handleTabChange('home')}>
+              <Home size={22} /> <span>الرئيسية</span>
             </div>
+          </div>
           <button onClick={onLogout} className="admin-logout-btn mt-6" style={{ fontFamily: 'Rubik, sans-serif' }}>
             <LogOut size={18} /> تسجيل الخروج
           </button>
@@ -1765,56 +2071,58 @@ const userRoles = useMemo(() =>
         {/* Content Area */}
         <div className="admin-content">
           {/* Beautiful Header Card */}
-          <div className="relative mb-8 rounded-[24px] p-6 shadow-sm border border-sky-100 flex flex-col justify-between no-print" style={{ background: 'linear-gradient(to left, #e0f2fe, #f0fdfa)' }}>
-              <div className="flex flex-col-reverse sm:flex-row justify-between w-full items-start gap-4 sm:gap-0">
-              <div className="flex flex-col text-right mt-2 w-full">
-                <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 mb-2 leading-tight w-full">{user.name || 'أهلاً بك'}</h2>
-                <p className="text-slate-600 font-medium text-sm">نتمنى لك {getGreeting() === 'صباح الخير' ? 'صباحاً مشرقاً ومثمراً' : 'مساءً هادئاً ومريحاً'}</p>
-              </div>
-
-              <div className="flex items-center gap-2 w-full justify-end sm:w-auto sm:justify-start" dir="ltr">
-                <NotificationCenter user={user} onNavigate={handleNotificationNavigate} />
-                <button type="button" className="header-icon-button bg-white/60 hover:bg-white/80 transition-colors" onClick={() => window.location.reload()} title="تحديث الصفحة">
-                  <RefreshCw size={19} className="text-sky-500" />
-                </button>
-                <button type="button" className="header-icon-button bg-white/60 hover:bg-white/80 transition-colors" onClick={toggleDarkMode} title="الوضع الليلي">
-                  <SunMoon size={19} />
-                </button>
-                <HeaderUserMenu user={user} onLogout={onLogout} onUpdateUser={onUpdateUser} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-6 w-full relative z-10">
-              <div className="flex items-center justify-between rounded-xl px-4 py-2.5 shadow-sm transition-all hover:shadow-md" style={{ backgroundColor: 'var(--primary)', color: 'white' }}>
-                <div className="flex items-center gap-2">
-                  <Fingerprint size={16} />
-                  <span className="text-xs font-bold">الرقم الوظيفي</span>
+          {activeTab === 'home' && (
+            <div className="relative mb-8 rounded-[24px] shadow-sm border border-sky-100 flex flex-col justify-between no-print" style={{ background: 'linear-gradient(to left, #e0f2fe, #f0fdfa)', padding: isMobile ? '1.25rem' : '1.5rem', marginTop: isMobile ? '1rem' : '0' }}>
+              <div className="flex flex-col sm:flex-row justify-between w-full items-start gap-4 sm:gap-0">
+                <div className="flex flex-col text-right mt-2 w-full">
+                  <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 mb-2 leading-tight w-full">{user.name || 'أهلاً بك'}</h2>
+                  <p className="text-slate-600 font-medium text-sm">نتمنى لك {getGreeting() === 'صباح الخير' ? 'صباحاً مشرقاً ومثمراً' : 'مساءً هادئاً ومريحاً'}</p>
                 </div>
-                <span className="text-sm font-extrabold">{user.id}</span>
+
+                <div className="flex items-center gap-2 w-full justify-end sm:w-auto sm:justify-start" dir="ltr">
+                  <NotificationCenter user={user} onNavigate={handleNotificationNavigate} />
+                  <button type="button" className="header-icon-button bg-white/60 hover:bg-white/80 transition-colors" onClick={() => window.location.reload()} title="تحديث الصفحة">
+                    <RefreshCw size={19} className="text-sky-500" />
+                  </button>
+                  <button type="button" className="header-icon-button bg-white/60 hover:bg-white/80 transition-colors" onClick={toggleDarkMode} title="الوضع الليلي">
+                    <SunMoon size={19} />
+                  </button>
+                  <HeaderUserMenu user={user} onLogout={onLogout} onUpdateUser={onUpdateUser} />
+                </div>
               </div>
-              
-              {user.jobTitle && (
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-6 w-full relative z-10">
                 <div className="flex items-center justify-between rounded-xl px-4 py-2.5 shadow-sm transition-all hover:shadow-md" style={{ backgroundColor: 'var(--primary)', color: 'white' }}>
                   <div className="flex items-center gap-2">
-                    <Activity size={16} />
-                    <span className="text-xs font-bold">المسمى الوظيفي</span>
+                    <Fingerprint size={16} />
+                    <span className="text-xs font-bold">الرقم الوظيفي</span>
                   </div>
-                  <span className="text-sm font-extrabold">{user.jobTitle}</span>
+                  <span className="text-sm font-extrabold">{user.id}</span>
                 </div>
-              )}
 
-              {user.directManager && (
-                <div className="flex items-center justify-between rounded-xl px-4 py-2.5 shadow-sm transition-all hover:shadow-md" style={{ backgroundColor: 'var(--primary)', color: 'white' }}>
-                  <div className="flex items-center gap-2">
-                    <Users size={16} />
-                    <span className="text-xs font-bold">المدير المباشر</span>
+                {user.jobTitle && (
+                  <div className="flex items-center justify-between rounded-xl px-4 py-2.5 shadow-sm transition-all hover:shadow-md" style={{ backgroundColor: 'var(--primary)', color: 'white' }}>
+                    <div className="flex items-center gap-2">
+                      <Activity size={16} />
+                      <span className="text-xs font-bold">المسمى الوظيفي</span>
+                    </div>
+                    <span className="text-sm font-extrabold">{user.jobTitle}</span>
                   </div>
-                  <span className="text-sm font-extrabold truncate ml-2" style={{ maxWidth: '60%' }}>{user.directManager}</span>
-                </div>
-              )}
+                )}
+
+                {user.directManager && (
+                  <div className="flex items-center justify-between rounded-xl px-4 py-2.5 shadow-sm transition-all hover:shadow-md" style={{ backgroundColor: 'var(--primary)', color: 'white' }}>
+                    <div className="flex items-center gap-2">
+                      <Users size={16} />
+                      <span className="text-xs font-bold">المدير المباشر</span>
+                    </div>
+                    <span className="text-sm font-extrabold truncate ml-2" style={{ maxWidth: '60%' }}>{user.directManager}</span>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-          
+          )}
+
           {renderContent()}
         </div>
       </div>
@@ -1858,10 +2166,10 @@ const userRoles = useMemo(() =>
               <form onSubmit={handleSaveMissingPunch} className="space-y-4">
                 <div className="input-group">
                   <label>التاريخ</label>
-                  <Flatpickr 
-                    value={missingPunchForm.date} 
-                    onChange={(dates, dateStr) => setMissingPunchForm({...missingPunchForm, date: dateStr})} 
-                    className="input-field w-full bg-white" 
+                  <Flatpickr
+                    value={missingPunchForm.date}
+                    onChange={(dates, dateStr) => setMissingPunchForm({ ...missingPunchForm, date: dateStr })}
+                    className="input-field w-full bg-white"
                     options={{ dateFormat: 'Y-m-d', disableMobile: true, maxDate: 'today' }}
                     placeholder="اختر التاريخ"
                     required
@@ -1870,7 +2178,7 @@ const userRoles = useMemo(() =>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="input-group">
                     <label>نوع الختمة</label>
-                    <select className="input-field" value={missingPunchForm.type} onChange={e => setMissingPunchForm({...missingPunchForm, type: e.target.value})}>
+                    <select className="input-field" value={missingPunchForm.type} onChange={e => setMissingPunchForm({ ...missingPunchForm, type: e.target.value })}>
                       <option value="دخول">دخول</option>
                       <option value="خروج">خروج</option>
                     </select>
@@ -1913,7 +2221,7 @@ const userRoles = useMemo(() =>
                 </div>
                 <div className="input-group">
                   <label>سبب عدم تسجيل الختمة</label>
-                  <textarea rows={2} className="input-field" required placeholder="اذكر السبب بوضوح..." value={missingPunchForm.reason} onChange={e => setMissingPunchForm({...missingPunchForm, reason: e.target.value})}></textarea>
+                  <textarea rows={2} className="input-field" required placeholder="اذكر السبب بوضوح..." value={missingPunchForm.reason} onChange={e => setMissingPunchForm({ ...missingPunchForm, reason: e.target.value })}></textarea>
                 </div>
                 <div className="flex justify-end gap-3 pt-4 mt-2 border-t border-gray-100">
                   <button type="button" onClick={() => setShowMissingPunchModal(false)} className="btn btn-outline">إلغاء</button>
@@ -1931,8 +2239,8 @@ const userRoles = useMemo(() =>
           <div className="modal-content" style={{ maxWidth: '500px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div className="flex justify-between items-center p-5 border-b border-gray-100 shrink-0">
               <h3 className="font-bold text-lg text-slate-800">
-                {['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'].includes(leaveFormData.type) ? 'تقديم طلب إجازة' : 
-                 leaveFormData.type === 'بدل عمل إضافي' ? 'تقديم بدل عمل إضافي' : 'تقديم طلب مغادرة'}
+                {['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'].includes(leaveFormData.type) ? 'تقديم طلب إجازة' :
+                  leaveFormData.type === 'بدل عمل إضافي' ? 'تقديم بدل عمل إضافي' : 'تقديم طلب مغادرة'}
               </h3>
               <button type="button" onClick={() => setShowLeaveModal(false)} className="icon-btn hover:bg-gray-100 rounded-full p-2 transition-colors">
                 <X size={20} className="text-gray-500" />
@@ -1940,56 +2248,64 @@ const userRoles = useMemo(() =>
             </div>
             <div className="p-5 overflow-y-auto">
               <form onSubmit={handleSaveLeaveRequest} className="space-y-4">
-              
-              {/* Balances Display */}
-              {['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'].includes(leaveFormData.type) && (
-                <>
-                  <div className="flex gap-3 mb-4">
-                    {leaveFormData.type === 'إجازة سنوية' && allowedLeaveTypes.includes('إجازة سنوية') && (
-                      <div className="flex-1 bg-blue-50 border border-blue-100 rounded-xl p-3 text-center shadow-sm">
-                        <div className="text-xs text-blue-600 mb-1 font-bold">رصيد الإجازة السنوية</div>
-                        <div className="text-xl font-black text-blue-800">{calculatedVacationBalance} <span className="text-sm font-normal">يوم</span></div>
-                      </div>
-                    )}
-                    {leaveFormData.type === 'إجازة مرضية' && allowedLeaveTypes.includes('إجازة مرضية') && (
-                      <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center shadow-sm">
-                        <div className="text-xs text-emerald-600 mb-1 font-bold">رصيد الإجازة المرضية</div>
-                        <div className="text-xl font-black text-emerald-800">{calculatedSickBalance} <span className="text-sm font-normal">يوم</span></div>
-                      </div>
-                    )}
-                  </div>
-                  {leaveFormData.type === 'إجازة غير مدفوعة' && (
-                    <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl mb-4 text-sm flex gap-2 items-center">
-                      <Info size={16} className="text-amber-600 shrink-0" />
-                      ملاحظة: الإجازة غير المدفوعة سوف تُخصم من راتبك القادم.
-                    </div>
-                  )}
-                  {leaveFormData.type === 'إجازة مرضية' && (
-                    <div className="p-3 rounded-xl mb-4 text-sm font-bold flex gap-2 items-center" style={{ backgroundColor: '#fef2f2', borderColor: '#fecaca', color: '#991b1b', borderWidth: '1px' }}>
-                      <Info size={16} className="shrink-0" style={{ color: '#dc2626' }} />
-                      ملاحظة هامة: يرجى إرسال نسخة عن تقرير الإجازة المرضية إلى رقم هاتف الشركة على الواتساب لغايات الموافقة، وإلا فلن يتم قبولها.
-                    </div>
-                  )}
-                </>
-              )}
-                {leaveFormData.type !== 'بدل عمل إضافي' && (
-                <div className="input-group">
-                  <label>نوع الطلب</label>
-                  <select value={leaveFormData.type} onChange={e=>setLeaveFormData({...leaveFormData, type: e.target.value})} className="input-field" required>
-                    {['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر', 'مغادرة الدخان'].includes(leaveFormData.type) ? (
 
-                      allowedLeaveTypes.filter(t => ['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر', 'مغادرة الدخان'].includes(t)).map(type => (
-                        <option key={type} value={type}>{type}</option>
-                      ))
-                    ) : (
-                      allowedLeaveTypes.filter(t => ['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'].includes(t)).map(type => (
-                        <option key={type} value={type}>{type}</option>
-                      ))
+                {/* Balances Display */}
+                {['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'].includes(leaveFormData.type) && (
+                  <>
+                    <div className="flex gap-3 mb-4">
+                      {leaveFormData.type === 'إجازة سنوية' && allowedLeaveTypes.includes('إجازة سنوية') && (
+                        <>
+                          <div className="flex-1 bg-blue-50 border border-blue-100 rounded-xl p-3 text-center shadow-sm">
+                            <div className="text-xs text-blue-600 mb-1 font-bold">الرصيد المتبقي لهذه السنة</div>
+                            <div className="text-xl font-black text-blue-800">{annualVacationBalance !== undefined ? (Number.isInteger(annualVacationBalance) ? annualVacationBalance : annualVacationBalance.toFixed(2)) : '0'} <span className="text-sm font-normal">يوم</span></div>
+                          </div>
+                          <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center shadow-sm">
+                            <div className="text-xs text-emerald-600 mb-1 font-bold">المتاح للتقديم لتاريخه</div>
+                            <div className="text-xl font-black text-emerald-800">{calculatedVacationBalance !== undefined ? (Number.isInteger(calculatedVacationBalance) ? calculatedVacationBalance : calculatedVacationBalance.toFixed(2)) : '0'} <span className="text-sm font-normal">يوم</span></div>
+                          </div>
+                        </>
+                      )}
+                      {leaveFormData.type === 'إجازة مرضية' && allowedLeaveTypes.includes('إجازة مرضية') && (
+                        <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center shadow-sm">
+                          <div className="text-xs text-emerald-600 mb-1 font-bold">رصيد الإجازة المرضية</div>
+                          <div className="text-xl font-black text-emerald-800">{calculatedSickBalance} <span className="text-sm font-normal">يوم</span></div>
+                        </div>
+                      )}
+                    </div>
+                    {leaveFormData.type === 'إجازة غير مدفوعة' && (
+                      <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl mb-4 text-sm flex gap-2 items-center">
+                        <Info size={16} className="text-amber-600 shrink-0" />
+                        ملاحظة: الإجازة غير المدفوعة سوف تُخصم من راتبك القادم.
+                      </div>
                     )}
-                  </select>
-                </div>
+                    {leaveFormData.type === 'إجازة مرضية' && (
+                      <div className="p-3 rounded-xl mb-4 text-sm font-bold flex gap-2 items-center" style={{ backgroundColor: '#fef2f2', borderColor: '#fecaca', color: '#991b1b', borderWidth: '1px' }}>
+                        <Info size={16} className="shrink-0" style={{ color: '#dc2626' }} />
+                        ملاحظة هامة: يرجى إرسال نسخة عن تقرير الإجازة المرضية إلى رقم هاتف الشركة على الواتساب لغايات الموافقة، وإلا فلن يتم قبولها.
+                      </div>
+                    )}
+                  </>
                 )}
-                
+                {leaveFormData.type !== 'بدل عمل إضافي' && (
+                  <div className="input-group">
+                    <label>نوع الطلب</label>
+                    <select value={leaveFormData.type} onChange={e => setLeaveFormData({ ...leaveFormData, type: e.target.value })} className="input-field" required>
+                      {['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر', 'مغادرة الدخان'].includes(leaveFormData.type) ? (
+
+                        allowedLeaveTypes.filter(t => ['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر', 'مغادرة الدخان'].includes(t)).map(type => (
+                          <option key={type} value={type}>{type}</option>
+                        ))
+                      ) : (
+                        allowedLeaveTypes.filter(t => ['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'].includes(t)).map(type => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                )}
+
                 {leaveFormData.type === 'مغادرة خاصة' && (
                   <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl mb-4 text-sm flex gap-2 items-center">
                     <Info size={16} className="text-amber-600 shrink-0" />
@@ -2006,11 +2322,11 @@ const userRoles = useMemo(() =>
                   <div className="space-y-4">
                     <div className="input-group">
                       <label>{leaveFormData.type === 'بدل عمل إضافي' ? 'تاريخ العمل الإضافي' : 'تاريخ المغادرة'}</label>
-                      <Flatpickr 
-                        value={leaveFormData.date} 
-                        onChange={(dates, dateStr) => setLeaveFormData({...leaveFormData, date: dateStr})} 
-                        className="input-field w-full bg-white" 
-                        options={{ 
+                      <Flatpickr
+                        value={leaveFormData.date}
+                        onChange={(dates, dateStr) => setLeaveFormData({ ...leaveFormData, date: dateStr })}
+                        className="input-field w-full bg-white"
+                        options={{
                           ...defaultDatePickerOptions,
                           minDate: leaveFormData.type === 'مغادرة الدخان' ? 'today' : new Date(new Date().setDate(new Date().getDate() - 2)),
                           maxDate: leaveFormData.type === 'مغادرة الدخان' ? 'today' : (leaveFormData.type === 'بدل عمل إضافي' ? 'today' : new Date(new Date().setDate(new Date().getDate() + 7)))
@@ -2022,22 +2338,22 @@ const userRoles = useMemo(() =>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="input-group">
                         <label>من الساعة</label>
-                        <input 
+                        <input
                           type="time"
-                          className="input-field w-full bg-white text-slate-800" 
-                          value={leaveFormData.startTime || ''} 
-                          onChange={(e) => setLeaveFormData({...leaveFormData, startTime: e.target.value})} 
-                          required 
+                          className="input-field w-full bg-white text-slate-800"
+                          value={leaveFormData.startTime || ''}
+                          onChange={(e) => setLeaveFormData({ ...leaveFormData, startTime: e.target.value })}
+                          required
                         />
                       </div>
                       <div className="input-group">
                         <label>إلى الساعة</label>
-                        <input 
+                        <input
                           type="time"
-                          className="input-field w-full bg-white text-slate-800" 
-                          value={leaveFormData.endTime || ''} 
-                          onChange={(e) => setLeaveFormData({...leaveFormData, endTime: e.target.value})} 
-                          required 
+                          className="input-field w-full bg-white text-slate-800"
+                          value={leaveFormData.endTime || ''}
+                          onChange={(e) => setLeaveFormData({ ...leaveFormData, endTime: e.target.value })}
+                          required
                         />
                       </div>
                     </div>
@@ -2046,15 +2362,15 @@ const userRoles = useMemo(() =>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="input-group">
                       <label>من تاريخ</label>
-                      <Flatpickr 
-                        value={leaveFormData.startDate} 
-                        onChange={(dates, dateStr) => setLeaveFormData({...leaveFormData, startDate: dateStr})} 
-                        className="input-field w-full bg-white" 
-                        options={{ 
+                      <Flatpickr
+                        value={leaveFormData.startDate}
+                        onChange={(dates, dateStr) => setLeaveFormData({ ...leaveFormData, startDate: dateStr })}
+                        className="input-field w-full bg-white"
+                        options={{
                           ...defaultDatePickerOptions,
                           minDate: new Date(new Date().setDate(new Date().getDate() - 4)),
-                          maxDate: leaveFormData.type === 'إجازة مرضية' 
-                            ? new Date(new Date().setDate(new Date().getDate() + 2)) 
+                          maxDate: leaveFormData.type === 'إجازة مرضية'
+                            ? new Date(new Date().setDate(new Date().getDate() + 2))
                             : new Date(new Date().setDate(new Date().getDate() + 30))
                         }}
                         placeholder="اختر التاريخ"
@@ -2063,15 +2379,15 @@ const userRoles = useMemo(() =>
                     </div>
                     <div className="input-group">
                       <label>إلى تاريخ</label>
-                      <Flatpickr 
-                        value={leaveFormData.endDate} 
-                        onChange={(dates, dateStr) => setLeaveFormData({...leaveFormData, endDate: dateStr})} 
-                        className="input-field w-full bg-white" 
-                        options={{ 
+                      <Flatpickr
+                        value={leaveFormData.endDate}
+                        onChange={(dates, dateStr) => setLeaveFormData({ ...leaveFormData, endDate: dateStr })}
+                        className="input-field w-full bg-white"
+                        options={{
                           ...defaultDatePickerOptions,
                           minDate: new Date(new Date().setDate(new Date().getDate() - 4)),
-                          maxDate: leaveFormData.type === 'إجازة مرضية' 
-                            ? new Date(new Date().setDate(new Date().getDate() + 2)) 
+                          maxDate: leaveFormData.type === 'إجازة مرضية'
+                            ? new Date(new Date().setDate(new Date().getDate() + 2))
                             : new Date(new Date().setDate(new Date().getDate() + 30))
                         }}
                         placeholder="اختر التاريخ"
@@ -2083,12 +2399,12 @@ const userRoles = useMemo(() =>
 
                 <div className="input-group">
                   <label>ملاحظات / السبب</label>
-                  <textarea 
-                    rows={2} 
-                    value={leaveFormData.notes} 
-                    onChange={e=>setLeaveFormData({...leaveFormData, notes: e.target.value})} 
-                    className="input-field" 
-                    required 
+                  <textarea
+                    rows={2}
+                    value={leaveFormData.notes}
+                    onChange={e => setLeaveFormData({ ...leaveFormData, notes: e.target.value })}
+                    className="input-field"
+                    required
                     disabled={leaveFormData.type === 'مغادرة الدخان'}
                   ></textarea>
                 </div>
@@ -2101,7 +2417,7 @@ const userRoles = useMemo(() =>
           </div>
         </div>
       )}
-    
+
       {/* Advance Request Modal */}
       {showAdvanceModal && (
         <div className="modal-overlay" style={{ zIndex: 10500 }}>
@@ -2112,46 +2428,47 @@ const userRoles = useMemo(() =>
                 <X size={20} className="text-gray-500" />
               </button>
             </div>
-            
+
             <form onSubmit={async (e) => {
               e.preventDefault();
+              if (isRequestSubmittingRef.current) return;
 
               if (user.allowAdvances === false) {
-                 Swal.fire({
-                    icon: 'error',
-                    title: 'عذراً',
-                    text: 'غير مسموح لك بتقديم طلبات سلف. يرجى مراجعة إدارة الموارد البشرية.',
-                    confirmButtonText: 'حسناً'
-                 });
-                 return;
+                Swal.fire({
+                  icon: 'error',
+                  title: 'عذراً',
+                  text: 'غير مسموح لك بتقديم طلبات سلف. يرجى مراجعة إدارة الموارد البشرية.',
+                  confirmButtonText: 'حسناً'
+                });
+                return;
               }
 
               const currentDay = new Date().getDate();
-              let periodsToCheck = globalSettings?.hrSettings?.advancePeriods || [{fromDay: 15, toDay: 20}];
-              
+              let periodsToCheck = globalSettings?.hrSettings?.advancePeriods || [{ fromDay: 15, toDay: 20 }];
+
               if (user.useCustomAdvancePeriods && user.customAdvancePeriods && user.customAdvancePeriods.length > 0) {
-                 periodsToCheck = user.customAdvancePeriods;
+                periodsToCheck = user.customAdvancePeriods;
               }
 
               if (periodsToCheck && periodsToCheck.length > 0) {
-                 let isAllowedByPeriod = false;
-                 for (const p of periodsToCheck) {
-                    if (currentDay >= p.fromDay && currentDay <= p.toDay) {
-                       isAllowedByPeriod = true;
-                       break;
-                    }
-                 }
-                 
-                 if (!isAllowedByPeriod) {
-                    const periodsText = periodsToCheck.map(p => `من يوم ${p.fromDay} إلى ${p.toDay}`).join('، أو ');
-                    Swal.fire({
-                       icon: 'info',
-                       title: 'ملاحظة إدارية',
-                       text: `تقديم طلبات السلف متاح فقط خلال الفترات التالية من كل شهر: (${periodsText}). شكراً لتفهمك!`,
-                       confirmButtonText: 'حسناً'
-                    });
-                    return;
-                 }
+                let isAllowedByPeriod = false;
+                for (const p of periodsToCheck) {
+                  if (currentDay >= p.fromDay && currentDay <= p.toDay) {
+                    isAllowedByPeriod = true;
+                    break;
+                  }
+                }
+
+                if (!isAllowedByPeriod) {
+                  const periodsText = periodsToCheck.map(p => `من يوم ${p.fromDay} إلى ${p.toDay}`).join('، أو ');
+                  Swal.fire({
+                    icon: 'info',
+                    title: 'ملاحظة إدارية',
+                    text: `تقديم طلبات السلف متاح فقط خلال الفترات التالية من كل شهر: (${periodsText}). شكراً لتفهمك!`,
+                    confirmButtonText: 'حسناً'
+                  });
+                  return;
+                }
               }
 
               if (!advanceForm.type || advanceForm.type.trim() === '') {
@@ -2173,7 +2490,7 @@ const userRoles = useMemo(() =>
               const amountNum = Number(advanceForm.amount);
               const maxPct = globalSettings?.hrSettings?.maxAdvancePercentage ?? 50;
               const maxAmount = ((user.basicSalary || 0) * maxPct) / 100;
-              
+
               if (amountNum > maxAmount) {
                 Swal.fire('مرفوض', `لا يمكن أن تتجاوز السلفة ${maxPct}% من الراتب الأساسي (${maxAmount} د.أ)`, 'error');
                 return;
@@ -2184,6 +2501,18 @@ const userRoles = useMemo(() =>
                 return;
               }
 
+              // Check duplicate advance request
+              const isDuplicateAdvance = myAdvances.some(a => {
+                if (a.status === 'مرفوض') return false;
+                return a.date === advanceForm.date && a.type === advanceForm.type && Number(a.amount) === amountNum;
+              });
+              if (isDuplicateAdvance) {
+                Swal.fire('خطأ', 'لقد قمت بتقديم طلب سلفة مماثل مسبقاً وهو قيد المراجعة أو مقبول!', 'error');
+                return;
+              }
+
+              isRequestSubmittingRef.current = true;
+              setIsRequestSubmitting(true);
               try {
                 await saveHRAdvance({
                   ...advanceForm,
@@ -2198,7 +2527,7 @@ const userRoles = useMemo(() =>
                     if (lower === 'packaging' || lower === 'مسطرة التغليف' || lower === 'تغليف' || lower === 'تغليف وتشطيب') return 'تغليف وتشطيب';
                     if (lower === 'cutting' || lower === 'القص') return 'القص والخياطة';
                     if (lower === 'admin' || lower === 'الإدارة' || lower === 'الادارة') return 'الادارة';
-                    if (lower === 'sales' || lower === 'المبيعات') return 'المبيعات';
+                    if (lower === 'sales' || lower === 'المبيعات') return 'الطلبيات';
                     return d;
                   })()
                 }, user);
@@ -2211,61 +2540,64 @@ const userRoles = useMemo(() =>
                   message: `الموظف: ${user.name}\nالنوع: ${advanceForm.type}\nالمبلغ: ${amountNum} د.أ\nالسبب: ${advanceForm.reason}`,
                   target: { tab: 'hr_requests' }
                 });
-                
+
                 Swal.fire('نجاح', 'تم تقديم طلب السلفة بنجاح وهو بانتظار الموافقة', 'success');
                 setShowAdvanceModal(false);
                 setAdvanceForm({ type: 'سلفة شخصية', date: new Date().toISOString().split('T')[0], amount: '', reason: '', paymentMethod: 'خصم من الراتب القادم', status: 'معلق' });
               } catch (error) {
                 Swal.fire('خطأ', 'حدث خطأ أثناء حفظ الطلب', 'error');
+              } finally {
+                isRequestSubmittingRef.current = false;
+                setIsRequestSubmitting(false);
               }
             }}>
               <div className="p-5" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div className="input-group">
                     <label>نوع السلفة *</label>
-                    <select 
-                      value={advanceForm.type} 
+                    <select
+                      value={advanceForm.type}
                       onChange={e => {
                         const newType = e.target.value;
                         setAdvanceForm({
-                          ...advanceForm, 
+                          ...advanceForm,
                           type: newType,
                           paymentMethod: newType === 'سلفة شخصية' ? 'خصم من الراتب القادم' : 'تصرف نقداً'
                         });
-                      }} 
-                      className="input-field" 
+                      }}
+                      className="input-field"
                       required
                     >
                       <option value="سلفة شخصية">سلفة شخصية</option>
                       <option value="سلفة عمل">سلفة عمل</option>
                     </select>
                   </div>
-                  
+
                   <div className="input-group">
                     <label>التاريخ *</label>
-                    <Flatpickr 
-                      value={advanceForm.date} 
-                      onChange={(dates, dateStr) => setAdvanceForm({...advanceForm, date: dateStr})} 
-                      className="input-field w-full bg-white" 
+                    <Flatpickr
+                      value={advanceForm.date}
+                      onChange={(dates, dateStr) => setAdvanceForm({ ...advanceForm, date: dateStr })}
+                      className="input-field w-full bg-white"
                       options={{ ...defaultDatePickerOptions, minDate: 'today' }}
                       placeholder="اختر التاريخ"
                       required
                     />
                   </div>
-                  
+
                   {advanceForm.type === 'سلفة شخصية' ? (
-                    <div className="input-group" style={{ gridColumn: '1 / -1' }}>
-                      <div className="bg-blue-50 text-blue-800 p-3 rounded-lg text-sm flex items-center gap-2">
-                        <span className="font-bold">توضيح:</span> سيتم خصم قيمة هذه السلفة من الراتب القادم.
+                    <div className="input-group" style={{ gridColumn: '1 / -1', marginBottom: '0.25rem' }}>
+                      <div style={{ color: '#ef4444', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                        <span>⚠️ توضيح: سيتم خصم قيمة هذه السلفة من الراتب القادم.</span>
                       </div>
                     </div>
                   ) : (
                     <div className="input-group" style={{ gridColumn: '1 / -1' }}>
                       <label>طريقة الصرف *</label>
-                      <select 
-                        value={advanceForm.paymentMethod} 
-                        onChange={e => setAdvanceForm({...advanceForm, paymentMethod: e.target.value})} 
-                        className="input-field" 
+                      <select
+                        value={advanceForm.paymentMethod}
+                        onChange={e => setAdvanceForm({ ...advanceForm, paymentMethod: e.target.value })}
+                        className="input-field"
                         required
                       >
                         <option value="تصرف نقداً">تصرف نقداً</option>
@@ -2274,71 +2606,125 @@ const userRoles = useMemo(() =>
                     </div>
                   )}
                 </div>
-                
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
                   <div className="input-group">
                     <label>قيمة السلفة (د.أ) *</label>
-                    <input type="number" step="1" min="1" value={advanceForm.amount} onChange={e=>setAdvanceForm({...advanceForm, amount: e.target.value})} className="input-field" required />
-                    <p className="text-xs text-gray-500 mt-1">الحد الأقصى المسموح: {(((user.basicSalary || 0) * (globalSettings?.hrSettings?.maxAdvancePercentage ?? 50)) / 100).toFixed(0)} د.أ</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'nowrap' }}>
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        value={advanceForm.amount}
+                        onChange={e => setAdvanceForm({ ...advanceForm, amount: e.target.value })}
+                        className="input-field"
+                        style={{ width: '130px', flexShrink: 0 }}
+                        required
+                      />
+                      <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#ef4444', whiteSpace: 'nowrap' }}>
+                        (الحد الأقصى المسموح: {(((user.basicSalary || 0) * (globalSettings?.hrSettings?.maxAdvancePercentage ?? 50)) / 100).toFixed(0)} د.أ)
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 <div className="input-group">
                   <label>السبب *</label>
-                  <textarea rows={3} value={advanceForm.reason} onChange={e=>setAdvanceForm({...advanceForm, reason: e.target.value})} className="input-field" required></textarea>
+                  <textarea rows={3} value={advanceForm.reason} onChange={e => setAdvanceForm({ ...advanceForm, reason: e.target.value })} className="input-field" required></textarea>
                 </div>
               </div>
-              <div style={{ padding: '1.25rem', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', backgroundColor: '#fff', borderBottomLeftRadius: '0.5rem', borderBottomRightRadius: '0.5rem' }}>
+              <div style={{ padding: '1.25rem', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'center', gap: '0.75rem', backgroundColor: '#fff', borderBottomLeftRadius: '0.5rem', borderBottomRightRadius: '0.5rem' }}>
                 <button type="button" onClick={() => setShowAdvanceModal(false)} className="btn btn-outline">إلغاء</button>
-                <button type="submit" className="btn btn-primary px-6">إرسال الطلب</button>
+                <button type="submit" disabled={isRequestSubmitting} className="btn btn-primary px-6">{isRequestSubmitting ? 'جاري الإرسال...' : 'إرسال الطلب'}</button>
               </div>
             </form>
-          
-      {/* Mobile Bottom Navigation Bar */}
-      {isMobile && (
-        <div style={{
-          position: 'fixed',
-          bottom: '24px',
-          left: '20px',
-          right: '20px',
-          backgroundColor: '#ffffff',
-          borderRadius: '30px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-          display: 'grid',
-          gridTemplateColumns: '1fr auto 1fr',
-          alignItems: 'center',
-          padding: '0.65rem 1.5rem',
-          zIndex: 9999,
-        }}>
-          {/* Right Icon - Grid (rendered with div dots for 100% compatibility) */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', opacity: 0.8, cursor: 'pointer' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', width: '23px', height: '14px' }}>
-              {[1,2,3,4,5,6].map(i => (
-                <div key={'r'+i} style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#14b8a6' }}></div>
-              ))}
-            </div>
-          </div>
-          
-          {/* Center Icon - Home */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px', cursor: 'pointer' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#14b8a6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-              <polyline points="9 22 9 12 15 12 15 22"></polyline>
-            </svg>
-            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#0f766e' }}>الرئيسية</span>
-          </div>
-
-          {/* Left Icon - Grid */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', opacity: 0.8, cursor: 'pointer' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', width: '23px', height: '14px' }}>
-              {[1,2,3,4,5,6].map(i => (
-                <div key={'l'+i} style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#14b8a6' }}></div>
-              ))}
-            </div>
           </div>
         </div>
       )}
-</div>
+
+      {/* Modal for Petitions */}
+      {showPetitionModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', direction: 'rtl' }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '0.5rem', width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+            <div style={{ padding: '1.25rem', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', borderTopLeftRadius: '0.5rem', borderTopRightRadius: '0.5rem' }}>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 'bold', color: '#1e293b', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FileText size={20} color="#3b82f6" />
+                تقديم طلب استدعاء
+              </h3>
+              <button onClick={() => setShowPetitionModal(false)} style={{ color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!petitionFormData.title || petitionFormData.title.trim() === '') {
+                Swal.fire('تنبيه', 'الرجاء إدخال عنوان الاستدعاء', 'warning');
+                return;
+              }
+              if (!petitionFormData.text || petitionFormData.text.trim() === '') {
+                Swal.fire('تنبيه', 'الرجاء إدخال تفاصيل الاستدعاء', 'warning');
+                return;
+              }
+              isRequestSubmittingRef.current = true;
+              setIsRequestSubmitting(true);
+              try {
+                await saveHRPetition({
+                  ...petitionFormData,
+                  employeeId: user.id,
+                  employeeName: user.name,
+                  department: user.department || 'غير محدد',
+                  date: new Date().toISOString().split('T')[0]
+                });
+                
+                await createNotification({
+                  settingKey: 'petitions',
+                  targetEmployeeId: user.id,
+                  moduleKey: 'hr',
+                  moduleLabel: 'الموارد البشرية',
+                  title: 'طلب استدعاء جديد',
+                  message: `الموظف: ${user.name}\nالعنوان: ${petitionFormData.title}`,
+                  target: { tab: 'hr_petitions' }
+                });
+
+                Swal.fire('نجاح', 'تم تقديم الاستدعاء بنجاح وهو بانتظار المراجعة', 'success');
+                setShowPetitionModal(false);
+                setPetitionFormData({ title: '', text: '', status: 'معلق' });
+                const updated = await getHRPetitions();
+                setMyPetitions(updated.filter(p => String(p.employeeId) === String(user.id) || p.employeeName === user.name));
+              } catch (error) {
+                Swal.fire('خطأ', 'حدث خطأ أثناء حفظ الطلب', 'error');
+              } finally {
+                isRequestSubmittingRef.current = false;
+                setIsRequestSubmitting(false);
+              }
+            }}>
+              <div className="p-5" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="input-group">
+                  <label>عنوان الاستدعاء *</label>
+                  <input
+                    type="text"
+                    value={petitionFormData.title}
+                    onChange={e => setPetitionFormData({ ...petitionFormData, title: e.target.value })}
+                    className="input-field"
+                    placeholder="أدخل عنواناً موجزاً للاستدعاء"
+                    required
+                  />
+                </div>
+                <div className="input-group">
+                  <label>تفاصيل الاستدعاء *</label>
+                  <textarea 
+                    rows={4} 
+                    value={petitionFormData.text} 
+                    onChange={e => setPetitionFormData({ ...petitionFormData, text: e.target.value })} 
+                    className="input-field" 
+                    placeholder="أدخل تفاصيل ومبررات الاستدعاء هنا..."
+                    required
+                  ></textarea>
+                </div>
+              </div>
+              <div style={{ padding: '1.25rem', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'center', gap: '0.75rem', backgroundColor: '#fff', borderBottomLeftRadius: '0.5rem', borderBottomRightRadius: '0.5rem' }}>
+                <button type="button" onClick={() => setShowPetitionModal(false)} className="btn btn-outline">إلغاء</button>
+                <button type="submit" disabled={isRequestSubmitting} className="btn btn-primary px-6">{isRequestSubmitting ? 'جاري الإرسال...' : 'إرسال الطلب'}</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

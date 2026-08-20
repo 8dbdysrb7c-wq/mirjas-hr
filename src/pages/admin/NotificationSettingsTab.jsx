@@ -160,7 +160,6 @@ const NotificationSettingsTab = ({ settings, setSettings, employees = [] }) => {
                 <th className="px-6 py-4 text-sm font-bold text-slate-700 text-center">إشعار الموظف</th>
                 <th className="px-6 py-4 text-sm font-bold text-slate-700 text-center">إشعار المشرف</th>
                 <th className="px-6 py-4 text-sm font-bold text-slate-700 text-center">إشعار الإدارة</th>
-                <th className="px-6 py-4 text-sm font-bold text-slate-700 text-center">تنبيه عبر واتساب</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -209,12 +208,6 @@ const NotificationSettingsTab = ({ settings, setSettings, employees = [] }) => {
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" className="sr-only peer" checked={modSettings.management || false} onChange={() => handleToggle(key, 'management')} />
                         <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                      </label>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" checked={modSettings.whatsapp || false} onChange={() => handleToggle(key, 'whatsapp')} />
-                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#25D366]"></div>
                       </label>
                     </td>
                   </tr>

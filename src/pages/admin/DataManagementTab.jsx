@@ -271,7 +271,7 @@ const DataManagementTab = () => {
           </button>
 
           <button 
-            onClick={() => handleSafeReset('سجل إشعارات الواتساب', ['whatsapp_queue'])}
+            onClick={() => handleSafeReset('سجل إشعارات الواتساب', ['whatsapp_queue', 'whatsapp_queue_v2'])}
             className="btn flex items-center justify-center gap-2 text-xs py-2 px-3 flex-grow md:flex-grow-0"
             style={{ backgroundColor: '#22c55e', color: 'white', border: '1px solid #16a34a' }}
           >

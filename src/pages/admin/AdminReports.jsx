@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import HRSalaryReports from '../hr/HRSalaryReports';
-import { createPortal } from 'react-dom';
-import { getReports, getEmployees, getDepartments, saveReport, deleteReport, getSalesOrders, getOrders, getCustomers, getMissions, getStock, getReportsByDateRange, getSalesOrdersByDateRange, getOrdersByDateRange, getMissionsByDateRange, getHRAttendanceByDateRange, getHRViolationsByDateRange, getSupervisorTasksByDateRange, getSupervisorReportsByDateRange, getMissingPunches, updateMissingPunchStatus, createNotification, getGlobalSettings, canPerformStockAction, getStockVouchers, getStocktakes, saveSupervisorReport, deleteSupervisorReport } from '../../store';
+import { createPortal, flushSync } from 'react-dom';
+import { getReports, getEmployees, getDepartments, saveReport, deleteReport, getSalesOrders, getOrders, getCustomers, getMissions, getStock, getReportsByDateRange, getSalesOrdersByDateRange, getQuotesByDateRange, getOrdersByDateRange, getMissionsByDateRange, getHRAttendanceByDateRange, getHRViolationsByDateRange, getSupervisorTasksByDateRange, getSupervisorReportsByDateRange, getMissingPunches, updateMissingPunchStatus, createNotification, getGlobalSettings, canPerformStockAction, getStockVouchers, getStocktakes, saveSupervisorReport, deleteSupervisorReport } from '../../store';
+import { getHRLeaves } from '../../services/hr';
 import { sendWhatsAppNotification, sendTemplatedWhatsAppNotification } from '../../utils/whatsappService';
 import { FileText, Calendar, Search, Printer, List, Trash2, ShoppingCart, ShoppingBag, Users, X, Filter, Eye, Edit2, Plus, Minus, Trash, ArrowUpDown, Truck, Package, Building2, ClipboardList, UserCheck, FileSpreadsheet, FileDown, AlertTriangle, CheckCircle, User, ArrowLeft, Download, Upload, Layers, Clock, RotateCcw } from 'lucide-react';
 import SewingMachineIcon from '../../components/SewingMachineIcon';
@@ -13,6 +14,7 @@ import 'flatpickr/dist/themes/light.css';
 import html2pdf from 'html2pdf.js';
 import { EmployeesReportTab } from './reports/EmployeesReportTab';
 import { SalesOrdersReportTab } from './reports/SalesOrdersReportTab';
+import { QuotesReportTab } from './reports/QuotesReportTab';
 import { ProductionReportTab } from './reports/ProductionReportTab';
 import { DeliveryReportTab } from './reports/DeliveryReportTab';
 import { StockReportTab } from './reports/StockReportTab';
@@ -21,7 +23,8 @@ import { TasksReportTab } from './reports/TasksReportTab';
 import { SupervisorsReportTab } from './reports/SupervisorsReportTab';
 import { CustomersReportTab } from './reports/CustomersReportTab';
 import HRDateFilter from '../../components/ui/HRDateFilter';
-import Select from 'react-select';
+import { matchesSearch, useDebounce } from '../../utils/searchEngine';
+import Select from '../../components/SearchSelect';
 const MySwal = withReactContent(Swal);
 
 const JORDANIAN_CITIES = ['عمان', 'الزرقاء', 'إربد', 'العقبة', 'السلط', 'مادبا', 'الكرك', 'الطفيلة', 'معان', 'جرش', 'عجلون', 'المفرق'];
@@ -39,6 +42,45 @@ const getMissionTypeLabel = (mission) => {
     return `أخرى - ${mission.customType}`;
   }
   return mission.type || '---';
+};
+
+const formatTimeArabic = (timeStr) => {
+  if (!timeStr || timeStr === '--:--') return '--:--';
+  if (timeStr.includes('صباح') || timeStr.includes('مساء')) return timeStr;
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return timeStr;
+  let hours = parseInt(parts[0], 10);
+  const minutes = parts[1];
+  if (isNaN(hours)) return timeStr;
+  const ampm = hours >= 12 ? 'مساءً' : 'صباحاً';
+  const displayHours = hours % 12 || 12;
+  return `${displayHours}:${minutes} ${ampm}`;
+};
+
+const normalizeEmpId = (id) => String(id || '').toUpperCase().replace(/^EMP-0*/i, '').trim();
+
+const normalizeArabic = (str) => {
+  return String(str || '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const matchAttendance = (att, empId, empName, date) => {
+  if (!att || String(att.date).trim() !== String(date).trim()) return false;
+  if (att.isLeave) return false;
+  
+  const normAttId = normalizeEmpId(att.employeeId || att.id);
+  const normTargetId = normalizeEmpId(empId);
+  const matchId = normAttId && normTargetId && normAttId === normTargetId;
+  
+  const normAttName = normalizeArabic(att.employeeName || att.name);
+  const normTargetName = normalizeArabic(empName);
+  const matchName = normAttName && normTargetName && normAttName === normTargetName;
+  
+  return matchId || matchName;
 };
 
 const getStockItemStatus = (item) => {
@@ -59,9 +101,10 @@ const PRINT_ROW_LIMIT_OPTIONS = [
 const DEFAULT_PRINT_CONFIGS = {
   employees: { selectedColumns: ['date', 'userName', 'department', 'timeIn', 'timeOut', 'phoneUsages', 'tasksCount', 'finalScore'], rowLimit: 'all' },
   sales: { selectedColumns: ['orderDate', 'orderNumber', 'customerName', 'createdBy', 'lastActionBy', 'itemsCount', 'topItems', 'status'], rowLimit: 'all' },
+  quotes: { selectedColumns: ['quoteDate', 'quoteNumber', 'customerName', 'createdBy', 'itemsCount', 'totalAmount', 'status'], rowLimit: 'all' },
   production: { selectedColumns: ['orderDate', 'orderNumber', 'customerName', 'createdBy', 'lastActionBy', 'productName', 'quantity', 'status'], rowLimit: 'all' },
   delivery: { selectedColumns: ['createdAt', 'type', 'sourceEntity', 'targetEntity', 'assignedEmployeeName', 'dueDate', 'status'], rowLimit: 'all' },
-  stock: { selectedColumns: ['itemNumber', 'name', 'variant', 'category', 'warehouse', 'quantity', 'unit', 'status'], rowLimit: 'all' },
+  stock: { selectedColumns: ['itemNumber', 'itemCode', 'name', 'variant', 'category', 'warehouse', 'location', 'quantity', 'unit', 'status'], rowLimit: 'all' },
   hr: { selectedColumns: ['date', 'employeeName', 'type', 'details'], rowLimit: 'all' },
   tasks: { selectedColumns: ['createdAt', 'supervisorName', 'title', 'dueDate', 'status'], rowLimit: 'all' },
   supervisors: { selectedColumns: ['date', 'supervisorName', 'employeeEvaluations', 'status'], rowLimit: 'all' },
@@ -72,6 +115,7 @@ const DEFAULT_PRINT_CONFIGS = {
 const PRINT_ROWS_PER_PAGE_BY_TAB = {
   employees: 27,
   sales: 27,
+  quotes: 27,
   production: 27,
   delivery: 27,
   stock: 27,
@@ -105,8 +149,7 @@ const getStockVariantLabel = (item) => {
     item?.color,
     item?.detail,
     item?.details,
-    item?.model,
-    item?.location
+    item?.model
   ].filter(Boolean);
   return variantParts.length ? variantParts.join(' / ') : 'بدون تفصيل';
 };
@@ -122,6 +165,7 @@ const AdminReports = ({ user, notificationTarget }) => {
   const [missionStatuses, setMissionStatuses] = useState([]);
   const [productionStatuses, setProductionStatuses] = useState([]);
   const [salesOrders, setSalesOrders] = useState([]);
+  const [quotes, setQuotes] = useState([]);
   const [productionOrders, setProductionOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [deliveryMissions, setDeliveryMissions] = useState([]);
@@ -147,6 +191,8 @@ const AdminReports = ({ user, notificationTarget }) => {
   const [selectedType, setSelectedType] = useState('');
   const [selectedSalesRep, setSelectedSalesRep] = useState('');
   const [selectedWarehouse, setSelectedWarehouse] = useState('');
+  const [selectedSourceCompany, setSelectedSourceCompany] = useState('');
+  const [selectedTargetCompany, setSelectedTargetCompany] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [defaultDateFrom, setDefaultDateFrom] = useState('');
   const [isDefaultDate, setIsDefaultDate] = useState(true);
@@ -154,9 +200,13 @@ const AdminReports = ({ user, notificationTarget }) => {
   const [filterOrderNumber, setFilterOrderNumber] = useState('');
   const [filterCreatedBy, setFilterCreatedBy] = useState('');
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [summarySortKey, setSummarySortKey] = useState('averageScore');
+  const [summarySortDir, setSummarySortDir] = useState('desc');
   const [showPrintConfigModal, setShowPrintConfigModal] = useState(false);
   const [globalSettings, setGlobalSettings] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm);
   const [printConfigs, setPrintConfigs] = useState(() => ({ ...DEFAULT_PRINT_CONFIGS }));
   const [printDraftConfig, setPrintDraftConfig] = useState(DEFAULT_PRINT_CONFIGS.employees);
   const [printFilterDraft, setPrintFilterDraft] = useState(null);
@@ -171,7 +221,7 @@ const AdminReports = ({ user, notificationTarget }) => {
   const [empSortDir, setEmpSortDir] = useState('desc');
 
   // Isolating Employee Reports inline filter bar states
-  const [empDateMode, setEmpDateMode] = useState('month');
+  const [empDateMode, setEmpDateMode] = useState('day');
   const [empSelectedDate, setEmpSelectedDate] = useState(getLocalDateStr(new Date()));
   const [empSelectedMonth, setEmpSelectedMonth] = useState(new Date().toISOString().substring(0, 7));
   const [empStartDate, setEmpStartDate] = useState(getLocalDateStr(new Date()));
@@ -208,6 +258,8 @@ const AdminReports = ({ user, notificationTarget }) => {
     setSelectedType('');
     setSelectedSalesRep('');
     setSelectedWarehouse('');
+    setSelectedSourceCompany('');
+    setSelectedTargetCompany('');
     setDateFrom('');
     setDateTo('');
     setFilterOrderNumber('');
@@ -365,7 +417,7 @@ const AdminReports = ({ user, notificationTarget }) => {
         missionsFrom = getLocalDateStr(tenDaysAgo);
       }
 
-      const [reps, sales, prod, missions, attLogs, supTasks, supReps, settings] = await Promise.all([
+      const [reps, sales, prod, missions, attLogs, supTasks, supReps, settings, fetchedQuotes] = await Promise.all([
         getReportsByDateRange(repFrom, to),
         getSalesOrdersByDateRange(salesFrom, to),
         getOrdersByDateRange(prodFrom, to),
@@ -373,10 +425,12 @@ const AdminReports = ({ user, notificationTarget }) => {
         getHRAttendanceByDateRange(repFrom, to),
         getSupervisorTasksByDateRange(supervisorFrom, to),
         getSupervisorReportsByDateRange(supervisorFrom, to),
-        getGlobalSettings()
+        getGlobalSettings(),
+        getQuotesByDateRange(salesFrom, to)
       ]);
       setReports(reps);
       setSalesOrders(sales);
+      setQuotes(fetchedQuotes);
       setProductionOrders(prod);
       setDeliveryMissions(missions);
       setHRAttendance(attLogs || []);
@@ -430,7 +484,7 @@ const AdminReports = ({ user, notificationTarget }) => {
   useEffect(() => {
     if (activeReportTab === 'employees') {
       setSortConfig({ key: 'date', direction: 'descending' });
-    } else if (activeReportTab === 'sales' || activeReportTab === 'production') {
+    } else if (activeReportTab === 'sales' || activeReportTab === 'quotes' || activeReportTab === 'production') {
       setSortConfig({ key: 'orderDate', direction: 'descending' });
     } else if (activeReportTab === 'delivery') {
       setSortConfig({ key: 'createdAt', direction: 'descending' });
@@ -443,9 +497,9 @@ const AdminReports = ({ user, notificationTarget }) => {
     }
   }, [activeReportTab]);
 
-  // Sync dates and fetch data when Employee Reports tab filters change
+  // Sync dates and fetch data when Employee Reports / Sales Reports / Production Reports / Delivery Reports tab filters change
   useEffect(() => {
-    if (activeReportTab !== 'employees') return;
+    if (activeReportTab !== 'employees' && activeReportTab !== 'sales' && activeReportTab !== 'quotes' && activeReportTab !== 'production' && activeReportTab !== 'delivery') return;
 
     let from = '';
     let to = '';
@@ -518,7 +572,7 @@ const AdminReports = ({ user, notificationTarget }) => {
     const matchJobTitle = selectedJobTitle ? empJobTitle === selectedJobTitle : true;
     const matchDateFrom = dateFrom ? mp.date >= dateFrom : true;
     const matchDateTo = dateTo ? mp.date <= dateTo : true;
-    const matchSearch = searchTerm ? String(mp.employeeName || '').toLowerCase().includes(searchTerm.toLowerCase()) : true;
+    const matchSearch = matchesSearch([mp.employeeName, mp.employeeId, mp.reason, mp.notes], debouncedSearchTerm);
     return matchEmp && matchJobDept && matchJobTitle && matchDateFrom && matchDateTo && matchSearch;
   });
 
@@ -549,8 +603,11 @@ const AdminReports = ({ user, notificationTarget }) => {
         try {
           const emp = employees.find(e => e.id === punch.employeeId || e.name === punch.employeeName);
           if (emp && emp.phone) {
-            const msg = `مرحباً ${emp.name}،\nتمت الموافقة على طلب الختمة الناقصة الخاصة بك بتاريخ ${punch.date}.\n-- الإدارة`;
-            await sendWhatsAppNotification(emp.phone, msg, 'missing_punches');
+            await sendTemplatedWhatsAppNotification(emp.phone, 'missing_punches', 'approve', {
+              employeeName: emp.name,
+              date: punch.date || '',
+              notes: ''
+            });
           }
         } catch(err) { console.error('WhatsApp Error:', err); }
       }
@@ -600,8 +657,11 @@ const AdminReports = ({ user, notificationTarget }) => {
           try {
             const emp = employees.find(e => e.id === punch.employeeId || e.name === punch.employeeName);
             if (emp && emp.phone) {
-              const msg = `مرحباً ${emp.name}،\nتم رفض طلب الختمة الناقصة الخاصة بك بتاريخ ${punch.date}.\n-- الإدارة`;
-              await sendWhatsAppNotification(emp.phone, msg, 'missing_punches');
+              await sendTemplatedWhatsAppNotification(emp.phone, 'missing_punches', 'reject', {
+                employeeName: emp.name,
+                date: punch.date || '',
+                notes: ''
+              });
             }
           } catch(err) { console.error('WhatsApp Error:', err); }
         }
@@ -645,7 +705,7 @@ const AdminReports = ({ user, notificationTarget }) => {
     const matchJobTitle = selectedJobTitle ? empJobTitle === selectedJobTitle : true;
     const matchDateFrom = dateFrom ? r.date >= dateFrom : true;
     const matchDateTo = dateTo ? r.date <= dateTo : true;
-    const matchSearch = searchTerm ? String(r.userName || '').toLowerCase().includes(searchTerm.toLowerCase()) : true;
+    const matchSearch = matchesSearch([r.userName, r.userId, r.employeeId, r.details], debouncedSearchTerm);
     return matchEmp && matchJobDept && matchJobTitle && matchDateFrom && matchDateTo && matchSearch;
   });
 
@@ -656,7 +716,18 @@ const AdminReports = ({ user, notificationTarget }) => {
     const matchDateTo = dateTo ? o.orderDate <= dateTo : true;
     const matchOrderNum = filterOrderNumber ? (o.orderNumber || '').toString().includes(filterOrderNumber) : true;
     const matchCreatedBy = filterCreatedBy ? (o.createdBy || '').includes(filterCreatedBy) : true;
-    const matchSearch = searchTerm ? (String(o.orderNumber || '').includes(searchTerm) || String(o.customerName || '').toLowerCase().includes(searchTerm.toLowerCase())) : true;
+    const matchSearch = matchesSearch([o.orderNumber, o.customerName, o.customerNumber, o.items], debouncedSearchTerm);
+    return matchCust && matchStatus && matchDateFrom && matchDateTo && matchOrderNum && matchCreatedBy && matchSearch;
+  });
+
+  const filteredQuotes = quotes.filter(q => {
+    const matchCust = selectedCustomer ? q.customerId === selectedCustomer : true;
+    const matchStatus = selectedStatus ? q.status === selectedStatus : true;
+    const matchDateFrom = dateFrom ? q.quoteDate >= dateFrom : true;
+    const matchDateTo = dateTo ? q.quoteDate <= dateTo : true;
+    const matchOrderNum = filterOrderNumber ? (q.quoteNumber || '').toString().includes(filterOrderNumber) : true;
+    const matchCreatedBy = filterCreatedBy ? (q.createdBy || '').includes(filterCreatedBy) : true;
+    const matchSearch = matchesSearch([q.quoteNumber, q.customerName, q.customerNumber, q.items], debouncedSearchTerm);
     return matchCust && matchStatus && matchDateFrom && matchDateTo && matchOrderNum && matchCreatedBy && matchSearch;
   });
 
@@ -667,7 +738,7 @@ const AdminReports = ({ user, notificationTarget }) => {
     const matchDateTo = dateTo ? o.orderDate <= dateTo : true;
     const matchOrderNum = filterOrderNumber ? (o.orderNumber || '').toString().includes(filterOrderNumber) : true;
     const matchCreatedBy = filterCreatedBy ? (o.createdBy || '').includes(filterCreatedBy) : true;
-    const matchSearch = searchTerm ? (String(o.orderNumber || '').includes(searchTerm) || String(o.customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) || String(o.productName || '').toLowerCase().includes(searchTerm.toLowerCase())) : true;
+    const matchSearch = matchesSearch([o.orderNumber, o.customerName, o.customerNumber, o.productName, o.items], debouncedSearchTerm);
     return matchCust && matchStatus && matchDateFrom && matchDateTo && matchOrderNum && matchCreatedBy && matchSearch;
   });
 
@@ -678,15 +749,14 @@ const AdminReports = ({ user, notificationTarget }) => {
     const matchDateFrom = dateFrom ? missionDate >= dateFrom : true;
     const matchDateTo = dateTo ? missionDate <= dateTo : true;
     const matchCreatedBy = filterCreatedBy ? (mission.createdBy || '').includes(filterCreatedBy) : true;
-    const matchSearch = searchTerm
-      ? (
-        String(mission.sourceEntity || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        String(mission.targetEntity || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        String(mission.assignedEmployeeName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        String(missionType || '').toLowerCase().includes(searchTerm.toLowerCase())
-      )
-      : true;
-    return matchStatus && matchDateFrom && matchDateTo && matchCreatedBy && matchSearch;
+    const matchEmployee = selectedEmployee ? (mission.assignedEmployeeName === selectedEmployee || mission.assignedEmployeeId === selectedEmployee) : true;
+    const matchSourceCompany = selectedSourceCompany ? mission.sourceEntity === selectedSourceCompany : true;
+    const matchTargetCompany = selectedTargetCompany ? mission.targetEntity === selectedTargetCompany : true;
+    const matchSearch = matchesSearch(
+      [mission.id, mission.sourceEntity, mission.targetEntity, mission.assignedEmployeeName, missionType],
+      debouncedSearchTerm
+    );
+    return matchStatus && matchDateFrom && matchDateTo && matchCreatedBy && matchEmployee && matchSourceCompany && matchTargetCompany && matchSearch;
   });
 
   let filteredStockItems = stockItems.filter((item) => {
@@ -698,25 +768,19 @@ const AdminReports = ({ user, notificationTarget }) => {
     const matchDateFrom = (dateFrom && !isDefaultDate) ? movementDate >= dateFrom : true;
     const matchDateTo = dateTo ? movementDate <= dateTo : true;
     const matchCreatedBy = filterCreatedBy ? (item.createdBy || item.updatedBy || '').includes(filterCreatedBy) : true;
-    const matchSearch = searchTerm
-      ? (
-        (item.itemNumber || '').toString().includes(searchTerm) ||
-        String(item.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        String(getStockVariantLabel(item) || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        String(item.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        String(item.warehouse || '').toLowerCase().includes(searchTerm.toLowerCase())
-      )
-      : true;
+    const matchSearch = matchesSearch(
+      [item.id, item.code, item.itemNumber, item.name, getStockVariantLabel(item), item.category, item.warehouse],
+      debouncedSearchTerm
+    );
     return matchStatus && matchCategory && matchWarehouse && matchDateFrom && matchDateTo && matchCreatedBy && matchSearch;
   });
 
-  const isStockFilterActive = selectedStatus || selectedCategory || selectedWarehouse || (dateFrom && !isDefaultDate) || dateTo || filterCreatedBy || searchTerm;
-  if (!isStockFilterActive && activeReportTab === 'stock') {
+  if (activeReportTab === 'stock') {
     filteredStockItems = filteredStockItems.sort((a, b) => {
       const dateA = new Date(a.lastMovementDate || a.updatedAt || 0).getTime();
       const dateB = new Date(b.lastMovementDate || b.updatedAt || 0).getTime();
       return dateB - dateA;
-    }).slice(0, 20);
+    });
   }
 
   const getVoucherTypeFromSubTab = (subTab) => {
@@ -739,14 +803,9 @@ const AdminReports = ({ user, notificationTarget }) => {
     const matchDateTo = dateTo ? vDate <= dateTo : true;
     const matchCreatedBy = filterCreatedBy ? (v.createdBy || '').includes(filterCreatedBy) : true;
     const matchStatus = selectedStatus ? v.status === selectedStatus : true;
-    const matchSearch = searchTerm
-      ? (
-          String(v.voucherNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          String(v.createdBy || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          String(v.notes || '').toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      : true;
-    return matchDateFrom && matchDateTo && matchCreatedBy && matchStatus && matchSearch;
+    const matchWarehouse = selectedWarehouse ? v.warehouse === selectedWarehouse : true;
+    const matchSearch = matchesSearch([v.voucherNumber, v.createdBy, v.notes, v.warehouse, v.items], debouncedSearchTerm);
+    return matchDateFrom && matchDateTo && matchCreatedBy && matchStatus && matchWarehouse && matchSearch;
   });
 
   let filteredStocktakes = stocktakes.filter(st => {
@@ -756,14 +815,7 @@ const AdminReports = ({ user, notificationTarget }) => {
     const matchCreatedBy = filterCreatedBy ? (st.createdBy || '').includes(filterCreatedBy) : true;
     const matchWarehouse = selectedWarehouse ? st.warehouse === selectedWarehouse : true;
     const matchStatus = selectedStatus ? st.status === selectedStatus : true;
-    const matchSearch = searchTerm
-      ? (
-          String(st.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          String(st.createdBy || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          String(st.notes || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          String(st.warehouse || '').toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      : true;
+    const matchSearch = matchesSearch([st.id, st.createdBy, st.notes, st.warehouse, st.items], debouncedSearchTerm);
     return matchDateFrom && matchDateTo && matchCreatedBy && matchWarehouse && matchStatus && matchSearch;
   });
 
@@ -771,8 +823,7 @@ const AdminReports = ({ user, notificationTarget }) => {
   hrCombined.sort((a,b) => new Date(b.date) - new Date(a.date));
 
   const filteredHR = hrCombined.filter(item => {
-    const term = searchTerm.toLowerCase();
-    const matchSearch = String(item.employeeName || '').toLowerCase().includes(term) || String(item.employeeId || '').toLowerCase().includes(term) || String(item.details || item.reason || '').toLowerCase().includes(term);
+    const matchSearch = matchesSearch([item.employeeName, item.employeeId, item.details, item.reason], debouncedSearchTerm);
 
     const empObj = employees.find(e => String(e.id || '').trim() === String(item.employeeId || '').trim() || String(e.name || '').trim() === String(item.employeeName || '').trim());
     
@@ -787,8 +838,7 @@ const AdminReports = ({ user, notificationTarget }) => {
   });
 
   const filteredTasks = supervisorTasks.filter(item => {
-    const term = searchTerm.toLowerCase();
-    const matchSearch = String(item.name || '').toLowerCase().includes(term) || String(item.taskNumber || '').toLowerCase().includes(term) || String(item.description || '').toLowerCase().includes(term);
+    const matchSearch = matchesSearch([item.name, item.taskNumber, item.description, item.assigneeNames], debouncedSearchTerm);
     
     let matchEmp = true;
     if (selectedEmployee) {
@@ -800,16 +850,14 @@ const AdminReports = ({ user, notificationTarget }) => {
   });
 
   const filteredSupervisorReports = supervisorReports.filter(item => {
-    const term = searchTerm.toLowerCase();
-    const matchSearch = String(item.attendanceNotes || '').toLowerCase().includes(term) || String(item.supervisorName || '').toLowerCase().includes(term);
+    const matchSearch = matchesSearch([item.attendanceNotes, item.supervisorName, item.id], debouncedSearchTerm);
     const matchEmp = selectedEmployee ? item.supervisorName === selectedEmployee : true;
     const matchStatus = selectedStatus ? (item.status || 'قيد المراجعة') === selectedStatus : true;
     return matchSearch && matchEmp && matchStatus;
   });
 
   let filteredCustomersReports = customers.filter(item => {
-    const term = searchTerm.toLowerCase();
-    const matchSearch = String(item.name || '').toLowerCase().includes(term) || String(item.phone || '').toLowerCase().includes(term) || String(item.location || '').toLowerCase().includes(term);
+    const matchSearch = matchesSearch([item.name, item.customerNumber, item.phone, item.location, item.city, item.sector], debouncedSearchTerm);
     const matchStatus = selectedStatus ? item.status === selectedStatus : true;
     const matchSector = selectedSector ? item.sector === selectedSector : true;
     const matchCity = selectedCity ? item.city === selectedCity : true;
@@ -841,6 +889,14 @@ const AdminReports = ({ user, notificationTarget }) => {
     return [...new Set(creators)];
   };
 
+  const getUniqueSourceCompanies = () => {
+    return [...new Set(deliveryMissions.map(m => m.sourceEntity).filter(Boolean))].sort();
+  };
+
+  const getUniqueTargetCompanies = () => {
+    return [...new Set(deliveryMissions.map(m => m.targetEntity).filter(Boolean))].sort();
+  };
+
   const getUniqueStockCategories = () => [...new Set(stockItems.map((item) => item.category).filter(Boolean))];
 
   const stockDuplicateCounts = filteredStockItems.reduce((acc, item) => {
@@ -864,6 +920,7 @@ const AdminReports = ({ user, notificationTarget }) => {
   const currentResultsCount =
     activeReportTab === 'employees' ? filteredEmployeesReports.length :
     activeReportTab === 'sales' ? filteredSalesOrders.length :
+    activeReportTab === 'quotes' ? filteredQuotes.length :
     activeReportTab === 'production' ? filteredProductionOrders.length :
     activeReportTab === 'delivery' ? filteredDeliveryMissions.length :
     activeReportTab === 'stock' ? (
@@ -880,6 +937,7 @@ const AdminReports = ({ user, notificationTarget }) => {
   const currentReportTitle =
     activeReportTab === 'employees' ? 'تقارير الموظفين' :
     activeReportTab === 'sales' ? 'تقارير طلبيات العملاء' :
+    activeReportTab === 'quotes' ? 'تقارير عروض الأسعار' :
     activeReportTab === 'production' ? 'تقارير الإنتاج' :
     activeReportTab === 'delivery' ? 'تقارير التوصيل' :
     activeReportTab === 'stock' ? 'تقارير المخزون' :
@@ -911,7 +969,7 @@ const AdminReports = ({ user, notificationTarget }) => {
           : activeReportTab === 'delivery'
             ? 6
             : activeReportTab === 'stock'
-              ? (selectedStockSubTab === 'items' ? 9 : selectedStockSubTab === 'stocktake' ? 7 : 6)
+              ? (selectedStockSubTab === 'items' ? 10 : selectedStockSubTab === 'stocktake' ? 7 : 6)
               : activeReportTab === 'customers'
                 ? 6
                 : 8;
@@ -927,22 +985,12 @@ const AdminReports = ({ user, notificationTarget }) => {
       { key: 'department', label: 'القسم', render: (report) => report.department || '---' },
       { key: 'timeIn', label: 'الدخول', render: (report) => {
         const emp = employees.find(e => String(e.id).trim() === String(report.userId || '').trim() || String(e.id).trim() === String(report.employeeId || '').trim() || String(e.name).trim() === String(report.userName || '').trim());
-        const att = hrAttendance.find(a => {
-          const matchId = String(a.employeeId || 'NO_ID').trim() === String(emp?.id || report.userId || report.employeeId || 'MISSING_ID').trim();
-          const matchName = String(a.employeeName || 'NO_NAME').trim() === String(report.userName || emp?.name || 'MISSING_NAME').trim();
-          const matchDate = String(a.date).trim() === String(report.date).trim();
-          return (matchId || matchName) && matchDate;
-        });
+        const att = hrAttendance.find(a => matchAttendance(a, emp?.id || report.userId || report.employeeId, report.userName || emp?.name, report.date));
         return att?.timeIn || report.timeIn || '---';
       } },
       { key: 'timeOut', label: 'الخروج', render: (report) => {
         const emp = employees.find(e => String(e.id).trim() === String(report.userId || '').trim() || String(e.id).trim() === String(report.employeeId || '').trim() || String(e.name).trim() === String(report.userName || '').trim());
-        const att = hrAttendance.find(a => {
-          const matchId = String(a.employeeId || 'NO_ID').trim() === String(emp?.id || report.userId || report.employeeId || 'MISSING_ID').trim();
-          const matchName = String(a.employeeName || 'NO_NAME').trim() === String(report.userName || emp?.name || 'MISSING_NAME').trim();
-          const matchDate = String(a.date).trim() === String(report.date).trim();
-          return (matchId || matchName) && matchDate;
-        });
+        const att = hrAttendance.find(a => matchAttendance(a, emp?.id || report.userId || report.employeeId, report.userName || emp?.name, report.date));
         return att?.timeOut || report.timeOut || '---';
       } },
       { key: 'phoneUsages', label: 'الهاتف', render: (report) => report.phoneUsages || 0 },
@@ -958,6 +1006,15 @@ const AdminReports = ({ user, notificationTarget }) => {
       { key: 'itemsCount', label: 'عدد البنود', render: (order) => order.items?.length || 0 },
       { key: 'topItems', label: 'أبرز البنود', render: (order) => (order.items || []).slice(0, 3).map((item) => item.productName).filter(Boolean).join('، ') || '---' },
       { key: 'status', label: 'الحالة', render: (order) => <span className={`badge ${getStatusBadgeClass(order.status || '')}`}>{order.status || '---'}</span> }
+    ],
+    quotes: [
+      { key: 'quoteDate', label: 'التاريخ', render: (quote) => quote.quoteDate || '---' },
+      { key: 'quoteNumber', label: 'رقم العرض', render: (quote) => `#${quote.quoteNumber || '---'}` },
+      { key: 'customerName', label: 'العميل', render: (quote) => quote.customerName || '---' },
+      { key: 'createdBy', label: 'أُنشئت بواسطة', render: (quote) => quote.createdBy || '---' },
+      { key: 'itemsCount', label: 'عدد البنود', render: (quote) => quote.items?.length || 0 },
+      { key: 'totalAmount', label: 'الإجمالي', render: (quote) => (quote.totalAmount || 0).toFixed(2) },
+      { key: 'status', label: 'الحالة', render: (quote) => <span className={`badge ${getStatusBadgeClass(quote.status || '')}`}>{quote.status || '---'}</span> }
     ],
     production: [
       { key: 'orderDate', label: 'التاريخ', render: (order) => order.orderDate || '---' },
@@ -986,6 +1043,7 @@ const AdminReports = ({ user, notificationTarget }) => {
           { key: 'variant', label: 'اللون/التفصيل', render: renderStockVariant },
           { key: 'category', label: 'التصنيف', render: (item) => item.category || '---' },
           { key: 'warehouse', label: 'المستودع', render: (item) => item.warehouse || '---' },
+          { key: 'location', label: 'الموقع', render: (item) => item.location || '---' },
           { key: 'quantity', label: 'الكمية', render: (item) => item.quantity ?? 0 },
           { key: 'unit', label: 'الوحدة', render: (item) => item.unit || '---' },
           { key: 'status', label: 'الحالة', render: (item) => {
@@ -1058,6 +1116,7 @@ const AdminReports = ({ user, notificationTarget }) => {
   const sortedRowsByTab = {
     employees: getSortedData(filteredEmployeesReports, 'employees'),
     sales: getSortedData(filteredSalesOrders, 'sales'),
+    quotes: getSortedData(filteredQuotes, 'quotes'),
     production: getSortedData(filteredProductionOrders, 'production'),
     delivery: getSortedData(filteredDeliveryMissions, 'delivery'),
     stock: getSortedStockData(),
@@ -1165,35 +1224,93 @@ const AdminReports = ({ user, notificationTarget }) => {
   const applyPrintCustomization = () => {
     if (!printDraftConfig?.selectedColumns?.length) return;
 
-    setSelectedEmployee(printFilterDraft?.selectedEmployee || '');
-    setSelectedJobDepartment(printFilterDraft?.selectedJobDepartment || '');
-    setSelectedJobTitle(printFilterDraft?.selectedJobTitle || '');
-    setSelectedCustomer(printFilterDraft?.selectedCustomer || '');
-    setSelectedCategory(printFilterDraft?.selectedCategory || '');
-    setSelectedWarehouse(printFilterDraft?.selectedWarehouse || '');
-    setSelectedStatus(printFilterDraft?.selectedStatus || '');
-    setSelectedCity(printFilterDraft?.selectedCity || '');
-    setSelectedSector(printFilterDraft?.selectedSector || '');
-    setDateFrom(printFilterDraft?.dateFrom || '');
-    setIsDefaultDate(false);
-    setDateTo(printFilterDraft?.dateTo || '');
-    setFilterOrderNumber(printFilterDraft?.filterOrderNumber || '');
-    setFilterCreatedBy(printFilterDraft?.filterCreatedBy || '');
-    setSearchTerm(printFilterDraft?.searchTerm || '');
+    const isPrint = exportActionToRun === 'print';
 
-    setPrintConfigs((currentConfigs) => ({
-      ...currentConfigs,
-      [activeReportTab]: {
-        rowLimit: printDraftConfig.rowLimit,
-        selectedColumns: printDraftConfig.selectedColumns
+    const updateStates = () => {
+      setSelectedEmployee(printFilterDraft?.selectedEmployee || '');
+      setSelectedJobDepartment(printFilterDraft?.selectedJobDepartment || '');
+      setSelectedJobTitle(printFilterDraft?.selectedJobTitle || '');
+      setSelectedCustomer(printFilterDraft?.selectedCustomer || '');
+      setSelectedCategory(printFilterDraft?.selectedCategory || '');
+      setSelectedWarehouse(printFilterDraft?.selectedWarehouse || '');
+      setSelectedStatus(printFilterDraft?.selectedStatus || '');
+      setSelectedCity(printFilterDraft?.selectedCity || '');
+      setSelectedSector(printFilterDraft?.selectedSector || '');
+      setDateFrom(printFilterDraft?.dateFrom || '');
+      setIsDefaultDate(false);
+      setDateTo(printFilterDraft?.dateTo || '');
+      setFilterOrderNumber(printFilterDraft?.filterOrderNumber || '');
+      setFilterCreatedBy(printFilterDraft?.filterCreatedBy || '');
+      setSearchTerm(printFilterDraft?.searchTerm || '');
+
+      setPrintConfigs((currentConfigs) => ({
+        ...currentConfigs,
+        [activeReportTab]: {
+          rowLimit: printDraftConfig.rowLimit,
+          selectedColumns: printDraftConfig.selectedColumns
+        }
+      }));
+
+      setShowPrintConfigModal(false);
+      if (!isPrint) {
+        setPendingExportAction(exportActionToRun);
       }
-    }));
+    };
 
-    setShowPrintConfigModal(false);
-    setPendingExportAction(exportActionToRun);
+    if (isPrint) {
+      flushSync(() => {
+        updateStates();
+      });
+      window.print();
+    } else {
+      updateStates();
+    }
   };
 
-  const handleViewSupervisorReport = (report) => {
+  const handleViewSupervisorReport = async (report) => {
+    // Lookup supervisor live attendance logs
+    const hrLeaves = await getHRLeaves();
+    const supAttLog = hrAttendance.find(l => matchAttendance(l, report.supervisorId, report.supervisorName, report.date));
+    
+    let supLeave = hrLeaves.find(l => {
+      const matchEmp = (String(l.employeeId || '').trim() === String(report.supervisorId || '').trim() || String(l.employeeName || '').trim() === String(report.supervisorName || '').trim());
+      if (!matchEmp) return false;
+      const isApproved = l.status === 'موافق' || l.status === 'مقبول' || l.status === 'Approved' || !l.status;
+      if (!isApproved) return false;
+      if (l.date === report.date) return true;
+      if (l.startDate && l.endDate && report.date >= l.startDate && report.date <= l.endDate) return true;
+      return false;
+    });
+
+    const formatTime = (t) => {
+      if (!t) return '--:--';
+      const parts = t.split(':');
+      if (parts.length < 2) return t;
+      let hh = parseInt(parts[0], 10);
+      const m = parts[1];
+      const ampm = hh >= 12 ? 'م' : 'ص';
+      hh = hh % 12 || 12;
+      return `${hh}:${m} ${ampm}`;
+    };
+    
+    let supTimeIn = formatTime(supAttLog?.timeIn || report.timeIn);
+    let supTimeOut = formatTime(supAttLog?.timeOut || report.timeOut);
+
+    if (supAttLog?.status && (supAttLog.status.includes('إجازة') || supAttLog.status.includes('مغادرة'))) {
+      supTimeIn = `<span style="color: #f59e0b; font-weight: bold;">${supAttLog.status}</span>`;
+      supTimeOut = `<span style="color: #f59e0b; font-weight: bold;">${supAttLog.status}</span>`;
+    } else if (supAttLog?.status && (supAttLog.status.includes('غياب') || supAttLog.status.includes('غائب'))) {
+      supTimeIn = '<span style="color: #ef4444; font-weight: bold;">غائب</span>';
+      supTimeOut = '<span style="color: #ef4444; font-weight: bold;">غائب</span>';
+    } else if (!supAttLog?.timeIn && !report.timeIn && supLeave) {
+      const leaveType = supLeave.type || 'إجازة';
+      supTimeIn = `<span style="color: #f59e0b; font-weight: bold;">${leaveType}</span>`;
+      supTimeOut = `<span style="color: #f59e0b; font-weight: bold;">${leaveType}</span>`;
+    } else if (!supAttLog?.timeIn && !report.timeIn) {
+      supTimeIn = '<span style="color: #ef4444; font-weight: bold;">غائب</span>';
+      supTimeOut = '<span style="color: #ef4444; font-weight: bold;">غائب</span>';
+    }
+
     Swal.fire({
       customClass: {
         container: 'premium-modal-container',
@@ -1201,143 +1318,262 @@ const AdminReports = ({ user, notificationTarget }) => {
         confirmButton: 'btn-premium-close-teal',
         actions: 'premium-modal-actions'
       },
+      showConfirmButton: false, // We'll render our own footer buttons for custom styling
       buttonsStyling: false,
-      width: '850px',
-      confirmButtonText: 'إغلاق',
+      width: '600px',
       html: `
-        <div style="direction: rtl; text-align: right; font-family: 'Rubik', sans-serif; color: #1e293b; padding: 10px; max-height: 75vh; overflow-y: auto;">
-          <h2 style="text-align: center; color: #1e293b; font-size: 1.8rem; margin-bottom: 25px; font-weight: 800; border-bottom: 2px solid var(--primary); padding-bottom: 10px;">
-            تقرير المشرف: ${report.supervisorName || '---'}
-          </h2>
+        <div style="direction: rtl; text-align: right; font-family: 'Tajawal', sans-serif; color: #1e293b; display: flex; flex-direction: column; height: 80vh; overflow: hidden; margin: -2rem;">
           
-          <h3 style="color: #1e293b; font-size: 1.3rem; font-weight: 800; margin-bottom: 15px;">الدوام</h3>
-          <div style="margin-bottom: 30px; line-height: 2; font-size: 1.05rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px;">
-            <div><span style="font-weight: 800; min-width: 120px; display: inline-block;">التاريخ:</span> ${report.date || '---'}</div>
-            <div><span style="font-weight: 800; min-width: 120px; display: inline-block;">وقت الحضور:</span> <span dir="ltr" style="display: inline-block;">${report.timeIn || '---'}</span></div>
-            <div><span style="font-weight: 800; min-width: 120px; display: inline-block;">وقت الخروج:</span> <span dir="ltr" style="display: inline-block;">${report.timeOut || '---'}</span></div>
+          <!-- Header -->
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 1.25rem; border-bottom: 1px solid #e2e8f0; background: #ffffff;">
+            <!-- Close Button (Left) -->
+            <button onclick="Swal.close()" style="width: 2.75rem; height: 2.75rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #475569;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+            
+            <!-- Title (Center) -->
+            <div style="text-align: center; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+              <h3 style="margin: 0; font-size: 1.05rem; font-weight: 800; color: #1e293b;">تقرير المشرف: ${report.supervisorName || '---'}</h3>
+              <span style="font-size: 0.72rem; color: #64748b; font-weight: bold; background: #f1f5f9; padding: 2px 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-family: monospace;">${report.supervisorId || ''}</span>
+            </div>
+            
+            <!-- Print Button (Right) -->
+            <button onclick="window.printSupervisorReport()" style="width: 2.75rem; height: 2.75rem; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #0f766e; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            </button>
           </div>
 
-          <h3 style="color: #1e293b; font-size: 1.3rem; font-weight: 800; margin-bottom: 15px;">التقييم اليومي للموظفين</h3>
-          <table style="width: 100%; border-collapse: collapse; text-align: center; margin-bottom: 30px;">
-            <thead style="background-color: #f8fafc;">
-              <tr>
-                <th style="padding: 12px; border: 1px solid #cbd5e1; background-color: #f8fafc;">الموظف</th>
-                <th style="padding: 12px; border: 1px solid #cbd5e1; background-color: #f8fafc;">التقييم</th>
-                <th style="padding: 12px; border: 1px solid #cbd5e1; background-color: #f8fafc;">النسبة</th>
-                <th style="padding: 12px; border: 1px solid #cbd5e1; background-color: #f8fafc;">الملاحظة</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${(report.employeeEvaluations || []).map(ev => {
-                 const empDailyReport = reports.find(r => (String(r.userId || '').trim() === String(ev.employeeId).trim() || String(r.employeeId || '').trim() === String(ev.employeeId).trim() || String(r.userName || '').trim() === String(ev.employeeName).trim()) && r.date === report.date);
-                 let reportHtml = '';
-                 
-                 if (empDailyReport) {
-                   reportHtml = `
-                     <tr>
-                       <td colspan="4" style="padding: 15px; border: 1px solid #cbd5e1; background-color: #f8fafc; text-align: right;">
-                         <div style="font-weight: 800; margin-bottom: 10px; color: #1a8d9b; font-size: 1.1rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;">
-                           تفاصيل تقرير الموظف
-                         </div>
-                         <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 0.9rem; margin-bottom: 10px;">
-                           <thead style="background-color: #e2e8f0;">
-                             <tr>
-                               <th style="padding: 8px; border: 1px solid #cbd5e1;">القسم</th>
-                               <th style="padding: 8px; border: 1px solid #cbd5e1;">الصنف</th>
-                               <th style="padding: 8px; border: 1px solid #cbd5e1;">العملية</th>
-                               <th style="padding: 8px; border: 1px solid #cbd5e1;">المنجز</th>
-                               <th style="padding: 8px; border: 1px solid #cbd5e1;">الحد المطلوب</th>
-                             </tr>
-                           </thead>
-                           <tbody>
-                             ${(empDailyReport.tasks && empDailyReport.tasks.length > 0) ? empDailyReport.tasks.map(t => `
-                               <tr style="background-color: #ffffff;">
-                                 <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold; color: #1a8d9b;">${t.departmentName || t.department || 'عام'}</td>
-                                 <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold;">${t.name}</td>
-                                 <td style="padding: 8px; border: 1px solid #cbd5e1; color: #475569;">${t.operation}</td>
-                                 <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 1.1rem; color: #1a8d9b;">${t.count}</td>
-                                 <td style="padding: 8px; border: 1px solid #cbd5e1;">${(t.min > 0 || t.max > 0) ? `<span dir="ltr">${t.max} - ${t.min}</span>` : '-'}</td>
-                               </tr>
-                             `).join('') : `
-                               <tr><td colspan="5" style="padding: 10px; color: #64748b; font-style: italic;">لا توجد مهام مسجلة.</td></tr>
-                             `}
-                           </tbody>
-                         </table>
-                         
-                         <div style="display: flex; justify-content: space-between; align-items: center; background-color: #eaf4f5; padding: 10px; border-radius: 8px; font-weight: bold; color: #334155; font-size: 0.9rem;">
-                           <div style="display: flex; gap: 15px;">
-                             <span>الهاتف بالأمانات: <span style="color: ${empDailyReport.phoneSafe ? '#16a34a' : '#ef4444'}">${empDailyReport.phoneSafe ? 'نعم' : 'لا'}</span></span>
-                             <span>استخدام الهاتف: <span style="color: ${empDailyReport.phoneUsages > 0 ? '#ef4444' : '#16a34a'}">${empDailyReport.phoneUsages || 0} مرات</span></span>
-                           </div>
-                           <div style="display: flex; gap: 15px; color: #1a8d9b;">
-                             <span>دخول: <span dir="ltr">${(() => { 
-                               const attLog = hrAttendance.find(l => (String(l.employeeId || '').trim() === String(ev.employeeId || '').trim() || String(l.employeeName || '').trim() === String(ev.employeeName || '').trim()) && l.date === report.date);
-                               const tIn = attLog?.timeIn || empDailyReport.timeIn;
-                               if (!tIn) return '---';
-                               const [h,m] = tIn.split(':'); let hh = parseInt(h,10); const ampm = hh >= 12 ? 'م' : 'ص'; hh = hh % 12 || 12; return `${hh}:${m} ${ampm}`; 
-                             })()}</span></span>
-                             <span>خروج: <span dir="ltr">${(() => { 
-                               const attLog = hrAttendance.find(l => (String(l.employeeId || '').trim() === String(ev.employeeId || '').trim() || String(l.employeeName || '').trim() === String(ev.employeeName || '').trim()) && l.date === report.date);
-                               const tOut = attLog?.timeOut || empDailyReport.timeOut;
-                               if (!tOut) return '---';
-                               const [h,m] = tOut.split(':'); let hh = parseInt(h,10); const ampm = hh >= 12 ? 'م' : 'ص'; hh = hh % 12 || 12; return `${hh}:${m} ${ampm}`; 
-                             })()}</span></span>
-                            </div>
-                          </div>
-                          ${empDailyReport.notes ? `
-                            <div style="margin-top: 10px; padding: 10px; background-color: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; font-size: 0.85rem; color: #78350f; text-align: right;">
-                              <strong>ملاحظة الموظف في تقريره:</strong> ${empDailyReport.notes}
-                            </div>
-                          ` : ''}
+          <!-- Body (Scrollable) -->
+          <div style="flex: 1; overflow-y: auto; padding: 1.25rem; background-color: #f8fafc;">
+            
+            <!-- الدوام Card -->
+            <div style="background: #ffffff; border-radius: 20px; padding: 1.25rem; margin-bottom: 1.25rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 10px rgba(0,0,0,0.02);">
+              <div style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; font-weight: 800; color: #0f766e; font-size: 0.95rem; margin-bottom: 1rem;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                <span>الدوام</span>
+              </div>
+              
+              <div style="display: flex; gap: 0.75rem;">
+                <!-- التاريخ -->
+                <div style="flex: 1; border: 1.5px solid #cbd5e1; border-radius: 14px; padding: 0.75rem 0.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.25rem; background: #f8fafc;">
+                  <span style="font-size: 0.7rem; font-weight: 700; color: #64748b; display: flex; align-items: center; gap: 0.25rem;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    <span>التاريخ:</span>
+                  </span>
+                  <span style="font-weight: 800; color: #1e293b; font-size: 0.85rem;">${report.date || '---'}</span>
+                </div>
+                
+                <!-- وقت الحضور -->
+                <div style="flex: 1; border: 1.5px solid #cbd5e1; border-radius: 14px; padding: 0.75rem 0.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.25rem; background: #f8fafc;">
+                  <span style="font-size: 0.7rem; font-weight: 700; color: #64748b; display: flex; align-items: center; gap: 0.25rem;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <span>وقت الحضور:</span>
+                  </span>
+                  <span style="font-weight: 800; color: #1e293b; font-size: 0.85rem;" dir="ltr">${supTimeIn}</span>
+                </div>
+                
+                <!-- وقت الخروج -->
+                <div style="flex: 1; border: 1.5px solid #cbd5e1; border-radius: 14px; padding: 0.75rem 0.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.25rem; background: #f8fafc;">
+                  <span style="font-size: 0.7rem; font-weight: 700; color: #64748b; display: flex; align-items: center; gap: 0.25rem;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <span>وقت الخروج:</span>
+                  </span>
+                  <span style="font-weight: 800; color: #1e293b; font-size: 0.85rem;" dir="ltr">${supTimeOut}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- تقييمات الموظفين -->
+            ${(report.employeeEvaluations || []).map((ev, idx) => {
+              const empDailyReport = reports.find(r => (String(r.userId || '').trim() === String(ev.employeeId).trim() || String(r.employeeId || '').trim() === String(ev.employeeId).trim() || String(r.userName || '').trim() === String(ev.employeeName).trim()) && r.date === report.date);
+              
+              return `
+                <!-- Employee evaluation card wrapper -->
+                <div style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 20px; padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03); position: relative;">
+                  
+                  <!-- Employee Header -->
+                  <div style="display: flex; justify-content: flex-start; align-items: center; gap: 0.75rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
+                    <!-- Circular Green Badge index (Right) -->
+                    <div style="width: 26px; height: 26px; background-color: #0f766e; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.8rem; box-shadow: 0 2px 6px rgba(15,118,110,0.2); flex-shrink: 0;">
+                      ${String(idx + 1).padStart(2, '0')}
+                    </div>
+                    <!-- User icon & name -->
+                    <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 800; color: #1e293b; font-size: 0.95rem;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0e7490" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                      <span>${ev.employeeName}</span>
+                      <span style="font-size: 0.72rem; color: #64748b; font-weight: bold; background: #f1f5f9; padding: 2px 6px; border-radius: 6px; border: 1px solid #e2e8f0; font-family: monospace; margin-right: 4px;">${ev.employeeId}</span>
+                    </div>
+                  </div>
+
+                  <!-- Mini evaluation table -->
+                  <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 0.8rem; margin-bottom: 1rem; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0;">
+                    <thead>
+                      <tr style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: bold;">
+                        <th style="padding: 8px; border: 1px solid #cbd5e1;">التقييم</th>
+                        <th style="padding: 8px; border: 1px solid #cbd5e1;">النسبة</th>
+                        <th style="padding: 8px; border: 1px solid #cbd5e1;">الملاحظة</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style="background-color: #ffffff;">
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold; color: ${ev.rating === 'ممتاز' || ev.rating === 'جيد' ? '#10b981' : ev.rating === 'سيئ' || ev.rating === 'لم يقدم تقرير' ? '#ef4444' : '#334155'};">
+                          ${ev.rating}
+                        </td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold; color: #0e7490;" dir="ltr">
+                          ${ev.scorePercentage ? ev.scorePercentage + '%' : '---'}
+                        </td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; color: #475569; font-weight: 600;">
+                          ${ev.reason || '---'}
                         </td>
                       </tr>
-                    `
-                    + `
-                           </div>
-                         </div>
-                       </td>
-                     </tr>
-                   `;
-                 }
+                    </tbody>
+                  </table>
 
-                 return `
-                  <tr>
-                    <td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: bold; background-color: #ffffff;">${ev.employeeName}</td>
-                    <td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: bold; background-color: #ffffff; color: ${ev.rating === 'ممتاز' || (ev.rating && ev.rating.includes('%') && parseInt(ev.rating) >= 90) ? 'green' : ev.rating === 'سيئ' || (ev.rating && ev.rating.includes('%') && parseInt(ev.rating) < 50) ? 'red' : (ev.rating && ev.rating.includes('%')) ? 'blue' : 'inherit'}">${ev.rating}</td>
-                    <td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: bold; color: #1a8d9b; background-color: #ffffff;" dir="ltr">${ev.scorePercentage ? ev.scorePercentage + '%' : '---'}</td>
-                    <td style="padding: 10px; border: 1px solid #cbd5e1; background-color: #ffffff;">${ev.reason || '---'}</td>
+                  <!-- Collapsible section header -->
+                  <div style="display: flex; align-items: center; justify-content: space-between; color: #0e7490; font-weight: bold; font-size: 0.85rem; padding: 0.5rem 0; border-top: 1px dashed #cbd5e1; margin-top: 0.5rem; cursor: pointer;">
+                    <span style="display: flex; align-items: center; gap: 0.25rem;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                      <span>تفاصيل تقرير الموظف</span>
+                    </span>
+                  </div>
+
+                  <!-- Tasks Table Container -->
+                  <div style="background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; margin: 0.5rem 0; overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 0.65rem;">
+                      <thead>
+                        <tr style="background-color: #f8fafc; border-bottom: 1px solid #cbd5e1; color: #64748b; font-weight: bold;">
+                          <th style="padding: 5px 3px; border: 1px solid #cbd5e1; font-size: 0.62rem !important; font-weight: bold !important;">القسم</th>
+                          <th style="padding: 5px 3px; border: 1px solid #cbd5e1; font-size: 0.62rem !important; font-weight: bold !important;">الصنف</th>
+                          <th style="padding: 5px 3px; border: 1px solid #cbd5e1; font-size: 0.62rem !important; font-weight: bold !important;">العملية</th>
+                          <th style="padding: 5px 3px; border: 1px solid #cbd5e1; font-size: 0.62rem !important; font-weight: bold !important;">المنجز</th>
+                          <th style="padding: 5px 3px; border: 1px solid #cbd5e1; font-size: 0.62rem !important; font-weight: bold !important;">الحد المطلوب</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${(empDailyReport && empDailyReport.tasks && empDailyReport.tasks.length > 0) ? empDailyReport.tasks.map(t => `
+                          <tr style="background-color: #ffffff;">
+                            <td style="padding: 5px 3px; border: 1px solid #cbd5e1; font-weight: normal !important; color: #0e7490; font-size: 0.6rem !important;">${t.departmentName || t.department || 'عام'}</td>
+                            <td style="padding: 5px 3px; border: 1px solid #cbd5e1; font-weight: normal !important; color: #1e293b; font-size: 0.6rem !important;">${t.name}</td>
+                            <td style="padding: 5px 3px; border: 1px solid #cbd5e1; color: #475569; font-size: 0.6rem !important; font-weight: normal !important;">${t.operation}</td>
+                            <td style="padding: 5px 3px; border: 1px solid #cbd5e1; font-weight: 800 !important; color: #0e7490; font-size: 0.68rem !important;">${t.count}</td>
+                            <td style="padding: 5px 3px; border: 1px solid #cbd5e1; color: #64748b; font-size: 0.58rem !important; font-weight: normal !important;">${(t.min > 0 || t.max > 0) ? `<span dir="ltr">${t.max} - ${t.min}</span>` : '-'}</td>
+                          </tr>
+                        `).join('') : `
+                          <tr>
+                            <td colspan="5" style="padding: 1rem; color: #94a3b8; text-align: center;">
+                              <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem; justify-content: center;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><line x1="12" y1="11" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                                <span style="font-weight: bold; font-size: 0.8rem;">لا توجد مهام مسجلة.</span>
+                              </div>
+                            </td>
+                          </tr>
+                        `}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <!-- Metadata Row badges -->
+                  <div style="display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: space-between; align-items: center; background-color: #f0f9fa; padding: 0.5rem 0.75rem; border-radius: 12px; border: 1px solid #cfeef1; font-size: 0.75rem; font-weight: bold;">
+                    <!-- Phone Safe -->
+                    <span style="color: ${empDailyReport && empDailyReport.phoneSafe ? '#16a34a' : '#ef4444'}; display: flex; align-items: center; gap: 0.25rem;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                      <span>الهاتف بالأمانات: ${empDailyReport && empDailyReport.phoneSafe ? 'نعم' : 'لا'}</span>
+                    </span>
+                    <!-- Phone Usages -->
+                    <span style="color: ${empDailyReport && empDailyReport.phoneUsages > 0 ? '#ef4444' : '#16a34a'}; display: flex; align-items: center; gap: 0.25rem;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                      <span>استخدام الهاتف: ${empDailyReport ? empDailyReport.phoneUsages || 0 : 0} مرات</span>
+                    </span>
+                    <!-- Check-in Time -->
+                    <span style="color: #0e7490; display: flex; align-items: center; gap: 0.25rem;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                      <span>دخول: ${(() => { 
+                        const attLog = hrAttendance.find(l => matchAttendance(l, ev.employeeId, ev.employeeName, report.date));
+                        if (attLog?.status === 'إجازة' || attLog?.status === 'مغادرة') return `<span style="color: #f59e0b; font-weight: bold;">${attLog.status}</span>`;
+                        if (attLog?.status === 'غياب' || attLog?.status === 'غائب' || ev.rating === 'غائب') return '<span style="color: #ef4444; font-weight: bold;">غائب</span>';
+                        const tIn = attLog?.timeIn || empDailyReport?.timeIn;
+                        if (!tIn) return '--:--';
+                        const [h,m] = tIn.split(':'); let hh = parseInt(h,10); const ampm = hh >= 12 ? 'م' : 'ص'; hh = hh % 12 || 12; return `${hh}:${m} ${ampm}`; 
+                      })()}</span>
+                    </span>
+                    <!-- Check-out Time -->
+                    <span style="color: #0e7490; display: flex; align-items: center; gap: 0.25rem;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                      <span>خروج: ${(() => { 
+                        const attLog = hrAttendance.find(l => matchAttendance(l, ev.employeeId, ev.employeeName, report.date));
+                        if (attLog?.status === 'إجازة' || attLog?.status === 'مغادرة') return `<span style="color: #f59e0b; font-weight: bold;">${attLog.status}</span>`;
+                        if (attLog?.status === 'غياب' || attLog?.status === 'غائب' || ev.rating === 'غائب') return '<span style="color: #ef4444; font-weight: bold;">غائب</span>';
+                        const tOut = attLog?.timeOut || empDailyReport?.timeOut;
+                        if (!tOut) return '--:--';
+                        const [h,m] = tOut.split(':'); let hh = parseInt(h,10); const ampm = hh >= 12 ? 'م' : 'ص'; hh = hh % 12 || 12; return `${hh}:${m} ${ampm}`; 
+                      })()}</span>
+                    </span>
+                  </div>
+
+                </div>
+              `;
+            }).join('')}
+
+            <!-- متابعة الطلبيات والإنتاج المباشر -->
+            <div style="background: #ffffff; border-radius: 20px; padding: 1.25rem; margin-top: 1.25rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 10px rgba(0,0,0,0.02);">
+              <div style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; font-weight: 800; color: #0f766e; font-size: 0.95rem; margin-bottom: 1rem;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                <span>متابعة الطلبيات والإنتاج المباشر</span>
+              </div>
+              
+              <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 0.8rem; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0;">
+                <thead>
+                  <tr style="background-color: #f8fafc; border-bottom: 1px solid #cbd5e1; color: #64748b; font-weight: bold;">
+                    <th style="padding: 10px; border: 1px solid #cbd5e1;">الطلبية/المهمة</th>
+                    <th style="padding: 10px; border: 1px solid #cbd5e1;">القسم</th>
+                    <th style="padding: 10px; border: 1px solid #cbd5e1;">الحالة</th>
+                    <th style="padding: 10px; border: 1px solid #cbd5e1;">ملاحظات المشرف</th>
                   </tr>
-                   ${reportHtml}
-                   <tr><td colspan="4" style="height: 12px; background-color: #0f172a; padding: 0; border: none; border-top: 2px solid #000; border-bottom: 2px solid #000;"></td></tr>
-                  `;
-              }).join('')}
-              ${(!report.employeeEvaluations || report.employeeEvaluations.length === 0) ? '<tr><td colspan="4" style="padding: 10px; border: 1px solid #cbd5e1;">لا توجد تقييمات</td></tr>' : ''}
-            </tbody>
-          </table>
-          
-          <h3 style="color: #1e293b; font-size: 1.3rem; font-weight: 800; margin-bottom: 15px;">متابعة الطلبيات والإنتاج المباشر</h3>
-          <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 0.9rem;">
-            <thead style="background-color: #f8fafc;">
-              <tr>
-                <th style="padding: 10px; border: 1px solid #cbd5e1;">الطلبية/المهمة</th>
-                <th style="padding: 10px; border: 1px solid #cbd5e1;">القسم</th>
-                <th style="padding: 10px; border: 1px solid #cbd5e1;">الحالة</th>
-                <th style="padding: 10px; border: 1px solid #cbd5e1;">ملاحظات المشرف</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${(report.ordersSnapshot && report.ordersSnapshot.length > 0) ? report.ordersSnapshot.map(o => `
-                <tr>
-                  <td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: bold;">${o.isMission ? o.customerName : `#${o.orderNumber}`}</td>
-                  <td style="padding: 10px; border: 1px solid #cbd5e1;">${o.isMission ? 'التوصيل' : (o.currentDepartment || 'الإنتاج')}</td>
-                  <td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: bold; color: ${o.executionStatus === 'متوقف' || o.status === 'متوقف' ? '#ef4444' : 'inherit'}">${o.executionStatus || o.status || 'غير محدد'}</td>
-                  <td style="padding: 10px; border: 1px solid #cbd5e1;">${o.supervisorNotes || '---'}</td>
-                </tr>
-              `).join('') : '<tr><td colspan="4" style="padding: 10px; border: 1px solid #cbd5e1;">لا توجد طلبيات مسجلة</td></tr>'}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  ${(report.ordersSnapshot && report.ordersSnapshot.length > 0) ? (() => {
+                    const getDept = (o) => o.isMission ? 'التوصيل' : (o.currentDepartment || (['جديد', 'مؤكد', 'قيد الانتظار', 'طلب جديد'].includes(o.status || '') ? 'الطلبيات' : ((o.status || '').includes('توصيل') || (o.status || '').includes('تسليم') ? 'التوصيل' : 'الإنتاج')));
+                    
+                    const sorted = [...report.ordersSnapshot].sort((a,b) => {
+                      const d1 = getDept(a);
+                      const d2 = getDept(b);
+                      if (d1 === d2) return 0;
+                      if (d1 === 'الطلبيات') return -1;
+                      if (d2 === 'الطلبيات') return 1;
+                      if (d1 === 'الإنتاج') return -1;
+                      if (d2 === 'الإنتاج') return 1;
+                      return 0;
+                    });
+                    
+                    return sorted.map(o => {
+                      const dept = getDept(o);
+                      const deptColor = dept === 'الطلبيات' ? '#3b82f6' : dept === 'الإنتاج' ? '#f59e0b' : '#10b981';
+                      const deptBg = dept === 'الطلبيات' ? '#eff6ff' : dept === 'الإنتاج' ? '#fffbeb' : '#ecfdf5';
+                      
+                      return `
+                        <tr style="background-color: ${deptBg}; border-bottom: 1px solid #e2e8f0;">
+                          <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold; border-right: 4px solid ${deptColor}; text-align: right;">
+                            ${o.isMission 
+                              ? `<span style="color: #f97316; font-size: 0.85rem;">🚚 ${o.customerName || ''}</span>`
+                              : `<span style="color: ${deptColor}; font-size: 0.85rem;">#${parseInt(o.orderNumber || 0)}</span><span style="font-size: 0.75rem; color: #64748b; margin-right: 5px;">- ${o.customerName || ''}</span>`
+                            }
+                          </td>
+                          <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold; color: ${deptColor};">${dept}</td>
+                          <td style="padding: 8px; border: 1px solid #cbd5e1; color: #64748b;">${o.executionStatus || o.status || 'غير مححدد'}</td>
+                          <td style="padding: 8px; border: 1px solid #cbd5e1; color: #475569; font-weight: bold;">${o.supervisorNotes || '---'}</td>
+                        </tr>
+                      `;
+                    }).join('');
+                  })() : '<tr><td colspan="4" style="padding: 15px; border: 1px solid #cbd5e1; color: #64748b;">لا توجد طلبيات مسجلة</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+          </div>
+
         </div>
-      `
+      `,
     });
   };
 
@@ -1422,6 +1658,11 @@ const AdminReports = ({ user, notificationTarget }) => {
   };
 
   const handleViewReportDetails = (report) => {
+    const emp = employees.find(e => String(e.id).trim() === String(report.userId || '').trim() || String(e.id).trim() === String(report.employeeId || '').trim() || String(e.name).trim() === String(report.userName || '').trim());
+    const att = hrAttendance.find(a => matchAttendance(a, emp?.id || report.userId || report.employeeId, report.userName || emp?.name, report.date));
+    const timeInDisp = att?.timeIn || report.timeIn || '---';
+    const timeOutDisp = att?.timeOut || report.timeOut || '---';
+
     MySwal.fire({
       customClass: {
         container: 'premium-modal-container',
@@ -1448,10 +1689,10 @@ const AdminReports = ({ user, notificationTarget }) => {
             </div>
             <div style="display: flex; gap: 12px; justify-content: flex-start; align-items: center; flex-wrap: wrap;">
                <span style="font-weight: 800; color: #1e293b; min-width: 110px;">وقت الدخول:</span>
-               <span style="color: #475569; min-width: 60px;">${report.timeIn || '---'}</span>
+               <span style="color: #475569; min-width: 60px;">${formatTimeArabic(timeInDisp)}</span>
                <span style="margin: 0 15px; font-weight: bold; color: #cbd5e1;">|</span>
                <span style="font-weight: 800; color: #1e293b;">وقت الخروج:</span>
-               <span style="color: #475569; margin-right: 12px;">${report.timeOut || '---'}</span>
+               <span style="color: #475569; margin-right: 12px;">${formatTimeArabic(timeOutDisp)}</span>
             </div>
             <div style="display: flex; gap: 12px; justify-content: flex-start; align-items: center;">
                <span style="font-weight: 800; color: #1e293b; min-width: 110px;">استخدام الهاتف:</span>
@@ -1844,6 +2085,260 @@ const AdminReports = ({ user, notificationTarget }) => {
     a.click();
   };
 
+  const handleExportPDF = () => {
+    const tableHtml = `
+      <div style="direction: rtl; text-align: right; font-family: 'Arial', sans-serif; padding: 20px;">
+        <h2 style="text-align: center; color: #1e293b; margin-bottom: 20px;">${currentReportTitle}</h2>
+        <table border="1" style="border-collapse: collapse; width: 100%; font-size: 12px; border: 1px solid #cbd5e1;">
+          <thead>
+            <tr style="background-color: #f1f5f9; color: #1e293b;">
+              ${activePrintColumns.map(c => `<th style="padding: 10px; border: 1px solid #cbd5e1; font-weight: bold; text-align: center;">${c.label}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${printableRows.map(row => `
+              <tr>
+                ${activePrintColumns.map(c => {
+                  let val = c.render(row);
+                  let text = extractText(val);
+                  return `<td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${text}</td>`;
+                }).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    const element = document.createElement('div');
+    element.innerHTML = tableHtml;
+    
+    const opt = {
+      margin:       [10, 10, 10, 10],
+      filename:     `${currentReportTitle}_${dateFrom || 'الكل'}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2 },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' },
+      pagebreak:    { mode: ['css', 'legacy'] }
+    };
+    
+    html2pdf().set(opt).from(element).save();
+  };
+
+  const getSummaryData = () => {
+    const summary = {};
+    filteredEmployeesReports.forEach(report => {
+      const empId = report.userId || report.employeeId || 'unknown';
+      const empName = report.userName || 'غير معروف';
+      const finalScore = Number(report.finalScore) || 0;
+      
+      if (!summary[empId]) {
+        summary[empId] = {
+          empId,
+          empName,
+          totalScore: 0,
+          count: 0
+        };
+      }
+      summary[empId].totalScore += finalScore;
+      summary[empId].count += 1;
+    });
+
+    const list = Object.values(summary).map(item => ({
+      ...item,
+      averageScore: Math.round(item.totalScore / item.count)
+    }));
+
+    list.sort((a, b) => {
+      let aVal = a[summarySortKey];
+      let bVal = b[summarySortKey];
+
+      if (summarySortKey === 'empName' || summarySortKey === 'empId') {
+        const strA = String(aVal || '').trim().toLowerCase();
+        const strB = String(bVal || '').trim().toLowerCase();
+        if (strA < strB) return summarySortDir === 'asc' ? -1 : 1;
+        if (strA > strB) return summarySortDir === 'asc' ? 1 : -1;
+        return 0;
+      }
+
+      const numA = Number(aVal) || 0;
+      const numB = Number(bVal) || 0;
+      if (numA < numB) return summarySortDir === 'asc' ? -1 : 1;
+      if (numA > numB) return summarySortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return list;
+  };
+
+  const getSummarySortIcon = (key) => {
+    if (summarySortKey !== key) return <span style={{ color: '#94a3b8', fontSize: '12px', marginRight: '4px' }}>↕</span>;
+    return summarySortDir === 'asc' 
+      ? <span style={{ color: 'var(--primary)', fontWeight: 'bold', marginRight: '4px' }}>↑</span>
+      : <span style={{ color: 'var(--primary)', fontWeight: 'bold', marginRight: '4px' }}>↓</span>;
+  };
+
+  const handleSummarySort = (key) => {
+    if (summarySortKey === key) {
+      setSummarySortDir(summarySortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSummarySortKey(key);
+      setSummarySortDir('desc');
+    }
+  };
+
+  const getPeriodDescription = () => {
+    if (dateFrom && dateTo) {
+      return `للفترة من ${dateFrom} إلى ${dateTo}`;
+    }
+    return `لآخر فترة افتراضية`;
+  };
+
+  const handlePrintSummary = () => {
+    const summaryData = getSummaryData();
+    const periodText = getPeriodDescription();
+    const totalSum = summaryData.reduce((acc, curr) => acc + curr.averageScore, 0);
+    const companyAverage = summaryData.length > 0 ? Math.round(totalSum / summaryData.length) : 0;
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>كشف التقييمات الإجمالي للموظفين</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+            body {
+              direction: rtl;
+              font-family: 'Tajawal', sans-serif;
+              padding: 40px;
+              color: #1e293b;
+              background-color: #ffffff;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+              border-bottom: 3px solid #1a8d9b;
+              padding-bottom: 20px;
+            }
+            .title {
+              font-size: 26px;
+              font-weight: bold;
+              color: #126a75;
+              margin: 0 0 10px 0;
+            }
+            .subtitle {
+              font-size: 15px;
+              color: #64748b;
+              margin: 0;
+              font-weight: 500;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 20px;
+            }
+            th, td {
+              border: 1px solid #cbd5e1;
+              padding: 14px;
+              text-align: center;
+              font-size: 14px;
+            }
+            th {
+              background-color: #f1f5f9;
+              font-weight: 700;
+              color: #334155;
+            }
+            tr:nth-child(even) td {
+              background-color: #f8fafc;
+            }
+            .badge {
+              display: inline-block;
+              padding: 6px 14px;
+              border-radius: 20px;
+              font-weight: 700;
+              font-size: 13px;
+            }
+            .badge-success { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+            .badge-warning { background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+            .badge-danger { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecdd3; }
+            
+            .footer {
+              margin-top: 40px;
+              border-top: 2px solid #e2e8f0;
+              padding-top: 20px;
+            }
+            .avg-box {
+              float: left;
+              background-color: #e0f2f1;
+              border: 1px solid #b2dfdb;
+              padding: 12px 24px;
+              border-radius: 8px;
+              color: #126a75;
+              font-weight: 700;
+              font-size: 16px;
+            }
+            @media print {
+              body { padding: 10px; }
+              button { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+             <h1 class="title">كشف التقييمات الإجمالي للموظفين</h1>
+             <p class="subtitle">${periodText}</p>
+          </div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 60px;">#</th>
+                <th>الرقم الوظيفي</th>
+                <th>اسم الموظف</th>
+                <th>عدد أيام التقييم</th>
+                <th>متوسط التقييم الإجمالي</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${summaryData.map((row, idx) => {
+                let toneClass = 'badge-success';
+                if (row.averageScore < 50) toneClass = 'badge-danger';
+                else if (row.averageScore < 75) toneClass = 'badge-warning';
+
+                return `
+                  <tr>
+                    <td>${idx + 1}</td>
+                    <td style="font-family: monospace; font-weight: 500;">${row.empId}</td>
+                    <td style="font-weight: bold; text-align: right; font-size: 15px;">${row.empName}</td>
+                    <td>${row.count} يوم</td>
+                    <td>
+                      <span class="badge ${toneClass}">${row.averageScore}%</span>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+          
+          <div class="footer">
+            <div class="avg-box">
+              المعدل العام للشركة: ${companyAverage}%
+            </div>
+            <div style="clear: both;"></div>
+          </div>
+          
+          <script>
+            window.setTimeout(function() {
+              window.print();
+              window.close();
+            }, 600);
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   const handlePrint = () => {
     openPrintConfig('print');
   };
@@ -1907,14 +2402,15 @@ const AdminReports = ({ user, notificationTarget }) => {
         }}>
           {[
             { id: 'employees', label: 'تقارير الموظفين', desc: 'عدد الموظفين، الغياب، التأخير، ساعات العمل', icon: Users },
-            { id: 'sales', label: 'طلبيات العملاء', desc: 'طلبيات العملاء، المبيعات، المرتجعات', icon: ShoppingCart },
+            { id: 'sales', label: 'طلبيات العملاء', desc: 'طلبيات العملاء، المرتجعات', icon: ShoppingCart },
+            { id: 'quotes', label: 'عروض الأسعار', desc: 'عروض الأسعار، الموافقة، الرفض', icon: FileText },
             { id: 'production', label: 'تقارير الإنتاج', desc: 'الإنتاج اليومي، الإنجاز، المتأخرات، جودة الإنتاج', icon: SewingMachineIcon },
             { id: 'delivery', label: 'تقارير التوصيل', desc: 'قيد التوصيل، المكتمل، المرتجع، مناطق التوصيل', icon: Truck },
             { id: 'stock', label: 'تقارير المخزون', desc: 'الكميات، النواقص، الحركة، التالف، الجرد', icon: Package },
             { id: 'hr', label: 'الموارد البشرية', desc: 'الإجازات، السلف، العقود، الحضور والانصراف', icon: UserCheck },
             { id: 'tasks', label: 'تقارير المهام', desc: 'المهام المفتوحة، المنجزة، المتأخرة، قيد المراجعة', icon: ClipboardList },
             { id: 'supervisors', label: 'تقارير المشرفين', desc: 'متابعة الأداء، تقييم الموظفين، الإنجازات', icon: FileText },
-            { id: 'customers', label: 'تقرير العملاء والموردين', desc: 'العملاء الجدد، الطلبات، المبيعات، رضا العملاء', icon: Building2 }
+            { id: 'customers', label: 'تقرير العملاء والموردين', desc: 'العملاء الجدد، الطلبات، رضا العملاء', icon: Building2 }
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeReportTab === tab.id;
@@ -2156,7 +2652,9 @@ const AdminReports = ({ user, notificationTarget }) => {
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: '16px',
-          flexWrap: 'wrap'
+          flexWrap: 'wrap',
+          position: 'relative',
+          zIndex: 50
         }}>
           {/* Filter Controls: Conditional for Employee Reports vs Other Reports */}
           {activeReportTab === 'employees' ? (
@@ -2215,6 +2713,148 @@ const AdminReports = ({ user, notificationTarget }) => {
                 />
               </div>
             </div>
+          ) : (activeReportTab === 'sales' || activeReportTab === 'production' || activeReportTab === 'delivery') ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap', flex: 1, direction: 'rtl' }}>
+              {/* Date Filter */}
+              <HRDateFilter 
+                mode={empDateMode}
+                setMode={setEmpDateMode}
+                date={empSelectedDate}
+                setDate={setEmpSelectedDate}
+                month={empSelectedMonth}
+                setMonth={setEmpSelectedMonth}
+                startDate={empStartDate}
+                setStartDate={setEmpStartDate}
+                endDate={empEndDate}
+                setEndDate={setEmpEndDate}
+                allowedModes={['day', 'month', 'range']}
+              />
+              {/* Quick Search */}
+              <div style={{ position: 'relative', width: '250px' }}>
+                <input
+                  type="text"
+                  placeholder="بحث سريع في التقرير الحالي..."
+                  className="input-field"
+                  style={{ 
+                    margin: 0, 
+                    paddingRight: '40px',
+                    width: '100%',
+                    borderRadius: '12px',
+                    border: '1px solid #cbd5e1',
+                    height: '44px'
+                  }}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <Search 
+                  size={18} 
+                  style={{ 
+                    position: 'absolute', 
+                    right: '12px', 
+                    top: '50%', 
+                    transform: 'translateY(-50%)',
+                    color: '#64748b' 
+                  }} 
+                />
+              </div>
+            </div>
+          ) : activeReportTab === 'stock' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1, direction: 'rtl' }}>
+              {/* Category Filter (Only for Items) */}
+              {selectedStockSubTab === 'items' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '130px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}>التصنيف</label>
+                  <select 
+                    className="input-field" 
+                    value={selectedCategory} 
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    style={{ margin: 0, height: '42px', borderRadius: '10px', border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', padding: '0 8px', backgroundColor: '#ffffff' }}
+                  >
+                    <option value="">جميع التصنيفات</option>
+                    {getUniqueStockCategories().map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {/* Warehouse Filter */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '130px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}>المستودع</label>
+                <select 
+                  className="input-field" 
+                  value={selectedWarehouse} 
+                  onChange={(e) => setSelectedWarehouse(e.target.value)}
+                  style={{ margin: 0, height: '42px', borderRadius: '10px', border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', padding: '0 8px', backgroundColor: '#ffffff' }}
+                >
+                  <option value="">جميع المستودعات</option>
+                  {[...new Set([
+                    ...(globalSettings.warehouses || []),
+                    ...stockItems.map(item => item.warehouse)
+                  ].filter(Boolean))].map(wh => <option key={wh} value={wh}>{wh}</option>)}
+                </select>
+              </div>
+
+              {/* Status Filter */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '130px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}>الحالة</label>
+                <select 
+                  className="input-field" 
+                  value={selectedStatus} 
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  style={{ margin: 0, height: '42px', borderRadius: '10px', border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', padding: '0 8px', backgroundColor: '#ffffff' }}
+                >
+                  <option value="">جميع الحالات</option>
+                  {selectedStockSubTab === 'items' ? (
+                    <>
+                      <option value="متوفر">متوفر</option>
+                      <option value="يحتاج متابعة">يحتاج متابعة</option>
+                      <option value="ناقص">ناقص</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="معتمد">معتمد</option>
+                      <option value="مسودة">مسودة</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+
+
+              {/* Quick Search */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '150px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}>بحث سريع</label>
+                <div style={{ position: 'relative', width: '100%' }}>
+                  <input
+                    type="text"
+                    placeholder="بحث سريع..."
+                    className="input-field"
+                    style={{ 
+                      margin: 0, 
+                      paddingRight: '40px',
+                      width: '100%',
+                      borderRadius: '10px',
+                      border: '1.5px solid #cbd5e1',
+                      height: '42px',
+                      fontSize: '13px',
+                      fontWeight: 'bold',
+                      backgroundColor: '#ffffff'
+                    }}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  <Search 
+                    size={18} 
+                    style={{ 
+                      position: 'absolute', 
+                      right: '12px', 
+                      top: '50%', 
+                      transform: 'translateY(-50%)',
+                      color: '#64748b' 
+                    }} 
+                  />
+                </div>
+              </div>
+            </div>
           ) : (
             /* Search Input for Other Tabs */
             <div className="flex-1 flex gap-4 items-center" style={{ minWidth: '260px' }}>
@@ -2249,17 +2889,27 @@ const AdminReports = ({ user, notificationTarget }) => {
 
           {/* Action Buttons Group */}
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Reset Filters Button (Only for Employee Reports) */}
-            {activeReportTab === 'employees' && (
+            {/* Reset Filters Button (Only for Employee & Stock Reports) */}
+            {(activeReportTab === 'employees' || activeReportTab === 'stock') && (
               <button 
                 className="btn flex items-center gap-2"
                 onClick={() => {
-                  setSelectedEmployee('');
-                  setEmpDateMode('month');
-                  setEmpSelectedDate(getLocalDateStr(new Date()));
-                  setEmpSelectedMonth(new Date().toISOString().substring(0, 7));
-                  setEmpStartDate(getLocalDateStr(new Date()));
-                  setEmpEndDate(getLocalDateStr(new Date()));
+                  if (activeReportTab === 'employees') {
+                    setSelectedEmployee('');
+                    setEmpDateMode('month');
+                    setEmpSelectedDate(getLocalDateStr(new Date()));
+                    setEmpSelectedMonth(new Date().toISOString().substring(0, 7));
+                    setEmpStartDate(getLocalDateStr(new Date()));
+                    setEmpEndDate(getLocalDateStr(new Date()));
+                  } else {
+                    setSelectedCategory('');
+                    setSelectedWarehouse('');
+                    setSelectedStatus('');
+                    setDateFrom('');
+                    setDateTo('');
+                    setSearchTerm('');
+                    setIsDefaultDate(false);
+                  }
                 }}
                 style={{
                   borderRadius: '12px',
@@ -2270,7 +2920,8 @@ const AdminReports = ({ user, notificationTarget }) => {
                   gap: '8px',
                   backgroundColor: '#f1f5f9',
                   color: '#475569',
-                  border: '1px solid #cbd5e1'
+                  border: '1px solid #cbd5e1',
+                  height: '44px'
                 }}
                 title="إعادة تعيين فلاتر البحث"
               >
@@ -2279,29 +2930,10 @@ const AdminReports = ({ user, notificationTarget }) => {
               </button>
             )}
 
-            {/* Reset Button */}
-            <button 
-              className="btn flex items-center gap-2"
-              onClick={handleResetCurrentReport}
-              style={{
-                borderRadius: '12px',
-                padding: '10px 16px',
-                fontWeight: 'bold',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                backgroundColor: '#fee2e2',
-                color: '#dc2626',
-                border: '1px solid #fca5a5'
-              }}
-              title={`تصفير ${currentReportTitle}`}
-            >
-              <Trash2 size={18} />
-              <span className="hidden sm:inline">تصفير</span>
-            </button>
 
-            {/* Filter Button (Hidden for Employee Reports since we have inline filters) */}
-            {activeReportTab !== 'employees' && (
+
+            {/* Filter Button (Hidden for Employee & Stock Reports since we have inline filters) */}
+            {activeReportTab !== 'employees' && activeReportTab !== 'stock' && (
               <button 
                 className="btn btn-primary flex items-center gap-2"
                 onClick={() => setShowFilterModal(true)}
@@ -2319,6 +2951,31 @@ const AdminReports = ({ user, notificationTarget }) => {
                 {(selectedEmployee || selectedJobDepartment || selectedJobTitle || selectedCustomer || selectedCategory || selectedWarehouse || selectedStatus || selectedCity || selectedSector || (dateFrom && !isDefaultDate) || dateTo || filterOrderNumber || filterCreatedBy) && (
                   <span className="bg-white text-primary rounded-full px-2 py-0.5 text-[0.7rem] font-bold mr-1">نشط</span>
                 )}
+              </button>
+            )}
+
+            {/* Overall Evaluation Summary Button */}
+            {activeReportTab === 'employees' && (
+              <button 
+                className="btn flex items-center gap-1.5 font-bold shadow-sm"
+                onClick={() => setShowSummaryModal(true)}
+                style={{
+                  borderRadius: '12px',
+                  padding: '10px 18px',
+                  fontSize: '0.85rem',
+                  color: '#ffffff',
+                  background: 'linear-gradient(135deg, #126a75 0%, #1a8d9b 100%)',
+                  border: 'none',
+                  boxShadow: '0 4px 12px rgba(26, 141, 155, 0.25)',
+                  height: '44px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease-in-out'
+                }}
+              >
+                <ClipboardList size={18} />
+                <span>كشف التقييمات الإجمالي</span>
               </button>
             )}
 
@@ -2637,10 +3294,34 @@ const AdminReports = ({ user, notificationTarget }) => {
                 ) : activeReportTab === 'delivery' ? (
                   <>
                     <div className="input-group">
+                      <label>الموظف المسؤول</label>
+                      <select className="input-field" value={selectedEmployee} onChange={(e) => setSelectedEmployee(e.target.value)}>
+                        <option value="">جميع الموظفين</option>
+                        {employees.map(emp => <option key={emp.id} value={emp.name}>{emp.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="input-group">
+                      <label>الشركة التابعة لها المشوار</label>
+                      <select className="input-field" value={selectedSourceCompany} onChange={(e) => setSelectedSourceCompany(e.target.value)}>
+                        <option value="">جميع الشركات</option>
+                        {getUniqueSourceCompanies().map(company => <option key={company} value={company}>{company}</option>)}
+                      </select>
+                    </div>
+                    <div className="input-group">
+                      <label>الشركة المتجه إليها</label>
+                      <select className="input-field" value={selectedTargetCompany} onChange={(e) => setSelectedTargetCompany(e.target.value)}>
+                        <option value="">جميع الشركات</option>
+                        {getUniqueTargetCompanies().map(company => <option key={company} value={company}>{company}</option>)}
+                      </select>
+                    </div>
+                    <div className="input-group">
                       <label>الحالة</label>
                       <select className="input-field" value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
                         <option value="">جميع الحالات</option>
-                        {missionStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+                        {missionStatuses.map(s => {
+                          const name = typeof s === 'object' ? s.name : s;
+                          return <option key={name} value={name}>{name}</option>;
+                        })}
                       </select>
                     </div>
                     <div className="input-group">
@@ -2653,27 +3334,41 @@ const AdminReports = ({ user, notificationTarget }) => {
                   </>
                 ) : activeReportTab === 'stock' ? (
                   <>
-                    <div className="input-group">
-                      <label>التصنيف</label>
-                      <select className="input-field" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
-                        <option value="">جميع التصنيفات</option>
-                        {getUniqueStockCategories().map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                      </select>
-                    </div>
+                    {selectedStockSubTab === 'items' && (
+                      <div className="input-group">
+                        <label>التصنيف</label>
+                        <select className="input-field" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+                          <option value="">جميع التصنيفات</option>
+                          {getUniqueStockCategories().map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                        </select>
+                      </div>
+                    )}
                     <div className="input-group">
                       <label>المستودع</label>
                       <select className="input-field" value={selectedWarehouse} onChange={(e) => setSelectedWarehouse(e.target.value)}>
                         <option value="">جميع المستودعات</option>
-                        {[...new Set(stockItems.map(item => item.warehouse).filter(Boolean))].map(wh => <option key={wh} value={wh}>{wh}</option>)}
+                        {[...new Set([
+                          ...(globalSettings.warehouses || []),
+                          ...stockItems.map(item => item.warehouse)
+                        ].filter(Boolean))].map(wh => <option key={wh} value={wh}>{wh}</option>)}
                       </select>
                     </div>
                     <div className="input-group">
                       <label>الحالة</label>
                       <select className="input-field" value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
                         <option value="">جميع الحالات</option>
-                        <option value="متوفر">متوفر</option>
-                        <option value="يحتاج متابعة">يحتاج متابعة</option>
-                        <option value="ناقص">ناقص</option>
+                        {selectedStockSubTab === 'items' ? (
+                          <>
+                            <option value="متوفر">متوفر</option>
+                            <option value="يحتاج متابعة">يحتاج متابعة</option>
+                            <option value="ناقص">ناقص</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="معتمد">معتمد</option>
+                            <option value="مسودة">مسودة</option>
+                          </>
+                        )}
                       </select>
                     </div>
                   </>
@@ -2710,7 +3405,7 @@ const AdminReports = ({ user, notificationTarget }) => {
                       </select>
                     </div>
                     <div className="input-group">
-                      <label>البائع (مندوب المبيعات)</label>
+                      <label>البائع (مندوب الطلبيات)</label>
                       <select className="input-field" value={selectedSalesRep} onChange={(e) => setSelectedSalesRep(e.target.value)}>
                         <option value="">جميع البائعين</option>
                         <option value="زبائن الشركة">زبائن الشركة</option>
@@ -2767,6 +3462,8 @@ const AdminReports = ({ user, notificationTarget }) => {
                   setSelectedCustomer('');
                   setSelectedCategory('');
                   setSelectedWarehouse('');
+                  setSelectedSourceCompany('');
+                  setSelectedTargetCompany('');
                   setSelectedStatus('');
                   setSelectedCity('');
                   setSelectedSector('');
@@ -2783,6 +3480,110 @@ const AdminReports = ({ user, notificationTarget }) => {
             </div>
           </div>
         )}
+
+        {/* Summary Modal */}
+        {showSummaryModal && (() => {
+          const summaryData = getSummaryData();
+          const periodText = getPeriodDescription();
+          const totalSum = summaryData.reduce((acc, curr) => acc + curr.averageScore, 0);
+          const companyAverage = summaryData.length > 0 ? Math.round(totalSum / summaryData.length) : 0;
+
+          return (
+            <div className="modal-overlay no-print" style={{ zIndex: 1000 }}>
+              <div className="modal-content animate-fade-in text-right" style={{ maxWidth: '850px', direction: 'rtl', width: '95%' }}>
+                <div className="flex justify-between items-center mb-4 border-b pb-3">
+                  <h3 className="text-xl font-bold flex items-center gap-2 text-slate-800">
+                    <div className="bg-primary/10 text-primary p-1.5 rounded-lg">
+                      <ClipboardList size={22} />
+                    </div>
+                    <span>كشف التقييمات الإجمالي للموظفين</span>
+                  </h3>
+                  <button type="button" className="btn btn-outline" style={{ padding: '0.5rem' }} onClick={() => setShowSummaryModal(false)}>
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="text-right mb-4">
+                  <p className="text-sm font-bold text-slate-500">{periodText}</p>
+                </div>
+
+                <div style={{ maxHeight: '55vh', overflowY: 'auto' }} className="border rounded-xl">
+                  <table className="w-full text-right border-collapse">
+                    <thead className="bg-slate-50 sticky top-0" style={{ zIndex: 10 }}>
+                      <tr>
+                        <th className="p-3 font-bold text-slate-700 border-b text-center" style={{ width: '60px', fontSize: '1rem' }}>#</th>
+                        <th onClick={() => handleSummarySort('empId')} className="p-3 font-bold text-slate-700 border-b text-center cursor-pointer hover:text-primary transition-colors" style={{ fontSize: '1rem' }}>
+                          الرقم الوظيفي {getSummarySortIcon('empId')}
+                        </th>
+                        <th onClick={() => handleSummarySort('empName')} className="p-3 font-bold text-slate-700 border-b text-right cursor-pointer hover:text-primary transition-colors" style={{ fontSize: '1rem' }}>
+                          اسم الموظف {getSummarySortIcon('empName')}
+                        </th>
+                        <th onClick={() => handleSummarySort('count')} className="p-3 font-bold text-slate-700 border-b text-center cursor-pointer hover:text-primary transition-colors" style={{ fontSize: '1rem' }}>
+                          عدد أيام التقييم {getSummarySortIcon('count')}
+                        </th>
+                        <th onClick={() => handleSummarySort('averageScore')} className="p-3 font-bold text-slate-700 border-b text-center cursor-pointer hover:text-primary transition-colors" style={{ fontSize: '1rem' }}>
+                          متوسط التقييم {getSummarySortIcon('averageScore')}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summaryData.length > 0 ? (
+                        summaryData.map((row, idx) => {
+                          const tone = getScoreTone(row.averageScore);
+                          return (
+                            <tr key={row.empId} className="hover:bg-slate-50 transition-colors">
+                              <td className="p-3 border-b text-center text-slate-500 font-bold" style={{ fontSize: '0.95rem' }}>{idx + 1}</td>
+                              <td className="p-3 border-b text-center font-mono text-slate-600 font-semibold" style={{ fontSize: '0.9rem' }}>{row.empId}</td>
+                              <td className="p-3 border-b text-right font-bold text-slate-700" style={{ fontSize: '1rem' }}>{row.empName}</td>
+                              <td className="p-3 border-b text-center text-slate-600 font-semibold" style={{ fontSize: '0.95rem' }}>{row.count} يوم</td>
+                              <td className="p-3 border-b text-center">
+                                <span className={`report-score-badge ${tone}`} style={{ fontSize: '0.95rem', padding: '6px 14px', minWidth: '70px', fontWeight: 'bold' }}>
+                                  {row.averageScore}%
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan="5" className="p-8 text-center text-slate-500" style={{ fontSize: '1rem' }}>لا توجد بيانات تقييم للفترة المحددة</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {summaryData.length > 0 && (
+                  <div className="flex justify-between items-center mt-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <span className="font-bold text-slate-700" style={{ fontSize: '1.05rem' }}>المعدل العام للشركة:</span>
+                    <span className={`report-score-badge ${getScoreTone(companyAverage)}`} style={{ fontSize: '1.1rem', padding: '8px 18px', fontWeight: 'bold', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                      {companyAverage}%
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex gap-4 mt-6 pt-4 border-t">
+                  <button 
+                    className="btn btn-primary flex-1 flex items-center justify-center gap-2" 
+                    onClick={handlePrintSummary}
+                    disabled={summaryData.length === 0}
+                    style={{ padding: '12px', fontSize: '1rem', borderRadius: '8px' }}
+                  >
+                    <Printer size={18} />
+                    <span>طباعة الكشف</span>
+                  </button>
+                  <button 
+                    className="btn btn-outline flex-1" 
+                    onClick={() => setShowSummaryModal(false)}
+                    style={{ padding: '12px', fontSize: '1rem', borderRadius: '8px' }}
+                  >
+                    إغلاق
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
       {/* Table Section */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -2896,6 +3697,14 @@ const AdminReports = ({ user, notificationTarget }) => {
                 getStatusBadgeClass={getStatusBadgeClass}
               />
             )}
+            {activeReportTab === 'quotes' && (
+              <QuotesReportTab
+                sortedQuotes={sortedRowsByTab.quotes}
+                handleSort={handleSort}
+                getSortIcon={getSortIcon}
+                getStatusBadgeClass={getStatusBadgeClass}
+              />
+            )}
             {activeReportTab === 'production' && (
               <ProductionReportTab
                 sortedProductionOrders={sortedRowsByTab.production}
@@ -2966,6 +3775,7 @@ const AdminReports = ({ user, notificationTarget }) => {
                 (activeReportTab === 'supervisors' && filteredSupervisorReports.length === 0) ||
                 (activeReportTab === 'customers' && filteredCustomersReports.length === 0) ||
                 (activeReportTab === 'sales' && filteredSalesOrders.length === 0) ||
+                (activeReportTab === 'quotes' && filteredQuotes.length === 0) ||
                 (activeReportTab === 'production' && filteredProductionOrders.length === 0) ||
                 (activeReportTab === 'delivery' && filteredDeliveryMissions.length === 0) ||
                 (activeReportTab === 'stock' && filteredStockItems.length === 0)) && (

@@ -105,6 +105,40 @@
   min-width: 0;
 }
 
+/* Keep all 12 HR modules visible on desktop. The previous fixed 1750px grid
+   pushed the final settlement card beyond the left edge. */
+.hr-modules-nav-wrap {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+.hr-modules-nav-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+@media (min-width: 901px) and (max-width: 1500px) {
+  .hr-modules-nav-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .hr-modules-nav-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .hr-modules-nav-grid {
+    grid-template-columns: repeat(12, 125px);
+    width: max-content;
+  }
+}
+
 /* Dashboard Styles */
 .hr-header-bar {
   display: flex;
@@ -293,6 +327,99 @@
   color: #475569;
   font-size: 0.875rem;
   border-bottom: 1px solid #e2e8f0;
+}
+
+/* Salaries contain 14 financial columns. Keep the table inside its card,
+   expose a real horizontal scroller on narrower screens, and keep employee
+   identity visible while reviewing the remaining values. */
+.salary-table-responsive {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  direction: rtl;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.75) #f1f5f9;
+  border-radius: 0 0 14px 14px;
+}
+
+.salary-table-responsive::-webkit-scrollbar {
+  height: 9px;
+}
+
+.salary-table-responsive::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.salary-table-responsive::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.75);
+  border-radius: 999px;
+}
+
+.salary-table {
+  width: 100% !important;
+  min-width: 1480px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.salary-table th,
+.salary-table td {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 0.65rem 0.4rem !important;
+  font-size: 0.75rem !important;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.salary-table th {
+  white-space: normal;
+  vertical-align: middle;
+}
+
+.salary-table th:nth-child(1),
+.salary-table td:nth-child(1) { width: 78px; }
+
+.salary-table th:nth-child(2),
+.salary-table td:nth-child(2) { width: 155px; }
+
+.salary-table th:nth-child(n+3),
+.salary-table td:nth-child(n+3) { width: 104px; }
+
+.salary-table th:nth-child(1),
+.salary-table td:nth-child(1) {
+  position: sticky;
+  right: 0;
+  z-index: 4;
+  background: #fff;
+}
+
+.salary-table th:nth-child(2),
+.salary-table td:nth-child(2) {
+  position: sticky;
+  right: 78px;
+  z-index: 3;
+  background: #fff;
+  box-shadow: -1px 0 0 #e2e8f0;
+  text-align: right !important;
+  padding-right: 1rem !important;
+  padding-left: 0.5rem !important;
+}
+
+.salary-table tbody td:nth-child(2) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.salary-table thead th:nth-child(1),
+.salary-table thead th:nth-child(2) {
+  z-index: 6;
+  background: #f8fafc;
 }
 
 .hr-table td {

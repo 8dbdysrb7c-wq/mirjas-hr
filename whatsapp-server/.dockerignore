@@ -1,0 +1,7 @@
+node_modules
+.wwebjs_auth
+.wwebjs_cache
+.chrome_debug_profile
+dedup_cache.json
+*.bat
+*.vbs

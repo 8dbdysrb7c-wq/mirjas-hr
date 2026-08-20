@@ -1,21 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { getSupervisorTasks, saveSupervisorTask, deleteSupervisorTask, getEmployees, isAdmin } from '../../store';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
-import { Plus, Clock, AlertCircle, CheckCircle2, MoreHorizontal, User, MessageSquare, Calendar, ShieldCheck, Flag, Trash2, Filter, Search, X } from 'lucide-react';
+import { Plus, Clock, AlertCircle, CheckCircle2, MoreHorizontal, User, MessageSquare, Calendar, ShieldCheck, Flag, Trash2, Filter, Search, X, Loader2, Inbox, FileText, ChevronDown } from 'lucide-react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import flatpickr from 'flatpickr';
 import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import 'flatpickr/dist/themes/light.css';
+import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 
 const MySwal = withReactContent(Swal);
 
 const COLUMNS = [
-  { id: 'جديدة', title: 'جديدة', color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
-  { id: 'تم الاستلام', title: 'تم الاستلام', color: '#8b5cf6', bg: '#f5f3ff', border: '#ddd6fe' },
-  { id: 'جاري العمل', title: 'جاري العمل', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
-  { id: 'بانتظار الاعتماد', title: 'بانتظار الاعتماد', color: '#ec4899', bg: '#fdf2f8', border: '#fbcfe8' },
-  { id: 'مكتملة', title: 'مكتملة', color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0' }
+  { id: 'جديدة', title: 'جديدة', color: '#3b82f6', bg: '#eff6ff', bgHeader: '#e0f2fe', border: '#bfdbfe', icon: FileText },
+  { id: 'تم الاستلام', title: 'تم الاستلام', color: '#8b5cf6', bg: '#f5f3ff', bgHeader: '#f3e8ff', border: '#ddd6fe', icon: Inbox },
+  { id: 'جاري العمل', title: 'جاري العمل', color: '#f59e0b', bg: '#fffbeb', bgHeader: '#fef3c7', border: '#fde68a', icon: Loader2 },
+  { id: 'بانتظار الاعتماد', title: 'بانتظار الاعتماد', color: '#ec4899', bg: '#fff5f5', bgHeader: '#fdf2f8', border: '#fbcfe8', icon: Clock },
+  { id: 'مكتملة', title: 'مكتملة', color: '#10b981', bg: '#effaf6', bgHeader: '#ecfdf5', border: '#a7f3d0', icon: CheckCircle2 }
 ];
 
 const PRIORITIES = {
@@ -36,6 +37,7 @@ const AdminSupervisorTasks = ({ user }) => {
     assigneeId: '',
     priority: ''
   });
+  const debouncedTaskSearch = useDebounce(filters.search);
   
   // An employer is ONLY the system owner (Anas/Mashhour/Admin)
   const isEmployer = user.id === 'admin' || String(user.name).includes('مشهور') || String(user.name).includes('انس') || String(user.name).includes('أنس') || user.name === 'المدير العام';
@@ -98,6 +100,12 @@ const AdminSupervisorTasks = ({ user }) => {
     // Prevent changing to the same status
     if (task.status === columnId) return;
 
+    // Prevent supervisor from moving tasks to "جديدة"
+    if (columnId === 'جديدة' && !isSuperAdmin) {
+      MySwal.fire('صلاحيات مقيدة', 'لا يمكنك نقل المهمة إلى "جديدة"، هذا الإجراء خاص بالإدارة فقط.', 'warning');
+      return;
+    }
+
     // Optional: Check permissions (e.g. only admin can move to "مكتملة")
     if (columnId === 'مكتملة' && !isSuperAdmin) {
       // Supervisor moves it to "Waiting for Approval" instead
@@ -147,8 +155,9 @@ const AdminSupervisorTasks = ({ user }) => {
   };
 
   const openTaskModal = (task = null) => {
-    if (!task && !isSuperAdmin) {
-      MySwal.fire('خطأ', 'فقط الإدارة يمكنها إنشاء مهام جديدة', 'error');
+    const hasAddPerm = isSuperAdmin || user?.permissions?.supervisor_tasks?.add;
+    if (!task && !hasAddPerm) {
+      MySwal.fire('خطأ', 'ليس لديك صلاحية لإنشاء مهام جديدة', 'error');
       return;
     }
 
@@ -198,223 +207,389 @@ const AdminSupervisorTasks = ({ user }) => {
       assigneeNames: [],
       priority: 'متوسطة',
       dueDate: '',
-      taskNumber: nextTaskNumber
+      taskNumber: nextTaskNumber,
+      status: 'جديدة'
     };
 
-    const isReadOnly = isEdit && !isSuperAdmin;
+    const hasEditPerm = isSuperAdmin || user?.permissions?.supervisor_tasks?.edit;
+    const isReadOnly = isEdit && !hasEditPerm;
 
     MySwal.fire({
       customClass: { container: 'premium-modal-container', popup: 'premium-modal-medium' },
       width: '650px',
-      showCloseButton: true,
+      showCloseButton: false,
       showConfirmButton: false,
       html: `
-        <div style="direction: rtl; text-align: right; padding: 5px;">
-          <h3 style="font-size: 22px; font-weight: 800; margin-bottom: 25px; color: var(--primary-dark); border-bottom: 2px solid var(--surface-border); padding-bottom: 15px; display: flex; align-items: center; gap: 10px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-            <span>${isEdit ? `تفاصيل المهمة: ${task.taskNumber}` : 'إنشاء مهمة جديدة'}</span>
+        <style>
+          .swal2-popup.premium-modal-medium {
+            padding: 0 !important;
+            border-radius: 24px !important;
+            overflow: hidden !important;
+            border: none !important;
+            background: #ffffff !important;
+          }
+          .premium-modal-header-teal {
+            background-color: #1a8d9b;
+            color: #ffffff;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-family: 'Tajawal', sans-serif;
+          }
+          .premium-modal-body {
+            padding: 24px 20px;
+            direction: rtl;
+            text-align: right;
+            font-family: 'Tajawal', sans-serif;
+            background-color: #ffffff;
+          }
+          .field-label {
+            font-size: 12px;
+            font-weight: 800;
+            color: #64748b;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+          }
+          .custom-input-box {
+            width: 100%;
+            height: 46px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 0 16px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #334155;
+            background-color: #f8fafc;
+            outline: none;
+            transition: border-color 0.2s;
+            text-align: center;
+          }
+          .custom-input-box:focus {
+            border-color: #1a8d9b;
+          }
+          .custom-textarea {
+            width: 100%;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 12px 16px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #334155;
+            background-color: #f8fafc;
+            outline: none;
+            resize: vertical;
+            min-height: 100px;
+          }
+          .custom-textarea:focus {
+            border-color: #1a8d9b;
+          }
+          .assignee-row-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background-color: #ffffff;
+          }
+          .assignee-row-card[data-selected="true"] {
+            border-color: #1a8d9b;
+            background-color: #effafb;
+          }
+          .assignee-avatar-circle {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background-color: #e2e8f0;
+            color: #475569;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 11px;
+            transition: all 0.2s;
+            flex-shrink: 0;
+          }
+          .assignee-row-card[data-selected="true"] .assignee-avatar-circle {
+            background-color: #1a8d9b;
+            color: #ffffff;
+          }
+          .three-cols-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+          }
+          .select-wrapper {
+            position: relative;
+          }
+          .select-wrapper select {
+            width: 100%;
+            height: 46px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 0 12px 0 24px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #334155;
+            background-color: #ffffff;
+            outline: none;
+            appearance: none;
+            cursor: pointer;
+            text-align: center;
+          }
+          .select-wrapper .dropdown-arrow {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+            pointer-events: none;
+          }
+        </style>
+
+        <div class="premium-modal-header-teal">
+          <div onclick="Swal.close()" style="cursor: pointer; display: flex; align-items: center; justify-content: center;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </div>
+          <h3 style="font-size: 15px; font-weight: 800; margin: 0; text-align: center;">
+            تفاصيل المهمة: ${initial.taskNumber || ''}
           </h3>
-          
-          <div style="display: flex; flex-direction: column; gap: 20px;">
-            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px;">
-              <div class="form-group-premium">
-                <label>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
-                  رقم المهمة
-                </label>
-                <input id="t-number" class="form-input-premium" value="${initial.taskNumber || ''}" readonly placeholder="رقم المهمة" style="font-weight: bold; color: var(--primary-dark); text-align: center; background: #f8fafc; cursor: not-allowed; border: 1px dashed var(--surface-border);">
-              </div>
-              <div class="form-group-premium">
-                <label>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                  عنوان المهمة
-                </label>
-                <input id="t-name" class="form-input-premium" value="${initial.name}" ${isReadOnly ? 'disabled' : ''} placeholder="أدخل عنوان المهمة">
-              </div>
-            </div>
+          <div style="width: 22px;"></div>
+        </div>
 
-            <div class="form-group-premium">
-              <label>
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                وصف المهمة
-              </label>
-              <textarea id="t-desc" rows="4" class="form-input-premium" ${isReadOnly ? 'disabled' : ''} placeholder="تفاصيل وخطوات المهمة...">${initial.description || ''}</textarea>
-            </div>
+        <div class="premium-modal-body">
+          <input id="t-number" type="hidden" value="${(initial.taskNumber || '').replace('TSK-', '')}">
 
-            <div class="form-group-premium">
-              <label>
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                المسؤولون عن التنفيذ
-              </label>
-              ${isReadOnly ? `
-                <div style="width: 100%; display: flex; flex-wrap: wrap; gap: 10px;">
-                  ${Array.isArray(initial.assigneeNames) && initial.assigneeNames.length > 0 
-                    ? initial.assigneeNames.map(name => {
-                        const init = name ? name.trim().charAt(0) : '?';
-                        return `
-                          <div class="premium-assignee-card" data-selected="true" style="cursor: default; pointer-events: none;">
-                            <div class="assignee-avatar">${init}</div>
-                            <span class="assignee-label">${name}</span>
-                          </div>
-                        `;
-                      }).join('')
-                    : `<span style="color: var(--text-muted); font-style: italic;">غير معين</span>`
-                  }
-                </div>
-              ` : `
-                <div class="assignee-grid">
-                  ${employees.map(e => {
-                    const isChecked = (Array.isArray(initial.assigneeIds) && initial.assigneeIds.includes(e.id)) || (initial.assigneeId === e.id);
-                    const init = e.name ? e.name.trim().charAt(0) : '?';
+          <div class="three-cols-grid" style="margin-bottom: 24px;">
+            <div>
+              <div class="field-label">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                حالة المهمة
+              </div>
+              <div class="select-wrapper">
+                <select id="t-status">
+                  ${COLUMNS.map(col => {
+                    const isDisabledCompleted = col.id === 'مكتملة' && !isSuperAdmin;
+                    const isDisabledNew = col.id === 'جديدة' && !isSuperAdmin;
                     return `
-                      <div class="premium-assignee-card" data-id="${e.id}" data-name="${e.name}" data-selected="${isChecked ? 'true' : 'false'}">
-                        <div class="assignee-avatar">
-                          ${isChecked ? `
-                            <svg class="check-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                          ` : init}
-                        </div>
-                        <span class="assignee-label" title="${e.name}">${e.name.split(' ')[0]}</span>
-                      </div>
+                      <option value="${col.id}" ${initial.status === col.id ? 'selected' : ''} ${isDisabledCompleted || isDisabledNew ? 'disabled' : ''}>
+                        ${col.title} ${isDisabledCompleted ? '(يتطلب اعتماد)' : ''} ${isDisabledNew ? '(خاص بالإدارة)' : ''}
+                      </option>
                     `;
                   }).join('')}
-                </div>
-              `}
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-              <div class="form-group-premium">
-                <label>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                  تاريخ الاستحقاق (Deadline)
-                </label>
-                <input id="t-due" type="text" class="form-input-premium" value="${initial.dueDate}" ${isReadOnly ? 'disabled' : ''} placeholder="اختر تاريخ الاستحقاق..." style="background: var(--surface); cursor: ${isReadOnly ? 'not-allowed' : 'pointer'};">
-              </div>
-              <div class="form-group-premium">
-                <label>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                  مستوى الأولوية
-                </label>
-                <select id="t-priority" class="form-input-premium" ${isReadOnly ? 'disabled' : ''}>
-                  ${Object.keys(PRIORITIES).map(p => '<option value="' + p + '" ' + (initial.priority === p ? 'selected' : '') + '>' + p + '</option>').join('')}
                 </select>
+                <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
             </div>
 
-            ${isEdit ? `
-              <div style="margin-top: 10px; padding-top: 20px; border-top: 2px dashed var(--surface-border);">
-                <label style="display: block; font-size: 14px; font-weight: bold; color: var(--text-main); margin-bottom: 10px; text-align: right;">إضافة تعليق / تحديث</label>
-                <div style="display: flex; gap: 10px;">
-                  <input id="t-new-comment" class="form-input-premium" style="flex: 1;" placeholder="اكتب تحديثاً أو طلب مساعدة...">
-                  <button id="btn-add-comment" style="padding: 10px 20px; background: var(--primary); color: #fff; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 10px rgba(26, 141, 155, 0.15);">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                    إرسال
-                  </button>
-                </div>
-                
-                <div style="margin-top: 20px; max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 15px; background: var(--bg); border-radius: 16px; border: 1.5px solid var(--surface-border); box-shadow: inset 0 2px 6px rgba(0,0,0,0.02);">
-                  ${(initial.logs || []).filter(log => log.action === 'تعليق جديد').slice().reverse().map(log => {
-                    const isMe = log.by === user.name;
-                    return `
-                      <div style="display: flex; flex-direction: column; max-width: 75%; align-self: ${isMe ? 'flex-end' : 'flex-start'}; text-align: right;">
-                        <div style="background: ${isMe ? 'var(--primary-light)' : 'var(--surface)'}; color: var(--text-main); padding: 10px 14px; border-radius: 16px; border-top-${isMe ? 'left' : 'right'}-radius: 0px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid ${isMe ? 'rgba(26,141,155,0.15)' : 'var(--surface-border)'}; position: relative;">
-                          ${!isMe ? `<div style="font-size: 11px; font-weight: 800; color: var(--primary); margin-bottom: 4px;">${log.by}</div>` : ''}
-                          <div style="font-size: 13px; line-height: 1.5; word-wrap: break-word; font-weight: 500;">
-                            ${log.comment}
-                          </div>
-                          <div style="font-size: 10px; color: var(--text-muted); text-align: ${isMe ? 'left' : 'right'}; margin-top: 4px; display: flex; justify-content: ${isMe ? 'flex-start' : 'flex-end'}; align-items: center; gap: 4px;">
-                            ${new Date(log.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
-                            ${isMe ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
-                          </div>
-                        </div>
-                      </div>
-                    `;
-                  }).join('')}
-                  ${(!initial.logs || initial.logs.filter(log => log.action === 'تعليق جديد').length === 0) ? '<div style="text-align: center; background: var(--surface); padding: 8px 16px; border-radius: 20px; font-size: 12px; color: var(--text-muted); margin: 0 auto; width: fit-content; border: 1px solid var(--surface-border);">لا توجد رسائل سابقة. ابدأ المحادثة الآن!</div>' : ''}
-                </div>
+            <div>
+              <div class="field-label">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                مستوى الأولوية
               </div>
-            ` : ''}
+              <div class="select-wrapper">
+                <select id="t-priority" ${isReadOnly ? 'disabled' : ''}>
+                  ${Object.keys(PRIORITIES).map(p => `<option value="${p}" ${initial.priority === p ? 'selected' : ''}>${p}</option>`).join('')}
+                </select>
+                ${!isReadOnly ? `<svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>` : ''}
+              </div>
+            </div>
 
+            <div>
+              <div class="field-label">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                تاريخ الاستحقاق
+              </div>
+              <input id="t-due" type="date" class="custom-input-box" style="background-color: #ffffff; cursor: pointer; text-align: center;" value="${initial.dueDate}" ${isReadOnly ? 'disabled' : ''}>
+            </div>
           </div>
 
-          ${!isReadOnly ? `
-            <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 10px;">
-              <button id="btn-save-task" style="padding: 12px 30px; background: var(--primary); color: white; border: none; border-radius: 12px; font-weight: bold; font-size: 14px; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(26, 141, 155, 0.25); display: inline-flex; align-items: center; gap: 8px;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-                حفظ المهمة
-              </button>
+          <div style="margin-bottom: 16px;">
+            <div class="field-label">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+              عنوان المهمة
+            </div>
+            <input id="t-name" class="custom-input-box" style="background-color: #ffffff; font-size: 14px; font-weight: 800; color: #1e293b; text-align: right;" value="${initial.name}" ${isReadOnly ? 'disabled' : ''} placeholder="العنوان">
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <div class="field-label">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              وصف المهمة
+            </div>
+            <textarea id="t-desc" rows="6" class="custom-textarea" style="background-color: #ffffff;" ${isReadOnly ? 'disabled' : ''} placeholder="تفاصيل المهمة...">${initial.description || ''}</textarea>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <div class="field-label">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+              المسؤولون عن التنفيذ
+            </div>
+             ${isReadOnly ? `
+               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                 ${Array.isArray(initial.assigneeNames) && initial.assigneeNames.length > 0 
+                   ? initial.assigneeNames.map(name => {
+                       const init = name ? name.trim().charAt(0) : '?';
+                       return `
+                         <div class="assignee-row-card" data-selected="true" style="cursor: default; pointer-events: none;">
+                           <span style="font-size: 11px; font-weight: 800; color: #334155;">${name}</span>
+                           <div class="assignee-avatar-circle" style="background-color: #1a8d9b; color: #ffffff;">${init}</div>
+                         </div>
+                       `;
+                     }).join('')
+                   : `<span style="color: #94a3b8; font-style: italic;">غير معين</span>`
+                 }
+               </div>
+             ` : `
+               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                 ${employees.map(e => {
+                   const isChecked = (Array.isArray(initial.assigneeIds) && initial.assigneeIds.includes(e.id)) || (initial.assigneeId === e.id);
+                   const init = e.name ? e.name.trim().charAt(0) : '?';
+                   return `
+                     <div class="assignee-row-card" data-id="${e.id}" data-name="${e.name}" data-selected="${isChecked ? 'true' : 'false'}">
+                       <span class="assignee-label" style="font-size: 11px; font-weight: 800; color: #334155;">${e.name}</span>
+                       <div class="assignee-avatar-circle">
+                         ${isChecked ? `
+                           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                         ` : init}
+                       </div>
+                     </div>
+                   `;
+                 }).join('')}
+               </div>
+             `}
+          </div>
+
+          ${isEdit ? `
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 2px dashed #e2e8f0;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h4 style="font-size: 14px; font-weight: 850; color: #1e293b; margin: 0;">إضافة تعليق / تحديث</h4>
+                <button id="btn-add-comment" style="padding: 0 16px; height: 36px; background-color: #1a8d9b; color: #ffffff; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12px; transition: all 0.2s;" class="hover:opacity-90">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                  إرسال
+                </button>
+              </div>
+              
+              <div style="margin-bottom: 16px;">
+                <input id="t-new-comment" class="custom-input-box" style="width: 100%; text-align: right; background-color: #ffffff;" placeholder="اكتب تحديثاً...">
+              </div>
+
+              <div style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 10px; background-color: #f8fafc; border-radius: 18px; border: 1.5px solid #e2e8f0;">
+                ${(initial.logs || []).filter(log => log.action === 'تعليق جديد').slice().reverse().map(log => {
+                  const isMe = log.by === user.name;
+                  return `
+                    <div style="display: flex; flex-direction: column; max-width: 80%; align-self: ${isMe ? 'flex-end' : 'flex-start'}; text-align: right;">
+                      <div style="background-color: ${isMe ? '#effafb' : '#ffffff'}; color: #1e293b; padding: 10px 14px; border-radius: 16px; border-top-${isMe ? 'left' : 'right'}-radius: 0px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); border: 1px solid ${isMe ? 'rgba(26,141,155,0.15)' : '#e2e8f0'};">
+                        ${!isMe ? `<div style="font-size: 11px; font-weight: 800; color: #1a8d9b; margin-bottom: 4px;">${log.by}</div>` : ''}
+                        <div style="font-size: 13px; line-height: 1.5; font-weight: bold;">${log.comment}</div>
+                        <div style="font-size: 10px; color: #94a3b8; text-align: left; margin-top: 4px;">
+                          ${new Date(log.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+                ${(!initial.logs || initial.logs.filter(log => log.action === 'تعليق جديد').length === 0) ? `
+                  <div style="text-align: center; padding: 20px; font-size: 12px; color: #94a3b8; font-weight: bold;">
+                    لا توجد رسائل سابقة. ابدأ المحادثة الآن!
+                  </div>
+                ` : ''}
+              </div>
             </div>
           ` : ''}
+
+          <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button id="btn-save-task" style="padding: 0 30px; height: 46px; background-color: #1a8d9b; color: white; border: none; border-radius: 16px; font-weight: bold; font-size: 14px; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(26, 141, 155, 0.25); display: inline-flex; align-items: center; gap: 8px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+              حفظ المهمة
+            </button>
+          </div>
         </div>
       `,
       didOpen: () => {
         if (!isReadOnly) {
-          flatpickr(document.getElementById('t-due'), {
-            locale: Arabic,
-            dateFormat: "Y-m-d",
-            allowInput: true,
-            onOpen: function(selectedDates, dateStr, instance) {
-              if (instance.calendarContainer) {
-                instance.calendarContainer.style.zIndex = 99999;
-              }
-            }
-          });
-
-          const cards = document.querySelectorAll('.premium-assignee-card');
+          const cards = document.querySelectorAll('.assignee-row-card');
           cards.forEach(card => {
             card.addEventListener('click', () => {
               const isSelected = card.getAttribute('data-selected') === 'true';
               const name = card.getAttribute('data-name');
               const init = name ? name.trim().charAt(0) : '?';
-              const avatar = card.querySelector('.assignee-avatar');
+              const avatar = card.querySelector('.assignee-avatar-circle');
               
               if (isSelected) {
                 card.setAttribute('data-selected', 'false');
-                card.style.borderColor = 'var(--surface-border)';
-                card.style.backgroundColor = 'var(--surface)';
-                card.style.color = 'var(--text-main)';
-                const label = card.querySelector('.assignee-label');
-                if (label) label.style.color = 'var(--text-main)';
+                card.style.borderColor = '#e2e8f0';
+                card.style.backgroundColor = '#ffffff';
                 if (avatar) {
-                  avatar.style.backgroundColor = 'var(--primary-light)';
-                  avatar.style.color = 'var(--primary)';
-                  avatar.style.borderColor = 'rgba(26, 141, 155, 0.2)';
+                  avatar.style.backgroundColor = '#e2e8f0';
+                  avatar.style.color = '#475569';
                   avatar.innerHTML = init;
                 }
               } else {
                 card.setAttribute('data-selected', 'true');
-                card.style.borderColor = 'var(--primary)';
-                card.style.backgroundColor = 'var(--primary-light)';
-                card.style.color = 'var(--primary-dark)';
-                const label = card.querySelector('.assignee-label');
-                if (label) label.style.color = 'var(--primary-dark)';
+                card.style.borderColor = '#1a8d9b';
+                card.style.backgroundColor = '#effafb';
                 if (avatar) {
-                  avatar.style.backgroundColor = 'var(--primary)';
+                  avatar.style.backgroundColor = '#1a8d9b';
                   avatar.style.color = '#ffffff';
-                  avatar.style.borderColor = 'var(--primary)';
                   avatar.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
                 }
               }
             });
           });
+        }
 
-          document.getElementById('btn-save-task')?.addEventListener('click', async () => {
+        document.getElementById('btn-save-task')?.addEventListener('click', async () => {
             const name = document.getElementById('t-name').value;
-            const taskNumber = document.getElementById('t-number').value.trim();
+            const taskNumber = `TSK-${document.getElementById('t-number').value.trim()}`;
             const description = document.getElementById('t-desc').value;
             const dueDate = document.getElementById('t-due').value;
             const priority = document.getElementById('t-priority').value;
+            const status = document.getElementById('t-status')?.value || initial.status;
 
-            const selectedCards = document.querySelectorAll('.premium-assignee-card[data-selected="true"]');
-            const assigneeIds = Array.from(selectedCards).map(c => c.getAttribute('data-id'));
-            const assigneeNames = Array.from(selectedCards).map(c => c.getAttribute('data-name'));
+            const selectedCards = document.querySelectorAll('.assignee-row-card[data-selected="true"]');
+            const assigneeIds = isReadOnly 
+              ? (initial.assigneeIds || (initial.assigneeId ? [initial.assigneeId] : [])) 
+              : Array.from(selectedCards).map(c => c.getAttribute('data-id'));
+            const assigneeNames = isReadOnly 
+              ? (initial.assigneeNames || (initial.assigneeName ? [initial.assigneeName] : [])) 
+              : Array.from(selectedCards).map(c => c.getAttribute('data-name'));
 
-            if (!name || !taskNumber || assigneeIds.length === 0) {
+            if (!name || !taskNumber || assigneeIds.length === 0 || !assigneeIds[0]) {
               MySwal.showValidationMessage('يرجى ملء العنوان ورقم المهمة واختيار مسؤول واحد على الأقل');
               return;
             }
 
+            // Check if status changed without admin privileges
+            if (isEdit && status !== initial.status) {
+              if (status === 'مكتملة' && !isSuperAdmin) {
+                MySwal.showValidationMessage('لا يمكنك إغلاق المهمة مباشرة، يجب نقلها إلى "بانتظار الاعتماد" ليقوم المدير بذلك.');
+                return;
+              }
+              if (status === 'جديدة' && !isSuperAdmin) {
+                MySwal.showValidationMessage('لا يمكنك إعادة المهمة إلى حالة "جديدة"، هذا الإجراء خاص بالإدارة فقط.');
+                return;
+              }
+            }
+
             const assigneeId = assigneeIds[0];
             const assigneeName = assigneeNames[0];
+
+            let finalLogs = [...(initial.logs || [])];
+            if (isEdit && status !== initial.status) {
+              finalLogs.push({
+                action: 'تغيير حالة المهمة',
+                by: user.name || 'مستخدم',
+                timestamp: new Date().toISOString(),
+                comment: `تم تغيير الحالة من "${initial.status}" إلى "${status}"`
+              });
+            }
 
             const newTaskData = {
               ...initial,
@@ -427,6 +602,8 @@ const AdminSupervisorTasks = ({ user }) => {
               assigneeNames,
               dueDate,
               priority,
+              status,
+              logs: finalLogs,
               createdBy: user.name || 'إدارة'
             };
 
@@ -451,7 +628,6 @@ const AdminSupervisorTasks = ({ user }) => {
             MySwal.close();
             MySwal.fire('تم الحفظ', 'تم حفظ بيانات المهمة بنجاح', 'success');
           });
-        }
 
         if (isEdit) {
           document.getElementById('btn-add-comment')?.addEventListener('click', async () => {
@@ -486,80 +662,142 @@ const AdminSupervisorTasks = ({ user }) => {
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   return (
-    <div style={{ padding: '20px', direction: 'rtl', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
+    <div style={{ padding: '12px 12px 120px 12px', direction: 'rtl', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: 'Tajawal, sans-serif' }}>
       
-      <div className="glass-card mb-6 p-6 bg-white border border-slate-200 rounded-xl shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <h2 className="text-2xl font-extrabold text-slate-800 flex items-center gap-2">
-            <User className="text-slate-600" size={24} /> إدارة مهام المشرفين
-          </h2>
-          <div className="flex flex-wrap items-center mt-4 md:mt-0" style={{ gap: '16px' }}>
-            {isSuperAdmin && (
-              <button 
-                onClick={() => openTaskModal()} 
-                className="btn btn-primary flex items-center gap-2 transition-all shadow-sm hover:shadow-md"
-                style={{
-                  padding: '10px 24px',
-                  borderRadius: '12px',
-                  fontWeight: 'bold',
-                  fontSize: '15px',
-                  border: 'none'
-                }}
-              >
-                <Plus size={18} /> إضافة مهمة
-              </button>
-            )}
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="btn btn-primary flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow-md"
-              style={{
-                padding: '10px 24px',
-                borderRadius: '12px',
-                fontWeight: 'bold',
-                fontSize: '15px',
-                border: 'none',
-                color: 'white',
-                backgroundColor: 'var(--primary)'
-              }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-filter"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-              <span>تصفية</span>
-            </button>
-            <div 
-              className="flex items-center gap-2 shadow-sm transition-all"
-              style={{
-                backgroundColor: '#10b981', // Emerald green
-                color: 'white',
-                padding: '10px 24px',
-                borderRadius: '12px',
-                fontWeight: 'bold',
-                fontSize: '15px'
-              }}
-            >
-              <CheckCircle2 size={18} />
-              <span>نسبة الإنجاز: {completionRate}%</span>
-            </div>
-            
-            <div 
-              className="flex items-center gap-2 shadow-sm transition-all"
-              style={{
-                backgroundColor: '#ef4444',
-                color: 'white',
-                padding: '10px 24px',
-                borderRadius: '12px',
-                fontWeight: 'bold',
-                fontSize: '15px'
-              }}
-            >
-              <AlertCircle size={18} />
-              <span>مهام متأخرة: {lateTasks}</span>
-            </div>
+      {/* Header with Icon on the Right (RTL) */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '12px',
+        padding: '4px 4px'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '36px',
+          height: '36px',
+          borderRadius: '50%',
+          backgroundColor: '#ffffff',
+          border: '1px solid #e2e8f0',
+          color: '#475569'
+        }}>
+          <User size={18} />
+        </div>
+        <h2 style={{ fontSize: '18px', fontWeight: '850', color: '#1e293b', margin: 0, textAlign: 'center', flex: 1 }}>
+          إدارة مهام المشرفين
+        </h2>
+        <div style={{ width: '36px' }}></div>
+      </div>
+
+      {/* Unified Stats and Actions Card - Compact 3-Column Layout */}
+      <div style={{
+        backgroundColor: '#ffffff',
+        borderRadius: '20px',
+        padding: '12px 16px',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.015)',
+        border: '1px solid #f1f5f9',
+        marginBottom: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px'
+      }}>
+        {isSuperAdmin && (
+          <button
+            onClick={() => openTaskModal()}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              backgroundColor: '#1a8d9b',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '10px',
+              height: '36px',
+              fontWeight: 'bold',
+              fontSize: '12px',
+              cursor: 'pointer',
+              width: '100%'
+            }}
+            className="hover:opacity-90 active:scale-95"
+          >
+            <Plus size={14} />
+            <span>إضافة مهمة جديدة</span>
+          </button>
+        )}
+
+        {/* 3 Columns Row: Stats + Filter */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr 0.8fr',
+          gap: '8px',
+          alignItems: 'center'
+        }}>
+          {/* Completion Rate */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px',
+            backgroundColor: '#effaf6',
+            border: '1px solid #d1fae5',
+            color: '#10b981',
+            borderRadius: '10px',
+            height: '36px',
+            fontWeight: 'bold',
+            fontSize: '11px'
+          }}>
+            <CheckCircle2 size={13} />
+            <span>إنجاز: {completionRate}%</span>
           </div>
+
+          {/* Late Tasks */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px',
+            backgroundColor: '#fff5f5',
+            border: '1px solid #fee2e2',
+            color: '#ef4444',
+            borderRadius: '10px',
+            height: '36px',
+            fontWeight: 'bold',
+            fontSize: '11px'
+          }}>
+            <AlertCircle size={13} />
+            <span>متأخرة: {lateTasks}</span>
+          </div>
+
+          {/* Filters Toggle */}
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              backgroundColor: '#1a8d9b',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '10px',
+              height: '36px',
+              fontWeight: 'bold',
+              fontSize: '11px',
+              cursor: 'pointer'
+            }}
+            className="hover:opacity-90 active:scale-95"
+          >
+            <Filter size={13} />
+            <span>تصفية</span>
+          </button>
         </div>
       </div>
 
       {showFilters && (
-        <div className="premium-filter-panel">
+        <div className="premium-filter-panel" style={{ marginBottom: '24px' }}>
           <div style={{ flex: '1', minWidth: '200px', display: 'flex', alignItems: 'center', background: 'var(--surface)', border: '1px solid rgba(26, 141, 155, 0.2)', borderRadius: '10px', padding: '0 10px', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
             <Search size={16} color="var(--primary)" />
             <input 
@@ -604,12 +842,12 @@ const AdminSupervisorTasks = ({ user }) => {
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '50px' }}><div className="loading-spinner"></div></div>
       ) : (
-        /* Kanban Board */
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '10px', paddingBottom: '10px', alignItems: 'start' }}>
+        /* Kanban Board Grid - Stacks on mobile, columns on desktop */
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px', paddingBottom: '20px', alignItems: 'start' }}>
           {COLUMNS.map(col => {
             const columnTasks = tasks.filter(t => {
               if (t.status !== col.id) return false;
-              if (filters.search && !t.name.includes(filters.search) && !t.taskNumber?.includes(filters.search)) return false;
+              if (!matchesSearch([t.name, t.taskNumber, t.description, t.assigneeNames], debouncedTaskSearch)) return false;
               if (filters.assigneeId) {
                 const isDirect = String(t.assigneeId) === String(filters.assigneeId);
                 const isInArray = Array.isArray(t.assigneeIds) && t.assigneeIds.map(String).includes(String(filters.assigneeId));
@@ -625,24 +863,53 @@ const AdminSupervisorTasks = ({ user }) => {
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, col.id)}
                 style={{ 
-                  backgroundColor: col.bg, 
-                  border: `1px solid ${col.border}`, 
-                  borderRadius: '12px',
-                  padding: '10px',
-                  minHeight: '400px',
+                  backgroundColor: '#ffffff', 
+                  border: `1.5px solid #f1f5f9`, 
+                  borderRadius: '20px',
+                  padding: '12px',
+                  minHeight: '180px',
                   display: 'flex',
                   flexDirection: 'column',
-                  overflow: 'hidden'
+                  boxShadow: '0 4px 15px rgba(0,0,0,0.015)'
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <h3 style={{ fontSize: '13px', fontWeight: 'bold', color: col.color, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{col.title}</h3>
-                  <div style={{ backgroundColor: '#fff', color: col.color, padding: '2px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', border: `1px solid ${col.border}` }}>
+                {/* Column Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      width: '38px', 
+                      height: '38px', 
+                      borderRadius: '50%', 
+                      backgroundColor: col.bgHeader, 
+                      color: col.color 
+                    }}>
+                      <col.icon size={20} />
+                    </div>
+                    <h3 style={{ fontSize: '15px', fontWeight: '850', color: col.color, margin: 0 }}>
+                      {col.title}
+                    </h3>
+                  </div>
+                  <div style={{ 
+                    backgroundColor: col.bgHeader, 
+                    color: col.color, 
+                    width: '28px', 
+                    height: '28px', 
+                    borderRadius: '50%', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    fontSize: '13px', 
+                    fontWeight: '800', 
+                    border: `1px solid ${col.border}` 
+                  }}>
                     {columnTasks.length}
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
                   {columnTasks.map(task => {
                     const priorityData = PRIORITIES[task.priority] || PRIORITIES['متوسطة'];
                     const isTaskLate = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'مكتملة';
@@ -656,17 +923,16 @@ const AdminSupervisorTasks = ({ user }) => {
                         onDragEnd={handleDragEnd}
                         onClick={() => openTaskModal(task)}
                         style={{ 
-                          backgroundColor: '#fff', 
-                          border: isTaskLate ? '2px solid #fca5a5' : '1px solid #e2e8f0', 
-                          borderRadius: '10px', 
-                          padding: '10px', 
+                          backgroundColor: col.bg, 
+                          border: isTaskLate ? '2px solid #ef4444' : `1px solid ${col.border}`, 
+                          borderRadius: '16px', 
+                          padding: '14px', 
                           cursor: 'grab',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                          transition: 'transform 0.1s, box-shadow 0.1s',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                          transition: 'all 0.2s',
                           position: 'relative'
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.05)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)'; }}
+                        className="hover:-translate-y-1 hover:shadow-md"
                       >
                         {isTaskLate && (
                           <div style={{ position: 'absolute', top: '-8px', left: '-4px', backgroundColor: '#ef4444', color: '#fff', fontSize: '9px', padding: '2px 4px', borderRadius: '6px', fontWeight: 'bold' }}>
@@ -676,7 +942,7 @@ const AdminSupervisorTasks = ({ user }) => {
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 'bold' }}>{task.taskNumber}</span>
+                            <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 'bold' }}>{task.taskNumber}</span>
                             {isSuperAdmin && (
                               <button
                                 onClick={(e) => handleDeleteTask(e, task.id)}
@@ -692,22 +958,22 @@ const AdminSupervisorTasks = ({ user }) => {
                           </div>
                         </div>
 
-                        <h4 style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b', margin: '0 0 8px 0', lineHeight: '1.4', wordBreak: 'break-word' }}>
+                        <h4 style={{ fontSize: '13px', fontWeight: '800', color: '#1e293b', margin: '0 0 8px 0', lineHeight: '1.4', wordBreak: 'break-word' }}>
                           {task.name}
                         </h4>
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px', borderTop: '1px solid #f1f5f9', paddingTop: '8px', flexWrap: 'wrap', gap: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px', borderTop: '1px solid rgba(0,0,0,0.03)', paddingTop: '8px', flexWrap: 'wrap', gap: '4px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#e0e7ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#ffffff', color: col.color, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${col.border}` }}>
                               <User size={10} strokeWidth={2.5} />
                             </div>
                             <span 
                               style={{ fontSize: '11px', color: '#475569', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80px' }}
-                              title={Array.isArray(task.assigneeNames) ? task.assigneeNames.join('، ') : task.assigneeName}
+                              title={Array.isArray(task.assigneeNames) ? task.assigneeNames.filter(Boolean).join('، ') : (task.assigneeName || 'غير معين')}
                             >
-                              {Array.isArray(task.assigneeNames) && task.assigneeNames.length > 0 
-                                ? task.assigneeNames.map(n => n.split(' ')[0]).join('، ')
-                                : (task.assigneeName ? task.assigneeName.split(' ')[0] : 'غير معين')}
+                              {Array.isArray(task.assigneeNames) && task.assigneeNames.filter(n => typeof n === 'string').length > 0 
+                                ? task.assigneeNames.filter(n => typeof n === 'string').map(n => n.split(' ')[0]).join('، ')
+                                : (typeof task.assigneeName === 'string' ? task.assigneeName.split(' ')[0] : 'غير معين')}
                             </span>
                           </div>
 
@@ -730,8 +996,21 @@ const AdminSupervisorTasks = ({ user }) => {
                   })}
                   
                   {columnTasks.length === 0 && (
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '13px', border: '2px dashed #cbd5e1', borderRadius: '12px', opacity: 0.5 }}>
-                      اسحب المهام إلى هنا
+                    <div style={{ 
+                      flex: 1, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      color: '#94a3b8', 
+                      fontSize: '13px', 
+                      border: '2px dashed #cbd5e1', 
+                      borderRadius: '14px', 
+                      minHeight: '60px',
+                      padding: '16px',
+                      fontWeight: 'bold',
+                      backgroundColor: '#fafafa'
+                    }}>
+                      لسحب المهام إلى هنا
                     </div>
                   )}
                 </div>

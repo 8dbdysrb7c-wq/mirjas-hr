@@ -12,11 +12,13 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-import { Settings, Globe, MessageSquare, Image as ImageIcon, CheckCircle, ListTodo, Users, Plus, Trash2, Save, Upload, Edit2, Package, Home, Palette, Ruler, Truck, CheckCircle2, Bell, ChevronDown, ChevronUp, Volume2, VolumeX, Briefcase, Building, Clock, MapPin, Fingerprint, ArrowUpDown, Calendar, PlusCircle, MinusCircle, Shield, RotateCcw, DollarSign, Database } from 'lucide-react';
+import { Settings, Globe, GripVertical, MessageSquare, Image as ImageIcon, CheckCircle, ListTodo, Users, Plus, Trash2, Save, Upload, Edit2, Package, Home, Palette, Ruler, Truck, CheckCircle2, Bell, ChevronDown, ChevronUp, Volume2, VolumeX, Briefcase, Building, Clock, MapPin, Fingerprint, ArrowUpDown, Calendar, PlusCircle, MinusCircle, Shield, RotateCcw, DollarSign, Database, FileText } from 'lucide-react';
 import Swal from 'sweetalert2';
 import WhatsAppSettingsTab from './WhatsAppSettingsTab';
 import NotificationSettingsTab from './NotificationSettingsTab';
 import DataManagementTab from './DataManagementTab';
+import RolesSettingsTab from './RolesSettingsTab';
+import BarcodeManagerTab from '../../components/BarcodeManagerTab';
 import HRHolidays from '../hr/HRHolidays';
 
 function MapUpdater({ lat, lng }) {
@@ -61,6 +63,58 @@ const ALL_LEAVE_TYPES = [
 
 const AR_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
 const DEFAULT_CALENDAR_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+
+const DraggableList = ({ items, fieldName, onEdit, onDelete, onReorder }) => {
+  const [draggedIdx, setDraggedIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+
+  const handleDragStart = (e, index) => {
+    setDraggedIdx(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragEnter = (e, index) => {
+    e.preventDefault();
+    if (draggedIdx !== index) {
+      setDragOverIdx(index);
+    }
+  };
+
+  const handleDragEnd = () => {
+    if (draggedIdx !== null && dragOverIdx !== null && draggedIdx !== dragOverIdx) {
+      onReorder(fieldName, draggedIdx, dragOverIdx);
+    }
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+  };
+
+  return (
+    <div className="flex flex-col gap-2 mt-4" onDragOver={e => e.preventDefault()}>
+      {items.length > 0 ? items.map((item, idx) => (
+        <div
+          key={idx}
+          draggable
+          onDragStart={(e) => handleDragStart(e, idx)}
+          onDragEnter={(e) => handleDragEnter(e, idx)}
+          onDragEnd={handleDragEnd}
+          className={`flex items-center justify-between p-3 bg-white border rounded-xl shadow-sm transition-all duration-200 cursor-move ${dragOverIdx === idx ? 'border-primary bg-slate-50 scale-[1.02] z-10' : 'border-slate-200 hover:border-slate-300'}`}
+        >
+          <div className="flex items-center gap-3">
+            <GripVertical size={18} className="text-slate-400 cursor-grab active:cursor-grabbing" />
+            <span className="font-bold text-slate-700 whitespace-pre-line">{fieldName === 'quoteTaxRates' ? `${item}%` : item}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="icon-btn icon-btn-edit" onClick={() => onEdit(fieldName, idx)}><Edit2 size={16} /></button>
+            <button className="icon-btn icon-btn-delete" onClick={() => onDelete(fieldName, idx)}><Trash2 size={16} /></button>
+          </div>
+        </div>
+      )) : (
+        <div className="p-4 text-center text-slate-500 bg-slate-50 border border-slate-200 border-dashed rounded-xl">لا توجد عناصر مضافة</div>
+      )}
+    </div>
+  );
+};
 
 
 const AdminSettings = ({ user }) => {
@@ -132,6 +186,7 @@ const AdminSettings = ({ user }) => {
     itemStatuses: [],
     salesStatuses: [],
     productionStatuses: [],
+    preparationStatuses: [],
     userTypes: [],
     jobTitles: [],
     departmentsList: [],
@@ -157,6 +212,16 @@ const AdminSettings = ({ user }) => {
         getGlobalSettings(),
         getEmployees()
       ]);
+      if (data.stockColors && Array.isArray(data.stockColors)) {
+        data.stockColors.sort((a, b) => {
+          const isModelA = String(a).trim().startsWith('موديل');
+          const isModelB = String(b).trim().startsWith('موديل');
+          if (isModelA && !isModelB) return -1;
+          if (!isModelA && isModelB) return 1;
+          return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+        });
+      }
+      
       setSettings({
         ...data,
         ammanAreas: data.ammanAreas || [
@@ -418,6 +483,13 @@ const AdminSettings = ({ user }) => {
     }
   };
 
+  const reorderItem = (field, startIndex, endIndex) => {
+    const newList = Array.from(settings[field] || []);
+    const [removed] = newList.splice(startIndex, 1);
+    newList.splice(endIndex, 0, removed);
+    setSettings({ ...settings, [field]: newList });
+  };
+
   const addItem = (field) => {
     Swal.fire({
       customClass: {
@@ -446,9 +518,31 @@ const AdminSettings = ({ user }) => {
       }
     }).then((result) => {
       if (result.isConfirmed && result.value) {
+        let newArray = [...(settings[field] || []), result.value.trim()];
+        if (field === 'stockColors') {
+          newArray.sort((a, b) => {
+            const isModelA = String(a).trim().startsWith('موديل');
+            const isModelB = String(b).trim().startsWith('موديل');
+            if (isModelA && !isModelB) return -1;
+            if (!isModelA && isModelB) return 1;
+            return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+          });
+        }
+        if (['customerSectors', 'ammanAreas'].includes(field)) {
+          newArray.sort((a, b) => String(a).localeCompare(String(b), 'ar', { sensitivity: 'base', numeric: true }));
+        }
+        if (field === 'jordanianCities') {
+          newArray.sort((a, b) => {
+            const isAmmanA = String(a).trim() === 'عمان';
+            const isAmmanB = String(b).trim() === 'عمان';
+            if (isAmmanA && !isAmmanB) return -1;
+            if (!isAmmanA && isAmmanB) return 1;
+            return String(a).localeCompare(String(b), 'ar', { sensitivity: 'base', numeric: true });
+          });
+        }
         setSettings({
           ...settings,
-          [field]: [...(settings[field] || []), result.value.trim()]
+          [field]: newArray
         });
       }
     });
@@ -485,6 +579,27 @@ const AdminSettings = ({ user }) => {
       if (result.isConfirmed && result.value) {
         const newList = [...settings[field]];
         newList[index] = result.value.trim();
+        if (field === 'stockColors') {
+          newList.sort((a, b) => {
+            const isModelA = String(a).trim().startsWith('موديل');
+            const isModelB = String(b).trim().startsWith('موديل');
+            if (isModelA && !isModelB) return -1;
+            if (!isModelA && isModelB) return 1;
+            return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+          });
+        }
+        if (['customerSectors', 'ammanAreas'].includes(field)) {
+          newList.sort((a, b) => String(a).localeCompare(String(b), 'ar', { sensitivity: 'base', numeric: true }));
+        }
+        if (field === 'jordanianCities') {
+          newList.sort((a, b) => {
+            const isAmmanA = String(a).trim() === 'عمان';
+            const isAmmanB = String(b).trim() === 'عمان';
+            if (isAmmanA && !isAmmanB) return -1;
+            if (!isAmmanA && isAmmanB) return 1;
+            return String(a).localeCompare(String(b), 'ar', { sensitivity: 'base', numeric: true });
+          });
+        }
         setSettings({ ...settings, [field]: newList });
       }
     });
@@ -506,7 +621,7 @@ const AdminSettings = ({ user }) => {
         <div style="text-align: right; display: flex; flex-direction: column; gap: 15px;">
           <div class="input-group">
             <label>اسم النوع</label>
-            <input id="swal-type-name" class="premium-input" placeholder="مثال: مشرف مبيعات">
+            <input id="swal-type-name" class="premium-input" placeholder="مثال: مشرف طلبيات">
           </div>
           <div class="input-group">
             <label>لون التمييز</label>
@@ -873,6 +988,62 @@ const AdminSettings = ({ user }) => {
     });
   };
 
+  const generateKShelves = () => {
+    Swal.fire({
+      title: 'هل تريد توليد الرفوف من K0 إلى K60 تلقائياً؟',
+      text: 'سيتم إضافة الرفوف غير الموجودة مسبقاً إلى قائمة مواقع المخزون.',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'نعم، قم بالتوليد',
+      cancelButtonText: 'إلغاء',
+      customClass: {
+        confirmButton: 'btn-premium-save',
+        cancelButton: 'btn-premium-cancel'
+      },
+      buttonsStyling: false
+    }).then((result) => {
+      if (result.isConfirmed) {
+        const currentLocations = settings.stockLocations || [];
+        const newLocations = [...currentLocations];
+        let addedCount = 0;
+        for (let i = 0; i <= 60; i++) {
+          const name = `K${i}`;
+          if (!newLocations.includes(name)) {
+            newLocations.push(name);
+            addedCount++;
+          }
+        }
+        if (addedCount > 0) {
+          setSettings({
+            ...settings,
+            stockLocations: newLocations
+          });
+          Swal.fire({
+            title: 'تم التوليد بنجاح',
+            text: `تم إضافة ${addedCount} رف جديد (من K0 إلى K60). يرجى الضغط على زر حفظ الإعدادات أسفل الصفحة لتأكيد الحفظ.`,
+            icon: 'success',
+            confirmButtonText: 'حسناً',
+            customClass: {
+              confirmButton: 'btn-premium-save'
+            },
+            buttonsStyling: false
+          });
+        } else {
+          Swal.fire({
+            title: 'لم يتم إضافة أي رف',
+            text: 'جميع الرفوف من K0 إلى K60 موجودة مسبقاً.',
+            icon: 'info',
+            confirmButtonText: 'حسناً',
+            customClass: {
+              confirmButton: 'btn-premium-save'
+            },
+            buttonsStyling: false
+          });
+        }
+      }
+    });
+  };
+
   const moveItem = (field, index, direction) => {
     const newList = [...(settings[field] || [])];
     if (direction === -1 && index > 0) {
@@ -1022,6 +1193,9 @@ return (
         <div className={`premium-tab ${activeTab === 'statuses' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('statuses')}>
           <ListTodo size={18} /> <span>إدارة الحالات</span>
         </div>
+        <div className={`premium-tab ${activeTab === 'roles' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('roles')}>
+          <Shield size={18} /> <span>الأدوار والصلاحيات</span>
+        </div>
         <div className={`premium-tab ${activeTab === 'users' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('users')}>
           <Users size={18} /> <span>أنواع المستخدمين</span>
         </div>
@@ -1031,8 +1205,11 @@ return (
         <div className={`premium-tab ${activeTab === 'stock' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('stock')}>
           <Package size={18} /> <span>إعدادات المخزون</span>
         </div>
-                <div className={`premium-tab ${activeTab === 'notifications' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('notifications')}>
+        <div className={`premium-tab ${activeTab === 'notifications' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('notifications')}>
           <Bell size={18} /> <span>إعدادات الإشعارات</span>
+        </div>
+        <div className={`premium-tab ${activeTab === 'quotes' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('quotes')}>
+          <FileText size={18} /> <span>إعدادات عروض الأسعار</span>
         </div>
         
         <div className={`premium-tab ${['hr', 'jobtitles', 'workshifts', 'holidays'].includes(activeTab) ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('hr')}>
@@ -1043,6 +1220,9 @@ return (
         </div>
         <div className={`premium-tab ${activeTab === 'data' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('data')}>
           <Database size={18} /> <span>إدارة البيانات</span>
+        </div>
+        <div className={`premium-tab ${activeTab === 'barcodes' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('barcodes')}>
+          <i className="lucide-barcode w-4 h-4" /> <span>إدارة الباركودات</span>
         </div>
       </div>
 
@@ -1874,6 +2054,44 @@ return (
                 </table>
               </div>
             </div>
+              {/* حالات الطلبيات - تحضير */}
+            <div className="glass-panel p-6 space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold flex items-center gap-2"><CheckCircle size={18} className="text-primary" /> حالات الطلبيات (تحضير)</h3>
+                <button className="btn-premium-add" onClick={() => addItem('preparationStatuses')}><span>إضافة</span> <Plus size={16} /></button>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
+                <table className="w-full text-right border-collapse">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="p-3 font-bold text-slate-700 border border-slate-200">الحالة</th>
+                      <th className="p-3 font-bold text-slate-700 w-32 text-center border border-slate-200">الإجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(settings.preparationStatuses || []).length > 0 ? (
+                      (settings.preparationStatuses || []).map((status, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-3 font-medium align-middle border border-slate-200">{status}</td>
+                          <td className="p-3 align-middle text-center border border-slate-200">
+                            <div className="flex gap-2 justify-center items-center">
+                              <button className="icon-btn text-slate-400 hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed" disabled={idx === 0} onClick={() => moveItem('preparationStatuses', idx, -1)}><ChevronUp size={16} /></button>
+                              <button className="icon-btn text-slate-400 hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed" disabled={idx === (settings.preparationStatuses || []).length - 1} onClick={() => moveItem('preparationStatuses', idx, 1)}><ChevronDown size={16} /></button>
+                              <button className="icon-btn icon-btn-edit" onClick={() => editItem('preparationStatuses', idx)}><Edit2 size={16} /></button>
+                              <button className="icon-btn icon-btn-delete" onClick={() => removeItem('preparationStatuses', idx)}><Trash2 size={16} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="2" className="p-4 text-center text-slate-500 border border-slate-200">لا توجد حالات مضافة</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
               {/* حالات الطلبيات - عملاء */}
             <div className="glass-panel p-6 space-y-4">
               <div className="flex justify-between items-center">
@@ -1960,6 +2178,50 @@ return (
           </div>
         )}
 
+        {activeTab === 'quotes' && (
+          <div className="space-y-8 animate-fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+              {/* حالات عروض الأسعار */}
+              <div className="glass-panel p-6 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold flex items-center gap-2"><ListTodo size={18} className="text-primary" /> حالات عروض الأسعار</h3>
+                  <button className="btn-premium-add" onClick={() => addItem('quoteStatuses')}><span>إضافة</span> <Plus size={16} /></button>
+                </div>
+                <DraggableList items={settings.quoteStatuses || []} fieldName="quoteStatuses" onEdit={editItem} onDelete={removeItem} onReorder={reorderItem} />
+              </div>
+
+              {/* نسب الضريبة لعروض الأسعار */}
+              <div className="glass-panel p-6 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold flex items-center gap-2"><DollarSign size={18} className="text-primary" /> نسب الضريبة (%)</h3>
+                  <button className="btn-premium-add" onClick={() => addItem('quoteTaxRates')}><span>إضافة</span> <Plus size={16} /></button>
+                </div>
+                <DraggableList items={settings.quoteTaxRates || []} fieldName="quoteTaxRates" onEdit={editItem} onDelete={removeItem} onReorder={reorderItem} />
+              </div>
+
+              {/* فترات صلاحية عروض الأسعار */}
+              <div className="glass-panel p-6 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold flex items-center gap-2"><Clock size={18} className="text-primary" /> فترات صلاحية العرض</h3>
+                  <button className="btn-premium-add" onClick={() => addItem('quoteValidities')}><span>إضافة</span> <Plus size={16} /></button>
+                </div>
+                <DraggableList items={settings.quoteValidities || []} fieldName="quoteValidities" onEdit={editItem} onDelete={removeItem} onReorder={reorderItem} />
+              </div>
+
+              {/* الشروط العامة لعروض الأسعار */}
+              <div className="glass-panel p-6 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold flex items-center gap-2"><FileText size={18} className="text-primary" /> الشروط والأحكام العامة</h3>
+                  <button className="btn-premium-add" onClick={() => addItem('quoteTerms')}><span>إضافة</span> <Plus size={16} /></button>
+                </div>
+                <DraggableList items={settings.quoteTerms || []} fieldName="quoteTerms" onEdit={editItem} onDelete={removeItem} onReorder={reorderItem} />
+              </div>
+
+            </div>
+          </div>
+        )}
+
         {activeTab === 'users' && (
           <div className="glass-panel p-6 space-y-4 animate-fade-in">
             <div className="flex justify-between items-center">
@@ -2014,7 +2276,7 @@ return (
               <h3 className="font-bold flex items-center gap-2"><Briefcase size={18} className="text-primary" /> المسميات والأقسام الوظيفية</h3>
               <button className="btn-premium-add" onClick={() => addItem('jobTitles')}><span>إضافة مسمى جديد</span> <Plus size={16} /></button>
             </div>
-            <p className="text-sm text-slate-500">أضف المسميات الوظيفية المتاحة في شركتك لتسهيل تصنيف الموظفين (مثال: مدير مبيعات، محاسب، إلخ).</p>
+            <p className="text-sm text-slate-500">أضف المسميات الوظيفية المتاحة في شركتك لتسهيل تصنيف الموظفين (مثال: مدير طلبيات، محاسب، إلخ).</p>
             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
               <table className="w-full text-right border-collapse">
                 <thead className="bg-slate-50">
@@ -2053,7 +2315,7 @@ return (
               <h3 className="font-bold flex items-center gap-2"><Building size={18} className="text-primary" /> الأقسام الوظيفية</h3>
               <button className="btn-premium-add" onClick={() => addItem('departmentsList')}><span>إضافة قسم جديد</span> <Plus size={16} /></button>
             </div>
-            <p className="text-sm text-slate-500">أضف الأقسام الرئيسية والإدارات في شركتك لتعيين الموظفين فيها (مثال: قسم المبيعات، التسويق، الموارد البشرية).</p>
+            <p className="text-sm text-slate-500">أضف الأقسام الرئيسية والإدارات في شركتك لتعيين الموظفين فيها (مثال: قسم الطلبيات، التسويق، الموارد البشرية).</p>
             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
               <table className="w-full text-right border-collapse">
                 <thead className="bg-slate-50">
@@ -2089,10 +2351,10 @@ return (
         {activeTab === 'jobtitles' && (
           <div className="glass-panel p-6 space-y-4 animate-fade-in">
             <div className="flex justify-between items-center mb-2">
-              <h3 className="font-bold flex items-center gap-2"><Users size={18} className="text-primary" /> مندوبو المبيعات (البائعين)</h3>
+              <h3 className="font-bold flex items-center gap-2"><Users size={18} className="text-primary" /> مندوبو الطلبيات (البائعين)</h3>
               <button className="btn-premium-add" onClick={() => addItem('salesReps')}><span>إضافة مندوب جديد</span> <Plus size={16} /></button>
             </div>
-            <p className="text-sm text-slate-500">أضف أسماء مندوبي المبيعات (البائعين) في شركتك لربطهم بالعملاء وتسهيل الفرز والتقارير.</p>
+            <p className="text-sm text-slate-500">أضف أسماء مندوبي الطلبيات (البائعين) في شركتك لربطهم بالعملاء وتسهيل الفرز والتقارير.</p>
             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
               <table className="w-full text-right border-collapse">
                 <thead className="bg-slate-50">
@@ -2132,35 +2394,49 @@ return (
               <button className="btn-premium-add" onClick={() => addItem('customerSectors')}><span>إضافة قطاع جديد</span> <Plus size={16} /></button>
             </div>
             <p className="text-sm text-slate-500">أضف قطاعات العملاء لعملائك لاستخدامها عند إضافة أو تعديل بيانات العميل.</p>
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
-              <table className="w-full text-right border-collapse">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="p-3 font-bold text-slate-700 border border-slate-200">القطاع</th>
-                    <th className="p-3 font-bold text-slate-700 w-32 text-center border border-slate-200">الإجراء</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(settings.customerSectors || []).length > 0 ? (
-                    (settings.customerSectors || []).map((sector, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-3 font-medium align-middle border border-slate-200">{sector}</td>
-                        <td className="p-3 align-middle text-center border border-slate-200">
-                          <div className="flex gap-2 justify-center">
-                            <button className="icon-btn icon-btn-edit" onClick={() => editItem('customerSectors', idx)}><Edit2 size={16} /></button>
-                            <button className="icon-btn icon-btn-delete" onClick={() => removeItem('customerSectors', idx)}><Trash2 size={16} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="2" className="p-4 text-center text-slate-500 border border-slate-200">لا توجد قطاعات مضافة</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            {(settings.customerSectors || []).length > 0 ? (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                gap: '10px',
+                marginTop: '16px',
+                direction: 'rtl'
+              }}>
+                {(settings.customerSectors || []).map((sector, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '10px',
+                    padding: '5px 12px',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)'
+                  }}>
+                    <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1e293b' }}>{sector}</span>
+                    <div className="flex gap-1.5">
+                      <button className="icon-btn icon-btn-edit" style={{ width: '30px', height: '30px', borderRadius: '8px' }} onClick={() => editItem('customerSectors', idx)} title="تعديل">
+                        <Edit2 size={14} />
+                      </button>
+                      <button className="icon-btn icon-btn-delete" style={{ width: '30px', height: '30px', borderRadius: '8px' }} onClick={() => removeItem('customerSectors', idx)} title="حذف">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{
+                textAlign: 'center',
+                color: '#64748b',
+                padding: '24px',
+                fontWeight: '500',
+                backgroundColor: '#ffffff',
+                borderRadius: '12px',
+                border: '1px dashed #cbd5e1',
+                marginTop: '16px'
+              }}>لا توجد قطاعات مضافة</div>
+            )}
           </div>
         )}
 
@@ -2171,35 +2447,49 @@ return (
               <button className="btn-premium-add" onClick={() => addItem('ammanAreas')}><span>إضافة منطقة جديدة</span> <Plus size={16} /></button>
             </div>
             <p className="text-sm text-slate-500">أضف مناطق عمان المتاحة للاختيار عند تعيين عنوان عميل داخل عمان.</p>
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
-              <table className="w-full text-right border-collapse">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="p-3 font-bold text-slate-700 border border-slate-200">المنطقة</th>
-                    <th className="p-3 font-bold text-slate-700 w-32 text-center border border-slate-200">الإجراء</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(settings.ammanAreas || []).length > 0 ? (
-                    (settings.ammanAreas || []).map((area, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-3 font-medium align-middle border border-slate-200">{area}</td>
-                        <td className="p-3 align-middle text-center border border-slate-200">
-                          <div className="flex gap-2 justify-center">
-                            <button className="icon-btn icon-btn-edit" onClick={() => editItem('ammanAreas', idx)}><Edit2 size={16} /></button>
-                            <button className="icon-btn icon-btn-delete" onClick={() => removeItem('ammanAreas', idx)}><Trash2 size={16} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="2" className="p-4 text-center text-slate-500 border border-slate-200">لا توجد مناطق مضافة</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            {(settings.ammanAreas || []).length > 0 ? (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                gap: '10px',
+                marginTop: '16px',
+                direction: 'rtl'
+              }}>
+                {(settings.ammanAreas || []).map((area, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '10px',
+                    padding: '5px 12px',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)'
+                  }}>
+                    <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1e293b' }}>{area}</span>
+                    <div className="flex gap-1.5">
+                      <button className="icon-btn icon-btn-edit" style={{ width: '30px', height: '30px', borderRadius: '8px' }} onClick={() => editItem('ammanAreas', idx)} title="تعديل">
+                        <Edit2 size={14} />
+                      </button>
+                      <button className="icon-btn icon-btn-delete" style={{ width: '30px', height: '30px', borderRadius: '8px' }} onClick={() => removeItem('ammanAreas', idx)} title="حذف">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{
+                textAlign: 'center',
+                color: '#64748b',
+                padding: '24px',
+                fontWeight: '500',
+                backgroundColor: '#ffffff',
+                borderRadius: '12px',
+                border: '1px dashed #cbd5e1',
+                marginTop: '16px'
+              }}>لا توجد مناطق مضافة</div>
+            )}
           </div>
         )}
 
@@ -2210,217 +2500,384 @@ return (
               <button className="btn-premium-add" onClick={() => addItem('jordanianCities')}><span>إضافة مدينة جديدة</span> <Plus size={16} /></button>
             </div>
             <p className="text-sm text-slate-500">أضف أو عدّل المدن والمحافظات الرئيسية المتاحة للعملاء.</p>
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
-              <table className="w-full text-right border-collapse">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="p-3 font-bold text-slate-700 border border-slate-200">المدينة</th>
-                    <th className="p-3 font-bold text-slate-700 w-32 text-center border border-slate-200">الإجراء</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(settings.jordanianCities || []).length > 0 ? (
-                    (settings.jordanianCities || []).map((city, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-3 font-medium align-middle border border-slate-200">{city}</td>
-                        <td className="p-3 align-middle text-center border border-slate-200">
-                          <div className="flex gap-2 justify-center">
-                            <button className="icon-btn icon-btn-edit" onClick={() => editItem('jordanianCities', idx)}><Edit2 size={16} /></button>
-                            <button className="icon-btn icon-btn-delete" onClick={() => removeItem('jordanianCities', idx)}><Trash2 size={16} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="2" className="p-4 text-center text-slate-500 border border-slate-200">لا توجد مدن مضافة</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            {(settings.jordanianCities || []).length > 0 ? (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                gap: '10px',
+                marginTop: '16px',
+                direction: 'rtl'
+              }}>
+                {(settings.jordanianCities || []).map((city, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '10px',
+                    padding: '5px 12px',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)'
+                  }}>
+                    <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1e293b' }}>{city}</span>
+                    <div className="flex gap-1.5">
+                      <button className="icon-btn icon-btn-edit" style={{ width: '30px', height: '30px', borderRadius: '8px' }} onClick={() => editItem('jordanianCities', idx)} title="تعديل">
+                        <Edit2 size={14} />
+                      </button>
+                      <button className="icon-btn icon-btn-delete" style={{ width: '30px', height: '30px', borderRadius: '8px' }} onClick={() => removeItem('jordanianCities', idx)} title="حذف">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{
+                textAlign: 'center',
+                color: '#64748b',
+                padding: '24px',
+                fontWeight: '500',
+                backgroundColor: '#ffffff',
+                borderRadius: '12px',
+                border: '1px dashed #cbd5e1',
+                marginTop: '16px'
+              }}>لا توجد مدن مضافة</div>
+            )}
           </div>
         )}
 
         {activeTab === 'stock' && (
-          <div className="grid grid-cols-2 gap-6 items-start animate-fade-in">
+          <div className="grid grid-cols-3 gap-6 items-start animate-fade-in">
+            <style>{`
+              .shelf-grid-container {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(75px, 1fr));
+                gap: 10px;
+                max-height: 400px;
+                overflow-y: auto;
+                padding: 8px;
+                direction: rtl;
+              }
+              .colors-grid-container {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+                gap: 10px;
+                padding: 8px;
+                direction: rtl;
+              }
+              .general-grid-container {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+                gap: 10px;
+                padding: 8px;
+                direction: rtl;
+              }
+              .shelf-card, .general-card {
+                position: relative;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 44px;
+                border-radius: 8px;
+                font-size: 0.85rem;
+                font-weight: 600;
+                transition: all 0.2s ease;
+                cursor: pointer;
+                box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+                text-align: center;
+                padding: 6px 10px;
+                box-sizing: border-box;
+              }
+              
+              /* 1. Warehouses (Blue-gray/Slate theme) */
+              .warehouse-card {
+                background: #f8fafc;
+                border: 1px solid #cbd5e1;
+                color: #475569;
+              }
+              .warehouse-card:hover {
+                border-color: #64748b;
+                background: #f1f5f9;
+                color: #334155;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 6px -1px rgba(100, 116, 139, 0.15);
+              }
+              
+              /* 2. Stock Categories (Violet/Purple theme) */
+              .category-card {
+                background: #faf5ff;
+                border: 1px solid #e9d5ff;
+                color: #7c3aed;
+              }
+              .category-card:hover {
+                border-color: #7c3aed;
+                background: #f3e8ff;
+                color: #6d28d9;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 6px -1px rgba(124, 58, 237, 0.15);
+              }
+              
+              /* 3. Units (Amber/Orange theme) */
+              .unit-card {
+                background: #fffbeb;
+                border: 1px solid #fde68a;
+                color: #d97706;
+              }
+              .unit-card:hover {
+                border-color: #d97706;
+                background: #fef3c7;
+                color: #b45309;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 6px -1px rgba(217, 119, 6, 0.15);
+              }
+              
+              /* 4. Colors/Specs (Rose/Pink theme) */
+              .color-card {
+                background: #fff1f2;
+                border: 1px solid #fecdd3;
+                color: #db2777;
+              }
+              .color-card:hover {
+                border-color: #db2777;
+                background: #ffe4e6;
+                color: #be123c;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 6px -1px rgba(219, 39, 119, 0.15);
+              }
+
+              /* 5. Shelf/Locations */
+              .shelf-card-a {
+                background: #f0f9ff;
+                border: 1px solid #bae6fd;
+                color: #0369a1;
+              }
+              .shelf-card-a:hover {
+                border-color: #0284c7;
+                background: #e0f2fe;
+                color: #0369a1;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 6px -1px rgba(2, 132, 199, 0.15);
+              }
+              .shelf-card-k {
+                background: #f0fdfa;
+                border: 1px solid #ccfbf1;
+                color: #0f766e;
+              }
+              .shelf-card-k:hover {
+                border-color: #0d9488;
+                background: #ccfbf1;
+                color: #0f766e;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 6px -1px rgba(13, 148, 136, 0.15);
+              }
+              .shelf-card-other {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                color: #475569;
+              }
+              .shelf-card-other:hover {
+                border-color: var(--primary);
+                background: var(--primary-light, #f0fdfa);
+                color: var(--primary);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+              }
+
+              .shelf-actions, .general-actions {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(255, 255, 255, 0.96);
+                border-radius: 7px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.15s ease;
+              }
+              .shelf-card:hover .shelf-actions, .general-card:hover .general-actions {
+                opacity: 1;
+                pointer-events: auto;
+              }
+              .shelf-btn {
+                padding: 4px;
+                border-radius: 6px;
+                border: none;
+                background: transparent;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.15s;
+              }
+              .shelf-btn-edit {
+                color: #2563eb;
+              }
+              .shelf-btn-edit:hover {
+                background: #dbeafe;
+              }
+              .shelf-btn-delete {
+                color: #dc2626;
+              }
+              .shelf-btn-delete:hover {
+                background: #fee2e2;
+              }
+            `}</style>
+
+            {/* 1. Warehouses */}
             <div className="glass-panel p-6 space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="font-bold flex items-center gap-2"><Home size={18} className="text-primary" /> المستودعات</h3>
                 <button className="btn-premium-add" onClick={() => addItem('warehouses')}><span>إضافة</span> <Plus size={16} /></button>
               </div>
-              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
-                <table className="w-full text-right border-collapse">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="p-3 font-bold text-slate-700 border border-slate-200">الاسم</th>
-                      <th className="p-3 font-bold text-slate-700 w-32 text-center border border-slate-200">الإجراء</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(settings.warehouses || []).length > 0 ? (
-                      (settings.warehouses || []).map((item, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-3 font-medium align-middle border border-slate-200">{item}</td>
-                          <td className="p-3 align-middle text-center border border-slate-200">
-                            <div className="flex gap-2 justify-center">
-                              <button className="icon-btn icon-btn-edit" onClick={() => editItem('warehouses', idx)}><Edit2 size={16} /></button>
-                              <button className="icon-btn icon-btn-delete" onClick={() => removeItem('warehouses', idx)}><Trash2 size={16} /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="2" className="p-4 text-center text-slate-500 border border-slate-200">لا توجد مستودعات مضافة</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+              <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-4 mt-4 shadow-sm">
+                {(settings.warehouses || []).length > 0 ? (
+                  <div className="general-grid-container">
+                    {(settings.warehouses || []).map((item, idx) => (
+                      <div key={idx} className="shelf-card warehouse-card">
+                        <span>{item}</span>
+                        <div className="general-actions">
+                          <button className="shelf-btn shelf-btn-edit" onClick={(e) => { e.stopPropagation(); editItem('warehouses', idx); }} title="تعديل">
+                            <Edit2 size={14} />
+                          </button>
+                          <button className="shelf-btn shelf-btn-delete" onClick={(e) => { e.stopPropagation(); removeItem('warehouses', idx); }} title="حذف">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 text-center text-slate-500">لا توجد مستودعات مضافة</div>
+                )}
               </div>
             </div>
 
+            {/* 2. Stock Categories */}
             <div className="glass-panel p-6 space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="font-bold flex items-center gap-2"><ListTodo size={18} className="text-primary" /> تصنيفات المخزون</h3>
                 <button className="btn-premium-add" onClick={() => addItem('stockCategories')}><span>إضافة</span> <Plus size={16} /></button>
               </div>
-              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
-                <table className="w-full text-right border-collapse">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="p-3 font-bold text-slate-700 border border-slate-200">الاسم</th>
-                      <th className="p-3 font-bold text-slate-700 w-32 text-center border border-slate-200">الإجراء</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(settings.stockCategories || []).length > 0 ? (
-                      (settings.stockCategories || []).map((item, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-3 font-medium align-middle border border-slate-200">{item}</td>
-                          <td className="p-3 align-middle text-center border border-slate-200">
-                            <div className="flex gap-2 justify-center">
-                              <button className="icon-btn icon-btn-edit" onClick={() => editItem('stockCategories', idx)}><Edit2 size={16} /></button>
-                              <button className="icon-btn icon-btn-delete" onClick={() => removeItem('stockCategories', idx)}><Trash2 size={16} /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="2" className="p-4 text-center text-slate-500 border border-slate-200">لا توجد تصنيفات مضافة</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+              <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-4 mt-4 shadow-sm">
+                {(settings.stockCategories || []).length > 0 ? (
+                  <div className="general-grid-container">
+                    {(settings.stockCategories || []).map((item, idx) => (
+                      <div key={idx} className="shelf-card category-card">
+                        <span>{item}</span>
+                        <div className="general-actions">
+                          <button className="shelf-btn shelf-btn-edit" onClick={(e) => { e.stopPropagation(); editItem('stockCategories', idx); }} title="تعديل">
+                            <Edit2 size={14} />
+                          </button>
+                          <button className="shelf-btn shelf-btn-delete" onClick={(e) => { e.stopPropagation(); removeItem('stockCategories', idx); }} title="حذف">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 text-center text-slate-500">لا توجد تصنيفات مضافة</div>
+                )}
               </div>
             </div>
 
-            <div className="glass-panel p-6 space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="font-bold flex items-center gap-2"><Palette size={18} className="text-primary" /> الألوان / المواصفات</h3>
-                <button className="btn-premium-add" onClick={() => addItem('stockColors')}><span>إضافة</span> <Plus size={16} /></button>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
-                <table className="w-full text-right border-collapse">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="p-3 font-bold text-slate-700 border border-slate-200">الاسم</th>
-                      <th className="p-3 font-bold text-slate-700 w-32 text-center border border-slate-200">الإجراء</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(settings.stockColors || []).length > 0 ? (
-                      (settings.stockColors || []).map((item, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-3 font-medium align-middle border border-slate-200">{item}</td>
-                          <td className="p-3 align-middle text-center border border-slate-200">
-                            <div className="flex gap-2 justify-center">
-                              <button className="icon-btn icon-btn-edit" onClick={() => editItem('stockColors', idx)}><Edit2 size={16} /></button>
-                              <button className="icon-btn icon-btn-delete" onClick={() => removeItem('stockColors', idx)}><Trash2 size={16} /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="2" className="p-4 text-center text-slate-500 border border-slate-200">لا توجد ألوان مضافة</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
+            {/* 3. Stock Units */}
             <div className="glass-panel p-6 space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="font-bold flex items-center gap-2"><Ruler size={18} className="text-primary" /> الوحدات</h3>
                 <button className="btn-premium-add" onClick={() => addItem('stockUnits')}><span>إضافة</span> <Plus size={16} /></button>
               </div>
-              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
-                <table className="w-full text-right border-collapse">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="p-3 font-bold text-slate-700 border border-slate-200">الاسم</th>
-                      <th className="p-3 font-bold text-slate-700 w-32 text-center border border-slate-200">الإجراء</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(settings.stockUnits || []).length > 0 ? (
-                      (settings.stockUnits || []).map((item, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-3 font-medium align-middle border border-slate-200">{item}</td>
-                          <td className="p-3 align-middle text-center border border-slate-200">
-                            <div className="flex gap-2 justify-center">
-                              <button className="icon-btn icon-btn-edit" onClick={() => editItem('stockUnits', idx)}><Edit2 size={16} /></button>
-                              <button className="icon-btn icon-btn-delete" onClick={() => removeItem('stockUnits', idx)}><Trash2 size={16} /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="2" className="p-4 text-center text-slate-500 border border-slate-200">لا توجد وحدات مضافة</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+              <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-4 mt-4 shadow-sm">
+                {(settings.stockUnits || []).length > 0 ? (
+                  <div className="general-grid-container">
+                    {(settings.stockUnits || []).map((item, idx) => (
+                      <div key={idx} className="shelf-card unit-card">
+                        <span>{item}</span>
+                        <div className="general-actions">
+                          <button className="shelf-btn shelf-btn-edit" onClick={(e) => { e.stopPropagation(); editItem('stockUnits', idx); }} title="تعديل">
+                            <Edit2 size={14} />
+                          </button>
+                          <button className="shelf-btn shelf-btn-delete" onClick={(e) => { e.stopPropagation(); removeItem('stockUnits', idx); }} title="حذف">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 text-center text-slate-500">لا توجد وحدات مضافة</div>
+                )}
               </div>
             </div>
 
-            <div className="glass-panel p-6 space-y-4">
+            {/* 4. Stock Colors (Full Width) */}
+            <div className="glass-panel p-6 space-y-4 col-span-3">
               <div className="flex justify-between items-center">
-                <h3 className="font-bold flex items-center gap-2"><Globe size={18} className="text-primary" /> مواقع المخزون (الرفوف)</h3>
-                <button className="btn-premium-add" onClick={() => addItem('stockLocations')}><span>إضافة</span> <Plus size={16} /></button>
+                <h3 className="font-bold flex items-center gap-2"><Palette size={18} className="text-primary" /> الألوان / المواصفات</h3>
+                <button className="btn-premium-add" onClick={() => addItem('stockColors')}><span>إضافة</span> <Plus size={16} /></button>
               </div>
-              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mt-4 shadow-sm">
-                <table className="w-full text-right border-collapse">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="p-3 font-bold text-slate-700 border border-slate-200">الاسم</th>
-                      <th className="p-3 font-bold text-slate-700 w-32 text-center border border-slate-200">الإجراء</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(settings.stockLocations || []).length > 0 ? (
-                      (settings.stockLocations || []).map((item, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-3 font-medium align-middle border border-slate-200">{item}</td>
-                          <td className="p-3 align-middle text-center border border-slate-200">
-                            <div className="flex gap-2 justify-center">
-                              <button className="icon-btn icon-btn-edit" onClick={() => editItem('stockLocations', idx)}><Edit2 size={16} /></button>
-                              <button className="icon-btn icon-btn-delete" onClick={() => removeItem('stockLocations', idx)}><Trash2 size={16} /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="2" className="p-4 text-center text-slate-500 border border-slate-200">لا توجد مواقع مضافة</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+              <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-4 mt-4 shadow-sm">
+                {(settings.stockColors || []).length > 0 ? (
+                  <div className="colors-grid-container">
+                    {(settings.stockColors || []).map((item, idx) => (
+                      <div key={idx} className="shelf-card color-card">
+                        <span>{item}</span>
+                        <div className="general-actions">
+                          <button className="shelf-btn shelf-btn-edit" onClick={(e) => { e.stopPropagation(); editItem('stockColors', idx); }} title="تعديل">
+                            <Edit2 size={14} />
+                          </button>
+                          <button className="shelf-btn shelf-btn-delete" onClick={(e) => { e.stopPropagation(); removeItem('stockColors', idx); }} title="حذف">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 text-center text-slate-500">لا توجد ألوان مضافة</div>
+                )}
+              </div>
+            </div>
+
+            {/* 5. Stock Locations (Full Width) */}
+            <div className="glass-panel p-6 space-y-4 col-span-3">
+              <div className="flex justify-between items-center flex-wrap gap-4">
+                <h3 className="font-bold flex items-center gap-2"><Globe size={18} className="text-primary" /> مواقع المخزون (الرفوف)</h3>
+                <button className="btn-premium-add" onClick={() => addItem('stockLocations')}>
+                  <span>إضافة رف جديد</span> <Plus size={16} />
+                </button>
+              </div>
+              <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-4 mt-4 shadow-sm">
+                {(settings.stockLocations || []).length > 0 ? (
+                  <div className="shelf-grid-container">
+                    {(settings.stockLocations || []).map((item, idx) => {
+                      const isA = item.toUpperCase().startsWith('A');
+                      const isK = item.toUpperCase().startsWith('K');
+                      const cardClass = isA ? 'shelf-card-a' : (isK ? 'shelf-card-k' : 'shelf-card-other');
+                      
+                      return (
+                        <div key={idx} className={`shelf-card ${cardClass}`}>
+                          <span>{item}</span>
+                          <div className="shelf-actions">
+                            <button className="shelf-btn shelf-btn-edit" onClick={(e) => { e.stopPropagation(); editItem('stockLocations', idx); }} title="تعديل">
+                              <Edit2 size={14} />
+                            </button>
+                            <button className="shelf-btn shelf-btn-delete" onClick={(e) => { e.stopPropagation(); removeItem('stockLocations', idx); }} title="حذف">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-slate-500">لا توجد مواقع مضافة</div>
+                )}
               </div>
             </div>
           </div>
@@ -2438,6 +2895,12 @@ return (
           </div>
         )}
 
+        {activeTab === 'roles' && (
+          <div className="admin-content-layout space-y-8 animate-fade-in mt-6">
+            <RolesSettingsTab />
+          </div>
+        )}
+
         {activeTab === 'holidays' && (
           <div className="admin-content-layout space-y-8 animate-fade-in">
             <HRHolidays user={user} />
@@ -2447,6 +2910,12 @@ return (
         {activeTab === 'data' && (
           <div className="admin-content-layout space-y-8 animate-fade-in">
             <DataManagementTab />
+          </div>
+        )}
+
+        {activeTab === 'barcodes' && (
+          <div className="admin-content-layout space-y-8 animate-fade-in">
+            <BarcodeManagerTab user={user} />
           </div>
         )}
       </div>

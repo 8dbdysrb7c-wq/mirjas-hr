@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ar" dir="rtl" translate="no">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -17,13 +17,34 @@
   <body>
     <div id="root"></div>
     <div id="print-portal"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <script type="module" src="/src/main.jsx?v=20260815"></script>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js');
+          navigator.serviceWorker.register('/sw.js?v=20260815');
         });
       }
+    </script>
+    <script>
+      window.printSupervisorReport = function() {
+        const swalContent = document.querySelector('.premium-modal-popup-report');
+        if (!swalContent) {
+          window.print();
+          return;
+        }
+        const printPortal = document.getElementById('print-portal');
+        if (printPortal) {
+          printPortal.innerHTML = '<div class="report-print-layout" style="direction: rtl; text-align: right; font-family: \'Tajawal\', sans-serif; background: #fff; padding: 2rem; width: 100%; box-sizing: border-box;">' + swalContent.innerHTML + '</div>';
+          const buttons = printPortal.querySelectorAll('button');
+          buttons.forEach(btn => btn.style.display = 'none');
+          window.print();
+          setTimeout(() => {
+            printPortal.innerHTML = '';
+          }, 100);
+        } else {
+          window.print();
+        }
+      };
     </script>
   </body>
 </html>

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { getHRAssets, saveHRAsset, deleteHRAsset, getEmployees, getGlobalSettings, saveGlobalSettings, getStock, saveStockItem } from '../../store';
-import { Package, Plus, Search, Filter, AlertTriangle, CheckCircle, XCircle, ArrowRightLeft, Edit2, Trash2, Calendar, FileText, User, RefreshCw, BarChart2, Eye, X, Activity, ArrowUp, ArrowDown, Printer, FileDown, Layers, ArrowUpDown } from 'lucide-react';
+import { Package, Plus, Search, Filter, AlertTriangle, CheckCircle, XCircle, ArrowRightLeft, Edit2, Trash2, Calendar, FileText, User, RefreshCw, BarChart2, Eye, X, Activity, ArrowUp, ArrowDown, Printer, FileDown, Layers, ArrowUpDown, ChevronDown } from 'lucide-react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/light.css';
+import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 
 const MySwal = withReactContent(Swal);
 
@@ -33,6 +34,7 @@ const HRAssets = ({ user }) => {
   const [loading, setLoading] = useState(true);
   
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm);
   const [filterStatus, setFilterStatus] = useState('جميع الحالات');
   const [filterEmployee, setFilterEmployee] = useState('');
   const [filterLocation, setFilterLocation] = useState('');
@@ -223,27 +225,27 @@ const HRAssets = ({ user }) => {
         </div>
         <div class="premium-form text-right" style="direction: rtl;">
           <div class="grid grid-cols-12 gap-x-8 gap-y-8">
-            <!-- Row 1: Item Number, Name, Category -->
-            <div class="premium-form-group col-span-12 md:col-span-3">
+            <!-- Row 1: ID & Name -->
+            <div class="premium-form-group col-span-12 md:col-span-4">
               <label>رقم الصنف (ID)</label>
               <input id="swal-itemNumber" class="premium-input" value="${initialData.itemNumber}" disabled style="background: var(--surface); cursor: not-allowed; font-weight: bold; color: var(--primary-dark); text-align: center;">
             </div>
-            <div class="premium-form-group col-span-12 md:col-span-6">
+            <div class="premium-form-group col-span-12 md:col-span-8">
               <label>اسم الصنف</label>
               <input id="swal-name" class="premium-input" placeholder="مثال: قماش أبيض تركي" value="">
             </div>
-            <div class="premium-form-group col-span-12 md:col-span-3">
+
+            <!-- Row 2: Code, Category & Warehouse -->
+            <div class="premium-form-group col-span-12 md:col-span-4">
+              <label>رمز الصنف</label>
+              <input id="swal-itemCode" class="premium-input" placeholder="" value="">
+            </div>
+            <div class="premium-form-group col-span-12 md:col-span-4">
               <label>التصنيف</label>
               <select id="swal-category" class="premium-input">
                 <option value="" disabled>اختر التصنيف</option>
                 ${categories.map(c => `<option value="${c}" ${initialData.category === c ? 'selected' : ''}>${c}</option>`).join('')}
               </select>
-            </div>
-
-            <!-- Row 2: Item Code, Warehouse -->
-            <div class="premium-form-group col-span-12 md:col-span-3">
-              <label>رمز الصنف</label>
-              <input id="swal-itemCode" class="premium-input" placeholder="" value="">
             </div>
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label>المخزن</label>
@@ -277,7 +279,7 @@ const HRAssets = ({ user }) => {
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label class="text-primary">الكمية الحالية</label>
               <div class="flex gap-2">
-                <input id="swal-quantity" type="number" class="premium-input" style="flex: 2;" value="1">
+                <input id="swal-quantity" type="number" class="premium-input" style="flex: 2;" value="0">
                 <select id="swal-unit" class="premium-input" style="flex: 1;">
                   ${(globalSettings?.stockUnits || ['عدد', 'متر', 'كغم']).map(u => `<option value="${u}">${u}</option>`).join('')}
                 </select>
@@ -427,6 +429,16 @@ const HRAssets = ({ user }) => {
     const hasEmptyItems = formData.items.some(i => !i.name || !i.quantity || i.quantity <= 0);
     if (hasEmptyItems) {
       Swal.fire('خطأ', 'يرجى التأكد من اختيار اسم الصنف وإدخال كمية صحيحة لجميع سطور العهدة', 'error');
+      return;
+    }
+
+    const invalidStockItems = formData.items.filter(i => {
+      const exists = stockItems.some(s => String(s.name).trim() === String(i.name).trim());
+      return !exists;
+    });
+    if (invalidStockItems.length > 0) {
+      const namesStr = invalidStockItems.map(i => `"${i.name}"`).join('، ');
+      Swal.fire('صنف غير موجود في المخزن', `الصنف أو الأصناف التالية غير متوفرة في المخزن: ${namesStr} \n يرجى تحديد الصنف من القائمة المنسدلة للمخزن فقط.`, 'error');
       return;
     }
 
@@ -691,30 +703,35 @@ const HRAssets = ({ user }) => {
            const c_status = document.getElementById('col-itemStatus').checked;
 
            let html = `
-              <html dir="rtl">
+              <html>
               <head>
                 <meta charset="utf-8">
                 <style>
-                  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; direction: rtl; text-align: right; color: #1e293b; background: #fff; }
+                  * { box-sizing: border-box; }
+                  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #fff; margin: 0; padding: 0; }
+                  .print-container { padding: 30px; direction: rtl; text-align: right; color: #1e293b; margin: 0 auto; max-width: 850px; }
                   h1 { color: #0ea5e9; text-align: center; margin-bottom: 30px; border-bottom: 2px solid #e0f2fe; padding-bottom: 15px; }
                   .details { margin-bottom: 30px; background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
                   .details p { margin: 0; font-size: 15px; }
-                  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                  th, td { padding: 14px; border: 1px solid #cbd5e1; text-align: right; font-size: 14px; }
+                  table { width: 100%; max-width: 100%; border-collapse: collapse; margin-top: 20px; table-layout: fixed; }
+                  th, td { padding: 14px; border: 1px solid #cbd5e1; text-align: right; font-size: 14px; word-wrap: break-word; }
                   th { background-color: #0ea5e9; color: white; font-weight: bold; }
                   tr:nth-child(even) { background-color: #f8fafc; }
                   .footer { margin-top: 60px; display: flex; justify-content: space-around; text-align: center; }
                   .sig-box { border-top: 2px dashed #94a3b8; width: 220px; padding-top: 10px; margin-top: 60px; font-weight: bold; color: #64748b; }
                   @media print {
-                     body { padding: 0; }
+                     @page { size: A4 portrait; margin: 10mm; }
+                     body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+                     .print-container { width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
                      .details { background: transparent; border: 1px solid #000; }
-                     th { background-color: #f1f5f9; color: #000; }
-                     th, td { border: 1px solid #000; }
+                     th { background-color: #f1f5f9 !important; color: #000 !important; }
+                     th, td { border: 1px solid #000 !important; padding: 8px !important; }
                   }
                 </style>
               </head>
               <body>
-                <h1>نموذج تسليم عهدة وممتلكات</h1>
+                <div class="print-container" dir="rtl">
+                  <h1>نموذج تسليم عهدة وممتلكات</h1>
                 <div class="details">
                   ${c_assetNum ? `<p><strong>رقم العهدة:</strong> ${asset.assetNumber || '-'}</p>` : ''}
                   <p><strong>اسم العهدة:</strong> ${asset.name}</p>
@@ -726,24 +743,34 @@ const HRAssets = ({ user }) => {
                 <table>
                   <thead>
                     <tr>
-                      ${c_name ? '<th>اسم الصنف</th>' : ''}
-                      ${c_cat ? '<th>التصنيف</th>' : ''}
-                      ${c_loc ? '<th>الموقع بالمخزن</th>' : ''}
-                      ${c_qty ? '<th>الكمية</th>' : ''}
-                      ${c_status ? '<th>الحالة وقت التسليم</th>' : ''}
+                      ${c_name ? '<th style="width: 32%">اسم الصنف</th>' : ''}
+                      ${c_cat ? '<th style="width: 20%">التصنيف</th>' : ''}
+                      ${c_loc ? '<th style="width: 20%; text-align: center;">الموقع بالمخزن</th>' : ''}
+                      ${c_qty ? '<th style="width: 12%; text-align: center;">الكمية</th>' : ''}
+                      ${c_status ? '<th style="width: 16%; text-align: center;">الحالة وقت التسليم</th>' : ''}
                     </tr>
                   </thead>
                   <tbody>
                     ${(asset.items || []).map(item => {
                        const stockItem = stockItems.find(s => s.name === item.name);
-                       const loc = stockItem?.location || '-';
+                       let locHtml = '-';
+                       if (item.location) {
+                          const locs = item.location.split(/[,، -]/).filter(Boolean);
+                          locHtml = `<div style="display: flex; flex-wrap: wrap; gap: 4px; justify-content: center;">` + locs.map(l => `<span style="display: inline-block; border: 1.5px solid #059669; color: #047857; background: #ffffff; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; margin: 2px;">${l}</span>`).join('') + `</div>`;
+                       } else if (stockItem?.locations && stockItem.locations.length > 0) {
+                          locHtml = `<div style="display: flex; flex-wrap: wrap; gap: 4px; justify-content: center;">` + stockItem.locations.map(l => `<span style="display: inline-block; border: 1.5px solid #059669; color: #047857; background: #ffffff; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; margin: 2px;">${l}</span>`).join('') + `</div>`;
+                       } else if (stockItem?.location) {
+                          const locs = stockItem.location.split(/[,، -]/).filter(Boolean);
+                          locHtml = `<div style="display: flex; flex-wrap: wrap; gap: 4px; justify-content: center;">` + locs.map(l => `<span style="display: inline-block; border: 1.5px solid #059669; color: #047857; background: #ffffff; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; margin: 2px;">${l}</span>`).join('') + `</div>`;
+                       }
+                       const loc = locHtml;
                        return `
                          <tr>
                             ${c_name ? `<td><strong>${item.name}</strong></td>` : ''}
                             ${c_cat ? `<td>${item.category}</td>` : ''}
-                            ${c_loc ? `<td>${loc}</td>` : ''}
-                            ${c_qty ? `<td>${item.quantity}</td>` : ''}
-                            ${c_status ? `<td>${item.status}</td>` : ''}
+                            ${c_loc ? `<td style="text-align: center;">${loc}</td>` : ''}
+                            ${c_qty ? `<td style="text-align: center; font-weight: bold;">${item.quantity}</td>` : ''}
+                            ${c_status ? `<td style="text-align: center;">${item.status}</td>` : ''}
                          </tr>
                        `;
                     }).join('')}
@@ -757,6 +784,7 @@ const HRAssets = ({ user }) => {
                   <div>
                     <div class="sig-box">توقيع الموظف المستلم</div>
                   </div>
+                </div>
                 </div>
               </body>
               </html>
@@ -776,10 +804,17 @@ const HRAssets = ({ user }) => {
 
         document.getElementById('btn-print').onclick = () => {
            const html = getHtmlTable();
-           const win = window.open('', '_blank');
-           win.document.write(html);
-           win.document.close();
-           setTimeout(() => { win.print(); }, 200);
+           const printPortal = document.getElementById('print-portal');
+           if (printPortal) {
+              printPortal.innerHTML = html;
+              window.print();
+              setTimeout(() => { printPortal.innerHTML = ''; }, 100);
+           } else {
+              const win = window.open('', '_blank');
+              win.document.write(html);
+              win.document.close();
+              setTimeout(() => { win.print(); }, 200);
+           }
         };
         
         document.getElementById('btn-excel').onclick = () => {
@@ -976,31 +1011,149 @@ const HRAssets = ({ user }) => {
   };
 
   const handleSewingInventory = () => {
-    const initialItems = stockItems
-      .filter(s => s.category?.includes('خياط') || s.itemNumber?.startsWith('CON-'))
-      .map(s => {
-        const spent = assets.reduce((total, asset) => {
-          if (asset.status !== 'نشطة') return total;
-          const match = asset.items?.find(i => 
-            (i.itemNumber && s.itemNumber && i.itemNumber === s.itemNumber) || 
-            (String(i.name).trim() === String(s.name).trim())
-          );
-          if (match) return total + (Number(match.quantity) || 1);
-          return total;
-        }, 0);
-        const remaining = Number(s.quantity || 0) - spent;
-        return { ...s, spent, remaining };
+    const showCustodyBreakdown = (item) => {
+      const matches = [];
+      assets.forEach(asset => {
+        if (asset.status !== 'نشطة') return;
+        const itemsList = asset.items || (asset.name ? [{
+          name: asset.name,
+          itemNumber: asset.itemNumber,
+          quantity: asset.quantity || 1,
+          status: asset.status
+        }] : []);
+
+        const match = itemsList.find(i => {
+          const name1 = String(i.name || '').trim().replace(/\s+/g, ' ');
+          const name2 = String(item.name || '').trim().replace(/\s+/g, ' ');
+          if (name1 && name2) return name1 === name2;
+          return i.itemNumber && item.itemNumber && i.itemNumber === item.itemNumber;
+        });
+
+        if (match) {
+          matches.push({
+            employeeName: asset.employeeName || '-',
+            assetNumber: asset.assetNumber || '-',
+            quantity: Number(match.quantity) || 1,
+            handoverDate: asset.handoverDate || '-',
+            status: match.status || asset.status || 'نشطة'
+          });
+        }
       });
+
+      let htmlContent = `
+        <div class="text-right" style="direction: rtl; font-family: inherit;">
+          <h4 class="font-bold text-slate-800 mb-3 pb-2 border-b border-slate-100 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            تفاصيل توزيع العهدة لصنف: <span style="color: #7c3aed; font-weight: 900;">${item.name}</span>
+          </h4>
+      `;
+
+      if (matches.length > 0) {
+        htmlContent += `
+          <div class="overflow-hidden rounded-lg border border-slate-200 shadow-sm mb-4">
+            <table class="w-full text-right border-collapse text-xs bg-white">
+              <thead class="bg-slate-100 border-b border-slate-200">
+                <tr>
+                  <th class="p-2.5 font-bold text-slate-700">رقم العهدة</th>
+                  <th class="p-2.5 font-bold text-slate-700">الموظف المسؤول</th>
+                  <th class="p-2.5 font-bold text-slate-700">تاريخ التسليم</th>
+                  <th class="p-2.5 font-bold text-slate-700 text-center">الكمية</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${matches.map(m => `
+                  <tr class="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                    <td class="p-2.5 font-mono font-bold text-slate-600">${m.assetNumber}</td>
+                    <td class="p-2.5 font-bold text-slate-800">${m.employeeName}</td>
+                    <td class="p-2.5 text-slate-500">${m.handoverDate}</td>
+                    <td class="p-2.5 text-center font-bold text-orange-700" style="font-size: 13px;">${m.quantity}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      } else {
+        htmlContent += `<p class="text-slate-400 text-center p-4 bg-slate-50 rounded-lg text-xs border border-dashed border-slate-200">لم يتم صرف هذا الصنف كعهدة لأي موظف حالياً.</p>`;
+      }
+
+      htmlContent += `</div>`;
+
+      MySwal.fire({
+        html: htmlContent,
+        showConfirmButton: true,
+        confirmButtonText: 'عودة للجرد',
+        customClass: {
+          container: 'premium-modal-container',
+          popup: 'premium-modal-popup premium-modal-wide',
+          confirmButton: 'btn-premium-save',
+        },
+        buttonsStyling: false
+      }).then(() => {
+        handleSewingInventory();
+      });
+    };
+
+    // Group stock items by SKU or Name to avoid duplicate rows for items spread across different locations/warehouses
+    const groupedStock = {};
+    stockItems
+      .filter(s => s.category?.includes('خياط') || s.itemNumber?.startsWith('CON-'))
+      .forEach(s => {
+        const key = s.itemNumber || s.name;
+        if (!groupedStock[key]) {
+          groupedStock[key] = {
+            ...s,
+            quantity: 0,
+            locations: []
+          };
+        }
+        groupedStock[key].quantity += Number(s.quantity || 0);
+        if (s.location && !groupedStock[key].locations.includes(s.location)) {
+          groupedStock[key].locations.push(s.location);
+        }
+        if (s.locations) {
+          s.locations.forEach(loc => {
+            if (loc && !groupedStock[key].locations.includes(loc)) {
+              groupedStock[key].locations.push(loc);
+            }
+          });
+        }
+      });
+
+    const initialItems = Object.values(groupedStock).map(s => {
+      const spent = assets.reduce((total, asset) => {
+        if (asset.status !== 'نشطة') return total;
+        const itemsList = asset.items || (asset.name ? [{
+          name: asset.name,
+          itemNumber: asset.itemNumber,
+          quantity: asset.quantity || 1,
+          status: asset.status
+        }] : []);
+
+        const match = itemsList.find(i => {
+          const name1 = String(i.name || '').trim().replace(/\s+/g, ' ');
+          const name2 = String(s.name || '').trim().replace(/\s+/g, ' ');
+          if (name1 && name2) return name1 === name2;
+          return i.itemNumber && s.itemNumber && i.itemNumber === s.itemNumber;
+        });
+        if (match) return total + (Number(match.quantity) || 1);
+        return total;
+      }, 0);
+      const remaining = Number(s.quantity || 0) - spent;
+      return { ...s, spent, remaining };
+    });
+
 
     const ModalContent = () => {
       const [data, setData] = useState(initialItems);
       const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
       const [locationSearch, setLocationSearch] = useState('');
+      const debouncedLocationSearch = useDebounce(locationSearch);
 
       const displayedData = data.filter(s => {
         if (!locationSearch.trim()) return true;
         const locString = s.locations && s.locations.length > 0 ? s.locations.join(' ') : (s.location || '');
-        return locString.toLowerCase().includes(locationSearch.trim().toLowerCase());
+        return matchesSearch(locString, debouncedLocationSearch);
       });
 
       const requestSort = (key) => {
@@ -1064,69 +1217,90 @@ const HRAssets = ({ user }) => {
       };
 
       const handlePrint = () => {
-        const printWindow = window.open('', '_blank');
+        const printPortal = document.getElementById('print-portal');
         const html = `
-          <html dir="rtl">
+          <div class="print-container" dir="rtl" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; background: #fff; max-width: 850px; margin: 0 auto;">
+            <style>
+              .print-container h1 { color: #0ea5e9; text-align: center; margin-bottom: 30px; border-bottom: 2px solid #e0f2fe; padding-bottom: 15px; }
+              .print-container table { width: 100%; max-width: 100%; border-collapse: collapse; margin-top: 20px; table-layout: fixed; }
+              .print-container th, .print-container td { padding: 14px; border: 1px solid #cbd5e1; text-align: center; font-size: 14px; word-wrap: break-word; }
+              .print-container th { background-color: #0ea5e9; color: white; font-weight: bold; }
+              .print-container tr:nth-child(even) { background-color: #f8fafc; }
+              .print-container .footer { margin-top: 60px; display: flex; justify-content: space-around; text-align: center; }
+              .print-container .sig-box { border-top: 2px dashed #94a3b8; width: 220px; padding-top: 10px; margin-top: 60px; font-weight: bold; color: #64748b; }
+              @media print {
+                 @page { size: A4 portrait; margin: 10mm; }
+                 body { margin: 0 !important; padding: 0 !important; width: 100% !important; overflow: visible !important; }
+                 .print-container { width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+                 .print-container th { background-color: #f1f5f9 !important; color: #000 !important; }
+                 .print-container th, .print-container td { border: 1px solid #000 !important; padding: 8px !important; }
+              }
+            </style>
+            <h1>تقرير جرد مستهلكات الخياطة</h1>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 14%">رقم الصنف</th>
+                  <th style="width: 30%">اسم الصنف</th>
+                  <th style="width: 18%">الموقع</th>
+                  <th style="width: 12%">الكمية الكلية</th>
+                  <th style="width: 14%">المصروف</th>
+                  <th style="width: 12%">المتبقي</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${displayedData.map(s => `
+                  <tr>
+                    <td><strong>${s.itemNumber || '-'}</strong></td>
+                    <td><strong>${s.name}</strong></td>
+                    <td>
+                      ${s.locations && s.locations.length > 0 
+                        ? `<div style="display: flex; flex-wrap: wrap; gap: 4px; justify-content: center;">` + s.locations.map(l => `<span style="display: inline-block; border: 1.5px solid #059669; color: #047857; background: #ffffff; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; margin: 2px;">${l}</span>`).join('') + `</div>`
+                        : `<span style="font-weight: bold; color: #64748b;">${s.location || '-'}</span>`
+                      }
+                    </td>
+                    <td style="font-weight: bold;">${s.quantity || 0}</td>
+                    <td style="font-weight: bold;">${s.spent}</td>
+                    <td style="font-weight: bold;">${s.remaining}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            <div class="footer">
+              <div>
+                <div class="sig-box">توقيع مسؤول المخزون</div>
+              </div>
+              <div>
+                <div class="sig-box">توقيع الإدارة / المشرف</div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        if (printPortal) {
+          printPortal.innerHTML = html;
+          window.print();
+          setTimeout(() => {
+            printPortal.innerHTML = '';
+          }, 100);
+        } else {
+          const printWindow = window.open('', '_blank');
+          printWindow.document.write(`
+            <html>
             <head>
               <meta charset="utf-8">
               <title>تقرير جرد مستهلكات الخياطة</title>
-              <style>
-                * { box-sizing: border-box; }
-                @media print {
-                  @page { size: A4 portrait; margin: 1.5cm; }
-                  body { -webkit-print-color-adjust: exact; padding: 0 !important; margin: 0 !important; }
-                  table { page-break-inside: auto; }
-                  tr { page-break-inside: avoid; page-break-after: auto; }
-                  thead { display: table-header-group; }
-                }
-                body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; padding: 20px; direction: rtl; background-color: #fff; }
-                h2 { text-align: center; color: #1e293b; font-size: 22px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
-                table { width: 100%; max-width: 100%; border-collapse: collapse; text-align: center; font-size: 13px; table-layout: fixed; }
-                th, td { border: 1px solid #cbd5e1; padding: 10px; word-wrap: break-word; }
-                th { background-color: #f1f5f9; font-weight: bold; color: #334155; }
-                th:nth-child(4), td:nth-child(4) { color: #dc2626; font-weight: bold; }
-                th:nth-child(5), td:nth-child(5) { color: #059669; font-weight: bold; }
-              </style>
             </head>
             <body>
-              <h2>تقرير جرد مستهلكات الخياطة</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th style="width: 15%">رقم الصنف</th>
-                    <th style="width: 25%">اسم الصنف</th>
-                    <th style="width: 20%">الموقع</th>
-                    <th style="width: 13%">الكمية الكلية</th>
-                    <th style="width: 13%">المصروف (العهد)</th>
-                    <th style="width: 14%">المتبقي</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${displayedData.map(s => `
-                    <tr>
-                      <td>${s.itemNumber || '-'}</td>
-                      <td>${s.name}</td>
-                      <td>
-                        ${s.locations && s.locations.length > 0 
-                          ? s.locations.map(l => `<span style="display: inline-block; border: 1.5px solid #059669; color: #047857; background: #ffffff; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; margin: 2px;">${l}</span>`).join(' ')
-                          : `<span style="color: #64748b; font-weight: bold;">${s.location || '-'}</span>`
-                        }
-                      </td>
-                      <td>${s.quantity || 0}</td>
-                      <td>${s.spent}</td>
-                      <td>${s.remaining}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
+              ${html}
               <script>
-                window.onload = () => { window.print(); window.close(); }
+                setTimeout(() => { window.print(); window.close(); }, 300);
               </script>
             </body>
-          </html>
-        `;
-        printWindow.document.write(html);
-        printWindow.document.close();
+            </html>
+          `);
+          printWindow.document.close();
+        }
       };
 
       const SortIcon = () => (
@@ -1197,7 +1371,7 @@ const HRAssets = ({ user }) => {
               </thead>
               <tbody>
                 {displayedData.length > 0 ? displayedData.map(s => (
-                  <tr key={s.id || s.itemNumber} style={{ backgroundColor: '#ffffff', transition: 'background-color 0.2s' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}>
+                  <tr key={s.itemNumber || s.name} onClick={() => showCustodyBreakdown(s)} style={{ backgroundColor: '#ffffff', transition: 'background-color 0.2s', cursor: 'pointer' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ffffff'} title="انقر لعرض تفاصيل توزيع العهدة">
                     <td style={{ padding: '16px 14px', border: '1px solid #e2e8f0', fontWeight: 'bold', color: '#64748b', whiteSpace: 'nowrap' }}>{s.itemNumber || '-'}</td>
                     <td style={{ padding: '16px 14px', border: '1px solid #e2e8f0', fontWeight: 'bold', color: '#64748b' }}>{s.name}</td>
                     <td style={{ padding: '16px 14px', border: '1px solid #e2e8f0' }}>
@@ -1254,10 +1428,10 @@ const HRAssets = ({ user }) => {
 
   // Filter logic
   const filteredAssets = assets.filter(a => {
-    const matchSearch = searchTerm ? 
-       (a.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        a.assetNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.employeeName?.toLowerCase().includes(searchTerm.toLowerCase())) : true;
+    const matchSearch = matchesSearch(
+      [a.name, a.assetNumber, a.code, a.employeeName, a.employeeId, a.location],
+      debouncedSearchTerm
+    );
     const matchStatus = filterStatus !== 'جميع الحالات' ? a.status === filterStatus : true;
     
     const empObj = filterEmployee ? employees.find(e => String(e.id || '').trim() === String(filterEmployee).trim()) : null;
@@ -1266,6 +1440,170 @@ const HRAssets = ({ user }) => {
     const matchLoc = filterLocation ? (a.items && a.items.some(item => item.location === filterLocation)) : true;
     return matchSearch && matchStatus && matchEmp && matchLoc;
   });
+
+  const handleQuickLocationEdit = (e, index) => {
+    e.stopPropagation();
+    const item = formData.items[index];
+    if (!item) return;
+
+    const custodyAllLocs = assets.flatMap(a => (a.items || []).flatMap(i => (i.location || '').split(/[,،]/).map(x => x.trim()).filter(Boolean)));
+    const allSystemLocations = [...new Set([...(globalSettings.stockLocations || []), ...stockItems.flatMap(s => (s.location || '').split(/[,،]/).map(x => x.trim()).filter(Boolean)), ...custodyAllLocs])].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+
+    MySwal.fire({
+      customClass: {
+        container: 'premium-modal-container',
+        popup: 'premium-modal-popup premium-modal-wide',
+        confirmButton: 'btn-premium-save',
+        cancelButton: 'btn-premium-cancel',
+        actions: 'premium-modal-actions'
+      },
+      buttonsStyling: false,
+      width: '850px',
+      showCloseButton: false,
+      title: 'تعديل سريع للموقع',
+      html: `
+        <div class="premium-modal-header" style="padding-bottom: 12px; margin-bottom: 15px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+          <div class="premium-modal-title" style="display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 1.25rem;">
+             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#13898f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+             <span>تحديد موقع العهدة</span>
+          </div>
+          <div class="premium-modal-close" onclick="Swal.close()" style="cursor: pointer; color: #64748b; display: flex; align-items: center;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </div>
+        </div>
+        <div class="premium-form" style="text-align: right; direction: rtl;">
+          <div style="font-size: 14px; margin-bottom: 15px; color: #475569; line-height: 1.6;">
+            تحديد موقع الصنف: <b style="color:#13898f; font-size: 15px;">${item.name || 'صنف غير محدد'}</b><br>
+            <span style="color:#64748b; font-size:12px;">ملاحظة: يمكنك اختيار أكثر من موقع لنفس الصنف في العهدة.</span>
+          </div>
+          
+          <div class="premium-form-group">
+            <label style="font-weight: bold; color: #334155; display: block; margin-bottom: 8px;">اختر المواقع الحالية أو أضف موقعاً جديداً:</label>
+            <input type="hidden" id="swal-quick-location" value="${item.location || ''}">
+            
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+              <input type="text" id="quick-new-location-input" class="premium-input" placeholder="أدخل اسم رف/موقع جديد..." style="margin-bottom: 0; font-size: 13px; height: 38px; padding: 4px 10px; flex: 1;">
+              <button type="button" id="quick-new-location-btn" style="background: #13898f; color: white; border: none; padding: 0 16px; border-radius: 6px; font-size: 16px; height: 38px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold;">+</button>
+            </div>
+            
+            <div id="location-quick-options-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; padding: 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; background: #f8fafc; text-align: right; direction: rtl;">
+              <!-- Checkbox options will be rendered here dynamically -->
+            </div>
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'تأكيد الموقع',
+      cancelButtonText: 'إلغاء',
+      focusConfirm: false,
+      didOpen: () => {
+        const optionsList = document.getElementById('location-quick-options-list');
+        const hiddenInput = document.getElementById('swal-quick-location');
+        const newLocInput = document.getElementById('quick-new-location-input');
+        const newLocBtn = document.getElementById('quick-new-location-btn');
+
+        let selectedLocations = hiddenInput.value
+          ? hiddenInput.value.split(/[,،]/).map(l => l.trim()).filter(Boolean)
+          : [];
+
+        let systemLocations = [...allSystemLocations];
+        selectedLocations.forEach(loc => {
+          if (!systemLocations.includes(loc)) {
+            systemLocations.push(loc);
+          }
+        });
+        systemLocations.sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+
+        const updateSelectedValue = () => {
+          hiddenInput.value = selectedLocations.join(', ');
+          renderOptions();
+        };
+
+        const renderOptions = () => {
+          optionsList.innerHTML = systemLocations.map(loc => {
+            const isChecked = selectedLocations.includes(loc);
+            const locUpper = loc.toUpperCase();
+            const isA = locUpper.startsWith('A');
+            const isK = locUpper.startsWith('K');
+            
+            let bg = 'white';
+            let border = '#e2e8f0';
+            let textColor = '#334155';
+            
+            if (isA) {
+              bg = '#f0f9ff';
+              border = '#bae6fd';
+              textColor = '#0369a1';
+            } else if (isK) {
+              bg = '#fffbeb';
+              border = '#fde68a';
+              textColor = '#b45309';
+            }
+
+            return `
+              <label style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 6px; cursor: pointer; transition: background 0.2s; background: ${bg}; border: 1.5px solid ${border}; margin-bottom: 0; direction: ltr;" class="hover:opacity-90">
+                <span style="font-size: 13px; font-weight: bold; color: ${textColor}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${loc}">${loc}</span>
+                <input type="checkbox" class="loc-quick-checkbox" value="${loc}" ${isChecked ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px; accent-color: #13898f;">
+              </label>
+            `;
+          }).join('');
+
+          optionsList.querySelectorAll('.loc-quick-checkbox').forEach(chk => {
+            chk.addEventListener('change', (e) => {
+              const val = chk.value;
+              if (chk.checked) {
+                if (!selectedLocations.includes(val)) {
+                  selectedLocations.push(val);
+                }
+              } else {
+                selectedLocations = selectedLocations.filter(loc => loc !== val);
+              }
+              hiddenInput.value = selectedLocations.join(', ');
+            });
+          });
+        };
+
+        const addNewLocation = () => {
+          const newLoc = newLocInput.value.trim();
+          if (newLoc) {
+            if (!systemLocations.includes(newLoc)) {
+              systemLocations.push(newLoc);
+              systemLocations.sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+            }
+            if (!selectedLocations.includes(newLoc)) {
+              selectedLocations.push(newLoc);
+            }
+            newLocInput.value = '';
+            updateSelectedValue();
+          }
+        };
+
+        newLocBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          addNewLocation();
+        });
+
+        newLocInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            addNewLocation();
+          }
+        });
+
+        updateSelectedValue();
+      },
+      preConfirm: () => {
+        return document.getElementById('swal-quick-location').value;
+      }
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        const newItems = [...formData.items];
+        newItems[index].location = result.value;
+        setFormData({...formData, items: newItems});
+      }
+    });
+  };
 
   // Stats
   const activeCount = assets.filter(a => a.status === 'نشطة').length;
@@ -1788,36 +2126,16 @@ const HRAssets = ({ user }) => {
                             />
                           </td>
                           <td className="p-2 text-center align-middle">
-                            {(() => {
-                              const sameItems = stockItems.filter(s => s.name === item.name);
-                              const availableLocations = [];
-                              sameItems.forEach(s => {
-                                if (s.locations && s.locations.length > 0) availableLocations.push(...s.locations);
-                                if (s.location) availableLocations.push(...String(s.location).split(/[,،-]/).map(x => x.trim()).filter(Boolean));
-                              });
-                              if (item.location && !availableLocations.includes(item.location)) {
-                                availableLocations.push(item.location);
-                              }
-                              const allSystemLocations = globalSettings.stockLocations || [];
-                              const uniqueLocations = [...new Set([...allSystemLocations, ...availableLocations])];
-                              return (
-                                <select 
-                                  className="w-full border border-slate-200 rounded-lg px-2 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-center mx-auto" 
-                                  style={{ height: '38px', fontSize: '0.85rem' }} 
-                                  value={item.location || ''} 
-                                  onChange={(e) => {
-                                    const newItems = [...formData.items];
-                                    newItems[index].location = e.target.value;
-                                    setFormData({...formData, items: newItems});
-                                  }}
-                                >
-                                  <option value="" disabled>اختر الموقع</option>
-                                  {uniqueLocations.map((loc, i) => (
-                                    <option key={i} value={loc}>{loc}</option>
-                                  ))}
-                                </select>
-                              );
-                            })()}
+                            <div 
+                              className="w-full border border-slate-200 rounded-lg px-2 bg-white flex justify-between items-center cursor-pointer hover:border-primary transition-all mx-auto" 
+                              style={{ height: '38px', fontSize: '0.85rem' }} 
+                              onClick={(e) => handleQuickLocationEdit(e, index)}
+                            >
+                              <span className="truncate text-slate-700 font-bold" style={{flex: 1}}>
+                                {item.location || 'اختر الموقع...'}
+                              </span>
+                              <ChevronDown size={14} className="text-slate-400" />
+                            </div>
                           </td>
                           <td className="p-2 text-center align-middle">
                             <input 

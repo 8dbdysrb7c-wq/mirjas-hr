@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/light.css';
+import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 
 const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -37,15 +38,15 @@ const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
           }
           setIsOpen(!isOpen);
         }}
-        className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2 shadow-sm hover:border-primary transition-colors cursor-pointer min-w-[160px] h-[44px]"
+        className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-full px-5 py-2 shadow-sm hover:border-sky-300 hover:shadow-md transition-all cursor-pointer min-w-[160px] h-[44px]"
       >
-        <div className="flex items-center gap-2">
-          <Calendar size={18} className="text-primary" />
-          <span className="font-bold text-slate-700 whitespace-nowrap">
+        <div className="flex items-center gap-3">
+          <Calendar size={18} className="text-sky-500" />
+          <span className="font-bold text-slate-700 whitespace-nowrap text-[14px]">
             {getLabel()}
           </span>
         </div>
-        <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown size={16} className={`text-slate-400 transition-transform duration-300 ${isOpen ? 'rotate-180 text-sky-500' : ''}`} />
       </div>
       
       {isOpen && (
@@ -54,7 +55,8 @@ const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
           style={{
             position: 'absolute',
             top: 'calc(100% + 8px)',
-            right: '0',
+            left: '50%',
+            transform: 'translateX(-50%)',
             width: '280px',
             backgroundColor: '#ffffff',
             border: '1px solid #e2e8f0',
@@ -161,8 +163,25 @@ const HRDateFilter = ({
   setEndDate,
   allowedModes = ['day', 'month', 'range']
 }) => {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexShrink: 0 }}>
+    <div className="hr-date-filter-container" style={{
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '10px',
+      flexShrink: 0,
+      flexWrap: isMobile ? 'wrap' : 'nowrap',
+      width: isMobile ? '100%' : 'auto'
+    }}>
       {/* 1. Date Mode Switcher */}
       {allowedModes.length > 1 && (
         <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: '10px', padding: '4px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
@@ -231,36 +250,41 @@ const HRDateFilter = ({
         <MonthPicker selectedMonth={month} setSelectedMonth={setMonth} />
       )}
       {mode === 'day' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0 12px', height: '44px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-          <Calendar size={16} style={{ color: '#0ea5e9' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0 14px', height: '42px', boxShadow: '0 1px 3px rgba(0,0,0,0.03)', transition: 'all 0.2s', cursor: 'pointer' }} className="hover:border-sky-300 hover:shadow-md">
+          <Calendar size={18} style={{ color: '#0ea5e9', flexShrink: 0 }} />
           <Flatpickr 
             value={date}
             onChange={(dates, dateStr) => setDate(dateStr)}
-            options={{ dateFormat: 'Y-m-d' }}
+            options={{ dateFormat: 'Y-m-d', locale: Arabic }}
             placeholder="اختر التاريخ"
-            style={{ border: 'none', outline: 'none', width: '100px', fontSize: '13px', fontWeight: '700', color: '#334155', backgroundColor: 'transparent' }}
+            style={{ border: 'none', outline: 'none', width: '100%', fontSize: '14px', fontWeight: 'bold', color: '#334155', backgroundColor: 'transparent', cursor: 'pointer' }}
           />
+          <ChevronDown size={16} style={{ color: '#94a3b8' }} />
         </div>
       )}
       {mode === 'range' && (
-        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0 12px', height: '44px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8' }}>من</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0 12px', height: '42px', boxShadow: '0 1px 3px rgba(0,0,0,0.03)', transition: 'all 0.2s' }} className="hover:border-sky-300 hover:shadow-md">
+            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b' }}>من:</span>
             <Flatpickr 
               value={startDate}
               onChange={(dates, dateStr) => setStartDate(dateStr)}
-              options={{ dateFormat: 'Y-m-d' }}
-              style={{ width: '85px', border: 'none', outline: 'none', fontWeight: '700', fontSize: '12px', textAlign: 'center', color: '#334155', backgroundColor: 'transparent' }}
+              options={{ dateFormat: 'Y-m-d', locale: Arabic }}
+              placeholder="اختر تاريخ"
+              style={{ width: '90px', border: 'none', outline: 'none', fontWeight: 'bold', fontSize: '13px', color: '#1e293b', backgroundColor: 'transparent', cursor: 'pointer', fontFamily: 'Tajawal, sans-serif' }}
             />
+            <Calendar size={14} style={{ color: '#0ea5e9' }} />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', borderRight: '1px solid #f1f5f9', paddingRight: '8px', marginRight: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8' }}>إلى</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0 12px', height: '42px', boxShadow: '0 1px 3px rgba(0,0,0,0.03)', transition: 'all 0.2s' }} className="hover:border-sky-300 hover:shadow-md">
+            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b' }}>إلى:</span>
             <Flatpickr 
               value={endDate}
               onChange={(dates, dateStr) => setEndDate(dateStr)}
-              options={{ dateFormat: 'Y-m-d' }}
-              style={{ width: '85px', border: 'none', outline: 'none', fontWeight: '700', fontSize: '12px', textAlign: 'center', color: '#334155', backgroundColor: 'transparent' }}
+              options={{ dateFormat: 'Y-m-d', locale: Arabic }}
+              placeholder="اختر تاريخ"
+              style={{ width: '90px', border: 'none', outline: 'none', fontWeight: 'bold', fontSize: '13px', color: '#1e293b', backgroundColor: 'transparent', cursor: 'pointer', fontFamily: 'Tajawal, sans-serif' }}
             />
+            <Calendar size={14} style={{ color: '#0ea5e9' }} />
           </div>
         </div>
       )}

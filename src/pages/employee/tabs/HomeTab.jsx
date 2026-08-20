@@ -5,10 +5,12 @@ import {
   ClipboardCheck, Activity, Truck, ShoppingCart, 
   Settings as SewingMachineIcon, Layers, Users, FileText, Settings, 
   Plus, Clock, DollarSign, Calendar as CustomCalendar, 
-  FileText as CustomReport, Folder as CustomFolder, ClipboardList
+  FileText as CustomReport, Folder as CustomFolder, ClipboardList,
+  LogIn, Edit3
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { isAdmin } from '../../../store';
+import { hasPermission } from '../../../utils/permissions';
 
 // DashboardCard is assumed to be imported locally inside EmployeeDashboard, 
 // so we might need to pass it or we should just import it if it's external.
@@ -31,6 +33,8 @@ export const HomeTab = ({
   leaveFormData,
   setLeaveFormData,
   setShowLeaveModal,
+  calculatedVacationBalance,
+  calculatedSickBalance,
   handleTabChange,
   user,
   setShowAdvanceModal,
@@ -39,79 +43,311 @@ export const HomeTab = ({
   canViewSupervisorReports,
   remainingPunches,
   bonusPunches,
-  setShowMissingPunchModal
+  setShowMissingPunchModal,
+  pendingTasksCount,
+  pendingSalesOrdersCount,
+  pendingProductionCount,
+  pendingPreparationCount,
+  pendingMissionsCount,
+  pendingDeliveryMissionsCount,
+  pendingStockAuditsCount,
+  setShowPetitionModal
 }) => {
+  const [showManualActionModal, setShowManualActionModal] = React.useState(false);
+  const [manualActionOverride, setManualActionOverride] = React.useState(null);
+  
+  const [liveTime, setLiveTime] = React.useState(new Date());
+  React.useEffect(() => {
+    const timer = setInterval(() => setLiveTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const timeStr = liveTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+  const timeParts = timeStr.split(' ');
+  const onlyTime = timeParts[0] || '';
+  const amPm = timeParts[1] || '';
+
+  const dateStr = liveTime.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const dayName = liveTime.toLocaleDateString('ar-EG', { weekday: 'long' });
+
+  const formatTimeOnly = (tStr) => {
+    if (!tStr || tStr === '--:--') return '--:--';
+    const clean = String(tStr).replace(/[صم]/g, '').trim();
+    const parts = clean.split(':');
+    if (parts.length >= 2) {
+      return `${parts[0]}:${parts[1]}`;
+    }
+    return clean;
+  };
+
+  const currentAction = manualActionOverride || 
+    ((!todayAttendance?.timeIn || todayAttendance?.timeIn === '--:--') ? 'in' : 
+     (!todayAttendance?.timeOut || todayAttendance?.timeOut === '--:--') ? 'out' : 'done');
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="employee-home-container animate-fade-in" style={{ paddingBottom: isMobile ? '100px' : '0' }}>
       {/* GPS Live Attendance Card (Compact & Clean Theme) */}
       <div className={`mb-6 glass-card relative overflow-hidden transition-all duration-300 ${isFlash ? 'ring-2 ring-primary shadow-lg scale-[1.02] z-50' : ''}`} style={{ padding: 0 }}>
-        
-        {/* Subtle Top Gradient Bar */}
-        <div className="h-1 w-full bg-gradient-to-r from-primary to-sky-400"></div>
-        
-        <div className="p-4 md:p-5">
-          
+        <div style={{ backgroundColor: '#ffffff', padding: isMobile ? '0.75rem' : '1.5rem', display: 'flex', flexDirection: 'column', gap: isMobile ? '0.75rem' : '1.25rem', boxSizing: 'border-box' }}>
           {/* Top Info Row */}
-          <div className="flex justify-between items-center mb-4">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', width: '100%', direction: 'rtl' }}>
             
-            {/* Location */}
-            <div className="flex items-center gap-3">
-              <div className="bg-primary/10 p-2.5 rounded-xl text-primary shrink-0">
-                <MapPin size={22} />
+            {/* Location (Right Side in RTL) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.5rem' : '0.75rem' }}>
+              <div style={{
+                backgroundColor: '#ffffff',
+                border: '1px solid #f1f5f9',
+                borderRadius: '16px',
+                padding: isMobile ? '0.5rem' : '0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                color: '#0f766e',
+                height: isMobile ? '38px' : '46px',
+                width: isMobile ? '38px' : '46px',
+                boxSizing: 'border-box'
+              }}>
+                <MapPin size={isMobile ? 18 : 24} style={{ color: '#0f766e' }} />
               </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <h4 className="font-bold text-slate-800 text-sm">موقع الدوام</h4>
-                  <button onClick={fetchAddress} disabled={isCheckingInOut} className="btn-refresh">
-                    <RefreshCw size={12} className={isCheckingInOut ? 'animate-spin' : ''} />
-                    <span>تحديث</span>
-                  </button>
-                </div>
-                <span className="text-xs text-slate-500 font-medium block max-w-[180px] truncate">
+              <div style={{ textAlign: 'right' }}>
+                <h4 style={{ fontWeight: '800', color: '#1e293b', fontSize: isMobile ? '0.8rem' : '0.95rem', margin: 0, marginBottom: '0.15rem' }}>موقع الدوام</h4>
+                <span style={{ color: '#0f766e', fontWeight: 'bold', fontSize: isMobile ? '0.7rem' : '0.8rem', display: 'block', maxWidth: isMobile ? '100px' : '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {currentAddress}
                 </span>
               </div>
             </div>
             
-            {/* Time */}
-            <LiveClock />
+            {/* Live Clock (Center) */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', direction: 'ltr' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.2rem', direction: 'ltr' }}>
+                <span style={{ fontSize: isMobile ? '1.35rem' : '1.75rem', fontWeight: '800', color: '#1e293b', letterSpacing: '0.02em', fontFamily: 'sans-serif' }}>
+                  {onlyTime}
+                </span>
+                <span style={{ fontSize: isMobile ? '0.7rem' : '0.85rem', fontWeight: '800', color: '#0f766e', textTransform: 'uppercase' }}>
+                  {amPm}
+                </span>
+              </div>
+              <div style={{ fontSize: isMobile ? '0.7rem' : '0.8rem', color: '#64748b', marginTop: '0.15rem', fontWeight: 'bold' }}>
+                {dateStr} - {dayName}
+              </div>
+            </div>
+
+            {/* Refresh (Left Side in RTL) */}
+            <button 
+              onClick={fetchAddress} 
+              disabled={isCheckingInOut}
+              style={{
+                backgroundColor: '#ffffff',
+                border: '1px solid #f1f5f9',
+                borderRadius: '16px',
+                padding: '0.5rem',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.15rem',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                minWidth: isMobile ? '46px' : '55px',
+                height: isMobile ? '46px' : '55px',
+                boxSizing: 'border-box'
+              }}
+            >
+              <RefreshCw size={isMobile ? 14 : 18} className={isCheckingInOut ? 'animate-spin' : ''} style={{ color: '#0f766e' }} />
+              <span style={{ fontSize: isMobile ? '0.55rem' : '0.65rem', color: '#64748b', fontWeight: 'bold' }}>تحديث</span>
+            </button>
             
           </div>
-          
-          {/* Action Button */}
-          <div className="mt-2">
-            {!todayAttendance?.timeIn ? (
-              <button 
-                onClick={() => handleGPSAction('in')}
-                disabled={isCheckingInOut}
-                className="w-full btn btn-primary py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md text-base"
-              >
-                {isCheckingInOut ? (
-                  <><div className="spinner w-5 h-5 border-white border-2"></div> <span className="font-bold">التحقق...</span></>
-                ) : (
-                  <><Fingerprint size={20} /> <span className="font-bold">تسجيل الدخول</span></>
-                )}
-              </button>
-            ) : !todayAttendance?.timeOut ? (
-              <button 
-                onClick={() => handleGPSAction('out')}
-                disabled={isCheckingInOut}
-                className="w-full btn btn-danger py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md text-base disabled:opacity-70"
-              >
-                {isCheckingInOut ? (
-                  <><div className="spinner w-5 h-5 border-white border-2"></div> <span className="font-bold">التحقق...</span></>
-                ) : (
-                  <><LogOut size={20} /> <span className="font-bold">تسجيل الخروج</span></>
-                )}
-              </button>
-            ) : (
-              <div className="w-full bg-emerald-50 border border-emerald-100 text-emerald-600 py-3 rounded-xl flex items-center justify-center gap-2 shadow-sm text-base font-bold">
-                <CheckCircle2 size={20} />
-                <span>اكتمل الدوام اليوم</span>
+
+          {/* Middle Section (Check-in / Check-out Times) */}
+          <div style={{
+            position: 'relative',
+            backgroundColor: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: '18px',
+            padding: '1.25rem 0.5rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            boxSizing: 'border-box',
+            direction: 'ltr'
+          }}>
+            {/* Divider Line */}
+            <div style={{
+              position: 'absolute',
+              left: '50%',
+              top: '10%',
+              bottom: '10%',
+              width: '1px',
+              backgroundColor: '#e2e8f0',
+              zIndex: 1
+            }}></div>
+
+            {/* Calendar Circle in center */}
+            <div style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+              backgroundColor: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '50%',
+              width: '36px',
+              height: '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 10px rgba(0,0,0,0.05)',
+              color: '#0f766e',
+              zIndex: 3
+            }}>
+              <CustomCalendar size={18} style={{ color: '#0f766e' }} />
+            </div>
+
+            {/* Left Column (تسجيل الخروج - Check-Out) */}
+            <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
+              <div style={{
+                position: 'absolute',
+                left: isMobile ? '0.2rem' : '0.5rem',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                backgroundColor: '#ffffff',
+                border: '1px solid #f1f5f9',
+                borderRadius: isMobile ? '12px' : '16px',
+                padding: '0.65rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 10px rgba(0,0,0,0.02)',
+                color: '#0f766e',
+                width: isMobile ? '38px' : '52px',
+                height: isMobile ? '38px' : '52px',
+                boxSizing: 'border-box',
+                flexShrink: 0
+              }}>
+                <LogOut size={isMobile ? 18 : 26} style={{ color: '#0f766e', transform: 'scaleX(-1)' }} />
               </div>
-            )}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                <span style={{ color: '#64748b', fontSize: isMobile ? '0.65rem' : '0.75rem', fontWeight: 'bold' }}>تسجيل الخروج</span>
+                <span style={{ color: (todayAttendance?.timeOut && todayAttendance?.timeOut !== '--:--') ? '#059669' : '#1e293b', fontSize: isMobile ? '1.25rem' : '1.9rem', fontWeight: '800', fontFamily: 'sans-serif', margin: '0.1rem 0', lineHeight: 1 }}>
+                  {(todayAttendance?.timeOut && todayAttendance?.timeOut !== '--:--') ? formatTimeOnly(todayAttendance.timeOut) : '--:--'}
+                </span>
+                <span style={{ color: '#94a3b8', fontSize: isMobile ? '0.6rem' : '0.75rem', fontWeight: 'bold' }} dir="ltr">
+                  {todayAttendance?.date ? todayAttendance.date.split('-').reverse().join('/') : '---'}
+                </span>
+              </div>
+            </div>
+
+            {/* Right Column (تسجيل الدخول - Check-In) */}
+            <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                <span style={{ color: '#64748b', fontSize: isMobile ? '0.65rem' : '0.75rem', fontWeight: 'bold' }}>تسجيل الدخول</span>
+                <span style={{ color: '#1e293b', fontSize: isMobile ? '1.25rem' : '1.9rem', fontWeight: '800', fontFamily: 'sans-serif', margin: '0.1rem 0', lineHeight: 1 }}>
+                  {(todayAttendance?.timeIn && todayAttendance?.timeIn !== '--:--') ? formatTimeOnly(todayAttendance.timeIn) : '--:--'}
+                </span>
+                <span style={{ color: '#94a3b8', fontSize: isMobile ? '0.6rem' : '0.75rem', fontWeight: 'bold' }} dir="ltr">
+                  {todayAttendance?.date ? todayAttendance.date.split('-').reverse().join('/') : '---'}
+                </span>
+              </div>
+              <div style={{
+                position: 'absolute',
+                right: isMobile ? '0.2rem' : '0.5rem',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                backgroundColor: '#ffffff',
+                border: '1px solid #f1f5f9',
+                borderRadius: isMobile ? '12px' : '16px',
+                padding: '0.65rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 10px rgba(0,0,0,0.02)',
+                color: '#1e3a8a',
+                width: isMobile ? '38px' : '52px',
+                height: isMobile ? '38px' : '52px',
+                boxSizing: 'border-box',
+                flexShrink: 0
+              }}>
+                <LogIn size={isMobile ? 18 : 26} style={{ color: '#1e3a8a', transform: 'scaleX(-1)' }} />
+              </div>
+            </div>
+
           </div>
-          
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', width: '100%', alignItems: 'center', direction: 'rtl' }}>
+            
+            {/* Main Action Button (Right Side in RTL) */}
+            <div style={{ flex: '1 1 auto', height: '46px' }}>
+              {currentAction === 'in' ? (
+                <button 
+                  onClick={() => { handleGPSAction('in'); setManualActionOverride(null); }}
+                  disabled={isCheckingInOut}
+                  className="btn btn-primary"
+                  style={{ width: '100%', height: '46px', padding: '0 1rem', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', boxShadow: '0 4px 10px rgba(15, 118, 110, 0.2)', fontSize: '0.95rem', fontWeight: 'bold', boxSizing: 'border-box', direction: 'ltr' }}
+                >
+                  {isCheckingInOut ? (
+                    <><div className="spinner w-5 h-5 border-white border-2"></div> <span className="font-bold">التحقق...</span></>
+                  ) : (
+                    <><Fingerprint size={20} /> <span className="font-bold">تسجيل الدخول</span></>
+                  )}
+                </button>
+              ) : currentAction === 'out' ? (
+                <button 
+                  onClick={() => { handleGPSAction('out'); setManualActionOverride(null); }}
+                  disabled={isCheckingInOut}
+                  className="btn btn-danger"
+                  style={{ width: '100%', height: '46px', padding: '0 1rem', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', boxShadow: '0 4px 10px rgba(220, 38, 38, 0.2)', fontSize: '0.95rem', fontWeight: 'bold', opacity: isCheckingInOut ? 0.7 : 1, boxSizing: 'border-box', direction: 'ltr' }}
+                >
+                  {isCheckingInOut ? (
+                    <><div className="spinner w-5 h-5 border-white border-2"></div> <span className="font-bold">التحقق...</span></>
+                  ) : (
+                    <><LogOut size={20} /> <span className="font-bold">تسجيل الخروج</span></>
+                  )}
+                </button>
+              ) : (
+                <div style={{ width: '100%', height: '46px', backgroundColor: '#0f766e', color: '#ffffff', padding: '0 1rem', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', boxShadow: '0 4px 10px rgba(15, 118, 110, 0.2)', fontSize: '0.95rem', fontWeight: 'bold', boxSizing: 'border-box', direction: 'ltr' }}>
+                  <CheckCircle2 size={20} />
+                  <span>اكتمل الدوام اليوم</span>
+                </div>
+              )}
+            </div>
+            
+            {/* Change Button (Left Side in RTL) */}
+            <button 
+              onClick={() => setShowManualActionModal(true)}
+              disabled={isCheckingInOut}
+              style={{
+                height: '46px',
+                padding: '0 1.5rem',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.4rem',
+                color: '#0f766e',
+                backgroundColor: '#ffffff',
+                border: '1.5px solid #0f766e',
+                fontWeight: 'bold',
+                cursor: 'pointer', direction: 'ltr', boxShadow: '0 2px 5px rgba(0,0,0,0.02)', minWidth: '100px', flexShrink: 0, fontSize: '0.95rem', boxSizing: 'border-box'
+              }}
+            >
+              <Edit3 size={16} />
+              <span>تغيير</span>
+            </button>
+          </div>
+
+          {/* Footer Thank You Note */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', margin: '1.5rem 0 0.5rem 0', position: 'relative' }}>
+            <div style={{ position: 'absolute', left: 0, right: 0, height: '1px', backgroundColor: '#e2e8f0', zIndex: 1 }}></div>
+            <div style={{ backgroundColor: '#ffffff', padding: '0 1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b', fontSize: '0.8rem', fontWeight: 'bold', zIndex: 2, direction: 'ltr' }}>
+              <Clock size={16} />
+              <span>شكراً لإلتزامك</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -134,7 +370,8 @@ export const HomeTab = ({
                Swal.fire('مرفوض', 'ليس لديك صلاحية لتقديم إجازة.', 'error');
                return;
             }
-            setLeaveFormData({...leaveFormData, type: allowedLeaves[0]}); 
+            const firstValid = allowedLeaves.includes('إجازة سنوية') ? 'إجازة سنوية' : allowedLeaves[0];
+            setLeaveFormData({...leaveFormData, type: firstValid}); 
             setShowLeaveModal(true); 
           }} 
         />
@@ -144,19 +381,38 @@ export const HomeTab = ({
           onClick={() => handleTabChange('add')} 
         />
         {(isAdmin(user) || 
+          user?.department === 'المبيعات' ||
+          user?.permissions?.rep_visits?.view ||
+          user?.permissions?.rep_visits?.add ||
           user.employeeId === 'EMP-0017' ||
           user.id === 'EMP-0017'
         ) && (
-          <DashboardCard isMobile={isMobile} icon={ClipboardList} 
-            iconType="custom"
-            title="تقرير زيارة" 
-            onClick={() => handleTabChange('rep-visits')} 
-          />
+          <>
+            <DashboardCard isMobile={isMobile} icon={ClipboardList} 
+              iconType="custom"
+              title="تسجيل زيارة" 
+              onClick={() => handleTabChange('rep-visits')} 
+            />
+            <DashboardCard isMobile={isMobile} icon={RefreshCw} 
+              iconType="custom"
+              title="سجل زياراتي" 
+              onClick={() => handleTabChange('rep-visits-history')} 
+            />
+          </>
         )}
         <DashboardCard isMobile={isMobile} icon={CustomFolder} 
           iconType="custom"
           title="طلباتي" 
           onClick={() => handleTabChange('hr_requests')} 
+        />
+        <DashboardCard isMobile={isMobile} icon={FileText} 
+          iconType="custom"
+          title="طلب استدعاء" 
+          onClick={() => { 
+            if (typeof setShowPetitionModal === 'function') {
+               setShowPetitionModal(true);
+            }
+          }} 
         />
         <DashboardCard isMobile={isMobile} icon={DollarSign} 
           iconType="ring"
@@ -196,40 +452,46 @@ export const HomeTab = ({
           }} 
         />
         {/* SUPERVISOR / EXTRA ACCESS BUTTONS */}
-        {user.hasLiveAccess && (
+        {hasPermission(user, 'live') && (
           <DashboardCard isMobile={isMobile} icon={Activity} title="التحكم المباشر" onClick={() => handleTabChange('live')} />
         )}
         {canViewMissions && (
-          <DashboardCard isMobile={isMobile} icon={Truck} title="إدارة التوصيل" onClick={() => handleTabChange('missions')} />
+          <DashboardCard isMobile={isMobile} icon={Truck} title="المهمات المكلف بها" badgeCount={pendingMissionsCount} onClick={() => handleTabChange('missions')} />
         )}
-        {user.hasSalesAccess && (
-          <DashboardCard isMobile={isMobile} icon={ShoppingCart} title="إدارة المبيعات" onClick={() => handleTabChange('sales')} />
+        {hasPermission(user, 'quotes') && (
+          <DashboardCard isMobile={isMobile} icon={FileText} title="عروض الأسعار" onClick={() => handleTabChange('quotes')} />
         )}
-        {user.hasProductionAccess && (
-          <DashboardCard isMobile={isMobile} icon={SewingMachineIcon} title="إدارة الإنتاج" onClick={() => handleTabChange('production')} />
+        {hasPermission(user, 'orders') && (
+          <DashboardCard isMobile={isMobile} icon={ShoppingCart} title="إدارة الطلبيات" badgeCount={pendingSalesOrdersCount} onClick={() => handleTabChange('sales')} />
+        )}
+        {hasPermission(user, 'production') && (
+          <DashboardCard isMobile={isMobile} icon={SewingMachineIcon} title="إنتاج قيد الخياطة" badgeCount={pendingProductionCount} onClick={() => handleTabChange('production')} />
+        )}
+        {hasPermission(user, 'preparation') && (
+          <DashboardCard isMobile={isMobile} icon={SewingMachineIcon} title="إنتاج قيد التحضير" badgeCount={pendingPreparationCount} onClick={() => handleTabChange('preparation')} />
         )}
         
 
-        {isSupervisor && (
-          <DashboardCard isMobile={isMobile} icon={Layers} title="المهام" onClick={() => handleTabChange('supervisor-tasks')} />
+        {hasPermission(user, 'supervisor_tasks') && (
+          <DashboardCard isMobile={isMobile} icon={Layers} title="المهام" badgeCount={pendingTasksCount} onClick={() => handleTabChange('supervisor-tasks')} />
         )}
         
-        {user.hasStockAccess && (
+        {hasPermission(user, 'stock') && (
           <DashboardCard isMobile={isMobile} icon={Layers} title="المخزون" onClick={() => handleTabChange('stock')} />
         )}
-        {user.hasDeliveryAccess && (
-          <DashboardCard isMobile={isMobile} icon={Truck} title="التوصيل" onClick={() => handleTabChange('delivery')} />
+        {hasPermission(user, 'delivery') && (
+          <DashboardCard isMobile={isMobile} icon={Truck} title="التوصيل" badgeCount={pendingDeliveryMissionsCount} onClick={() => handleTabChange('delivery')} />
         )}
-        {user.hasCustomersAccess && (
+        {hasPermission(user, 'customers') && (
           <DashboardCard isMobile={isMobile} icon={Users} title="العملاء" onClick={() => handleTabChange('customers')} />
         )}
-        {user.hasReportsAccess && (
+        {hasPermission(user, 'reports') && (
           <DashboardCard isMobile={isMobile} icon={FileText} title="التقارير" onClick={() => handleTabChange('reports')} />
         )}
-        {user.hasProductionTasksAccess && (
+        {hasPermission(user, 'production_tasks') && (
           <DashboardCard isMobile={isMobile} icon={ClipboardCheck} title="مهام الإنتاج" onClick={() => handleTabChange('production-tasks')} />
         )}
-        {user.hasSiteSettingsAccess && (
+        {hasPermission(user, 'site_settings') && (
           <DashboardCard isMobile={isMobile} icon={Settings} title="الإعدادات" onClick={() => handleTabChange('site-settings')} />
         )}
 
@@ -348,6 +610,135 @@ export const HomeTab = ({
           <span style={{ fontSize: isMobile ? '2.25rem' : '3rem', fontWeight: '900', color: '#0f766e', lineHeight: '1' }}>{remainingPunches}</span>
         </div>
       </div>
+
+      {/* Manual Action Modal */}
+      {showManualActionModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.6)',
+          backdropFilter: 'blur(4px)',
+          WebkitBackdropFilter: 'blur(4px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1.25rem'
+        }} onClick={() => setShowManualActionModal(false)}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '24px',
+            padding: '2rem 1.5rem',
+            width: '100%',
+            maxWidth: '380px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            transform: 'translateY(0)',
+            transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{
+              fontWeight: '800',
+              textAlign: 'center',
+              fontSize: '1.25rem',
+              color: '#1e293b',
+              marginBottom: '1.75rem'
+            }}>تحديد الإجراء يدوياً</h3>
+            
+            <div style={{ display: 'flex', gap: '1rem', flexDirection: 'row-reverse' }}>
+              
+              {/* IN Button */}
+              <button 
+                onClick={() => { setShowManualActionModal(false); setManualActionOverride('in'); }}
+                disabled={todayAttendance?.timeIn && todayAttendance?.timeIn !== '--:--'}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.75rem',
+                  padding: '1.5rem 0.5rem',
+                  borderRadius: '20px',
+                  border: '2px solid',
+                  borderColor: (todayAttendance?.timeIn && todayAttendance?.timeIn !== '--:--') ? '#e2e8f0' : '#e0f2fe',
+                  backgroundColor: (todayAttendance?.timeIn && todayAttendance?.timeIn !== '--:--') ? '#f8fafc' : '#f0f9ff',
+                  color: (todayAttendance?.timeIn && todayAttendance?.timeIn !== '--:--') ? '#94a3b8' : '#0284c7',
+                  cursor: (todayAttendance?.timeIn && todayAttendance?.timeIn !== '--:--') ? 'not-allowed' : 'pointer',
+                  opacity: (todayAttendance?.timeIn && todayAttendance?.timeIn !== '--:--') ? 0.7 : 1,
+                  transition: 'all 0.2s'
+                }}
+              >
+                <div style={{
+                  backgroundColor: (todayAttendance?.timeIn && todayAttendance?.timeIn !== '--:--') ? '#cbd5e1' : '#0ea5e9',
+                  color: 'white',
+                  padding: '1rem',
+                  borderRadius: '50%',
+                  boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+                }}>
+                  <MapPin size={32} />
+                </div>
+                <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>تسجيل الدخول</span>
+                {(todayAttendance?.timeIn && todayAttendance?.timeIn !== '--:--') && <span style={{ fontSize: '0.75rem' }}>مسجل مسبقاً</span>}
+              </button>
+
+              {/* OUT Button */}
+              <button 
+                onClick={() => { setShowManualActionModal(false); setManualActionOverride('out'); }}
+                disabled={todayAttendance?.timeOut && todayAttendance?.timeOut !== '--:--'}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.75rem',
+                  padding: '1.5rem 0.5rem',
+                  borderRadius: '20px',
+                  border: '2px solid',
+                  borderColor: (todayAttendance?.timeOut && todayAttendance?.timeOut !== '--:--') ? '#e2e8f0' : '#fee2e2',
+                  backgroundColor: (todayAttendance?.timeOut && todayAttendance?.timeOut !== '--:--') ? '#f8fafc' : '#fef2f2',
+                  color: (todayAttendance?.timeOut && todayAttendance?.timeOut !== '--:--') ? '#94a3b8' : '#e11d48',
+                  cursor: (todayAttendance?.timeOut && todayAttendance?.timeOut !== '--:--') ? 'not-allowed' : 'pointer',
+                  opacity: (todayAttendance?.timeOut && todayAttendance?.timeOut !== '--:--') ? 0.7 : 1,
+                  transition: 'all 0.2s'
+                }}
+              >
+                <div style={{
+                  backgroundColor: (todayAttendance?.timeOut && todayAttendance?.timeOut !== '--:--') ? '#cbd5e1' : '#ef4444',
+                  color: 'white',
+                  padding: '1rem',
+                  borderRadius: '50%',
+                  boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+                }}>
+                  <MapPin size={32} />
+                </div>
+                <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>تسجيل الخروج</span>
+                {(todayAttendance?.timeOut && todayAttendance?.timeOut !== '--:--') && <span style={{ fontSize: '0.75rem' }}>مسجل مسبقاً</span>}
+              </button>
+
+            </div>
+            
+            <button 
+              onClick={() => setShowManualActionModal(false)}
+              style={{
+                marginTop: '1.5rem',
+                width: '100%',
+                padding: '1rem',
+                borderRadius: '16px',
+                backgroundColor: '#f1f5f9',
+                color: '#475569',
+                fontWeight: 'bold',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '1.05rem',
+                transition: 'background-color 0.2s'
+              }}
+            >
+              إلغاء
+            </button>
+          </div>
+        </div>
+      )}
+
     </motion.div>
   );
 };

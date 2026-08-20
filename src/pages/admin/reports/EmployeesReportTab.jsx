@@ -1,6 +1,19 @@
 import React from 'react';
 import { Eye, Edit2, Trash2 } from 'lucide-react';
 
+const formatTimeArabic = (timeStr) => {
+  if (!timeStr || timeStr === '--:--') return '--:--';
+  if (timeStr.includes('صباح') || timeStr.includes('مساء')) return timeStr;
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return timeStr;
+  let hours = parseInt(parts[0], 10);
+  const minutes = parts[1];
+  if (isNaN(hours)) return timeStr;
+  const ampm = hours >= 12 ? 'مساءً' : 'صباحاً';
+  const displayHours = hours % 12 || 12;
+  return `${displayHours}:${minutes} ${ampm}`;
+};
+
 export const EmployeesReportTab = ({
   employees,
   hrAttendance,
@@ -40,6 +53,15 @@ export const EmployeesReportTab = ({
     if (empSortKey === 'phoneUsages' || empSortKey === 'tasksCount' || empSortKey === 'finalScore') {
       const numA = Number(aVal) || 0;
       const numB = Number(bVal) || 0;
+      if (numA < numB) return empSortDir === 'asc' ? -1 : 1;
+      if (numA > numB) return empSortDir === 'asc' ? 1 : -1;
+      return 0;
+    }
+    
+    // Overall average handling
+    if (empSortKey === 'overallAverage') {
+      const numA = a ? getOverallAverage(a.userId || a.employeeId, a.userName) : 0;
+      const numB = b ? getOverallAverage(b.userId || b.employeeId, b.userName) : 0;
       if (numA < numB) return empSortDir === 'asc' ? -1 : 1;
       if (numA > numB) return empSortDir === 'asc' ? 1 : -1;
       return 0;
@@ -96,8 +118,8 @@ export const EmployeesReportTab = ({
           <th onClick={() => handleEmpSort('finalScore')} className="cursor-pointer hover:text-primary transition-colors p-4">
             <div className="flex items-center justify-center gap-1">التقييم اليومي {getEmpSortIcon('finalScore')}</div>
           </th>
-          <th className="p-4">
-            <div className="flex items-center justify-center gap-1">متوسط التقييم الإجمالي</div>
+          <th onClick={() => handleEmpSort('overallAverage')} className="cursor-pointer hover:text-primary transition-colors p-4">
+            <div className="flex items-center justify-center gap-1">متوسط التقييم الإجمالي {getEmpSortIcon('overallAverage')}</div>
           </th>
           <th className="no-print p-4" style={{ textAlign: 'center' }}>إجراءات</th>
         </tr>
@@ -115,20 +137,31 @@ export const EmployeesReportTab = ({
               uniqueReports.push(report);
             }
           });
+          const normalizeEmpId = (id) => String(id || '').toUpperCase().replace(/^EMP-0*/i, '').trim();
+          const normalizeArabic = (str) => String(str || '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/\s+/g, ' ').trim();
+
           const empIdMap = new Map();
           const empNameMap = new Map();
           employees.forEach(e => {
-            if (e.id) empIdMap.set(String(e.id).trim(), e);
-            if (e.name) empNameMap.set(String(e.name).trim(), e);
+            if (e.id) empIdMap.set(normalizeEmpId(e.id), e);
+            if (e.name) empNameMap.set(normalizeArabic(e.name), e);
           });
 
           const hrAttMap = new Map();
           hrAttendance.forEach(a => {
-            const id = String(a.employeeId || '').trim();
-            const name = String(a.employeeName || '').trim();
+            const id = normalizeEmpId(a.employeeId || a.id);
+            const name = normalizeArabic(a.employeeName || a.name || '');
             const date = String(a.date).trim();
-            if (id) hrAttMap.set(`${id}_${date}`, a);
-            if (name) hrAttMap.set(`${name}_${date}`, a);
+            
+            const updateMap = (key, log) => {
+              const existing = hrAttMap.get(key);
+              if (!existing || (log.timeIn || log.timeOut) || (!existing.timeIn && !existing.timeOut)) {
+                hrAttMap.set(key, log);
+              }
+            };
+            
+            if (id) updateMap(`${id}_${date}`, a);
+            if (name) updateMap(`${name}_${date}`, a);
           });
 
           return uniqueReports.map(report => {
@@ -136,10 +169,12 @@ export const EmployeesReportTab = ({
             const repUserName = String(report.userName || '').trim();
             const repDate = String(report.date || '').trim();
             
-            const emp = empIdMap.get(repUserId) || empNameMap.get(repUserName);
+            const emp = empIdMap.get(normalizeEmpId(repUserId)) || empNameMap.get(normalizeArabic(repUserName));
             const resolvedEmpId = emp ? (emp.employeeId || emp.id) : (repUserId || '---');
             
-            const att = hrAttMap.get(`${emp?.id || repUserId}_${repDate}`) || hrAttMap.get(`${repUserName || emp?.name}_${repDate}`);
+            const normEmpId = normalizeEmpId(emp?.id || repUserId);
+            const normEmpName = normalizeArabic(repUserName || emp?.name || '');
+            const att = hrAttMap.get(`${normEmpId}_${repDate}`) || hrAttMap.get(`${normEmpName}_${repDate}`);
 
             return (
             <tr key={report.id}>
@@ -152,11 +187,11 @@ export const EmployeesReportTab = ({
             <td style={{ fontWeight: 'bold' }}>{report.date}</td>
             <td>{(() => {
               const tIn = String(att?.timeIn || '').trim() || String(report.timeIn || '').trim();
-              return tIn || '---';
+              return formatTimeArabic(tIn);
             })()}</td>
             <td>{(() => {
               const tOut = String(att?.timeOut || '').trim() || String(report.timeOut || '').trim();
-              return tOut || '---';
+              return formatTimeArabic(tOut);
             })()}</td>
             <td>{report.phoneUsages || 0}</td>
             <td>

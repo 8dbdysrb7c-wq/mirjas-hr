@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getEmployees, saveEmployees, getDepartments, saveEmployee, deleteEmployee, getGlobalSettings, isAdmin, canPerformAction, addLog } from '../../store';
+import { getEmployees, saveEmployees, getDepartments, saveEmployee, deleteEmployee, getGlobalSettings, isAdmin, canPerformAction, addLog, getRoles } from '../../store';
+import Select from '../../components/SearchSelect';
 import { Plus, Edit2, Trash2, X, Key, Shield, User, Fingerprint, ArrowUpDown } from 'lucide-react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
@@ -9,6 +10,25 @@ import 'flatpickr/dist/themes/airbnb.css';
 
 const MySwal = withReactContent(Swal);
 
+const getNextAnnualRaiseDate = (joinDateStr) => {
+  if (!joinDateStr) return '-';
+  const joinDate = new Date(joinDateStr);
+  if (isNaN(joinDate.getTime())) return '-';
+  
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  
+  const nextRaise = new Date(joinDate);
+  nextRaise.setFullYear(now.getFullYear());
+  nextRaise.setHours(0, 0, 0, 0);
+  
+  if (nextRaise < now) {
+    nextRaise.setFullYear(now.getFullYear() + 1);
+  }
+  
+  return nextRaise.toISOString().split('T')[0];
+};
+
 const AdminEmployees = ({ user }) => {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState({});
@@ -16,6 +36,52 @@ const AdminEmployees = ({ user }) => {
   const [editingId, setEditingId] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'asc' });
   const [globalSettings, setGlobalSettings] = useState({ userTypes: [] });
+  const [rolesList, setRolesList] = useState([]);
+  
+  // Search and filter states
+  const [searchTermId, setSearchTermId] = useState('');
+  const [searchTermName, setSearchTermName] = useState('');
+
+  const customSelectStyles = {
+    control: (provided, state) => ({
+      ...provided,
+      backgroundColor: 'white',
+      border: '1px solid #e2e8f0',
+      borderRadius: '10px',
+      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+      cursor: 'pointer',
+      minHeight: '42px',
+      height: '42px',
+    }),
+    valueContainer: (provided) => ({
+      ...provided,
+      padding: '0 8px',
+    }),
+    singleValue: (provided) => ({
+      ...provided,
+      color: '#1e293b',
+      fontWeight: 'bold',
+      fontSize: '0.9rem',
+    }),
+    placeholder: (provided) => ({
+      ...provided,
+      color: '#94a3b8',
+      fontSize: '0.9rem',
+    }),
+    menu: (provided) => ({
+      ...provided,
+      zIndex: 9999,
+    }),
+    option: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isSelected ? '#0f766e' : state.isFocused ? '#f0fdf4' : 'white',
+      color: state.isSelected ? 'white' : '#1e293b',
+      cursor: 'pointer',
+      ':active': {
+        backgroundColor: '#0f766e',
+      }
+    })
+  };
   
   const [formData, setFormData] = useState({
     id: '',
@@ -30,14 +96,16 @@ const AdminEmployees = ({ user }) => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const [emps, depts, settings] = await Promise.all([
+      const [emps, depts, settings, rolesRes] = await Promise.all([
         getEmployees(),
         getDepartments(),
-        getGlobalSettings()
+        getGlobalSettings(),
+        getRoles()
       ]);
       setEmployees(emps);
       setDepartments(depts);
       setGlobalSettings(settings);
+      setRolesList(rolesRes || []);
     };
     fetchData();
   }, []);
@@ -69,10 +137,13 @@ const AdminEmployees = ({ user }) => {
       sickLeaveBalance: emp.sickLeaveBalance || '0',
       allowedLeaveTypes: emp.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'],
       allowedMissingPunches: emp.allowedMissingPunches !== undefined ? emp.allowedMissingPunches : 0,
-      roles: emp.roles || (emp.role ? [emp.role] : []),
-      level: emp.level || (emp.role === 'admin' ? 'admin' : 'employee'),
+      roles: emp.roles || [],
+      role: emp.role || null, // The modern RBAC role object
+      level: emp.level || (emp.roles?.includes('admin') ? 'admin' : 'employee'),
       hasSalesAccess: emp.hasSalesAccess || false,
       hasProductionAccess: emp.hasProductionAccess || false,
+      hasPreparationAccess: emp.hasPreparationAccess || false,
+      hasRepVisitsAccess: emp.hasRepVisitsAccess || false,
       supervisorPermissions: emp.supervisorPermissions || { attendance: true, smoking: true, absences: true, evaluations: true, orders: true },
       assignedEmployees: emp.assignedEmployees || [],
       workShiftName: emp.workShiftName || '',
@@ -96,7 +167,7 @@ const AdminEmployees = ({ user }) => {
       allowedMissingPunches: 0,
       directManager: '',
       roles: [],
-      level: 'employee',
+      level: 'موظف عادي',
       password: '12345678',
       hasOverviewAccess: true,
       hasEmployeesAccess: false,
@@ -105,8 +176,10 @@ const AdminEmployees = ({ user }) => {
       hasDeliveryAccess: false,
       hasReportsAccess: false,
       hasCustomersAccess: false,
+      hasRepVisitsAccess: false,
       hasSettingsAccess: false,
       hasStockAccess: false,
+      role: null,
       supervisorPermissions: { attendance: true, smoking: true, absences: true, evaluations: true, orders: true },
       assignedEmployees: [],
       workShiftName: '',
@@ -220,19 +293,24 @@ const AdminEmployees = ({ user }) => {
               </select>
             </div>
 
-            <div class="col-span-4 premium-form-group">
+            <div class="col-span-3 premium-form-group">
               <label>رقم الهاتف</label>
               <input id="swal-phone" class="premium-input" placeholder="رقم الهاتف" value="${initialData.phone}">
             </div>
 
-            <div class="col-span-4 premium-form-group">
+            <div class="col-span-3 premium-form-group">
               <label>تاريخ الميلاد</label>
               <input id="swal-dob" class="premium-input bg-white" placeholder="اختر تاريخ الميلاد" value="${initialData.dateOfBirth || ''}">
             </div>
 
-            <div class="col-span-4 premium-form-group">
+            <div class="col-span-3 premium-form-group">
               <label>تاريخ التعيين</label>
               <input id="swal-join-date" class="premium-input bg-white" placeholder="اختر تاريخ التعيين" value="${initialData.joinDate || ''}">
+            </div>
+
+            <div class="col-span-3 premium-form-group">
+              <label>موعد الزيادة السنوية</label>
+              <input id="swal-annual-raise" class="premium-input bg-white" placeholder="اختر تاريخ الزيادة" style="color: #0f766e; font-weight: bold;" value="${initialData.annualRaiseDate || getNextAnnualRaiseDate(initialData.joinDate)}">
             </div>
 
             <div class="col-span-12 grid grid-cols-4 gap-4">
@@ -402,7 +480,7 @@ const AdminEmployees = ({ user }) => {
 
             <div class="col-span-6 premium-form-group">
               <label><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield text-muted"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> نوع المستخدم</label>
-              <select id="swal-level" class="premium-input">
+              <select id="swal-level" class="premium-input" onchange="const val = this.value; const isSupOrAdmin = val === 'مشرف' || val === 'إدارة' || val === 'admin' || val === 'مدير' || val === 'سوبر مشرف' || val === 'supervisor' || val === 'super_admin'; document.getElementById('custom-permissions-container').style.display = isSupOrAdmin ? 'block' : 'none';">
                 ${globalSettings.userTypes.map(type => {
                   const typeName = typeof type === 'string' ? type : type.name;
                   return `<option value="${typeName}" ${initialData.level === typeName ? 'selected' : ''}>${typeName}</option>`;
@@ -413,77 +491,6 @@ const AdminEmployees = ({ user }) => {
               <label><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-key text-muted"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4.1a1 1 0 0 0-1.4 0l-2.1 2.1a1 1 0 0 0 0 1.4ZM7 18l-6 6"/><path d="M5 14a7 7 0 1 0 10 10L7 16l-2 2Z"/></svg> كلمة المرور</label>
               <input id="swal-password" class="premium-input" placeholder="كلمة المرور" value="${initialData.password}">
             </div>
-
-            <div class="col-span-12 premium-form-group">
-              <label><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layout-grid text-muted"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg> صلاحيات الأقسام (المساطر)</label>
-              <div class="premium-checkbox-grid" style="grid-template-columns: repeat(4, 1fr); background: #f1f5f9;">
-                ${deptCheckboxes}
-              </div>
-            </div>
-
-            <div class="col-span-12 premium-form-group">
-              <label><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lock text-muted"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> صلاحيات الوصول للقوائم</label>
-              <div class="premium-checkbox-grid" style="grid-template-columns: repeat(4, 1fr); background: #fff; border: 1px solid #e2e8f0;">
-                <label class="premium-checkbox-item">
-                  <input type="checkbox" id="swal-overview" ${initialData.hasOverviewAccess ? 'checked' : ''}>
-                  <span>الرئيسية</span>
-                </label>
-                <label class="premium-checkbox-item">
-                  <input type="checkbox" id="swal-live" ${initialData.hasLiveAccess ? 'checked' : ''}>
-                  <span>التحكم المباشر</span>
-                </label>
-                <label class="premium-checkbox-item">
-                  <input type="checkbox" id="swal-reports" ${initialData.hasReportsAccess ? 'checked' : ''}>
-                  <span>مركز التقارير</span>
-                </label>
-                <label class="premium-checkbox-item">
-                  <input type="checkbox" id="swal-supervisor-tasks" ${initialData.hasSupervisorTasksAccess ? 'checked' : ''}>
-                  <span>إدارة المهام</span>
-                </label>
-                <label class="premium-checkbox-item">
-                  <input type="checkbox" id="swal-supervisor-reports" ${initialData.hasSupervisorReportsAccess ? 'checked' : ''}>
-                  <span>تقرير المشرفين</span>
-                </label>
-                <label class="premium-checkbox-item">
-                  <input type="checkbox" id="swal-prod" ${initialData.hasProductionAccess ? 'checked' : ''}>
-                  <span>إدارة الإنتاج</span>
-                </label>
-                <label class="premium-checkbox-item">
-                  <input type="checkbox" id="swal-prod-tasks" ${initialData.hasProductionTasksAccess ? 'checked' : ''}>
-                  <span>مهام الإنتاج</span>
-                </label>
-                <label class="premium-checkbox-item">
-                  <input type="checkbox" id="swal-sales" ${initialData.hasSalesAccess ? 'checked' : ''}>
-                  <span>طلبيات العملاء</span>
-                </label>
-                <label class="premium-checkbox-item">
-                  <input type="checkbox" id="swal-delivery" ${initialData.hasDeliveryAccess ? 'checked' : ''}>
-                  <span>التوصيل</span>
-                </label>
-                <label class="premium-checkbox-item">
-                  <input type="checkbox" id="swal-stock" ${initialData.hasStockAccess ? 'checked' : ''}>
-                  <span>المخزون</span>
-                </label>
-                <label class="premium-checkbox-item">
-                  <input type="checkbox" id="swal-customers" ${initialData.hasCustomersAccess ? 'checked' : ''}>
-                  <span>العملاء</span>
-                </label>
-                <label class="premium-checkbox-item">
-                  <input type="checkbox" id="swal-site-settings" ${initialData.hasSiteSettingsAccess ? 'checked' : ''}>
-                  <span>إعدادات الموقع</span>
-                </label>
-                <label class="premium-checkbox-item">
-                  <input type="checkbox" id="swal-emps" ${initialData.hasEmployeesAccess ? 'checked' : ''}>
-                  <span>إدارة الموظفين</span>
-                </label>
-
-                <label class="premium-checkbox-item">
-                  <input type="checkbox" id="swal-logs" ${initialData.hasLogsAccess ? 'checked' : ''}>
-                  <span>سجل العمليات</span>
-                </label>
-              </div>
-            </div>
-
 
             <div class="col-span-12 premium-form-group">
               <label><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users text-muted"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> الموظفون التابعون (يظهرون فقط في تقرير هذا المشرف)</label>
@@ -501,7 +508,20 @@ const AdminEmployees = ({ user }) => {
       focusConfirm: false,
       didOpen: () => {
         flatpickr('#swal-dob', { locale: Arabic, disableMobile: true, dateFormat: 'Y-m-d' });
-        flatpickr('#swal-join-date', { locale: Arabic, disableMobile: true, dateFormat: 'Y-m-d' });
+        flatpickr('#swal-annual-raise', { locale: Arabic, disableMobile: true, dateFormat: 'Y-m-d' });
+        flatpickr('#swal-join-date', { 
+          locale: Arabic, 
+          disableMobile: true, 
+          dateFormat: 'Y-m-d',
+          onChange: (selectedDates, dateStr) => {
+            const nextRaiseEl = document.getElementById('swal-annual-raise');
+            if (nextRaiseEl && nextRaiseEl._flatpickr) {
+              nextRaiseEl._flatpickr.setDate(getNextAnnualRaiseDate(dateStr));
+            } else if (nextRaiseEl) {
+              nextRaiseEl.value = getNextAnnualRaiseDate(dateStr);
+            }
+          }
+        });
       },
       preConfirm: () => {
         const id = document.getElementById('swal-id').value;
@@ -512,6 +532,7 @@ const AdminEmployees = ({ user }) => {
         const phone = document.getElementById('swal-phone')?.value || '';
         const dateOfBirth = document.getElementById('swal-dob')?.value || '';
         const joinDate = document.getElementById('swal-join-date').value;
+        const annualRaiseDate = document.getElementById('swal-annual-raise')?.value || '';
         const basicSalary = document.getElementById('swal-basic-salary').value;
         const transportationAllowance = document.getElementById('swal-transportation-allowance')?.value || '';
         const vBalanceRaw = document.getElementById('swal-vacation-balance').value;
@@ -544,29 +565,30 @@ const AdminEmployees = ({ user }) => {
         
         const level = document.getElementById('swal-level').value;
         const password = document.getElementById('swal-password').value;
-        const hasOverviewAccess = document.getElementById('swal-overview')?.checked || false;
-        const hasLiveAccess = document.getElementById('swal-live')?.checked || false;
-        const hasEmployeesAccess = document.getElementById('swal-emps')?.checked || false;
-        const hasSalesAccess = document.getElementById('swal-sales')?.checked || false;
-        const hasProductionAccess = document.getElementById('swal-prod')?.checked || false;
-        const hasProductionTasksAccess = document.getElementById('swal-prod-tasks')?.checked || false;
-        const hasDeliveryAccess = document.getElementById('swal-delivery')?.checked || false;
-        const hasReportsAccess = document.getElementById('swal-reports')?.checked || false;
-        const hasCustomersAccess = document.getElementById('swal-customers')?.checked || false;
 
-        const hasStockAccess = document.getElementById('swal-stock')?.checked || false;
-        const hasSupervisorTasksAccess = document.getElementById('swal-supervisor-tasks')?.checked || false;
-        const hasSupervisorReportsAccess = document.getElementById('swal-supervisor-reports')?.checked || false;
-        const hasSiteSettingsAccess = document.getElementById('swal-site-settings')?.checked || false;
-        const hasLogsAccess = document.getElementById('swal-logs')?.checked || false;
+        // Keep permissions and role fields intact since they are managed inside Roles Settings Tab now
+        const hasOverviewAccess = initialData.hasOverviewAccess ?? false;
+        const hasLiveAccess = initialData.hasLiveAccess ?? false;
+        const hasEmployeesAccess = initialData.hasEmployeesAccess ?? false;
+        const hasSalesAccess = initialData.hasSalesAccess ?? false;
+        const hasProductionAccess = initialData.hasProductionAccess ?? false;
+        const hasProductionTasksAccess = initialData.hasProductionTasksAccess ?? false;
+        const hasPreparationAccess = initialData.hasPreparationAccess ?? false;
+        const hasPreparationTasksAccess = initialData.hasPreparationTasksAccess ?? false;
+        const hasDeliveryAccess = initialData.hasDeliveryAccess ?? false;
+        const hasReportsAccess = initialData.hasReportsAccess ?? false;
+        const hasCustomersAccess = initialData.hasCustomersAccess ?? false;
+        const hasRepVisitsAccess = initialData.hasRepVisitsAccess ?? false;
+        const hasStockAccess = initialData.hasStockAccess ?? false;
+        const hasSupervisorTasksAccess = initialData.hasSupervisorTasksAccess ?? false;
+        const hasSupervisorReportsAccess = initialData.hasSupervisorReportsAccess ?? false;
+        const hasSiteSettingsAccess = initialData.hasSiteSettingsAccess ?? false;
+        const hasLogsAccess = initialData.hasLogsAccess ?? false;
+        const hasSettingsAccess = hasProductionTasksAccess;
         
-        const hasSettingsAccess = hasProductionTasksAccess; // For backward compatibility if needed elsewhere
-        
-        // Always ensure roles includes the department if it is chosen
-        let selectedRoles = Array.from(document.querySelectorAll('.swal-role-checkbox:checked')).map(cb => cb.value);
-        if (department && !selectedRoles.includes(department)) {
-          selectedRoles.push(department);
-        }
+        const selectedRoles = initialData.roles || [];
+        const selectedRoleObj = initialData.role || null;
+        const employeePermissions = initialData.permissions || null;
 
         const assignedEmployees = Array.from(document.querySelectorAll('.swal-assigned-emp-checkbox:checked')).map(cb => cb.value);
 
@@ -600,21 +622,29 @@ const AdminEmployees = ({ user }) => {
           return false;
         }
         return { 
-          id, name, jobTitle, department, directManager, phone, dateOfBirth, joinDate, basicSalary, transportationAllowance, employmentStatus, vacationBalance, sickLeaveBalance, allowedMissingPunches, bonusMissingPunches, allowedLeaveTypes, hrNotes, level, password, 
+          id, name, jobTitle, department, directManager, phone, dateOfBirth, joinDate, annualRaiseDate, basicSalary, transportationAllowance, employmentStatus, vacationBalance, sickLeaveBalance, allowedMissingPunches, bonusMissingPunches, allowedLeaveTypes, hrNotes, level, password, 
           workShiftName, shiftStart, shiftEnd, workLocationId, hasSocialSecurity, socialSecuritySalary, isHazardousProfession,
           allowAdvances, useCustomAdvancePeriods, customAdvancePeriods,
           hasOverviewAccess, hasLiveAccess, hasEmployeesAccess, hasSalesAccess, 
-          hasProductionAccess, hasProductionTasksAccess, hasDeliveryAccess, hasReportsAccess, 
-          hasCustomersAccess, hasSettingsAccess, hasStockAccess, 
+          hasProductionAccess, hasProductionTasksAccess, hasPreparationAccess, hasPreparationTasksAccess, hasDeliveryAccess, hasReportsAccess, 
+          hasCustomersAccess, hasRepVisitsAccess, hasSettingsAccess, hasStockAccess, 
           hasSupervisorTasksAccess, hasSupervisorReportsAccess, hasSiteSettingsAccess, hasLogsAccess, 
           roles: selectedRoles,
+          role: selectedRoleObj,
+          permissions: employeePermissions,
           supervisorPermissions, assignedEmployees
         };
       }
     }).then(async (result) => {
       if (result.isConfirmed) {
-        const isAdmin = result.value.level === 'admin' || result.value.level === 'إدارة' || result.value.id === 'admin';
-        const savingData = { ...result.value, role: isAdmin ? 'admin' : (result.value.roles[0] || 'general') };
+        const isAdminUser = result.value.level === 'admin' || result.value.level === 'إدارة' || result.value.id === 'admin';
+        let newRole = result.value.role;
+        if (isAdminUser) {
+          newRole = 'admin';
+        } else if (newRole === 'admin') {
+          newRole = result.value.roles[0] || 'general';
+        }
+        const savingData = { ...result.value, role: newRole || (result.value.roles[0] || 'general') };
         const allEmps = await getEmployees();
         
         if (!isEdit && allEmps.some(e => e.id === savingData.id)) {
@@ -772,7 +802,13 @@ const AdminEmployees = ({ user }) => {
     setSortConfig({ key, direction });
   };
 
-  const sortedEmployees = [...employees].sort((a, b) => {
+  const filteredEmployees = employees.filter(emp => {
+    const matchId = searchTermId ? String(emp.id) === String(searchTermId) : true;
+    const matchName = searchTermName ? String(emp.name) === String(searchTermName) : true;
+    return matchId && matchName;
+  });
+
+  const sortedEmployees = [...filteredEmployees].sort((a, b) => {
     if (!sortConfig.key) return 0;
     let aVal = a[sortConfig.key];
     let bVal = b[sortConfig.key];
@@ -786,6 +822,16 @@ const AdminEmployees = ({ user }) => {
     if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
     return 0;
   });
+
+  const employeeIdOptions = [
+    { value: '', label: 'رقم الموظف...' },
+    ...[...new Set(employees.map(e => e.id))].filter(Boolean).map(id => ({ value: id, label: id }))
+  ];
+
+  const employeeNameOptions = [
+    { value: '', label: 'اسم الموظف...' },
+    ...[...new Set(employees.map(e => e.name))].filter(Boolean).map(name => ({ value: name, label: name }))
+  ];
 
   return (
     <div className="space-y-4" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -802,6 +848,37 @@ const AdminEmployees = ({ user }) => {
       </div>
 
       <div className="glass-card">
+        {/* Filters Bar */}
+        <div className="flex gap-4 items-center mb-6 flex-wrap no-print" dir="rtl" style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem' }}>
+          {/* Employee ID Filter */}
+          <div style={{ width: '180px', minWidth: '180px', flexShrink: 0 }}>
+              <Select
+                options={employeeIdOptions}
+                value={employeeIdOptions.find(opt => opt.value === searchTermId) || null}
+                onChange={(selected) => setSearchTermId(selected ? selected.value : '')}
+                styles={{...customSelectStyles, control: (base) => ({...base, height: '42px', minHeight: '42px', borderRadius: '10px', border: '1px solid #e2e8f0'})}}
+                placeholder="رقم الموظف..."
+                isSearchable={true}
+                isClearable={true}
+              />
+          </div>
+
+          {/* Employee Name Filter */}
+          <div style={{ width: '250px', minWidth: '250px', flexShrink: 0, position: 'relative' }}>
+              <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, color: '#94a3b8', pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
+                <User size={16} />
+              </div>
+              <Select
+                options={employeeNameOptions}
+                value={employeeNameOptions.find(opt => opt.value === searchTermName) || null}
+                onChange={(selected) => setSearchTermName(selected ? selected.value : '')}
+                styles={{...customSelectStyles, control: (base) => ({...base, height: '42px', minHeight: '42px', borderRadius: '10px', border: '1px solid #e2e8f0', paddingLeft: '24px'})}}
+                placeholder="اسم الموظف..."
+                isSearchable={true}
+                isClearable={true}
+              />
+          </div>
+        </div>
         <div className="table-container">
           <table>
             <thead>
@@ -821,9 +898,6 @@ const AdminEmployees = ({ user }) => {
                 <th onClick={() => handleSort('jobTitle')} className="cursor-pointer hover:text-primary transition-colors">
                   <div className="flex items-center gap-2">المسمى الوظيفي <ArrowUpDown size={12} className="text-muted" /></div>
                 </th>
-                <th>المساطر الفعالة</th>
-                <th>طلبيات العملاء</th>
-                <th>إدارة الإنتاج</th>
                 <th>إجراءات</th>
               </tr>
             </thead>
@@ -847,29 +921,6 @@ const AdminEmployees = ({ user }) => {
                     </td>
                     <td data-label="القسم الوظيفي">{emp.department || '-'}</td>
                     <td data-label="المسمى الوظيفي">{emp.jobTitle || '-'}</td>
-                    <td data-label="المساطر">
-                      <div className="flex flex-wrap gap-1 max-w-[200px]">
-                        {empRoles.filter(r => r !== emp.department).length > 0 ? empRoles.filter(r => r !== emp.department).map(r => (
-                          <span key={r} className="badge" style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', fontSize: '0.7rem' }}>
-                            {departments[r] || r}
-                          </span>
-                        )) : <span className="text-muted text-xs">لا يوجد</span>}
-                      </div>
-                    </td>
-                    <td data-label="المبيعات">
-                      {isAdmin(emp) || emp.hasSalesAccess ? (
-                        <span className="badge badge-success">مفعل</span>
-                      ) : (
-                        <span className="badge badge-poor">معطل</span>
-                      )}
-                    </td>
-                    <td data-label="الإنتاج">
-                      {isAdmin(emp) || emp.hasProductionAccess ? (
-                        <span className="badge badge-success">مفعل</span>
-                      ) : (
-                        <span className="badge badge-poor">معطل</span>
-                      )}
-                    </td>
                     <td data-label="إجراءات">
                       <div className="flex gap-2 justify-center">
                         {canPerformAction(user, 'EDIT', 'EMPLOYEES', globalSettings) && (

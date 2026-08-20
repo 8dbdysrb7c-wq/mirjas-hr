@@ -3,11 +3,13 @@ import { History, Search, Filter, Calendar , ArrowUpDown} from 'lucide-react';
 import { getHRAuditLogs } from '../../store';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
+import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 
 const HRAuditLog = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search);
   const [moduleFilter, setModuleFilter] = useState('all');
   const [dateRange, setDateRange] = useState([]);
 
@@ -23,10 +25,10 @@ const HRAuditLog = () => {
 
   const filteredLogs = logs.filter(log => {
     // Search
-    const matchesSearch = 
-      log.user?.toLowerCase().includes(search.toLowerCase()) || 
-      log.action?.toLowerCase().includes(search.toLowerCase()) || 
-      log.description?.toLowerCase().includes(search.toLowerCase());
+    const searchMatches = matchesSearch(
+      [log.user, log.action, log.description, log.module, log.id],
+      debouncedSearch
+    );
     
     // Module Filter
     const matchesModule = moduleFilter === 'all' || log.module === moduleFilter;
@@ -40,7 +42,7 @@ const HRAuditLog = () => {
       matchesDate = logDate >= start && logDate <= end;
     }
 
-    return matchesSearch && matchesModule && matchesDate;
+    return searchMatches && matchesModule && matchesDate;
   });
 
   const getModuleColor = (mod) => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, User } from 'lucide-react';
-import Select from 'react-select';
+import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
 import { getEmployees, getHRViolations, saveHRViolation, deleteHRViolation } from '../../store';
@@ -187,6 +187,8 @@ const HRViolations = ({ user }) => {
     return 0;
   });
 
+  const totalDeductions = sortedViolations.reduce((sum, v) => sum + (Number(v.deductionAmount) || 0), 0);
+
   return (
     <>
       <div className="glass-card flex flex-col min-h-[500px]">
@@ -195,7 +197,17 @@ const HRViolations = ({ user }) => {
           <h2 className="text-xl font-bold flex items-center gap-2">
             <AlertTriangle className="text-primary" /> المخالفات والخصومات
           </h2>
-          <p className="text-muted text-sm mt-1">سجل المخالفات الإدارية والخصومات المالية للموظفين</p>
+          <div className="flex flex-col gap-2 mt-2">
+            <p className="text-muted text-sm">سجل المخالفات الإدارية والخصومات المالية للموظفين</p>
+            <div className="flex items-center gap-3">
+              <span style={{ background: '#fff1f2', color: '#e11d48', padding: '6px 16px', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 'bold', border: '1px solid #ffe4e6' }}>
+                إجمالي الخصومات المعروضة: {totalDeductions.toFixed(2)} د.أ
+              </span>
+              <span style={{ background: '#f8fafc', color: '#475569', padding: '6px 16px', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 'bold', border: '1px solid #e2e8f0' }}>
+                عدد المخالفات: {sortedViolations.length}
+              </span>
+            </div>
+          </div>
         </div>
         <style>
           {`

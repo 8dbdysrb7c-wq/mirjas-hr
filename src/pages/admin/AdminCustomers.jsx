@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Trash2, Edit2, UserPlus, Phone, User as UserIcon, X, ArrowUpDown } from 'lucide-react';
 import { getCustomers, saveCustomer, deleteCustomer, isAdmin, getGlobalSettings, canPerformAction, addLog } from '../../store';
+import { advancedSearch, matchesSearch, useDebounce } from '../../utils/searchEngine';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 
@@ -9,7 +10,9 @@ const MySwal = withReactContent(Swal);
 const AdminCustomers = ({ user }) => {
   const [customers, setCustomers] = useState([]);
   const [searchName, setSearchName] = useState('');
+  const debouncedSearchName = useDebounce(searchName, 300);
   const [searchLocation, setSearchLocation] = useState('');
+  const debouncedSearchLocation = useDebounce(searchLocation, 300);
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -58,34 +61,70 @@ const AdminCustomers = ({ user }) => {
   };
 
   useEffect(() => {
-    const updateExistingCustomers = async () => {
+    const fixDuplicateCustomers = async () => {
       if (customers.length > 0) {
+        const byNumber = {};
+        customers.forEach(c => {
+          if (c.customerNumber) {
+            if (!byNumber[c.customerNumber]) byNumber[c.customerNumber] = [];
+            byNumber[c.customerNumber].push(c);
+          }
+        });
+
+        let maxCli = 0;
+        let maxSup = 0;
+        customers.forEach(c => {
+          if (c.customerNumber && c.customerNumber.startsWith('CLI-')) {
+            const num = parseInt(c.customerNumber.replace('CLI-', ''), 10);
+            if (!isNaN(num) && num > maxCli) maxCli = num;
+          }
+          if (c.customerNumber && c.customerNumber.startsWith('SUP-')) {
+            const num = parseInt(c.customerNumber.replace('SUP-', ''), 10);
+            if (!isNaN(num) && num > maxSup) maxSup = num;
+          }
+        });
+
+        let needsRefetch = false;
+        
+        // 1. Fix duplicates
+        for (const num in byNumber) {
+          if (byNumber[num].length > 1) {
+            const duplicates = byNumber[num].sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+            for (let i = 1; i < duplicates.length; i++) {
+              const c = duplicates[i];
+              const prefix = (c.type === 'مورد') ? 'SUP-' : 'CLI-';
+              let newNum = '';
+              if (prefix === 'CLI-') { maxCli++; newNum = `CLI-${String(maxCli).padStart(4, '0')}`; }
+              else { maxSup++; newNum = `SUP-${String(maxSup).padStart(4, '0')}`; }
+              
+              // Force frontend update so it saves properly
+              await saveCustomer({ ...c, customerNumber: newNum });
+              needsRefetch = true;
+            }
+          }
+        }
+        
+        // 2. Fix missing IDs
         const toUpdate = customers.filter(c => !c.customerNumber || !c.type);
         if (toUpdate.length > 0) {
-          let maxNum = 0;
-          customers.forEach(c => {
-            if (c.customerNumber && c.customerNumber.startsWith('CLI-')) {
-              const num = parseInt(c.customerNumber.replace('CLI-', ''), 10);
-              if (!isNaN(num) && num > maxNum) maxNum = num;
-            }
-          });
-          
           toUpdate.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
-          
           for (const c of toUpdate) {
             let updateData = { ...c };
             if (!c.type) updateData.type = 'عميل';
             if (!c.customerNumber) {
-              maxNum++;
-              updateData.customerNumber = `CLI-${String(maxNum).padStart(4, '0')}`;
+              const prefix = (updateData.type === 'مورد') ? 'SUP-' : 'CLI-';
+              if (prefix === 'CLI-') { maxCli++; updateData.customerNumber = `CLI-${String(maxCli).padStart(4, '0')}`; }
+              else { maxSup++; updateData.customerNumber = `SUP-${String(maxSup).padStart(4, '0')}`; }
             }
             await saveCustomer(updateData);
+            needsRefetch = true;
           }
-          fetchData();
         }
+        
+        if (needsRefetch) fetchData();
       }
     };
-    updateExistingCustomers();
+    fixDuplicateCustomers();
   }, [customers]);
 
   const handleSort = (key) => {
@@ -188,7 +227,7 @@ const AdminCustomers = ({ user }) => {
           <div class="premium-form-group" id="swal-salesRep-group">
             <label>
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user text-muted"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              البائع (مندوب المبيعات) *
+              البائع (مندوب الطلبيات) *
             </label>
             <select id="swal-salesRep" class="premium-input">
               <option value="زبائن الشركة" ${(!initialData.salesRep || initialData.salesRep === 'زبائن الشركة') ? 'selected' : ''}>زبائن الشركة</option>
@@ -320,7 +359,7 @@ const AdminCustomers = ({ user }) => {
           return false;
         }
         if (type === 'عميل' && (globalSettings.salesReps || []).length > 0 && !salesRep) {
-          Swal.showValidationMessage('يرجى اختيار البائع (مندوب المبيعات)');
+          Swal.showValidationMessage('يرجى اختيار البائع (مندوب الطلبيات)');
           return false;
         }
 
@@ -410,18 +449,16 @@ const AdminCustomers = ({ user }) => {
     return 0;
   });
 
-  const filteredCustomers = sortedCustomers.filter(c => {
+  const filteredCustomers = advancedSearch(sortedCustomers, debouncedSearchName, ['name', 'phone', 'customerNumber', 'location', 'city']).filter(c => {
     const typeMatch = (c.type || 'عميل') === activeTab;
-    const nameMatch = (c.name || '').toLowerCase().includes(searchName.toLowerCase());
-    const locationMatch = (c.location || '').toLowerCase().includes(searchLocation.toLowerCase());
-    const phoneMatch = (c.phone || '').includes(searchName);
+    const locationMatch = matchesSearch([c.location, c.city, c.area, c.sector], debouncedSearchLocation);
     const statusMatch = filterStatus ? c.status === filterStatus : true;
     const sectorMatch = filterSector ? c.sector === filterSector : true;
     const cityMatch = filterCity ? c.city === filterCity : true;
     const actualRep = c.type === 'مورد' ? '' : (c.salesRep || 'زبائن الشركة');
     const salesRepMatch = filterSalesRep ? actualRep === filterSalesRep : true;
     
-    return typeMatch && (nameMatch || phoneMatch) && locationMatch && statusMatch && sectorMatch && cityMatch && salesRepMatch;
+    return typeMatch && locationMatch && statusMatch && sectorMatch && cityMatch && salesRepMatch;
   });
 
   return (
@@ -663,7 +700,7 @@ const AdminCustomers = ({ user }) => {
               </div>
               {activeTab === 'عميل' && (
                 <div className="input-group">
-                  <label>البائع (مندوب المبيعات)</label>
+                  <label>البائع (مندوب الطلبيات)</label>
                   <select className="input-field" value={filterSalesRep} onChange={(e) => setFilterSalesRep(e.target.value)}>
                     <option value="">جميع البائعين</option>
                     {(globalSettings.salesReps || []).map(rep => <option key={rep} value={rep}>{rep}</option>)}

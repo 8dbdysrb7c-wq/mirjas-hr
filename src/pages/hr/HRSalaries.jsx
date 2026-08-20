@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Printer, Search, ArrowUpDown, ArrowUp, ArrowDown, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
+import { DollarSign, Printer, Search, ArrowUpDown, ArrowUp, ArrowDown, Calendar, ChevronDown, ChevronUp, User } from 'lucide-react';
+import Select from '../../components/SearchSelect';
 import { getEmployees, getHRViolations, getHRAttendance, getHRLeaves, getGlobalSettings, getHRSalaryPeriods, saveHRSalaryPeriod, getHRAdvances, getHRBonuses, archiveHRSalaryPeriod, unarchiveHRSalaryPeriod, getHRSalaryArchive } from '../../store';
 import { calculateSalaries as calculateSalariesLogic, getCycleDates } from '../../utils/salaryCalculator';
 import Swal from 'sweetalert2';
@@ -152,7 +153,15 @@ const HRSalaries = ({ user }) => {
   const getProcessedSalaryData = () => {
     const rawData = archivedSalaryData || calculateSalaries();
     
-    return rawData.filter(emp => 
+    const mapped = rawData.map(emp => {
+      const totalEntitlements = (emp.basic || 0) + (emp.transportAllowanceAddition || 0) + (emp.overtimePay || 0) + (emp.holidayPay || 0) + (emp.advanceAddition || 0) + (emp.bonusAddition || 0);
+      return {
+        ...emp,
+        totalEntitlements
+      };
+    });
+    
+    return mapped.filter(emp => 
       String(emp.name || '').toLowerCase().includes((search || '').toLowerCase()) || 
       String(emp.id || '').toLowerCase().includes((search || '').toLowerCase())
     ).sort((a, b) => {
@@ -183,13 +192,85 @@ const HRSalaries = ({ user }) => {
     });
   };
 
+  const customSelectStyles = {
+    control: (provided) => ({
+      ...provided,
+      backgroundColor: 'white',
+      border: '1px solid #e2e8f0',
+      borderRadius: '10px',
+      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+      cursor: 'pointer',
+      minHeight: '42px',
+      height: '42px',
+    }),
+    valueContainer: (provided) => ({
+      ...provided,
+      padding: '0 8px',
+    }),
+    singleValue: (provided) => ({
+      ...provided,
+      color: '#1e293b',
+      fontWeight: 'bold',
+      fontSize: '15px',
+    }),
+    placeholder: (provided) => ({
+      ...provided,
+      color: '#94a3b8',
+      fontSize: '15px',
+      fontWeight: '600',
+    }),
+    menuPortal: base => ({ ...base, zIndex: 9999 }),
+    menu: (provided) => ({
+      ...provided,
+      borderRadius: '12px',
+      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+      border: '1px solid #e2e8f0',
+      overflow: 'hidden',
+      zIndex: 9999,
+      width: 'max-content',
+      minWidth: '100%',
+    }),
+    option: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isSelected ? '#1a8d9b' : state.isFocused ? '#f1f5f9' : 'white',
+      color: state.isSelected ? 'white' : '#1e293b',
+      cursor: 'pointer',
+      padding: '10px 16px',
+      fontSize: '15px',
+      fontWeight: state.isSelected ? 'bold' : '600',
+    }),
+  };
+
+  const employeeIdOptions = [
+    { value: '', label: 'الكل (رقم الموظف)' },
+    ...employees.map(emp => ({ value: emp.id || emp.employeeId || '', label: emp.id || emp.employeeId || '' }))
+  ];
+
+  const employeeNameOptions = [
+    { value: '', label: 'الكل (اسم الموظف)' },
+    ...employees.map(emp => ({ value: emp.name || '', label: emp.name || '' }))
+  ];
+
   const salaryData = getProcessedSalaryData();
   
   const totalSalaries = salaryData.reduce((sum, s) => sum + s.netSalary, 0);
 
+  const totalActualHours = salaryData.reduce((sum, emp) => {
+    if (emp.actualWorkHours !== undefined) return sum + (Number(emp.actualWorkHours) || 0);
+    const workDays = emp.workDays || 30;
+    const stdHours = emp.empStandardWorkHours || 8;
+    const unpaid = emp.unpaidLeaveDays || 0;
+    const unexcused = emp.unexcusedAbsenceDays || 0;
+    const lateMins = emp.lateMinutes || 0;
+    const hrs = Math.max(0, (workDays - unpaid - unexcused) * stdHours - (lateMins / 60));
+    return sum + hrs;
+  }, 0);
+
+  const totalOvertimeHours = salaryData.reduce((sum, emp) => sum + (Number(emp.totalOvertimeHours) || 0), 0);
+
   const cycleInfo = hrSettings ? getCycleDates(selectedMonth, hrSettings.salaryCycleStartDay || 1) : {start:'', end:''};
 
-  const currentPeriod = salaryPeriods.find(p => p.month === selectedMonth);
+  const currentPeriod = salaryPeriods.find(p => (p.month || p.id) === selectedMonth);
   const periodStatus = currentPeriod ? currentPeriod.status : 'open';
 
   const handleStatusChange = async (newStatus) => {
@@ -225,9 +306,11 @@ const HRSalaries = ({ user }) => {
           await updateDoc(doc(db, 'hr_bonuses', bon.id), { processedInPeriod: selectedMonth });
         }
 
-        await archiveHRSalaryPeriod(selectedMonth, salaryData, user);
+        const archived = await archiveHRSalaryPeriod(selectedMonth, salaryData, user);
+        if (!archived) throw new Error('تعذر حفظ دورة الرواتب ونسخة الأرشيف');
       } else if (newStatus === 'open') {
-        await unarchiveHRSalaryPeriod(selectedMonth, user);
+        const reopened = await unarchiveHRSalaryPeriod(selectedMonth, user);
+        if (!reopened) throw new Error('تعذر إلغاء ترحيل دورة الرواتب');
         
         // Remove stamps
         const advancesToUnstamp = advances.filter(a => a.processedInPeriod === selectedMonth || (a.processedPeriods || []).includes(selectedMonth));
@@ -249,14 +332,15 @@ const HRSalaries = ({ user }) => {
           await updateDoc(doc(db, 'hr_bonuses', bon.id), { processedInPeriod: null });
         }
       } else {
-        await saveHRSalaryPeriod(selectedMonth, newStatus, user);
+        const saved = await saveHRSalaryPeriod(selectedMonth, newStatus, user);
+        if (!saved) throw new Error('تعذر تحديث حالة دورة الرواتب');
       }
       
       Swal.fire('نجاح', 'تم تحديث حالة دورة الرواتب بنجاح', 'success');
-      fetchData();
+      await fetchData();
     } catch (error) {
       console.error(error);
-      Swal.fire('خطأ', 'حدث خطأ أثناء تحديث الحالة', 'error');
+      Swal.fire('تعذر إتمام الترحيل', error?.message || 'حدث خطأ أثناء تحديث حالة دورة الرواتب', 'error');
     }
   };
 
@@ -270,7 +354,7 @@ const HRSalaries = ({ user }) => {
             {periodStatus === 'archived' && <span className="bg-slate-200 text-slate-800 text-xs px-2 py-1 rounded-full font-bold ml-2">مُرحّل ومغلق</span>}
             {periodStatus === 'review' && <span className="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded-full font-bold ml-2">قيد المراجعة</span>}
           </h2>
-          <p className="text-xs text-slate-400 mt-1 whitespace-nowrap">دورة الرواتب: {cycleInfo.start} إلى {cycleInfo.end}</p>
+          <p className="text-xs text-slate-500 font-bold mt-1 whitespace-nowrap">دورة الرواتب: {cycleInfo.start} إلى {cycleInfo.end}</p>
         </div>
         
         <div className="flex gap-3 w-full md:w-auto flex-wrap md:flex-nowrap items-center">
@@ -309,11 +393,27 @@ const HRSalaries = ({ user }) => {
                 setPickerYear(parseInt(year));
                 setIsMonthDropdownOpen(!isMonthDropdownOpen);
               }}
-              className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2 shadow-sm hover:border-primary transition-colors cursor-pointer min-w-[160px]"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                backgroundColor: 'white',
+                border: '1px solid #e2e8f0',
+                borderRadius: '10px',
+                boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                cursor: 'pointer',
+                height: '42px',
+                minHeight: '42px',
+                padding: '0 16px',
+                minWidth: '200px',
+                transition: 'border-color 0.2s'
+              }}
+              className="hover:border-primary"
             >
               <div className="flex items-center gap-2">
                 <Calendar size={18} className="text-primary" />
-                <span className="font-bold text-slate-700 whitespace-nowrap">
+                <span className="font-bold text-slate-700 whitespace-nowrap" style={{ fontSize: '15px' }}>
                   {getSelectedMonthLabel()}
                 </span>
               </div>
@@ -417,21 +517,126 @@ const HRSalaries = ({ user }) => {
               </div>
             )}
           </div>
-          <div className="search-wrapper flex-grow max-w-[200px]">
-            <Search className="search-icon" size={18} />
-            <input 
-              type="text" 
-              placeholder="البحث بالرقم الوظيفي أو اسم الموظف..." 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="input-field search-input w-full"
+          {/* Employee ID Filter */}
+          <div style={{ width: '260px', minWidth: '260px', flexShrink: 0 }}>
+            <Select
+              options={employeeIdOptions}
+              value={employeeIdOptions.find(opt => opt.value === search) || null}
+              onChange={(selected) => setSearch(selected ? selected.value : '')}
+              styles={{...customSelectStyles, control: (base) => ({...base, height: '42px', minHeight: '42px', borderRadius: '10px', border: '1px solid #e2e8f0'})}}
+              placeholder="رقم الموظف..."
+              isSearchable={true}
+              isClearable={true}
+            />
+          </div>
+
+          {/* Employee Name Filter */}
+          <div style={{ width: '260px', minWidth: '260px', flexShrink: 0, position: 'relative' }}>
+            <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, color: '#94a3b8', pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
+              <User size={16} />
+            </div>
+            <Select
+              options={employeeNameOptions}
+              value={employeeNameOptions.find(opt => opt.value === search) || null}
+              onChange={(selected) => setSearch(selected ? selected.value : '')}
+              styles={{
+                ...customSelectStyles, 
+                control: (base) => ({...base, height: '42px', minHeight: '42px', borderRadius: '10px', border: '1px solid #e2e8f0'}),
+                valueContainer: (base) => ({...base, paddingLeft: '32px'})
+              }}
+              placeholder="اسم الموظف..."
+              isSearchable={true}
+              isClearable={true}
             />
           </div>
         </div>
       </div>
 
-      <div className="table-responsive">
-        <table className="table">
+      {/* Summary Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '12px', marginBottom: '24px' }}>
+        {/* Card 1: Employees */}
+        <div style={{ backgroundColor: '#e0f2fe', borderRadius: '12px', border: '1px solid #bae6fd', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', padding: '14px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right', width: '100%' }}>
+            <p style={{ fontSize: '12px', fontWeight: '800', color: '#0369a1', margin: '0 0 4px 0', whiteSpace: 'nowrap' }}>عدد الموظفين</p>
+            <h4 style={{ fontSize: '20px', fontWeight: '900', color: '#0284c7', margin: 0 }}>
+              {salaryData.length} <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#0369a1' }}>موظف</span>
+            </h4>
+          </div>
+        </div>
+
+        {/* Card 2: Total Basic */}
+        <div style={{ backgroundColor: '#f1f5f9', borderRadius: '12px', border: '1px solid #cbd5e1', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', padding: '14px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right', width: '100%' }}>
+            <p style={{ fontSize: '12px', fontWeight: '800', color: '#475569', margin: '0 0 4px 0', whiteSpace: 'nowrap' }}>إجمالي الأساسي</p>
+            <h4 style={{ fontSize: '20px', fontWeight: '900', color: '#0f172a', margin: 0 }}>
+              {salaryData.reduce((sum, emp) => sum + (emp.basic || 0), 0).toFixed(2)} <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>JD</span>
+            </h4>
+          </div>
+        </div>
+
+        {/* Card 3: Total Additions */}
+        <div style={{ backgroundColor: '#d1fae5', borderRadius: '12px', border: '1px solid #a7f3d0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', padding: '14px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right', width: '100%' }}>
+            <p style={{ fontSize: '12px', fontWeight: '800', color: '#065f46', margin: '0 0 4px 0', whiteSpace: 'nowrap' }}>إجمالي الإضافات</p>
+            <h4 style={{ fontSize: '20px', fontWeight: '900', color: '#047857', margin: 0 }}>
+              {salaryData.reduce((sum, emp) => sum + (emp.transportAllowanceAddition || 0) + (emp.overtimePay || 0) + (emp.holidayPay || 0) + (emp.advanceAddition || 0) + (emp.bonusAddition || 0), 0).toFixed(2)} <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#065f46' }}>JD</span>
+            </h4>
+          </div>
+        </div>
+
+        {/* Card 4: Total Deductions */}
+        <div style={{ backgroundColor: '#fee2e2', borderRadius: '12px', border: '1px solid #fecaca', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', padding: '14px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right', width: '100%' }}>
+            <p style={{ fontSize: '12px', fontWeight: '800', color: '#991b1b', margin: '0 0 4px 0', whiteSpace: 'nowrap' }}>إجمالي الخصومات</p>
+            <h4 style={{ fontSize: '20px', fontWeight: '900', color: '#b91c1c', margin: 0 }}>
+              {salaryData.reduce((sum, emp) => sum + (emp.totalDeductions || 0), 0).toFixed(2)} <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#991b1b' }}>JD</span>
+            </h4>
+          </div>
+        </div>
+
+        {/* Card 5: Net Salaries */}
+        <div style={{ backgroundColor: '#e0e7ff', borderRadius: '12px', border: '1px solid #c7d2fe', boxShadow: '0 4px 15px -3px rgba(79, 70, 229, 0.1)', padding: '14px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right', width: '100%' }}>
+            <p style={{ fontSize: '12px', fontWeight: '800', color: '#3730a3', margin: '0 0 4px 0', whiteSpace: 'nowrap' }}>صافي الرواتب</p>
+            <h4 style={{ fontSize: '20px', fontWeight: '900', color: '#4338ca', margin: 0 }}>
+              {salaryData.reduce((sum, emp) => sum + (emp.netSalary || 0), 0).toFixed(2)} <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#3730a3' }}>JD</span>
+            </h4>
+          </div>
+        </div>
+
+        {/* Card 6: Total Advances */}
+        <div style={{ backgroundColor: '#fef3c7', borderRadius: '12px', border: '1px solid #fde68a', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', padding: '14px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right', width: '100%' }}>
+            <p style={{ fontSize: '12px', fontWeight: '800', color: '#92400e', margin: '0 0 4px 0', whiteSpace: 'nowrap' }}>مجموع السلف</p>
+            <h4 style={{ fontSize: '20px', fontWeight: '900', color: '#b45309', margin: 0 }}>
+              {salaryData.reduce((sum, emp) => sum + (emp.advanceDeduction || 0), 0).toFixed(2)} <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#92400e' }}>JD</span>
+            </h4>
+          </div>
+        </div>
+
+        {/* Card 7: Total Actual Work Hours */}
+        <div style={{ backgroundColor: '#ccfbf1', borderRadius: '12px', border: '1px solid #99f6e4', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', padding: '14px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right', width: '100%' }}>
+            <p style={{ fontSize: '12px', fontWeight: '800', color: '#0f766e', margin: '0 0 4px 0', whiteSpace: 'nowrap' }}>الساعات الفعلية</p>
+            <h4 style={{ fontSize: '20px', fontWeight: '900', color: '#0d9488', margin: 0 }}>
+              {totalActualHours.toFixed(1)} <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#0f766e' }}>ساعة</span>
+            </h4>
+          </div>
+        </div>
+
+        {/* Card 8: Total Overtime Hours */}
+        <div style={{ backgroundColor: '#ffedd5', borderRadius: '12px', border: '1px solid #fed7aa', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', padding: '14px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right', width: '100%' }}>
+            <p style={{ fontSize: '12.5px', fontWeight: '800', color: '#c2410c', margin: '0 0 4px 0', whiteSpace: 'nowrap' }}>ساعات الإضافي</p>
+            <h4 style={{ fontSize: '20px', fontWeight: '900', color: '#ea580c', margin: 0 }}>
+              {totalOvertimeHours.toFixed(1)} <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#c2410c' }}>ساعة</span>
+            </h4>
+          </div>
+        </div>
+      </div>
+
+      <div className="salary-table-responsive">
+        <table className="table salary-table">
           <thead>
             <tr>
               <th className="cursor-pointer hover:bg-gray-100 transition-colors text-center" onClick={() => handleSort('id')}>
@@ -455,6 +660,8 @@ const HRSalaries = ({ user }) => {
                 <div className="flex items-center justify-center gap-1">الغياب الشامل (-) {renderSortIcon('unpaidLeaveDeduction')}</div></th>
               <th className="text-rose-500 cursor-pointer hover:bg-gray-100 transition-colors text-center" title="سلف مقتطعة" onClick={() =>handleSort('advanceDeduction')}>
                 <div className="flex items-center justify-center gap-1">السلف (-) {renderSortIcon('advanceDeduction')}</div></th>
+              <th className="text-emerald-600 cursor-pointer hover:bg-gray-100 transition-colors text-center" title="إجمالي الراتب المستحق قبل الخصم" onClick={() =>handleSort('totalEntitlements')}>
+                <div className="flex items-center justify-center gap-1">إجمالي المستحق {renderSortIcon('totalEntitlements')}</div></th>
               <th className="text-rose-500 cursor-pointer hover:bg-gray-100 transition-colors text-center" title="إجمالي الخصومات اليدوية والآلية" onClick={() =>handleSort('totalDeductions')}>
                 <div className="flex items-center justify-center gap-1">إجمالي الخصم {renderSortIcon('totalDeductions')}</div></th>
               <th className="text-blue-500 cursor-pointer hover:bg-gray-100 transition-colors text-center" title="اقتطاع الضمان الاجتماعي" onClick={() =>handleSort('socialSecurityEmployeeDeduction')}>
@@ -476,6 +683,7 @@ const HRSalaries = ({ user }) => {
                 <td className="text-rose-500 font-medium text-center">{formatVal(emp.lateDeduction)}</td>
                 <td className="text-rose-500 font-medium text-center">{formatVal(emp.unpaidLeaveDeduction + (emp.unexcusedAbsenceDeduction || 0))}</td>
                 <td className="text-rose-500 font-medium text-center">{formatVal(emp.advanceDeduction)}</td>
+                <td className="text-emerald-600 font-bold text-center">{formatVal(emp.totalEntitlements)}</td>
                 <td className="py-3 px-2 font-bold text-rose-600 text-center">{formatVal(emp.totalDeductions)}</td>
                 <td className="py-3 px-2 font-medium text-blue-500 text-center">{formatVal(emp.socialSecurityEmployeeDeduction)}</td>
                 <td className="font-bold text-lg bg-slate-50 text-center">{formatVal(emp.netSalary, false)} د.أ</td>

@@ -4,6 +4,7 @@ import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
 import { getHolidays, saveHoliday, deleteHoliday, getDepartments, getGlobalSettings } from '../../store';
 import Swal from 'sweetalert2';
+import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 
 const HRHolidays = ({ user }) => {
   const [holidays, setHolidays] = useState([]);
@@ -123,10 +124,9 @@ const HRHolidays = ({ user }) => {
     }
   };
 
-  const filteredHolidays = holidays.filter(hol => 
-    hol.descriptionAr?.toLowerCase().includes(search.toLowerCase()) || 
-    hol.descriptionEn?.toLowerCase().includes(search.toLowerCase()) ||
-    String(hol.code)?.toLowerCase().includes(search.toLowerCase())
+  const debouncedSearch = useDebounce(search);
+  const filteredHolidays = holidays.filter(hol =>
+    matchesSearch([hol.descriptionAr, hol.descriptionEn, hol.code], debouncedSearch)
   ).sort((a, b) => {
     if (!sortConfig.key) return 0;
     let valA = a[sortConfig.key] || '';

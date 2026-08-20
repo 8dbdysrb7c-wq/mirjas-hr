@@ -1,3 +1,11 @@
+import {
+  getOfficialAbsenceMinutes,
+  getTimedLeaveMinutes,
+  isLongApprovedDeparture,
+  isPolicyEffective,
+  MAX_PARTIAL_ABSENCE_MINUTES
+} from './attendancePolicy.js';
+
 export const roundMinutes = (minutes, roundingMethod) => {
   if (!roundingMethod || roundingMethod === 'minute') return minutes;
   if (roundingMethod === '15_minutes') return Math.round(minutes / 15) * 15;
@@ -142,25 +150,45 @@ export const calculateSalaries = ({
       if (l.startDate && l.endDate) return l.startDate <= cycle.end && l.endDate >= cycle.start;
       return false;
     });
+
+    const automaticUnpaidDates = new Set();
+    empAttendance.forEach(attendanceRow => {
+      if (!isPolicyEffective(attendanceRow.date)) return;
+      const officialAbsenceMinutes = getOfficialAbsenceMinutes({
+        timeIn: attendanceRow.timeIn,
+        timeOut: attendanceRow.timeOut,
+        shiftStart: emp.shiftStart || '08:00',
+        shiftEnd: emp.shiftEnd || '16:00'
+      });
+      if (officialAbsenceMinutes > MAX_PARTIAL_ABSENCE_MINUTES) {
+        automaticUnpaidDates.add(attendanceRow.date);
+      }
+    });
+    empLeaves.forEach(leave => {
+      if (isLongApprovedDeparture(leave)) {
+        automaticUnpaidDates.add(leave.date || leave.startDate);
+      }
+    });
+    automaticUnpaidDates.forEach(date => unpaidLeaveDates.add(date));
     
     let missionMinutes = 0;
     
     empLeaves.forEach(leave => {
-      if (leave.type === 'مغادرة خاصة' || leave.type === 'مغادرة عمل') {
+      if (leave.type === 'مغادرة خاصة' || leave.type === 'مغادرة عمل' || leave.type === 'مغادرة الدخان') {
+        const leaveDate = leave.date || leave.startDate;
+        if (automaticUnpaidDates.has(leaveDate)) return;
         if (leave.startTime && leave.endTime) {
-          const [sh, sm] = leave.startTime.split(':').map(Number);
-          const [eh, em] = leave.endTime.split(':').map(Number);
-          let mins = (eh * 60 + em) - (sh * 60 + sm);
-          if (mins < 0) mins += 24 * 60;
-          missionMinutes += mins;
+          missionMinutes += getTimedLeaveMinutes(leave);
         }
       }
     });
     
     // Automatic Unexcused Absence Detection
     const todayObj = new Date();
-    const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
-    const endProcessDate = cycle.end > todayStr ? todayStr : cycle.end;
+    const yesterdayObj = new Date(todayObj);
+    yesterdayObj.setDate(yesterdayObj.getDate() - 1);
+    const yesterdayStr = `${yesterdayObj.getFullYear()}-${String(yesterdayObj.getMonth() + 1).padStart(2, '0')}-${String(yesterdayObj.getDate()).padStart(2, '0')}`;
+    const endProcessDate = cycle.end > yesterdayStr ? yesterdayStr : cycle.end;
     
     const arabicDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
     const weekends = hrSettings.weekendDays || ['الجمعة'];
@@ -168,7 +196,8 @@ export const calculateSalaries = ({
     let currentDay = new Date(cycle.start);
     const lastDay = new Date(endProcessDate);
     const nonWorkStatuses = ['غائب', 'غياب غير مبرر', 'إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة', 'لم يسجل دخول', 'محذوف'];
-    
+    let elapsedWorkDays = 0;
+
     while (currentDay <= lastDay) {
       const year = currentDay.getFullYear();
       const month = String(currentDay.getMonth() + 1).padStart(2, '0');
@@ -188,6 +217,18 @@ export const calculateSalaries = ({
         continue;
       }
       
+      elapsedWorkDays++;
+
+      // Check if leave exists in HR leaves (Approved leaves take precedence over actual/mistaken attendance)
+      const leaveForDay = empLeaves.find(l => (l.date && l.date === dateStr) || (l.startDate && l.startDate <= dateStr && l.endDate >= dateStr));
+      if (leaveForDay) {
+        if (String(leaveForDay.type || '').trim() === 'إجازة غير مدفوعة') {
+          unpaidLeaveDates.add(dateStr);
+        }
+        currentDay.setDate(currentDay.getDate() + 1);
+        continue;
+      }
+
       // Skip if actual attendance exists (meaning they worked)
       const hasActualAttendance = empAttendance.some(a => 
         a.date === dateStr && 
@@ -200,12 +241,12 @@ export const calculateSalaries = ({
         continue;
       }
       
-      // Check if leave exists
-      const leaveForDay = empLeaves.find(l => (l.date && l.date === dateStr) || (l.startDate && l.startDate <= dateStr && l.endDate >= dateStr));
-      if (leaveForDay) {
-        if (String(leaveForDay.type || '').trim() === 'إجازة غير مدفوعة') {
-          unpaidLeaveDates.add(dateStr);
-        }
+      // Skip if attendance explicitly marks an excused leave
+      const hasExcusedAbsenceInAttendance = empAttendance.some(a => 
+        a.date === dateStr && 
+        ['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة', 'إجازة', 'مغادرة'].includes(a.status)
+      );
+      if (hasExcusedAbsenceInAttendance) {
         currentDay.setDate(currentDay.getDate() + 1);
         continue;
       }
@@ -218,7 +259,35 @@ export const calculateSalaries = ({
     const unexcusedAbsenceDays = unexcusedAbsenceDates.size;
     const unpaidLeaveDays = unpaidLeaveDates.size;
     
-    const roundedLateMinutes = roundMinutes(rawLateMinutes, hrSettings.timeRounding);
+    // Smart overtime approval can settle attendance deficit from the requested
+    // period. Those minutes are neither payable overtime nor a second salary
+    // deduction. Legacy smart approvals stored only compMins, so keep that as
+    // a fallback for already-approved records.
+    const coveredLateMinutesByDate = empLeaves
+      .filter(l => l.type === 'بدل عمل إضافي' || l.type === 'عمل إضافي')
+      .reduce((byDate, l) => {
+        const details = l.rateDetails;
+        if (!details) return byDate;
+        const explicitLate = Number(details.lateCoveredMins);
+        const legacyCovered = Number(details.compMins);
+        const covered = Number.isFinite(explicitLate)
+          ? Math.max(0, explicitLate)
+          : (Number.isFinite(legacyCovered) ? Math.max(0, legacyCovered) : 0);
+        const date = l.date || l.startDate;
+        if (date) byDate.set(date, (byDate.get(date) || 0) + covered);
+        return byDate;
+      }, new Map());
+    // Cap coverage against lateness on the same attendance day. This prevents
+    // duplicate requests or early-departure coverage from cancelling lateness
+    // belonging to another day.
+    const payableLateMinutes = empAttendance.reduce((sum, attendanceRow) => {
+      if (unpaidLeaveDates.has(attendanceRow.date)) return sum;
+      const late = Math.max(0, Number(attendanceRow.lateMinutes) || 0);
+      const covered = coveredLateMinutesByDate.get(attendanceRow.date) || 0;
+      return sum + Math.max(0, late - covered);
+    }, 0);
+    const coveredLateMinutes = Math.max(0, rawLateMinutes - payableLateMinutes);
+    const roundedLateMinutes = roundMinutes(payableLateMinutes, hrSettings.timeRounding);
     const roundedMissionMinutes = roundMinutes(missionMinutes, hrSettings.timeRounding);
     
     let lateDeduction = 0;
@@ -259,12 +328,17 @@ export const calculateSalaries = ({
     const overtimeReqs = leaves.filter(l => {
       const isApproved = approvedStatuses.includes(l.status);
       if (l.employeeId !== emp.id || (l.type !== 'بدل عمل إضافي' && l.type !== 'عمل إضافي') || !isApproved) return false;
+      const overtimeDate = l.date || l.startDate;
+      // An unpaid day has zero payable attendance value. Any punches or
+      // overtime requests on that same day remain only as an audit trail.
+      if (overtimeDate && unpaidLeaveDates.has(overtimeDate)) return false;
       if (l.date) return l.date >= cycle.start && l.date <= cycle.end;
       if (l.startDate && l.endDate) return l.startDate <= cycle.end && l.endDate >= cycle.start;
       return false;
     });
     let rawNormalOvertimeMins = 0;
     let rawWeekendOvertimeMins = 0;
+    const overtimeMinutesByMultiplier = new Map();
     let overtimeRequestsCount = 0;
     
     overtimeReqs.forEach(req => {
@@ -272,8 +346,11 @@ export const calculateSalaries = ({
       if (req.startTime && req.endTime) {
         const [sh, sm] = req.startTime.split(':').map(Number);
         const [eh, em] = req.endTime.split(':').map(Number);
-        let mins = (eh * 60 + em) - (sh * 60 + sm);
-        if (mins < 0) mins += 24 * 60;
+        let mins = Number(req?.rateDetails?.extraMins);
+        if (!Number.isFinite(mins)) {
+          mins = (eh * 60 + em) - (sh * 60 + sm);
+          if (mins < 0) mins += 24 * 60;
+        }
         
         if (hrSettings.maxDailyOvertimeHours) {
            const maxMins = hrSettings.maxDailyOvertimeHours * 60;
@@ -293,6 +370,20 @@ export const calculateSalaries = ({
           }
         }
         
+        const fallbackMultiplier = isWeekendOrHoliday
+          ? (hrSettings.overtimeWeekendMultiplier || 1.50)
+          : (hrSettings.overtimeMultiplier || 1.25);
+        const storedRate = req.rate || req?.rateDetails?.baseRate;
+        const rateParts = storedRate ? String(storedRate).split(':') : [];
+        const explicitMultiplier = rateParts.length === 2 ? Number(rateParts[1]) : Number(storedRate);
+        const requestMultiplier = Number.isFinite(explicitMultiplier) && explicitMultiplier > 0
+          ? explicitMultiplier
+          : fallbackMultiplier;
+        overtimeMinutesByMultiplier.set(
+          requestMultiplier,
+          (overtimeMinutesByMultiplier.get(requestMultiplier) || 0) + mins
+        );
+
         if (isWeekendOrHoliday) {
           rawWeekendOvertimeMins += mins;
         } else {
@@ -312,11 +403,10 @@ export const calculateSalaries = ({
     if (hrSettings.overtimeCalculationMethod === 'fixed_amount') {
        overtimePay = overtimeRequestsCount * (hrSettings.overtimeFixedAmount || 10);
     } else {
-       const normalMult = hrSettings.overtimeMultiplier || 1.25;
-       const weekendMult = hrSettings.overtimeWeekendMultiplier || 1.50;
-       
-       overtimePay = (totalNormalOvertimeHours * hourlyRate * normalMult) + 
-                     (totalWeekendOvertimeHours * hourlyRate * weekendMult);
+       overtimePay = [...overtimeMinutesByMultiplier.entries()].reduce((sum, [multiplier, minutes]) => {
+         const roundedMinutes = roundMinutes(minutes, hrSettings.timeRounding);
+         return sum + ((roundedMinutes / 60) * hourlyRate * multiplier);
+       }, 0);
     }
 
     // Holiday Compensation
@@ -405,16 +495,22 @@ export const calculateSalaries = ({
 
     const totalBonusAmount = bonusAddition;
     const netSalary = basic + transportAllowanceAddition + overtimePay + holidayPay + advanceAddition + totalBonusAmount - totalDeductions;
+    const actualAttendedDays = Math.max(0, elapsedWorkDays - unpaidLeaveDays - unexcusedAbsenceDays);
+    const actualWorkHours = Math.max(0, actualAttendedDays * empStandardWorkHours - ((roundedLateMinutes + roundedMissionMinutes) / 60));
 
     return {
       ...emp,
       basic,
       transportAllowanceAddition: transportAllowanceAddition || 0,
+      actualWorkHours: actualWorkHours || 0,
+      empStandardWorkHours,
+      workDays,
       totalOvertimeHours: totalOvertimeHours || 0,
       overtimePay: overtimePay || 0,
       holidayPay: holidayPay || 0,
       holidayAlternativeDays,
       lateDeduction: lateDeduction || 0,
+      coveredLateMinutes: coveredLateMinutes || 0,
       unpaidLeaveDeduction: unpaidLeaveDeduction || 0,
       unexcusedAbsenceDays,
       unexcusedAbsenceDeduction: unexcusedAbsenceDeduction || 0,

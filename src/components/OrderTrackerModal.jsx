@@ -1,20 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, CheckCircle, Package, Truck, ClipboardList, AlertCircle, RefreshCw, Share2, Calendar, Clock, Building2, Copy, Factory } from 'lucide-react';
+import { X, Search, CheckCircle, Package, Truck, ClipboardList, AlertCircle, RefreshCw, Share2, Calendar, Clock, Building2, Copy, Factory, User } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { getSalesOrders, getOrders, getMissions } from '../store';
 import Swal from 'sweetalert2';
+import { matchesSearch, useDebounce } from '../utils/searchEngine';
 
 const OrderTrackerModal = ({ initialOrderNumber, onClose }) => {
   const [searchTerm, setSearchTerm] = useState(initialOrderNumber || '');
   const [loading, setLoading] = useState(false);
   const [orderData, setOrderData] = useState(null);
   const [error, setError] = useState(null);
+  const debouncedSearchTerm = useDebounce(searchTerm);
 
   useEffect(() => {
-    if (initialOrderNumber) {
-      handleSearch(initialOrderNumber);
+    if (debouncedSearchTerm.trim()) {
+      handleSearch(debouncedSearchTerm);
     }
-  }, [initialOrderNumber]);
+  }, [debouncedSearchTerm]);
 
   const handleSearch = async (orderNumberToSearch = searchTerm) => {
     if (!orderNumberToSearch.trim()) return;
@@ -22,11 +24,12 @@ const OrderTrackerModal = ({ initialOrderNumber, onClose }) => {
     setError(null);
     setOrderData(null);
 
-    const cleanSearch = orderNumberToSearch.trim().toLowerCase();
-
     try {
       const salesOrders = await getSalesOrders();
-      const order = salesOrders.find(o => String(o.orderNumber || o.salesOrderNumber).toLowerCase() === String(orderNumberToSearch).trim().toLowerCase());
+      const order = salesOrders.find(o => matchesSearch(
+        [o.orderNumber, o.salesOrderNumber, o.customerName, o.customerNumber, o.phone],
+        orderNumberToSearch
+      ));
 
       if (!order) {
         setError('لم يتم العثور على طلبية بهذا الرقم');
@@ -328,7 +331,18 @@ const OrderTrackerModal = ({ initialOrderNumber, onClose }) => {
               </div>
             </div>
 
-            {/* Column 2: Order Date */}
+            {/* Column 2: Customer Name */}
+            <div className="otm-info-col">
+              <div className="otm-info-label-row">
+                <User size={16} />
+                <span>اسم العميل</span>
+              </div>
+              <div className="otm-info-value-row">
+                <span style={{ color: orderData?.sales?.customerName ? '#1e293b' : '#94a3b8', fontWeight: 'bold' }}>{orderData?.sales?.customerName || '---'}</span>
+              </div>
+            </div>
+
+            {/* Column 3: Order Date */}
             <div className="otm-info-col">
               <div className="otm-info-label-row">
                 <Calendar size={16} />
@@ -646,7 +660,7 @@ const OrderTrackerModal = ({ initialOrderNumber, onClose }) => {
         /* Info Card Grid */
         .otm-info-grid {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
+          grid-template-columns: repeat(5, 1fr);
           background: #ffffff;
           border: 1.5px solid #e2e8f0;
           border-radius: 20px;

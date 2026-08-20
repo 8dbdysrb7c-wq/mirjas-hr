@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Home, Users, Settings, FileText, ShoppingBag, ShoppingCart, UserCheck, Target, Plus, MoreHorizontal, X, Truck, ClipboardList, SunMoon, Layers, ChevronDown, ChevronUp, Palette, Package, Moon, Activity, RefreshCw, MapPin } from 'lucide-react';
+import { LogOut, Home, Users, Settings, FileText, ShoppingBag, ShoppingCart, UserCheck, Target, Plus, MoreHorizontal, X, Truck, ClipboardList, SunMoon, Layers, ChevronDown, ChevronUp, Palette, Package, Moon, Activity, RefreshCw, MapPin, Tag, Scissors, Calculator } from 'lucide-react';
 import AdminOverview from './admin/AdminOverview';
 import AdminEmployees from './admin/AdminEmployees';
 import AdminProduction from './admin/AdminProduction';
+import AdminPreparation from './admin/AdminPreparation';
 import AdminSales from './admin/AdminSales';
 import AdminDelivery from './admin/AdminDelivery';
 import AdminCustomers from './admin/AdminCustomers';
+import AdminCustomerStatements from './admin/AdminCustomerStatements';
 import AdminSettings from './admin/AdminSettings';
 import AdminHR from './hr/AdminHR';
 import AdminLogs from './admin/AdminLogs';
@@ -16,8 +18,13 @@ import AdminSupervisorReports from './admin/AdminSupervisorReports';
 import AdminSupervisorTasks from './admin/AdminSupervisorTasks';
 import AdminLive from './admin/AdminLive';
 import AdminRepVisits from './admin/AdminRepVisits';
+import AdminQuotes from './admin/AdminQuotes';
+import AdminPriceLists from './admin/AdminPriceLists';
+import AdminProductCosting from './admin/AdminProductCosting';
+import AdminFabricLibrary from './admin/AdminFabricLibrary';
 import { useAttendanceReminders } from '../hooks/useAttendanceReminders';
 import { getGlobalSettings, isAdmin, saveEmployee } from '../store';
+import { hasPermission } from '../utils/permissions';
 import NotificationCenter from '../components/NotificationCenter';
 import HeaderUserMenu from '../components/HeaderUserMenu';
 import AISummaryButton from '../components/AISummaryButton';
@@ -88,6 +95,26 @@ const SewingMachineIcon = ({ size = 24, color = "currentColor", className = "" }
     
     {/* Crank mechanism */}
     <path d="M 151 85 H 160 V 105 H 180 C 195 105, 195 95, 180 95 H 165 V 80 H 151 Z" />
+  </svg>
+);
+
+const FabricRollIcon = ({ size = 24, color = "currentColor", className = "" }) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke={color} 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className={className}
+  >
+    <path d="M9 19V5a3 3 0 0 0-6 0v14" />
+    <circle cx="6" cy="19" r="3" />
+    <circle cx="6" cy="19" r="1" />
+    <path d="M9 5 C 13 5, 13 3, 16 3 C 18 3, 19.5 4, 21 5 V 19 C 19.5 18, 18 17, 16 17 C 13 17, 13 19, 9 19" />
   </svg>
 );
 
@@ -165,33 +192,38 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
 
   // Handle Initial Permissions Redirect
   useEffect(() => {
-    const isFullAdmin = isAdmin(user);
     const canAccess = (tab) => {
-      if (isFullAdmin) return true;
       switch (tab) {
-        case 'overview': return user.hasOverviewAccess;
-        case 'live': return user.hasLiveAccess;
-        case 'employees': return user.hasEmployeesAccess;
-        case 'production-orders': return user.hasProductionAccess;
-        case 'production-tasks': return user.hasProductionTasksAccess;
-        case 'sales': return user.hasSalesAccess;
-        case 'delivery': return user.hasDeliveryAccess;
-        case 'hr': return user.hasHRAccess || isAdmin(user);
-        case 'reports': return user.hasReportsAccess;
-        case 'supervisor-tasks': return user.hasSupervisorTasksAccess;
-        case 'supervisor-reports': return user.hasSupervisorReportsAccess === true || (user.hasSupervisorReportsAccess !== false && (user.level === 'supervisor' || user.level === 'مشرف' || user.level === 'مشرف قسم'));
-        case 'stock': return user.hasStockAccess;
-        case 'customers': return user.hasCustomersAccess;
-        case 'tasks': return user.hasProductionTasksAccess;
-        case 'site-settings': return user.hasSiteSettingsAccess;
-        case 'scoring': return user.hasScoringAccess;
-        case 'logs': return user.hasLogsAccess;
+        case 'overview': return hasPermission(user, 'overview');
+        case 'live': return hasPermission(user, 'live');
+        case 'employees': return hasPermission(user, 'employees');
+        case 'production-orders': return hasPermission(user, 'production');
+        case 'production-tasks': return hasPermission(user, 'production_tasks');
+        case 'preparation-orders': return hasPermission(user, 'preparation');
+        case 'quotes': return hasPermission(user, 'quotes');
+        case 'pricelists': return hasPermission(user, 'pricelists');
+        case 'product-costing': return hasPermission(user, 'product_costing');
+        case 'fabric-library': return hasPermission(user, 'fabric_library');
+        case 'sales': return hasPermission(user, 'orders');
+        case 'rep-visits': return hasPermission(user, 'rep_visits');
+        case 'delivery': return hasPermission(user, 'delivery');
+        case 'hr': return hasPermission(user, 'hr');
+        case 'reports': return hasPermission(user, 'reports');
+        case 'supervisor-tasks': return hasPermission(user, 'supervisor_tasks');
+        case 'supervisor-reports': return hasPermission(user, 'supervisor_reports');
+        case 'stock': return hasPermission(user, 'stock');
+        case 'customers': return hasPermission(user, 'customers');
+        case 'customer_statements': return hasPermission(user, 'customer_statements');
+        case 'tasks': return hasPermission(user, 'production_tasks');
+        case 'site-settings': return hasPermission(user, 'site_settings');
+        case 'scoring': return hasPermission(user, 'scoring');
+        case 'logs': return hasPermission(user, 'logs');
         default: return false;
       }
     };
 
     if (!canAccess(activeTab)) {
-      const tabsOrder = ['overview', 'live', 'hr', 'production-orders', 'production-tasks', 'sales', 'reports', 'supervisor-tasks', 'supervisor-reports', 'delivery', 'stock', 'employees', 'customers', 'site-settings', 'scoring', 'logs'];
+      const tabsOrder = ['overview', 'live', 'hr', 'production-orders', 'production-tasks', 'preparation-orders', 'quotes', 'pricelists', 'product-costing', 'fabric-library', 'sales', 'rep-visits', 'reports', 'supervisor-tasks', 'supervisor-reports', 'delivery', 'stock', 'employees', 'customers', 'site-settings', 'scoring', 'logs'];
       const firstAvailable = tabsOrder.find(t => canAccess(t));
       if (firstAvailable) {
         setActiveTab(firstAvailable);
@@ -210,7 +242,7 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
     if (!target) return;
     const targetObj = typeof target === 'string' ? { tab: target } : target;
     const nextTab = targetObj.tab || 'overview';
-    setProductionOpen(nextTab.startsWith('production-'));
+    setProductionOpen(nextTab.startsWith('production-') || nextTab.startsWith('preparation-'));
     setSettingsOpen(['site-settings', 'scoring', 'employees', 'logs'].includes(nextTab));
     setActiveTab(nextTab);
     setIsSidebarOpen(false);
@@ -227,6 +259,11 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
       case 'employees': return <AdminEmployees user={user} />;
       case 'production-orders': return <AdminProduction user={user} />;
       case 'production-tasks': return <AdminTasks user={user} />;
+      case 'preparation-orders': return <AdminPreparation user={user} />;
+      case 'quotes': return <AdminQuotes user={user} />;
+      case 'pricelists': return <AdminPriceLists user={user} />;
+      case 'product-costing': return <AdminProductCosting user={user} />;
+      case 'fabric-library': return <AdminFabricLibrary user={user} />;
       case 'sales': return <AdminSales user={user} />;
       case 'delivery': return <AdminDelivery user={user} notificationTarget={notificationTarget} />;
       case 'hr': return <AdminHR user={user} notificationTarget={notificationTarget} />;
@@ -235,6 +272,7 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
       case 'supervisor-reports': return <AdminSupervisorReports user={user} />;
       case 'stock': return <AdminStock user={user} notificationTarget={notificationTarget} />;
       case 'customers': return <AdminCustomers user={user} />;
+      case 'customer_statements': return <AdminCustomerStatements user={user} />;
       case 'rep-visits': return <AdminRepVisits />;
       case 'site-settings': return <AdminSettings user={user} />;
 
@@ -316,22 +354,22 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
 
       {/* Bottom Nav */}
       <div className="mobile-bottom-nav no-print">
-        {(isAdmin(user) || user.hasOverviewAccess) && (
+        {hasPermission(user, 'overview') && (
           <div className={`bottom-nav-item ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => handleTabChange('overview')}>
             <Home size={22} /> <span>الرئيسية</span>
           </div>
         )}
-        {(isAdmin(user) || user.hasProductionAccess) && (
+        {hasPermission(user, 'production') && (
           <div className={`bottom-nav-item ${activeTab === 'production-orders' ? 'active' : ''}`} onClick={() => handleTabChange('production-orders')}>
             <SewingMachineIcon size={22} /> <span>الإنتاج</span>
           </div>
         )}
-        {(isAdmin(user) || user.hasSalesAccess) && (
+        {hasPermission(user, 'orders') && (
           <div className={`bottom-nav-item ${activeTab === 'sales' ? 'active' : ''}`} onClick={() => handleTabChange('sales')}>
             <ShoppingCart size={22} /> <span>الطلبيات</span>
           </div>
         )}
-        {(isAdmin(user) || user.hasReportsAccess) && (
+        {hasPermission(user, 'reports') && (
           <div className={`bottom-nav-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => handleTabChange('reports')}>
             <FileText size={22} /> <span>التقارير</span>
           </div>
@@ -352,43 +390,43 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
           </div>
 
           <div className="admin-sidebar-menu">
-            {(isAdmin(user) || user.hasOverviewAccess) && (
+            {hasPermission(user, 'overview') && (
               <div className={`admin-sidebar-item ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => handleTabChange('overview')}>
                 <Home size={22} /> <span>الرئيسية</span>
               </div>
             )}
-            {(isAdmin(user) || user.hasLiveAccess) && (
+            {hasPermission(user, 'live') && (
               <div className={`admin-sidebar-item ${activeTab === 'live' ? 'active' : ''}`} onClick={() => handleTabChange('live')}>
                 <Activity size={22} /> <span>التحكم المباشر</span>
               </div>
             )}
-            {(isAdmin(user) || user.hasReportsAccess) && (
+            {hasPermission(user, 'reports') && (
               <div className={`admin-sidebar-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => handleTabChange('reports')}>
                 <FileText size={22} /> <span>مركز التقارير</span>
               </div>
             )}
 
-            {(isAdmin(user) || user.hasHRAccess) && (
+            {hasPermission(user, 'hr') && (
               <div className={`admin-sidebar-item ${activeTab === 'hr' ? 'active' : ''}`} onClick={() => handleTabChange('hr')}>
                 <Users size={22} /> <span>الموارد البشرية</span>
               </div>
             )}
 
-            {(isAdmin(user) || user.hasSupervisorTasksAccess) && (
+            {hasPermission(user, 'supervisor_tasks') && (
               <div className={`admin-sidebar-item ${activeTab === 'supervisor-tasks' ? 'active' : ''}`} onClick={() => handleTabChange('supervisor-tasks')}>
                 <Layers size={22} /> <span>إدارة المهام</span>
               </div>
             )}
-            {(isAdmin(user) || user.hasSupervisorReportsAccess === true || (user.hasSupervisorReportsAccess !== false && (user.level === 'supervisor' || user.level === 'مشرف' || user.level === 'مشرف قسم'))) && (
+            {hasPermission(user, 'supervisor_reports') && (
               <div className={`admin-sidebar-item ${activeTab === 'supervisor-reports' ? 'active' : ''}`} onClick={() => handleTabChange('supervisor-reports')}>
                 <ClipboardList size={22} /> <span>تقارير المشرفين</span>
               </div>
             )}
 
             {/* قسم الإنتاج المطور */}
-            {(isAdmin(user) || user.hasProductionAccess || user.hasProductionTasksAccess) && (
+            {(hasPermission(user, 'production') || hasPermission(user, 'production_tasks') || hasPermission(user, 'preparation')) && (
               <div className="sidebar-group">
-                <div className={`admin-sidebar-item ${(activeTab.startsWith('production-')) ? 'active' : ''}`} onClick={() => setProductionOpen(!productionOpen)}>
+                <div className={`admin-sidebar-item ${(activeTab.startsWith('production-') || activeTab.startsWith('preparation-')) ? 'active' : ''}`} onClick={() => setProductionOpen(!productionOpen)}>
                   <div className="flex items-center gap-3">
                     <SewingMachineIcon size={22} /> <span>إدارة الإنتاج</span>
                   </div>
@@ -396,12 +434,17 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
                 </div>
                 {productionOpen && (
                   <div className="sidebar-submenu">
-                    {(isAdmin(user) || user.hasProductionAccess) && (
+                    {hasPermission(user, 'production') && (
                       <div className={`submenu-item ${activeTab === 'production-orders' ? 'active' : ''}`} onClick={() => handleTabChange('production-orders')}>
-                        <span>كرت إنتاج</span>
+                        <span>إنتاج قيد الخياطة</span>
                       </div>
                     )}
-                    {(isAdmin(user) || user.hasProductionTasksAccess) && (
+                    {hasPermission(user, 'preparation') && (
+                      <div className={`submenu-item ${activeTab === 'preparation-orders' ? 'active' : ''}`} onClick={() => handleTabChange('preparation-orders')}>
+                        <span>إنتاج قيد التحضير</span>
+                      </div>
+                    )}
+                    {hasPermission(user, 'production_tasks') && (
                       <div className={`submenu-item ${activeTab === 'production-tasks' ? 'active' : ''}`} onClick={() => handleTabChange('production-tasks')}>
                         <span>مهام الإنتاج</span>
                       </div>
@@ -411,34 +454,59 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
               </div>
             )}
 
-            {(isAdmin(user) || user.hasSalesAccess) && (
+            {hasPermission(user, 'quotes') && (
+              <div className={`admin-sidebar-item ${activeTab === 'quotes' ? 'active' : ''}`} onClick={() => handleTabChange('quotes')}>
+                <FileText size={22} /> <span>عروض الأسعار</span>
+              </div>
+            )}
+            {hasPermission(user, 'pricelists') && (
+              <div className={`admin-sidebar-item ${activeTab === 'pricelists' ? 'active' : ''}`} onClick={() => handleTabChange('pricelists')}>
+                <Tag size={22} /> <span>قوائم الأسعار</span>
+              </div>
+            )}
+            {hasPermission(user, 'product_costing') && (
+              <div className={`admin-sidebar-item ${activeTab === 'product-costing' ? 'active' : ''}`} onClick={() => handleTabChange('product-costing')}>
+                <Calculator size={22} /> <span>حاسبة تسعير المنتج</span>
+              </div>
+            )}
+            {hasPermission(user, 'fabric_library') && (
+              <div className={`admin-sidebar-item ${activeTab === 'fabric-library' ? 'active' : ''}`} onClick={() => handleTabChange('fabric-library')}>
+                <FabricRollIcon size={22} /> <span>مكتبة الأقمشة</span>
+              </div>
+            )}
+            {hasPermission(user, 'orders') && (
               <div className={`admin-sidebar-item ${activeTab === 'sales' ? 'active' : ''}`} onClick={() => handleTabChange('sales')}>
                 <ShoppingCart size={22} /> <span>الطلبيات</span>
               </div>
             )}
-            {(isAdmin(user) || user.hasDeliveryAccess) && (
+            {hasPermission(user, 'delivery') && (
               <div className={`admin-sidebar-item ${activeTab === 'delivery' ? 'active' : ''}`} onClick={() => handleTabChange('delivery')}>
                 <Truck size={22} /> <span>التوصيل</span>
               </div>
             )}
-            {(isAdmin(user) || user.hasStockAccess) && (
+            {hasPermission(user, 'stock') && (
               <div className={`admin-sidebar-item ${activeTab === 'stock' ? 'active' : ''}`} onClick={() => handleTabChange('stock')}>
                 <Layers size={22} /> <span>المخزون</span>
               </div>
             )}
-            {(isAdmin(user) || user.hasCustomersAccess) && (
+            {hasPermission(user, 'customers') && (
               <div className={`admin-sidebar-item ${activeTab === 'customers' ? 'active' : ''}`} onClick={() => handleTabChange('customers')}>
                 <UserCheck size={22} /> <span>العملاء والموردين</span>
               </div>
             )}
-            {(isAdmin(user) || user.hasSalesAccess || user.hasCustomersAccess) && (
+            {hasPermission(user, 'customer_statements') && (
+              <div className={`admin-sidebar-item ${activeTab === 'customer_statements' ? 'active' : ''}`} onClick={() => handleTabChange('customer_statements')}>
+                <FileText size={22} /> <span>كشوفات الحسابات</span>
+              </div>
+            )}
+            {hasPermission(user, 'rep_visits') && (
               <div className={`admin-sidebar-item ${activeTab === 'rep-visits' ? 'active' : ''}`} onClick={() => handleTabChange('rep-visits')}>
                 <MapPin size={22} /> <span>زيارات المندوبين</span>
               </div>
             )}
 
             {/* قسم الإعدادات المطور */}
-            {(isAdmin(user) || user.hasSiteSettingsAccess || user.hasEmployeesAccess || user.hasScoringAccess || user.hasLogsAccess) && (
+            {(hasPermission(user, 'site_settings') || hasPermission(user, 'employees') || hasPermission(user, 'scoring') || hasPermission(user, 'logs')) && (
               <div className="sidebar-group">
                 <div className={`admin-sidebar-item ${(activeTab === 'site-settings' || activeTab === 'scoring' || activeTab === 'employees' || activeTab === 'logs') ? 'active' : ''}`} onClick={() => setSettingsOpen(!settingsOpen)}>
                   <div className="flex items-center gap-3">
@@ -448,18 +516,18 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
                 </div>
                 {settingsOpen && (
                   <div className="sidebar-submenu">
-                    {(isAdmin(user) || user.hasSiteSettingsAccess) && (
+                    {hasPermission(user, 'site_settings') && (
                       <div className={`submenu-item ${activeTab === 'site-settings' ? 'active' : ''}`} onClick={() => handleTabChange('site-settings')}>
                         <span>إعدادات الموقع</span>
                       </div>
                     )}
-                    {(isAdmin(user) || user.hasEmployeesAccess) && (
+                    {hasPermission(user, 'employees') && (
                       <div className={`submenu-item ${activeTab === 'employees' ? 'active' : ''}`} onClick={() => handleTabChange('employees')}>
                         <span>إعدادات الموظفين</span>
                       </div>
                     )}
 
-                    {(isAdmin(user) || user.hasLogsAccess) && (
+                    {hasPermission(user, 'logs') && (
                       <div className={`submenu-item ${activeTab === 'logs' ? 'active' : ''}`} onClick={() => handleTabChange('logs')}>
                         <span>سجل العمليات</span>
                       </div>
@@ -488,11 +556,11 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
                 {getGreeting()}، {user.name ? (user.name === 'المدير العام' ? 'مشهور' : user.name.split(' ')[0]) : 'أهلاً بك'} 👋
               </h2>
               <div className="app-topbar-meta">
-                <div className="text-xl font-bold text-primary">
-                  {new Intl.DateTimeFormat('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}
+                <div className="text-xl font-bold text-primary" dir="ltr">
+                  {new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())}
                 </div>
-                <div className="text-sm font-semibold text-muted bg-surface-hover px-3 py-1 rounded-lg">
-                  {new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                <div className="text-sm font-semibold text-muted bg-surface-hover px-3 py-1 rounded-lg" dir="ltr">
+                  {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
                 </div>
               </div>
             </div>

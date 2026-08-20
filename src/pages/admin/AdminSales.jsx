@@ -1,13 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText } from 'lucide-react';
-import { getSalesOrders, saveSalesOrder, deleteSalesOrder, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getMissions, saveMission, deleteMission } from '../../store';
+import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText, Briefcase, Clock, Check, Save, Share2, Layers, Clipboard, CheckCircle, Copy, Archive } from 'lucide-react';
+import { getSalesOrders, saveSalesOrder, deleteSalesOrder, getSalesOrderDrafts, saveSalesOrderDraft, deleteSalesOrderDraft, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getPreparationOrders, savePreparationOrder, getMissions, saveMission, deleteMission } from '../../store';
+import { matchesSearch, useDebounce } from '../../utils/searchEngine';
+import { hasPermission } from '../../utils/permissions';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/light.css';
-import Select from 'react-select';
+import Select from '../../components/SearchSelect';
 import SearchableDropdown from '../../components/SearchableDropdown';
+import PreparationVariantsModal from '../../components/PreparationVariantsModal';
+import MultiColorSelectionModal from '../../components/MultiColorSelectionModal';
+import html2pdf from 'html2pdf.js';
 const MySwal = withReactContent(Swal);
 
 const getLocalDateStr = (d) => {
@@ -21,6 +26,7 @@ const AdminSales = ({ user }) => {
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const [showModal, setShowModal] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -36,7 +42,7 @@ const AdminSales = ({ user }) => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('معلق');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filterCreatedBy, setFilterCreatedBy] = useState('');
   const [filterOrderNumber, setFilterOrderNumber] = useState('');
@@ -45,6 +51,22 @@ const AdminSales = ({ user }) => {
   const [showVariantsModal, setShowVariantsModal] = useState(false);
   const [variantModalIndex, setVariantModalIndex] = useState(null);
   const [productionVariants, setProductionVariants] = useState([]);
+
+  // Preparation Variants Modal
+  const [showPreparationVariantsModal, setShowPreparationVariantsModal] = useState(false);
+  const [preparationVariantModalIndex, setPreparationVariantModalIndex] = useState(null);
+  const [preparationVariants, setPreparationVariants] = useState([]);
+  const [linkedPreparationOrder, setLinkedPreparationOrder] = useState(null);
+  const [preparationOrders, setPreparationOrders] = useState([]);
+
+  const [showMultiColorModal, setShowMultiColorModal] = useState(false);
+  const [drafts, setDrafts] = useState([]);
+  const [activeDraftId, setActiveDraftId] = useState(null);
+  const [draftSaveState, setDraftSaveState] = useState('');
+  const draftReadyRef = useRef(false);
+  const draftTimerRef = useRef(null);
+  const draftUserId = String(user?.id || user?.uid || user?.email || user?.name || 'unknown');
+  const draftStorageKey = `mirjas_sales_draft_${draftUserId}`;
 
   const [formData, setFormData] = useState({
     customerId: '',
@@ -63,23 +85,127 @@ const AdminSales = ({ user }) => {
   });
 
   const [stock, setStock] = useState([]);
+  const [missions, setMissions] = useState([]);
+  const [productionOrders, setProductionOrders] = useState([]);
+
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  const { stockOptions, validStockOptions, stockLookup } = React.useMemo(() => {
+    const grouped = {};
+    const validMap = {};
+    const lookup = {};
+
+    stock.forEach(s => {
+      if (!s.name) return;
+      const sName = String(s.name || '').trim();
+      const specSuffix = s.spec ? ` - ${String(s.spec).trim()}` : '';
+      const key = `${sName}${specSuffix}`;
+      
+      validMap[key] = true;
+      const qty = Number(s.quantity || 0);
+      
+      // Only show 'بضاعة جاهزة' in the dropdown
+      if (s.category === 'بضاعة جاهزة') {
+        if (!grouped[key]) {
+          grouped[key] = {
+            name: sName,
+            spec: String(s.spec || '').trim(),
+            totalQuantity: 0
+          };
+        }
+        grouped[key].totalQuantity += qty;
+      }
+
+      if (!lookup[key]) {
+        lookup[key] = { total: 0, breakdown: [] };
+      }
+      lookup[key].total += qty;
+      
+      if (qty > 0) {
+        const warehouse = String(s.warehouse || 'الرئيسي').trim();
+        const existingWh = lookup[key].breakdown.find(b => b.warehouse === warehouse);
+        if (existingWh) {
+          existingWh.quantity += qty;
+        } else {
+          lookup[key].breakdown.push({ warehouse, quantity: qty });
+        }
+      }
+    });
+
+    const options = Object.keys(grouped)
+      .sort((a, b) => {
+        const isModelA = String(a).trim().startsWith('موديل');
+        const isModelB = String(b).trim().startsWith('موديل');
+        if (isModelA && !isModelB) return -1;
+        if (!isModelA && isModelB) return 1;
+        return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+      })
+      .map(key => {
+        const g = grouped[key];
+        return `${key} (المتوفر: ${g.totalQuantity})`;
+      });
+
+    return { stockOptions: options, validStockOptions: validMap, stockLookup: lookup };
+  }, [stock]);
 
   useEffect(() => {
     fetchData();
+    getSalesOrderDrafts(draftUserId).then(cloudDrafts => {
+      let localDraft = null;
+      try { localDraft = JSON.parse(localStorage.getItem(draftStorageKey) || 'null'); } catch (_) {}
+      const combined = [...cloudDrafts];
+      if (localDraft?.id && !combined.some(d => d.id === localDraft.id)) combined.unshift(localDraft);
+      setDrafts(combined);
+    });
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => () => clearTimeout(draftTimerRef.current), []);
+
+  // Save locally immediately, then synchronize quietly to Firestore after a short debounce.
+  useEffect(() => {
+    if (!showModal || editingOrder || !activeDraftId || !draftReadyRef.current) return;
+    const draft = {
+      id: activeDraftId,
+      userId: draftUserId,
+      userName: user?.name || '',
+      formData,
+      linkedProductionOrder,
+      linkedPreparationOrder,
+      updatedAt: new Date().toISOString()
+    };
+    localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+    setDraftSaveState('جاري حفظ المسودة...');
+    clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(async () => {
+      const saved = await saveSalesOrderDraft(draft);
+      setDraftSaveState(saved ? 'تم حفظ المسودة تلقائيًا' : 'محفوظة على هذا الجهاز');
+      if (saved) setDrafts(prev => [saved, ...prev.filter(d => d.id !== saved.id)]);
+    }, 700);
+  }, [formData, linkedProductionOrder, linkedPreparationOrder, showModal, editingOrder, activeDraftId]);
 
   const fetchData = async () => {
     setLoading(true);
-    const [ordersData, customersData, settingsData, stockData] = await Promise.all([
+    const [ordersData, customersData, settingsData, stockData, missionsData, prodOrdersData, prepOrdersData] = await Promise.all([
       getSalesOrders(),
       getCustomers(),
       getGlobalSettings(),
-      getStock()
+      getStock(),
+      getMissions(),
+      getOrders(),
+      getPreparationOrders()
     ]);
     setOrders(ordersData);
     setCustomers(customersData.filter(c => (c.type || 'عميل') === 'عميل'));
     setGlobalSettings(settingsData);
     setStock(stockData);
+    setMissions(missionsData || []);
+    setProductionOrders(prodOrdersData || []);
+    setPreparationOrders(prepOrdersData || []);
     setLoading(false);
   };
 
@@ -91,25 +217,307 @@ const AdminSales = ({ user }) => {
     setSortConfig({ key, direction });
   };
 
+  const getSortIcon = (columnName) => {
+    if (sortConfig.key !== columnName) {
+      return <ArrowUpDown size={14} className="text-muted opacity-40" />;
+    }
+    if (sortConfig.direction === 'asc') {
+      return <ArrowUp size={14} className="text-primary font-bold" />;
+    }
+    return <ArrowDown size={14} className="text-primary font-bold" />;
+  };
+
+  const getBandsText = (count) => {
+    if (count === 1) return 'بند واحد';
+    if (count === 2) return 'بندان';
+    if (count >= 3 && count <= 10) return `${count} بنود`;
+    return `${count} بند`;
+  };
+
+  const isOrderDeliveryFrozen = (order) => {
+    if (!order) return false;
+    if (isAdmin(user)) return false; // Admins are never frozen
+
+    // 1. If the order is already audited and deducted in the stock department
+    if (order.stockDeducted) return true;
+
+    // 2. Find if there is an associated delivery mission that is received or completed
+    const assoc = missions.find(m =>
+      m.type === 'تسليم طلبية' &&
+      String(m.salesOrderNumber || '').trim() === String(order.orderNumber || '').trim()
+    );
+
+    if (assoc) {
+      const normalizedStatus = String(assoc.status || '').trim();
+      if (['تم الاستلام', 'في الطريق', 'عند الموقع', 'تم الإنجاز'].includes(normalizedStatus)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const isOrderFrozenByProductionOrPreparation = (order) => {
+    if (!order) return false;
+    if (isAdmin(user)) return false; // Admins are never frozen
+    const normalize = (str) => String(str || '').replace(/أ|إ|آ/g, 'ا').replace(/ى/g, 'ي').trim();
+
+    // Check Production
+    const linkedProd = productionOrders.find(po =>
+      (po.salesOrderId && po.salesOrderId === order.id) ||
+      (po.salesOrderNumber && po.salesOrderNumber === order.orderNumber) ||
+      (po.orderNotes && po.orderNotes.includes(order.orderNumber))
+    );
+    if (linkedProd) {
+      const prodStatus = normalize(linkedProd.status || 'لم يتم التنفيذ');
+      let isOverallActive = !(prodStatus.includes('منتهي') || prodStatus.includes('ملغي') || prodStatus.includes('لم يتم التنفيذ'));
+
+      let isAnyItemActive = false;
+      if (linkedProd.items && linkedProd.items.length > 0) {
+        isAnyItemActive = linkedProd.items.some(pi => {
+          const piStatus = normalize(pi.status || 'لم يتم التنفيذ');
+          return !(piStatus.includes('منتهي') || piStatus.includes('ملغي') || piStatus.includes('لم يتم التنفيذ'));
+        });
+      }
+
+      if (isOverallActive || isAnyItemActive) return true;
+    }
+
+    // Check Preparation
+    const linkedPrep = preparationOrders.find(po =>
+      (po.salesOrderId && po.salesOrderId === order.id) ||
+      (po.salesOrderNumber && po.salesOrderNumber === order.orderNumber) ||
+      (po.orderNotes && po.orderNotes.includes(order.orderNumber))
+    );
+    if (linkedPrep) {
+      const prepStatus = normalize(linkedPrep.status || 'لم يتم التنفيذ');
+      let isOverallActive = !(prepStatus.includes('منتهي') || prepStatus.includes('ملغي') || prepStatus.includes('لم يتم التنفيذ'));
+
+      let isAnyItemActive = false;
+      if (linkedPrep.items && linkedPrep.items.length > 0) {
+        isAnyItemActive = linkedPrep.items.some(pi => {
+          const piStatus = normalize(pi.status || 'لم يتم التنفيذ');
+          return !(piStatus.includes('منتهي') || piStatus.includes('ملغي') || piStatus.includes('لم يتم التنفيذ'));
+        });
+      }
+
+      if (isOverallActive || isAnyItemActive) return true;
+    }
+
+    return false;
+  };
+
+  const isOrderTotallyFrozen = (order) => {
+    return isOrderDeliveryFrozen(order) || order.stockDeducted;
+  };
+
+  const handleCopyOrder = async (order) => {
+    if (!order) return;
+    
+    Swal.fire({
+      title: 'جاري تحضير النسخة...',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    try {
+      const todayStr = getLocalDateStr(new Date());
+      
+      const prodOrders = await getOrders();
+      const prepOrdersList = await getPreparationOrders();
+      
+      const linkedProd = prodOrders.find(po =>
+        (po.salesOrderId && po.salesOrderId === order.id) ||
+        (po.salesOrderNumber && po.salesOrderNumber === order.orderNumber)
+      );
+      
+      const linkedPrep = prepOrdersList.find(po =>
+        (po.salesOrderId && po.salesOrderId === order.id) ||
+        (po.salesOrderNumber && po.salesOrderNumber === order.orderNumber)
+      );
+
+      const maxNum = orders.reduce((max, o) => {
+        const str = String(o.orderNumber || '');
+        if (str.startsWith('ORD-')) {
+          const match = str.match(/ORD-(\d+)/);
+          return match ? Math.max(max, parseInt(match[1], 10)) : max;
+        }
+        return max;
+      }, 0);
+      const nextOrderNumber = `ORD-${String(maxNum + 1).padStart(4, '0')}`;
+
+      const duplicatedData = {
+        ...order,
+        id: '',
+        orderNumber: nextOrderNumber,
+        orderDate: todayStr,
+        status: 'جديد',
+        stockDeducted: false,
+        isArchived: false,
+        items: (order.items || [{ productName: order.productName, quantity: order.quantity, notes: order.notes || '' }]).map(item => ({
+          ...item,
+          id: '',
+          itemStatus: item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة' ? 'قيد الإنتاج' : item.itemStatus === 'قيد التحضير' || item.itemStatus === 'إنتاج قيد التحضير' ? 'قيد التحضير' : 'جديد',
+          hasProductionDetails: !!(linkedProd && linkedProd.items && linkedProd.items.some(pi => pi.productName === item.productName)),
+          hasPreparationDetails: !!(linkedPrep && linkedPrep.items && linkedPrep.items.some(pi => pi.productName === item.productName))
+        }))
+      };
+
+      if (linkedProd) {
+        setLinkedProductionOrder({
+          ...linkedProd,
+          id: '',
+          salesOrderId: '',
+          salesOrderNumber: nextOrderNumber,
+          status: 'جديد',
+          items: (linkedProd.items || []).map(i => ({
+            ...i,
+            id: '',
+            status: 'جديد'
+          }))
+        });
+      } else {
+        setLinkedProductionOrder(null);
+      }
+
+      if (linkedPrep) {
+        setLinkedPreparationOrder({
+          ...linkedPrep,
+          id: '',
+          salesOrderId: '',
+          salesOrderNumber: nextOrderNumber,
+          status: 'جديد',
+          items: (linkedPrep.items || []).map(i => ({
+            ...i,
+            id: '',
+            status: 'جديد'
+          }))
+        });
+      } else {
+        setLinkedPreparationOrder(null);
+      }
+
+      setEditingOrder(null);
+      setFormData(duplicatedData);
+      startFreshDraft();
+      
+      Swal.close();
+      setShowModal(true);
+    } catch (e) {
+      console.error(e);
+      Swal.fire('خطأ', 'حدث خطأ أثناء نسخ تفاصيل الطلبية.', 'error');
+    }
+  };
+
+  const readAvailableDrafts = async () => {
+    let localDraft = null;
+    try { localDraft = JSON.parse(localStorage.getItem(draftStorageKey) || 'null'); } catch (_) {}
+    const cloudDrafts = await getSalesOrderDrafts(draftUserId);
+    const combined = [...cloudDrafts];
+    if (localDraft?.id && !combined.some(d => d.id === localDraft.id)) combined.unshift(localDraft);
+    combined.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+    setDrafts(combined);
+    return combined;
+  };
+
+  const resumeDraft = (draft) => {
+    if (!draft?.formData) return;
+    draftReadyRef.current = false;
+    setEditingOrder(null);
+    setActiveDraftId(draft.id);
+    setFormData(draft.formData);
+    setLinkedProductionOrder(draft.linkedProductionOrder || null);
+    setLinkedPreparationOrder(draft.linkedPreparationOrder || null);
+    setDraftSaveState('تم استعادة المسودة');
+    setShowModal(true);
+    setTimeout(() => { draftReadyRef.current = true; }, 0);
+  };
+
+  const removeDraft = async (draft) => {
+    if (!draft?.id) return;
+    await deleteSalesOrderDraft(draft.id);
+    try {
+      const local = JSON.parse(localStorage.getItem(draftStorageKey) || 'null');
+      if (local?.id === draft.id) localStorage.removeItem(draftStorageKey);
+    } catch (_) { localStorage.removeItem(draftStorageKey); }
+    setDrafts(prev => prev.filter(d => d.id !== draft.id));
+  };
+
+  const startFreshDraft = () => {
+    const draftId = `draft_${draftUserId.replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}`;
+    draftReadyRef.current = false;
+    setActiveDraftId(draftId);
+    setDraftSaveState('سيتم الحفظ تلقائيًا');
+    setTimeout(() => { draftReadyRef.current = true; }, 0);
+  };
+
+  const handleShowDrafts = async () => {
+    const available = await readAvailableDrafts();
+    if (!available.length) {
+      Swal.fire('المسودات', 'لا توجد مسودات محفوظة حاليًا.', 'info');
+      return;
+    }
+    const options = Object.fromEntries(available.map((d, index) => {
+      const customer = d.formData?.customerName || 'بدون عميل';
+      const items = (d.formData?.items || []).filter(i => i.productName).length;
+      const date = d.updatedAt ? new Date(d.updatedAt).toLocaleString('ar-JO') : '';
+      return [d.id, `${index + 1}. ${customer} — ${items} صنف — ${date}`];
+    }));
+    const choice = await Swal.fire({
+      title: 'مسودات الطلبيات',
+      text: 'اختر المسودة التي تريد متابعتها أو حذفها',
+      input: 'select', inputOptions: options,
+      showDenyButton: true, showCancelButton: true,
+      preDeny: () => Swal.getInput()?.value,
+      confirmButtonText: 'متابعة المسودة', denyButtonText: 'حذف المسودة', cancelButtonText: 'إلغاء'
+    });
+    const selected = available.find(d => d.id === choice.value);
+    if (choice.isConfirmed && selected) resumeDraft(selected);
+    if (choice.isDenied && selected) {
+      const confirmDelete = await Swal.fire({ title: 'حذف المسودة؟', text: 'لن يمكن استعادة هذه المسودة.', icon: 'warning', showCancelButton: true, confirmButtonText: 'نعم، حذف', cancelButtonText: 'تراجع' });
+      if (confirmDelete.isConfirmed) await removeDraft(selected);
+    }
+  };
+
   const handleOpenModal = async (order = null) => {
+    if (order && isOrderTotallyFrozen(order)) {
+      handleOpenPreview(order);
+      return;
+    }
     if (order) {
+      draftReadyRef.current = false;
+      setActiveDraftId(null);
       setEditingOrder(order);
       setFormData({
         ...order,
         items: (order.items || [{ productName: order.productName, quantity: order.quantity, notes: order.notes || '' }]).map(item => ({
           ...item,
-          hasProductionDetails: item.itemStatus === 'قيد الإنتاج'
+          hasProductionDetails: item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة',
+          hasPreparationDetails: item.itemStatus === 'قيد التحضير' || item.itemStatus === 'إنتاج قيد التحضير'
         }))
       });
       // Fetch linked production order if any
       const prodOrders = await getOrders();
-      const linked = prodOrders.find(po => po.salesOrderNumber === order.orderNumber);
+      const prepOrdersList = await getPreparationOrders();
+      const linked = prodOrders.find(po =>
+        (po.salesOrderId && po.salesOrderId === order.id) ||
+        (po.salesOrderNumber && po.salesOrderNumber === order.orderNumber) ||
+        (po.orderNotes && po.orderNotes.includes(order.orderNumber))
+      );
       setLinkedProductionOrder(linked || null);
+
+      const linkedPrep = prepOrdersList.find(po =>
+        (po.salesOrderId && po.salesOrderId === order.id) ||
+        (po.salesOrderNumber && po.salesOrderNumber === order.orderNumber) ||
+        (po.orderNotes && po.orderNotes.includes(order.orderNumber))
+      );
+      setLinkedPreparationOrder(linkedPrep || null);
 
       setFormData(prev => ({
         ...prev,
         items: prev.items.map(item => {
-          if (item.itemStatus === 'قيد الإنتاج' && linked && linked.items) {
+          if ((item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة') && linked && linked.items) {
             const linkedItem = linked.items.find(li => li.productName === item.productName);
             if (linkedItem) {
               return {
@@ -122,12 +530,39 @@ const AdminSales = ({ user }) => {
               };
             }
           }
-          return { ...item, hasProductionDetails: item.itemStatus === 'قيد الإنتاج' };
+          if (item.itemStatus === 'قيد التحضير' && linkedPrep && linkedPrep.items) {
+            const linkedPrepItem = linkedPrep.items.find(li => li.productName === item.productName);
+            if (linkedPrepItem) {
+              return {
+                ...item,
+                hasPreparationDetails: true,
+                preparationNotes: linkedPrepItem.notes || item.preparationNotes || ''
+              };
+            }
+          }
+          return { ...item, hasProductionDetails: item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة', hasPreparationDetails: item.itemStatus === 'قيد التحضير' || item.itemStatus === 'إنتاج قيد التحضير' };
         })
       }));
     } else {
+      const available = await readAvailableDrafts();
+      if (available.length) {
+        const answer = await Swal.fire({
+          title: 'توجد طلبية غير مكتملة',
+          text: 'يوجد لديك طلبية غير مكتملة محفوظة كمسودة، هل تريد متابعة العمل عليها؟',
+          icon: 'question',
+          showDenyButton: true,
+          showCancelButton: true,
+          confirmButtonText: 'متابعة المسودة',
+          denyButtonText: 'حذف المسودة والبدء من جديد',
+          cancelButtonText: 'إلغاء'
+        });
+        if (answer.isConfirmed) { resumeDraft(available[0]); return; }
+        if (answer.isDismissed) return;
+        if (answer.isDenied) await removeDraft(available[0]);
+      }
       setEditingOrder(null);
       setLinkedProductionOrder(null);
+      setLinkedPreparationOrder(null);
       const maxNum = orders.reduce((max, o) => {
         const str = String(o.orderNumber || '');
         if (str.startsWith('ORD-')) {
@@ -137,7 +572,7 @@ const AdminSales = ({ user }) => {
         return max;
       }, 0);
       const nextOrderNumber = `ORD-${String(maxNum + 1).padStart(4, '0')}`;
-      
+
       setFormData({
         orderNumber: nextOrderNumber,
         customerId: '',
@@ -147,21 +582,44 @@ const AdminSales = ({ user }) => {
         orderNotes: '',
         items: [{ productName: '', quantity: '', notes: '', itemStatus: '' }]
       });
+      startFreshDraft();
     }
     setShowModal(true);
   };
 
   const handleOpenPreview = async (order) => {
     let orderToPreview = { ...order };
-    if (order.items && order.items.some(i => i.itemStatus === 'قيد الإنتاج')) {
+    if (order.items && order.items.some(i => i.itemStatus === 'قيد الإنتاج' || i.itemStatus === 'إنتاج قيد الخياطة')) {
       const prodOrders = await getOrders();
-      const linked = prodOrders.find(po => po.salesOrderNumber === order.orderNumber);
+      const linked = prodOrders.find(po =>
+        (po.salesOrderId && po.salesOrderId === order.id) ||
+        (po.salesOrderNumber && po.salesOrderNumber === order.orderNumber) ||
+        (po.orderNotes && po.orderNotes.includes(order.orderNumber))
+      );
       if (linked) {
         orderToPreview.productionOrderNumber = linked.orderNumber;
       }
     }
+    if (order.items && order.items.some(i => i.itemStatus === 'قيد التحضير')) {
+      const prepOrders = await getPreparationOrders();
+      const linkedPrep = prepOrders.find(po =>
+        (po.salesOrderId && po.salesOrderId === order.id) ||
+        (po.salesOrderNumber && po.salesOrderNumber === order.orderNumber) ||
+        (po.orderNotes && po.orderNotes.includes(order.orderNumber))
+      );
+      if (linkedPrep) {
+        orderToPreview.preparationOrderNumber = linkedPrep.orderNumber;
+      }
+    }
     setSelectedOrder(orderToPreview);
     setShowPreview(true);
+  };
+
+  const handleAddMultiColors = (itemsToAdd) => {
+    setFormData({
+      ...formData,
+      items: [...formData.items, ...itemsToAdd]
+    });
   };
 
   const handleAddItem = () => {
@@ -182,9 +640,9 @@ const AdminSales = ({ user }) => {
       else if (category === 'أصول' || category.includes('أصل')) prefix = 'AST';
 
       const categoryItems = stock.filter(item => item.itemNumber && item.itemNumber.startsWith(prefix + '-'));
-      
+
       if (categoryItems.length === 0) return `${prefix}-00001`;
-      
+
       const ids = categoryItems.map(item => {
         const parts = item.itemNumber.split('-');
         if (parts.length > 1) {
@@ -192,7 +650,7 @@ const AdminSales = ({ user }) => {
         }
         return 0;
       });
-      
+
       const maxID = Math.max(...ids, 0);
       return `${prefix}-${String(maxID + 1).padStart(5, '0')}`;
     };
@@ -208,7 +666,7 @@ const AdminSales = ({ user }) => {
       location: '',
       spec: '',
       unit: globalSettings.stockUnits?.[0] || 'عدد',
-      quantity: 1,
+      quantity: 0,
       minLimit: 0,
       lastMovement: 'إدخال',
       lastMovementDate: new Date().toISOString().split('T')[0],
@@ -283,30 +741,30 @@ const AdminSales = ({ user }) => {
           </div>
         </div>
         <div class="premium-form text-right" style="direction: rtl;">
-          <div class="grid grid-cols-12 gap-x-8 gap-y-8">
-            <!-- Row 1: Item Number, Name, Category -->
-            <div class="premium-form-group col-span-12 md:col-span-3">
+          <div class="grid grid-cols-12 gap-x-8 gap-y-8 swal-grid">
+            <!-- Row 1: ID & Name -->
+            <div class="premium-form-group col-span-12 md:col-span-4 swal-col-6">
               <label>رقم الصنف (ID)</label>
               <input id="swal-itemNumber" class="premium-input" placeholder="SKU-00001" value="${initialData.itemNumber}" disabled style="background: var(--surface); cursor: not-allowed; font-weight: bold; color: var(--primary-dark); text-align: center;">
             </div>
-            <div class="premium-form-group col-span-12 md:col-span-6">
+            <div class="premium-form-group col-span-12 md:col-span-8 swal-full-width">
               <label>اسم الصنف</label>
               <input id="swal-name" class="premium-input" placeholder="مثال: قماش أبيض تركي" value="${initialData.name}">
             </div>
-            <div class="premium-form-group col-span-12 md:col-span-3">
+
+            <!-- Row 2: Code, Category & Warehouse -->
+            <div class="premium-form-group col-span-12 md:col-span-4 swal-col-6">
+              <label>رمز الصنف</label>
+              <input id="swal-itemCode" class="premium-input" placeholder="" value="${initialData.itemCode || ''}">
+            </div>
+            <div class="premium-form-group col-span-12 md:col-span-4 swal-col-6">
               <label>التصنيف</label>
               <select id="swal-category" class="premium-input">
                 <option value="" disabled>اختر التصنيف</option>
                 ${categories.map(c => `<option value="${c}" ${initialData.category === c ? 'selected' : ''}>${c}</option>`).join('')}
               </select>
             </div>
-
-            <!-- Row 2: Item Code, Warehouse -->
-            <div class="premium-form-group col-span-12 md:col-span-3">
-              <label>رمز الصنف</label>
-              <input id="swal-itemCode" class="premium-input" placeholder="" value="${initialData.itemCode || ''}">
-            </div>
-            <div class="premium-form-group col-span-12 md:col-span-4">
+            <div class="premium-form-group col-span-12 md:col-span-4 swal-col-6">
               <label>المخزن</label>
               <select id="swal-warehouse" class="premium-input">
                 <option value="" disabled>اختر المخزن</option>
@@ -314,8 +772,8 @@ const AdminSales = ({ user }) => {
               </select>
             </div>
 
-            <!-- Row 3: Location (Full Width Dropdown + Add Button) -->
-            <div class="premium-form-group col-span-12" id="swal-location-container">
+            <!-- Row 4: Location -->
+            <div class="premium-form-group col-span-12 swal-full-width" id="swal-location-container">
               <label>الموقع (داخل المخزن)</label>
               <div class="flex gap-2">
                 <select id="swal-location" class="premium-input" style="flex: 1;">
@@ -326,16 +784,15 @@ const AdminSales = ({ user }) => {
               </div>
             </div>
 
-            <!-- Row 4: Spec, Quantity, MinLimit -->
-            <div class="premium-form-group col-span-12 md:col-span-4">
+            <!-- Row 5: Spec & Quantity -->
+            <div class="premium-form-group col-span-12 md:col-span-4 swal-col-6">
               <label>اللون / المواصفة</label>
               <select id="swal-spec" class="premium-input">
                 <option value="">اختر اللون/المواصفة</option>
                 ${(globalSettings?.stockColors || []).map(c => `<option value="${c}" ${initialData.spec === c ? 'selected' : ''}>${c}</option>`).join('')}
               </select>
             </div>
-
-            <div class="premium-form-group col-span-12 md:col-span-4">
+            <div class="premium-form-group col-span-12 md:col-span-4 swal-col-6">
               <label class="text-primary">الكمية الحالية</label>
               <div class="flex gap-2">
                 <input id="swal-quantity" type="number" class="premium-input" style="flex: 2;" value="${initialData.quantity}">
@@ -344,11 +801,13 @@ const AdminSales = ({ user }) => {
                 </select>
               </div>
             </div>
-            <div class="premium-form-group col-span-12 md:col-span-4">
+
+             <!-- Row 6: Min Limit & Last Movement -->
+            <div class="premium-form-group col-span-12 md:col-span-4 swal-col-6 swal-hide-mobile">
               <label>الحد الأدنى (تنبيه)</label>
               <input id="swal-minLimit" type="number" class="premium-input" value="${initialData.minLimit}">
             </div>
-            <div class="premium-form-group col-span-12 md:col-span-4">
+            <div class="premium-form-group col-span-12 md:col-span-4 swal-col-6 swal-hide-mobile">
               <label>آخر حركة</label>
               <select id="swal-lastMovement" class="premium-input">
                 <option value="إدخال" ${initialData.lastMovement === 'إدخال' ? 'selected' : ''}>إدخال</option>
@@ -357,15 +816,18 @@ const AdminSales = ({ user }) => {
               </select>
             </div>
 
-            <div class="premium-form-group col-span-12 md:col-span-4">
+            <!-- Row 7: Date & Recipient -->
+            <div class="premium-form-group col-span-12 md:col-span-4 swal-col-6 swal-hide-mobile">
               <label>تاريخ آخر حركة</label>
               <input id="swal-lastMovementDate" type="date" class="premium-input" value="${initialData.lastMovementDate}">
             </div>
-            <div class="premium-form-group col-span-12 md:col-span-4">
+            <div class="premium-form-group col-span-12 md:col-span-4 swal-col-6 swal-hide-mobile">
               <label>آخر مستلم / مسؤول</label>
               <input id="swal-lastRecipient" class="premium-input" placeholder="اسم الشخص" value="${initialData.lastRecipient}">
             </div>
-            <div class="premium-form-group col-span-12 md:col-span-4">
+
+            <!-- Row 8: Notes -->
+            <div class="premium-form-group col-span-12 swal-full-width swal-hide-mobile">
               <label>ملاحظات</label>
               <input id="swal-notes" class="premium-input" placeholder="أي ملاحظات..." value="${initialData.notes}">
             </div>
@@ -404,8 +866,8 @@ const AdminSales = ({ user }) => {
           return false;
         }
 
-        const existingInWarehouse = stock.find(s => 
-          s.itemNumber === data.itemNumber && 
+        const existingInWarehouse = stock.find(s =>
+          s.itemNumber === data.itemNumber &&
           s.warehouse === data.warehouse &&
           s.spec === data.spec
         );
@@ -427,7 +889,7 @@ const AdminSales = ({ user }) => {
             action: 'إضافة',
             details: 'إضافة صنف مخزون من شاشة الطلبيات: ' + res.name + ' (' + res.itemNumber + ')'
           });
-          
+
           Swal.fire({
             icon: 'success',
             title: 'تم الحفظ بنجاح',
@@ -435,7 +897,7 @@ const AdminSales = ({ user }) => {
             timer: 2000,
             showConfirmButton: false
           });
-          
+
           const updatedStock = await getStock();
           setStock(updatedStock);
         }
@@ -444,27 +906,27 @@ const AdminSales = ({ user }) => {
   };
   const handleAddProductionItem = async (index) => {
     const item = formData.items[index];
-    
+
     // Check if we already have variants for this item in the linked production order
     let existingVariants = [];
     if (linkedProductionOrder && linkedProductionOrder.items) {
       existingVariants = linkedProductionOrder.items.filter(i => i.productName === item.productName);
     }
-    
+
     if (existingVariants.length > 0) {
       setProductionVariants(existingVariants);
     } else {
-      setProductionVariants([{ 
+      setProductionVariants([{
         productName: item.productName,
-        quantity: item.quantity || '', 
-        colorModel: '', 
-        sizeCm: '', 
-        thickness: '', 
-        productionNotes: '',
+        quantity: item.quantity || '',
+        colorModel: '',
+        sizeCm: '',
+        thickness: '',
+        notes: item.productionNotes || '',
         status: 'لم يتم التنفيذ'
       }]);
     }
-    
+
     setVariantModalIndex(index);
     setShowVariantsModal(true);
   };
@@ -477,7 +939,7 @@ const AdminSales = ({ user }) => {
       colorModel: '',
       sizeCm: '',
       thickness: '',
-      productionNotes: '',
+      notes: '',
       status: 'لم يتم التنفيذ'
     }]);
   };
@@ -490,7 +952,7 @@ const AdminSales = ({ user }) => {
 
   const handleVariantChange = (idx, field, val) => {
     const newV = [...productionVariants];
-    
+
     if (field === 'thickness') {
       val = val.replace(/[^0-9]/g, '').slice(0, 2);
     } else if (field === 'sizeCm') {
@@ -513,7 +975,7 @@ const AdminSales = ({ user }) => {
     const item = formData.items[variantModalIndex];
     const targetQty = Number(item.quantity) || 0;
     const sumQty = productionVariants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0);
-    
+
     const invalidColorIdx = productionVariants.findIndex(v => !v.colorModel);
     if (invalidColorIdx !== -1) {
       Swal.fire('خطأ في الإدخال', `يرجى اختيار اللون / الموديل في السطر رقم ${invalidColorIdx + 1}`, 'error');
@@ -526,14 +988,14 @@ const AdminSales = ({ user }) => {
       return;
     }
 
-    const invalidThicknessIdx = productionVariants.findIndex(v => !v.thickness || v.thickness.trim() === '');
-    if (invalidThicknessIdx !== -1) {
-      Swal.fire('خطأ في الإدخال', `يرجى إدخال السماكة في السطر رقم ${invalidThicknessIdx + 1}`, 'error');
+
+
+    if (sumQty > targetQty) {
+      Swal.fire('خطأ في الكمية', `مجموع كميات الألوان والموديلات (${sumQty}) يجب أن لا يتجاوز الكمية المطلوبة للصنف (${targetQty})`, 'error');
       return;
     }
-
-    if (sumQty !== targetQty) {
-      Swal.fire('خطأ في الكمية', `مجموع كميات الألوان والموديلات (${sumQty}) لا يساوي الكمية المطلوبة للصنف (${targetQty})`, 'error');
+    if (sumQty === 0 && targetQty > 0) {
+      Swal.fire('خطأ في الكمية', `يرجى إدخال كمية للإنتاج أكبر من صفر.`, 'error');
       return;
     }
 
@@ -545,16 +1007,16 @@ const AdminSales = ({ user }) => {
 
     let prodNum = linkedProductionOrder?.orderNumber;
     if (!prodNum) {
-       try {
-         const allProd = await getOrders();
-         const maxNum = allProd.reduce((max, o) => {
-           const match = String(o.orderNumber || '').match(/\d+/);
-           return match ? Math.max(max, parseInt(match[0], 10)) : max;
-         }, 0);
-         prodNum = `PRO-${String(maxNum + 1).padStart(4, '0')}`;
-       } catch (e) {
-         prodNum = 'سيتم إنشاؤه تلقائياً';
-        }
+      try {
+        const allProd = await getOrders();
+        const maxNum = allProd.reduce((max, o) => {
+          const match = String(o.orderNumber || '').match(/\d+/);
+          return match ? Math.max(max, parseInt(match[0], 10)) : max;
+        }, 0);
+        prodNum = `PRO-${String(maxNum + 1).padStart(4, '0')}`;
+      } catch (e) {
+        prodNum = 'سيتم إنشاؤه تلقائياً';
+      }
     }
 
     if (linkedProductionOrder) {
@@ -574,11 +1036,11 @@ const AdminSales = ({ user }) => {
         orderDate: formData.orderDate,
         deliveryDate: formData.deliveryDate,
         status: 'لم يتم التنفيذ',
-        orderNotes: `مرتبط بطلبية مبيعات رقم ${formData.orderNumber}`,
+        orderNotes: `مرتبط بطلبية رقم ${formData.orderNumber}`,
         items: [...productionVariants]
       });
     }
-    
+
     const updatedItems = [...formData.items];
     updatedItems[variantModalIndex] = { ...updatedItems[variantModalIndex], hasProductionDetails: true };
     setFormData({ ...formData, items: updatedItems });
@@ -590,19 +1052,340 @@ const AdminSales = ({ user }) => {
       timer: 3000,
       showConfirmButton: false
     });
-    
+
     setShowVariantsModal(false);
   };
+
+  const handleAddPreparationItem = async (index) => {
+    const item = formData.items[index];
+
+    // Check if we already have variants for this item in the linked preparation order
+    let existingVariants = [];
+    if (linkedPreparationOrder && linkedPreparationOrder.items) {
+      existingVariants = linkedPreparationOrder.items.filter(i => i.productName === item.productName);
+    }
+
+    if (existingVariants.length > 0) {
+      setPreparationVariants(existingVariants);
+    } else {
+      setPreparationVariants([{
+        productName: item.productName,
+        quantity: item.quantity || '',
+        colorModel: '',
+        sizeCm: '',
+        thickness: '',
+        notes: item.preparationNotes || '',
+        status: 'لم يتم التنفيذ'
+      }]);
+    }
+
+    setPreparationVariantModalIndex(index);
+    setShowPreparationVariantsModal(true);
+  };
+
+  const handleAddPreparationVariant = () => {
+    const item = formData.items[preparationVariantModalIndex];
+    setPreparationVariants([...preparationVariants, {
+      productName: item.productName,
+      quantity: '',
+      colorModel: '',
+      sizeCm: '',
+      thickness: '',
+      notes: '',
+      status: 'لم يتم التنفيذ'
+    }]);
+  };
+
+  const handleRemovePreparationVariant = (idx) => {
+    const newV = [...preparationVariants];
+    newV.splice(idx, 1);
+    setPreparationVariants(newV);
+  };
+
+  const handlePreparationVariantChange = (idx, field, val) => {
+    const newV = [...preparationVariants];
+
+    if (field === 'thickness') {
+      val = val.replace(/[^0-9]/g, '').slice(0, 2);
+    } else if (field === 'sizeCm') {
+      let cleaned = val.replace(/[^0-9*]/g, '');
+      let parts = cleaned.split('*');
+      if (parts.length > 2) {
+        cleaned = parts[0] + '*' + parts.slice(1).join('');
+        parts = cleaned.split('*');
+      }
+      if (parts[0].length > 3) parts[0] = parts[0].slice(0, 3);
+      if (parts.length > 1 && parts[1].length > 3) parts[1] = parts[1].slice(0, 3);
+      val = parts.join('*');
+    }
+
+    newV[idx][field] = val;
+    setPreparationVariants(newV);
+  };
+
+  const handleSavePreparationVariants = async () => {
+    const item = formData.items[preparationVariantModalIndex];
+    const targetQty = Number(item.quantity) || 0;
+    const sumQty = preparationVariants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0);
+
+    if (sumQty > targetQty) {
+      Swal.fire('خطأ في الكمية', `مجموع الكميات الموزعة (${sumQty}) يجب أن لا يتجاوز الكمية المطلوبة للصنف (${targetQty})`, 'error');
+      return;
+    }
+    if (sumQty === 0 && targetQty > 0) {
+      Swal.fire('خطأ في الكمية', `يرجى إدخال كمية للتحضير أكبر من صفر.`, 'error');
+      return;
+    }
+
+    let prepNum = linkedPreparationOrder?.orderNumber;
+    if (!prepNum) {
+      try {
+        const allPrep = await getPreparationOrders();
+        const maxNum = allPrep.reduce((max, o) => {
+          const match = String(o.orderNumber || '').match(/\d+/);
+          return match ? Math.max(max, parseInt(match[0], 10)) : max;
+        }, 0);
+        prepNum = `PREP-${String(maxNum + 1).padStart(4, '0')}`;
+      } catch (e) {
+        prepNum = 'سيتم إنشاؤه تلقائياً';
+      }
+    }
+
+    if (linkedPreparationOrder) {
+      const filteredItems = (linkedPreparationOrder.items || []).filter(i => i.productName !== item.productName);
+      setLinkedPreparationOrder({
+        ...linkedPreparationOrder,
+        orderNumber: linkedPreparationOrder.orderNumber || prepNum,
+        items: [...filteredItems, ...preparationVariants]
+      });
+    } else {
+      setLinkedPreparationOrder({
+        id: null,
+        orderNumber: prepNum,
+        salesOrderNumber: formData.orderNumber,
+        customerId: formData.customerId,
+        customerName: formData.customerName,
+        orderDate: formData.orderDate,
+        deliveryDate: formData.deliveryDate,
+        status: 'لم يتم التنفيذ',
+        orderNotes: `مرتبط بطلبية رقم ${formData.orderNumber}`,
+        items: [...preparationVariants]
+      });
+    }
+
+    const updatedItems = [...formData.items];
+    updatedItems[preparationVariantModalIndex] = { ...updatedItems[preparationVariantModalIndex], hasPreparationDetails: true };
+    setFormData({ ...formData, items: updatedItems });
+
+    Swal.fire({
+      icon: 'success',
+      title: 'تم الإضافة مؤقتاً',
+      text: 'تمت إضافة الأصناف الفرعية لكرت التحضير في الذاكرة، سيتم الحفظ النهائي عند الضغط على "حفظ الطلبية".',
+      timer: 3000,
+      showConfirmButton: false
+    });
+
+    setShowPreparationVariantsModal(false);
+  };
+
 
 
   const handleRemoveItem = (index) => {
     if (formData.items.length === 1) return;
+    const item = formData.items[index];
+    if (item && isItemStatusDisabled(item)) {
+      Swal.fire('مرفوض', 'لا يمكن حذف هذا الصنف لأنه قيد الإنتاج ولم ينتهِ أو يُلغَ بعد.', 'error');
+      return;
+    }
     const newItems = formData.items.filter((_, i) => i !== index);
     setFormData({ ...formData, items: newItems });
   };
 
+  const getProductStockQuantity = (prodName) => {
+    if (!prodName) return null;
+    let targetWarehouse = null;
+    let cleanProdName = prodName.trim();
+    const warehouseMatch = cleanProdName.match(/\s*\(مستودع:\s*([^\)]+)\)\s*$/);
+    if (warehouseMatch) {
+      targetWarehouse = warehouseMatch[1].trim();
+      cleanProdName = cleanProdName.replace(/\s*\(مستودع:\s*[^\)]+\)\s*$/, '').trim();
+    }
+    
+    const stockData = stockLookup[cleanProdName];
+    if (!stockData) return null;
+    
+    if (targetWarehouse) {
+      const wh = stockData.breakdown.find(b => b.warehouse === targetWarehouse);
+      return wh ? wh.quantity : 0;
+    }
+    
+    return stockData.total;
+  };
+
+  const getProductStockBreakdown = (prodName) => {
+    if (!prodName) return [];
+    let targetWarehouse = null;
+    let cleanProdName = prodName.trim();
+    const warehouseMatch = cleanProdName.match(/\s*\(مستودع:\s*([^\)]+)\)\s*$/);
+    if (warehouseMatch) {
+      targetWarehouse = warehouseMatch[1].trim();
+      cleanProdName = cleanProdName.replace(/\s*\(مستودع:\s*[^\)]+\)\s*$/, '').trim();
+    }
+    
+    const stockData = stockLookup[cleanProdName];
+    if (!stockData) return [];
+    
+    if (targetWarehouse) {
+      const wh = stockData.breakdown.find(b => b.warehouse === targetWarehouse);
+      return wh ? [wh] : [];
+    }
+    return stockData.breakdown.map(b => ({ warehouse: b.warehouse || 'مستودع غير محدد', quantity: b.quantity }));
+  };
+
+  const isSupervisorOrAdmin = isAdmin(user) ||
+    user?.level === 'مشرف' ||
+    user?.role === 'مشرف' ||
+    user?.level === 'supervisor' ||
+    user?.role === 'supervisor' ||
+    user?.hasProductionAccess ||
+    user?.hasSalesAccess;
+
+  const isItemStatusDisabled = (item) => {
+    if (!editingOrder) return false;
+    if (!isSupervisorOrAdmin) return true;
+
+    if (item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة' || item.itemStatus === 'جاهز') {
+      if (linkedProductionOrder) {
+        const normalize = (str) => String(str || '').replace(/أ|إ|آ/g, 'ا').replace(/ى/g, 'ي').trim();
+        const overallStatus = normalize(linkedProductionOrder.status || 'لم يتم التنفيذ');
+        const isOverallActive = !(overallStatus.includes('منتهي') || overallStatus.includes('ملغي') || overallStatus.includes('لم يتم التنفيذ'));
+
+        if (linkedProductionOrder.items) {
+          const prodItem = linkedProductionOrder.items.find(pi => {
+            const name1 = normalize(pi.productName).replace(/\s+/g, ' ');
+            const name2 = normalize(item.productName).replace(/\s+/g, ' ');
+            return name1 === name2 || name1.includes(name2) || name2.includes(name1);
+          });
+          if (prodItem) {
+            const prodStatus = normalize(prodItem.status || 'لم يتم التنفيذ');
+            return !(prodStatus.includes('منتهي') || prodStatus.includes('ملغي') || prodStatus.includes('لم يتم التنفيذ'));
+          }
+        }
+
+        return isOverallActive;
+      }
+    }
+
+    if (item.itemStatus === 'قيد التحضير' || item.itemStatus === 'إنتاج قيد التحضير') {
+      if (linkedPreparationOrder) {
+        const normalize = (str) => String(str || '').replace(/أ|إ|آ/g, 'ا').replace(/ى/g, 'ي').trim();
+        const overallStatus = normalize(linkedPreparationOrder.status || 'لم يتم التنفيذ');
+        const isOverallActive = !(overallStatus.includes('منتهي') || overallStatus.includes('ملغي') || overallStatus.includes('لم يتم التنفيذ'));
+
+        if (linkedPreparationOrder.items) {
+          const prepItem = linkedPreparationOrder.items.find(pi => {
+            const name1 = normalize(pi.productName).replace(/\s+/g, ' ');
+            const name2 = normalize(item.productName).replace(/\s+/g, ' ');
+            return name1 === name2 || name1.includes(name2) || name2.includes(name1);
+          });
+          if (prepItem) {
+            const prepStatus = normalize(prepItem.status || 'لم يتم التنفيذ');
+            return !(prepStatus.includes('منتهي') || prepStatus.includes('ملغي') || prepStatus.includes('لم يتم التنفيذ'));
+          }
+        }
+
+        return isOverallActive;
+      }
+    }
+    return false;
+  };
+
+  const getProductionItemStatus = (salesOrder, item) => {
+    if (!productionOrders || !salesOrder) return null;
+    const linkedDb = productionOrders.find(po =>
+      (po.salesOrderId && po.salesOrderId === salesOrder.id) ||
+      (po.salesOrderNumber && po.salesOrderNumber === salesOrder.orderNumber) ||
+      (po.orderNotes && po.orderNotes.includes(salesOrder.orderNumber))
+    );
+    if (!linkedDb || !linkedDb.items) return null;
+
+    const normalize = (str) => String(str || '').replace(/أ|إ|آ/g, 'ا').replace(/ى/g, 'ي').trim();
+    const targetName = normalize(item.productName).replace(/\s+/g, ' ');
+
+    const prodItem = linkedDb.items.find(pi => {
+      const name = normalize(pi.productName).replace(/\s+/g, ' ');
+      return name === targetName || name.includes(targetName) || targetName.includes(name);
+    });
+    return prodItem ? prodItem.status : null;
+  };
+
+  const getPreparationItemStatus = (salesOrder, item) => {
+    if (!preparationOrders || !salesOrder) return null;
+    const linkedDb = preparationOrders.find(po =>
+      (po.salesOrderId && po.salesOrderId === salesOrder.id) ||
+      (po.salesOrderNumber && po.salesOrderNumber === salesOrder.orderNumber) ||
+      (po.orderNotes && po.orderNotes.includes(salesOrder.orderNumber))
+    );
+    if (!linkedDb || !linkedDb.items) return null;
+
+    const normalize = (str) => String(str || '').replace(/أ|إ|آ/g, 'ا').replace(/ى/g, 'ي').trim();
+    const targetName = normalize(item.productName).replace(/\s+/g, ' ');
+
+    const prepItem = linkedDb.items.find(pi => {
+      const name = normalize(pi.productName).replace(/\s+/g, ' ');
+      return name === targetName || name.includes(targetName) || targetName.includes(name);
+    });
+    return prepItem ? prepItem.status : null;
+  };
+
+  const getDisplayedItemStatus = (salesOrder, item) => {
+    if (item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة') {
+      const prodStatus = getProductionItemStatus(salesOrder, item);
+      if (prodStatus && prodStatus !== 'لم يتم التنفيذ') {
+        return prodStatus;
+      }
+      return 'إنتاج قيد الخياطة';
+    }
+    if (item.itemStatus === 'قيد التحضير' || item.itemStatus === 'إنتاج قيد التحضير') {
+      const prepStatus = getPreparationItemStatus(salesOrder, item);
+      if (prepStatus && prepStatus !== 'لم يتم التنفيذ') {
+        return prepStatus;
+      }
+      return 'إنتاج قيد التحضير';
+    }
+    return item.itemStatus || '---';
+  };
+
+  const getSalesStatusColor = (status) => {
+    switch (status) {
+      case 'جديد':
+        return { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' }; // Blue
+      case 'قيد التجهيز':
+        return { bg: '#fef3c7', text: '#d97706', border: '#fde68a' }; // Amber/Orange
+      case 'تم التجهيز':
+        return { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0' }; // Emerald Green
+      case 'تم التسليم للتوصيل':
+      case 'تم تسليمها للتوصيل':
+      case 'قيد التوصيل':
+        return { bg: '#f5f3ff', text: '#7c3aed', border: '#ddd6fe' }; // Purple
+      case 'تم التوصيل':
+      case 'منتهي':
+        return { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' }; // Green
+      case 'تم تأجيل التوصيل':
+      case 'مؤجل':
+        return { bg: '#fff7ed', text: '#c2410c', border: '#ffedd5' }; // Dark Orange
+      case 'ملغي':
+        return { bg: '#fef2f2', text: '#b91c1c', border: '#fca5a5' }; // Red
+      default:
+        return { bg: '#f8fafc', text: '#475569', border: '#e2e8f0' }; // Slate
+    }
+  };
+
   const handleItemChange = (index, field, value) => {
     const newItems = [...formData.items];
+    if (field === 'productName' && typeof value === 'string') {
+      value = value.replace(/\s*\(المتوفر:\s*[-+]?\d+\)/, '').trim();
+    }
     newItems[index][field] = value;
     setFormData({ ...formData, items: newItems });
   };
@@ -734,7 +1517,7 @@ const AdminSales = ({ user }) => {
           <div class="premium-form-group">
             <label>
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user text-muted"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              البائع (مندوب المبيعات) *
+              البائع (مندوب الطلبيات) *
             </label>
             <select id="swal-salesRep" class="premium-input">
               <option value="زبائن الشركة" selected>زبائن الشركة</option>
@@ -766,12 +1549,12 @@ const AdminSales = ({ user }) => {
           if (!locationContainer) return;
           if (selectedCity === 'عمان') {
             const areas = (globalSettings.ammanAreas && globalSettings.ammanAreas.length > 0) ? globalSettings.ammanAreas : [
-              'عبدون', 'دير غبار', 'أم أذينة', 'الرابية', 'الشميساني', 'الصويفية', 'الجندويل', 
-              'خلدا', 'تلاع العلي', 'أم السماق', 'ضاحية الرشيد', 'ضاحية الحسين', 'مرج الحمام', 
-              'الجبيهة', 'شفا بدران', 'أبو نصير', 'طبربور', 'الهاشمي الشمالي', 'الهاشمي الجنوبي', 
-              'جبل الحسين', 'جبل عمان', 'جبل اللويبدة', 'الأشرفية', 'الوحدات', 'رأس العين', 
-              'وسط البلد', 'النصر', 'القويسمة', 'أبو علندا', 'خريبة السوق', 'المقابلين', 
-              'الجويدة', 'سحاب', 'الموقر', 'ماركا الشمالية', 'ماركا الجنوبية', 'طارق', 
+              'عبدون', 'دير غبار', 'أم أذينة', 'الرابية', 'الشميساني', 'الصويفية', 'الجندويل',
+              'خلدا', 'تلاع العلي', 'أم السماق', 'ضاحية الرشيد', 'ضاحية الحسين', 'مرج الحمام',
+              'الجبيهة', 'شفا بدران', 'أبو نصير', 'طبربور', 'الهاشمي الشمالي', 'الهاشمي الجنوبي',
+              'جبل الحسين', 'جبل عمان', 'جبل اللويبدة', 'الأشرفية', 'الوحدات', 'رأس العين',
+              'وسط البلد', 'النصر', 'القويسمة', 'أبو علندا', 'خريبة السوق', 'المقابلين',
+              'الجويدة', 'سحاب', 'الموقر', 'ماركا الشمالية', 'ماركا الجنوبية', 'طارق',
               'بسمان', 'البيادر', 'وادي السير', 'اليادودة', 'حسبان', 'البنيات'
             ];
             locationContainer.innerHTML = `
@@ -831,7 +1614,7 @@ const AdminSales = ({ user }) => {
         }
         const salesRep = document.getElementById('swal-salesRep').value;
         if ((globalSettings.salesReps || []).length > 0 && !salesRep) {
-          Swal.showValidationMessage('يرجى اختيار البائع (مندوب المبيعات)');
+          Swal.showValidationMessage('يرجى اختيار البائع (مندوب الطلبيات)');
           return false;
         }
         return { name, phone: phone.trim(), city, location, sector, status, salesRep, type: 'عميل', customerNumber: initialData.customerNumber };
@@ -882,11 +1665,26 @@ const AdminSales = ({ user }) => {
 
 
 
-    const unlinkedProductionItem = formData.items.find(item => item.itemStatus === 'قيد الإنتاج' && !item.hasProductionDetails);
-    
+    const unlinkedProductionItem = formData.items.find(item => (item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة') && !item.hasProductionDetails);
+
     if (unlinkedProductionItem) {
       Swal.fire('تنبيه', `الصنف "${unlinkedProductionItem.productName}" قيد الإنتاج ولكن لم يتم إضافة تفاصيله لكرت الإنتاج. يرجى الضغط على زر (+) بجانبه لإضافتها.`, 'warning');
       return;
+    }
+
+    const unlinkedPreparationItem = formData.items.find(item => item.itemStatus === 'قيد التحضير' && !item.hasPreparationDetails);
+
+    if (unlinkedPreparationItem) {
+      Swal.fire('تنبيه', `الصنف "${unlinkedPreparationItem.productName}" قيد التحضير ولكن لم يتم إضافة تفاصيله لكرت التحضير. يرجى الضغط على زر (+) بجانبه لإضافتها.`, 'warning');
+      return;
+    }
+
+    if (formData.status === 'جاهز للتسليم للتوصيل' || formData.status === 'تم التسليم للتوصيل') {
+      const allReady = (formData.items || []).every(item => item.itemStatus === 'جاهز');
+      if (!allReady) {
+        Swal.fire('خطأ', 'لا يمكنك جعل حالة الطلب "جاهز للتسليم للتوصيل" أو "تم التسليم للتوصيل" إلا عندما تكون جميع بنود الطلب تحمل حالة "جاهز".', 'error');
+        return;
+      }
     }
 
     const dataToSave = {
@@ -922,6 +1720,29 @@ const AdminSales = ({ user }) => {
         }
       }
 
+      if (linkedPreparationOrder && linkedPreparationOrder.items?.length > 0) {
+        const prepData = {
+          ...linkedPreparationOrder,
+          customerId: result.customerId,
+          customerName: result.customerName,
+          deliveryDate: result.deliveryDate || linkedPreparationOrder.deliveryDate,
+          salesOrderId: result.id,
+          salesOrderNumber: result.orderNumber,
+          createdBy: linkedPreparationOrder.createdBy || user?.name || 'مدير',
+          lastActionBy: user?.name || 'مدير'
+        };
+        try {
+          const savedPrep = await savePreparationOrder(prepData);
+          if (!savedPrep) {
+            Swal.fire('خطأ في التحضير', 'تم حفظ الطلبية بنجاح، ولكن تعذر إنشاء كرت التحضير. يرجى مراجعة الإدارة.', 'error');
+            console.error("Failed to save preparation order with data:", prepData);
+          }
+        } catch (e) {
+          console.error("Error saving preparation order:", e, prepData);
+          Swal.fire('خطأ', 'حدث خطأ غير متوقع أثناء حفظ كرت التحضير.', 'error');
+        }
+      }
+
       await addLog({
         userName: user.name,
         userId: user.id,
@@ -938,6 +1759,11 @@ const AdminSales = ({ user }) => {
         timer: 2000,
         showConfirmButton: false
       });
+      clearTimeout(draftTimerRef.current);
+      if (!editingOrder && activeDraftId) {
+        await removeDraft({ id: activeDraftId });
+        setActiveDraftId(null);
+      }
       setShowModal(false);
       fetchData();
     }
@@ -948,7 +1774,7 @@ const AdminSales = ({ user }) => {
       try {
         const allMissions = await getMissions();
         const existingMission = allMissions.find(m => m.salesOrderNumber === order.orderNumber);
-        
+
         if (!existingMission) {
           const maxNum = allMissions.reduce((max, o) => {
             const str = String(o.missionNumber || '');
@@ -959,7 +1785,7 @@ const AdminSales = ({ user }) => {
             return max;
           }, 0);
           const nextMissionNumber = `DEL-${String(maxNum + 1).padStart(4, '0')}`;
-          
+
           await saveMission({
             id: null,
             missionNumber: nextMissionNumber,
@@ -967,7 +1793,7 @@ const AdminSales = ({ user }) => {
             customType: '',
             sourceEntity: 'مرجاس للتجارة - قسم البياضات',
             targetEntity: order.customerName || '',
-            details: `توصيل تلقائي لطلبية المبيعات رقم ${order.orderNumber} ${order.orderNotes ? '- ' + order.orderNotes : ''}`,
+            details: `توصيل تلقائي للطلبية رقم ${order.orderNumber} ${order.orderNotes ? '- ' + order.orderNotes : ''}`,
             assignedEmployeeId: '',
             assignedEmployeeName: '',
             dueDate: getLocalDateStr(new Date()),
@@ -1029,8 +1855,26 @@ const AdminSales = ({ user }) => {
   };
 
   const handleUpdateStatus = async (order, newStatus) => {
-    if ((order.status === 'تم التسليم للتوصيل' || order.status === 'تم تسليمها للتوصيل' || order.status === 'جاهز للتوصيل') && 
-        (newStatus !== 'تم التسليم للتوصيل' && newStatus !== 'تم تسليمها للتوصيل' && newStatus !== 'جاهز للتوصيل')) {
+    if (newStatus === 'جاهز للتسليم للتوصيل' || newStatus === 'تم التسليم للتوصيل') {
+      const allReady = (order.items || []).every(item => item.itemStatus === 'جاهز');
+      if (!allReady) {
+        MySwal.fire({
+          title: 'لا يمكن تغيير الحالة',
+          text: 'لا يمكنك جعل حالة الطلب "جاهز للتسليم للتوصيل" أو "تم التسليم للتوصيل" إلا عندما تكون جميع بنود الطلب تحمل حالة "جاهز".',
+          icon: 'error',
+          confirmButtonText: 'حسناً',
+          customClass: {
+            container: 'premium-modal-container',
+            popup: 'premium-modal-popup',
+            confirmButton: 'btn-premium-save'
+          }
+        });
+        return;
+      }
+    }
+
+    if ((order.status === 'تم التسليم للتوصيل' || order.status === 'تم تسليمها للتوصيل' || order.status === 'جاهز للتوصيل') &&
+      (newStatus !== 'تم التسليم للتوصيل' && newStatus !== 'تم تسليمها للتوصيل' && newStatus !== 'جاهز للتوصيل')) {
       try {
         const allMissions = await getMissions();
         const linkedMission = allMissions.find(m => m.salesOrderNumber === order.orderNumber);
@@ -1058,30 +1902,7 @@ const AdminSales = ({ user }) => {
       }
     }
 
-    if (newStatus === 'تم التوصيل' && order.status !== 'تم التوصيل') {
-      try {
-        const currentStock = await getStock();
-        for (const item of (order.items || [])) {
-          if (!item.productName || !item.quantity) continue;
-          const stockItem = currentStock.find(s => s.name === item.productName);
-          if (stockItem) {
-            const deduction = Number(item.quantity) || 0;
-            // السماح بالسالب كما طلبنا في التقرير
-            const newQuantity = Number(stockItem.quantity) - deduction;
-            await saveStockItem({
-              ...stockItem,
-              quantity: newQuantity,
-              lastMovement: 'إخراج',
-              lastMovementDate: getLocalDateStr(new Date()),
-              lastRecipient: order.customerName,
-              notes: `خصم تلقائي - طلبية مبيعات رقم ${order.orderNumber}`
-            });
-          }
-        }
-      } catch (err) {
-        console.error("Error updating stock:", err);
-      }
-    }
+
 
     await checkAndCreateMission(order, newStatus);
 
@@ -1101,34 +1922,166 @@ const AdminSales = ({ user }) => {
     if (selectedOrder && selectedOrder.orderNumber) {
       document.title = selectedOrder.orderNumber;
     }
+
+    // Call print immediately
     window.print();
+
     setTimeout(() => {
       document.title = originalTitle;
     }, 100);
+  };
+
+  const triggerSharePDF = async () => {
+    const printEl = document.querySelector('.sales-print-layout');
+    if (!printEl) {
+      Swal.fire({
+        icon: 'error',
+        title: 'خطأ',
+        text: 'تعذر العثور على محتوى الطباعة لتوليد الـ PDF.'
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: 'جاري تجهيز ملف PDF...',
+      html: 'يرجى الانتظار لحين إنشاء ملف PDF ومشاركته.',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    try {
+      const portal = document.getElementById('print-portal');
+      const originalDisplay = portal.style.display;
+      const originalPosition = portal.style.position;
+      const originalTop = portal.style.top;
+      const originalLeft = portal.style.left;
+      const originalZIndex = portal.style.zIndex;
+      const originalWidth = portal.style.width;
+
+      portal.style.display = 'block';
+      portal.style.position = 'absolute';
+      portal.style.top = '0';
+      portal.style.right = '0';
+      portal.style.left = 'auto';
+      portal.style.width = '800px'; // Force wide desktop layout
+      portal.style.zIndex = '-9999';
+      portal.style.direction = 'rtl';
+
+      // Force the actual print element to be 800px as well to prevent mobile CSS conflicts
+      const originalPrintElWidth = printEl.style.width;
+      const originalPrintElMinWidth = printEl.style.minWidth;
+      printEl.style.width = '800px';
+      printEl.style.minWidth = '800px';
+
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: `طلب_${selectedOrder.orderNumber}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false, windowWidth: 800, width: 800 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      // Pass the live DOM node directly to html2pdf
+      const pdfBlob = await html2pdf().set(opt).from(printEl).output('blob');
+
+      // Restore original element styles
+      printEl.style.width = originalPrintElWidth;
+      printEl.style.minWidth = originalPrintElMinWidth;
+
+      // Restore original portal styles
+      portal.style.display = originalDisplay;
+      portal.style.position = originalPosition;
+      portal.style.top = originalTop;
+      portal.style.left = originalLeft;
+      portal.style.width = originalWidth;
+      portal.style.zIndex = originalZIndex;
+
+      Swal.close();
+
+      const fileName = `طلب_${selectedOrder.orderNumber}.pdf`;
+      const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `طلب رقم #${selectedOrder.orderNumber}`,
+          text: `مرفق تفاصيل طلبية رقم #${selectedOrder.orderNumber}`
+        });
+      } else {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(pdfBlob);
+        link.download = fileName;
+        link.click();
+
+        Swal.fire({
+          icon: 'success',
+          title: 'تم تحميل ملف PDF',
+          text: 'تم تحميل ملف الـ PDF بنجاح لعدم دعم متصفحك لميزة المشاركة التلقائية.'
+        });
+      }
+    } catch (error) {
+      // Don't show error dialog if user simply canceled sharing (AbortError)
+      if (error.name !== 'AbortError') {
+        console.error('Error generating PDF or sharing:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'فشلت المشاركة',
+          text: 'حدث خطأ أثناء محاولة إنشاء ملف PDF أو مشاركته.'
+        });
+      } else {
+        Swal.close();
+      }
+    }
   };
 
   const sortedOrders = [...orders].sort((a, b) => {
     if (!sortConfig.key) return 0;
     let aVal = a[sortConfig.key];
     let bVal = b[sortConfig.key];
-    
+
+    if (aVal === null || aVal === undefined) aVal = '';
+    if (bVal === null || bVal === undefined) bVal = '';
+
     if (sortConfig.key === 'orderNumber') {
-      aVal = parseInt(aVal);
-      bVal = parseInt(bVal);
+      const numA = parseInt(String(aVal).replace(/\D/g, ''), 10);
+      const numB = parseInt(String(bVal).replace(/\D/g, ''), 10);
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
+      }
     }
-    
-    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-    return 0;
+
+    if (typeof aVal === 'number' && typeof bVal === 'number') {
+      return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+    }
+
+    const strA = String(aVal);
+    const strB = String(bVal);
+
+    return sortConfig.direction === 'asc'
+      ? strA.localeCompare(strB, undefined, { numeric: true, sensitivity: 'base' })
+      : strB.localeCompare(strA, undefined, { numeric: true, sensitivity: 'base' });
   });
 
   const filteredOrders = sortedOrders.filter(o => {
+    // Exclude Preparation and Production orders that might have been mistakenly saved in sales_orders
+    const orderNumStr = String(o.orderNumber || '').toUpperCase();
+    if (orderNumStr.startsWith('PREP-') || orderNumStr.startsWith('PRO-')) {
+      return false;
+    }
+
     const matchOrderNum = filterOrderNumber ? (o.orderNumber || '').toString().includes(filterOrderNumber) : true;
-    const matchSearch = searchTerm ? ((o.orderNumber || '').toString().includes(searchTerm) || (o.customerName || '').toLowerCase().includes(searchTerm.toLowerCase())) : true;
+    const matchSearch = matchesSearch(
+      [o.orderNumber, o.customerName, o.customerNumber, o.phone, o.items, o.productName],
+      debouncedSearchTerm
+    );
     const matchDateFrom = dateFrom ? o.orderDate >= dateFrom : true;
     const matchDateTo = dateTo ? o.orderDate <= dateTo : true;
     const matchCust = selectedCustomer ? o.customerId === selectedCustomer : true;
-    const matchStatus = selectedStatus ? o.status === selectedStatus : true;
+    const matchStatus = selectedStatus === 'معلق' 
+      ? (o.status !== 'تم التسليم للتوصيل' && o.status !== 'ملغي')
+      : (selectedStatus ? o.status === selectedStatus : true);
     const matchCreatedBy = filterCreatedBy ? (o.createdBy || '').includes(filterCreatedBy) : true;
     return matchOrderNum && matchSearch && matchDateFrom && matchDateTo && matchCust && matchStatus && matchCreatedBy;
   });
@@ -1152,10 +2105,53 @@ const AdminSales = ({ user }) => {
     }
   };
 
+  const getStatusBadgeStyle = (status) => {
+    switch (status) {
+      case 'منتهي':
+      case 'تم التوصيل':
+        return { bg: '#e8f5e9', text: '#2e7d32' };
+      case 'التحضير':
+        return { bg: '#e0f2f1', text: '#00796b' };
+      case 'قيد التوصيل':
+      case 'تم تسليمها للتوصيل':
+        return { bg: '#e3f2fd', text: '#1e3a8a' };
+      case 'تم تأجيل التوصيل':
+        return { bg: '#fffbeb', text: '#92400e' };
+      case 'لم يتم التنفيذ':
+      case 'ملغي':
+        return { bg: '#ffebee', text: '#c62828' };
+      default:
+        return { bg: '#e0f2f1', text: '#00796b' };
+    }
+  };
+
   return (
     <>
       {selectedOrder && createPortal(
         <div className="sales-print-layout" style={{ direction: 'rtl', padding: '1.5cm', fontFamily: 'Tajawal, sans-serif', background: 'white', color: '#333' }}>
+          <style dangerouslySetInnerHTML={{
+            __html: `
+            .sales-print-layout table {
+              display: table !important;
+              width: 100% !important;
+            }
+            .sales-print-layout thead {
+              display: table-header-group !important;
+            }
+            .sales-print-layout tbody {
+              display: table-row-group !important;
+            }
+            .sales-print-layout tr {
+              display: table-row !important;
+            }
+            .sales-print-layout th, .sales-print-layout td {
+              display: table-cell !important;
+            }
+            .sales-print-layout .signatures-container {
+              display: table !important;
+              width: 100% !important;
+            }
+          `}} />
           {/* Header */}
           <div style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '1.5rem', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -1168,53 +2164,94 @@ const AdminSales = ({ user }) => {
             <div style={{ textAlign: 'left' }}>
               <div style={{ fontSize: '2.2rem', fontWeight: '900', color: '#0f172a', letterSpacing: '1px' }}>{selectedOrder.orderNumber}</div>
               <div style={{ fontSize: '1.2rem', color: '#64748b', marginTop: '4px', fontWeight: 'bold' }}>تاريخ الطلب: {selectedOrder.orderDate}</div>
+              {(() => {
+                const linkedDb = (productionOrders || []).find(po =>
+                  (po.salesOrderId && po.salesOrderId === selectedOrder.id) ||
+                  (po.salesOrderNumber && po.salesOrderNumber === selectedOrder.orderNumber) ||
+                  (po.orderNotes && po.orderNotes.includes(selectedOrder.orderNumber))
+                );
+                const prodNumber = linkedDb ? linkedDb.orderNumber : selectedOrder.productionOrderNumber;
+
+                const linkedPrepDb = (preparationOrders || []).find(po =>
+                  (po.salesOrderId && po.salesOrderId === selectedOrder.id) ||
+                  (po.salesOrderNumber && po.salesOrderNumber === selectedOrder.orderNumber) ||
+                  (po.orderNotes && po.orderNotes.includes(selectedOrder.orderNumber))
+                );
+                const prepNumber = linkedPrepDb ? linkedPrepDb.orderNumber : selectedOrder.preparationOrderNumber;
+
+                const tags = [];
+                if (prodNumber) {
+                  tags.push(
+                    <div key="prod" style={{ marginTop: '8px', padding: '6px 12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', color: '#b91c1c', fontSize: '1rem', fontWeight: 'bold', display: 'inline-block', marginLeft: '8px' }}>
+                      مرتبطة بكرت إنتاج: <span style={{ direction: 'ltr', display: 'inline-block', fontWeight: '950' }}>{prodNumber}</span>
+                    </div>
+                  );
+                }
+                if (prepNumber) {
+                  tags.push(
+                    <div key="prep" style={{ marginTop: '8px', padding: '6px 12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', color: '#b91c1c', fontSize: '1rem', fontWeight: 'bold', display: 'inline-block', marginLeft: '8px' }}>
+                      مرتبطة بكرت تحضير: <span style={{ direction: 'ltr', display: 'inline-block', fontWeight: '950' }}>{prepNumber}</span>
+                    </div>
+                  );
+                }
+                return tags.length > 0 ? <div>{tags}</div> : null;
+              })()}
             </div>
           </div>
 
-          {/* Order Details Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem', marginBottom: '2rem' }}>
-            <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-              <h3 style={{ fontSize: '1.3rem', margin: '0 0 1rem 0', color: '#0f172a', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem', fontWeight: 'bold' }}>معلومات العميل والطلب</h3>
-              <table style={{ width: '100%', fontSize: '1.1rem', lineHeight: '1.8' }}>
-                <tbody>
-                  <tr>
-                    <td style={{ color: '#64748b', width: '130px', fontWeight: 'bold' }}>اسم العميل:</td>
-                    <td style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1.2rem' }}>{selectedOrder.customerName}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ color: '#64748b', fontWeight: 'bold' }}>حالة الطلبية:</td>
-                    <td><span style={{ background: '#e2e8f0', padding: '4px 10px', borderRadius: '4px', fontWeight: 'bold', color: '#334155' }}>{selectedOrder.status || '---'}</span></td>
-                  </tr>
-                  {selectedOrder.deliveryDate && (
-                    <tr>
-                      <td style={{ color: '#64748b', fontWeight: 'bold' }}>تاريخ التسليم:</td>
-                      <td>
-                        <span style={{ fontWeight: '900', color: '#dc2626', fontSize: '1.4rem', borderBottom: '2px solid #fca5a5', paddingBottom: '2px' }}>
-                          {selectedOrder.deliveryDate}
-                        </span>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-              <h3 style={{ fontSize: '1.3rem', margin: '0 0 1rem 0', color: '#0f172a', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem', fontWeight: 'bold' }}>معلومات إدارية</h3>
-              <table style={{ width: '100%', fontSize: '1.1rem', lineHeight: '1.8' }}>
-                <tbody>
-                  <tr>
-                    <td style={{ color: '#64748b', width: '140px', fontWeight: 'bold' }}>أُنشئت بواسطة:</td>
-                    <td style={{ fontWeight: 'bold', color: '#0f172a' }}>{selectedOrder.createdBy || '---'}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ color: '#64748b', fontWeight: 'bold' }}>آخر إجراء بواسطة:</td>
-                    <td style={{ fontWeight: 'bold', color: '#0f172a' }}>{selectedOrder.lastActionBy || '---'}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+          {/* Order Details Grid Table */}
+          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '1.5rem 0', margin: '0 -1.5rem 2rem -1.5rem', tableLayout: 'fixed' }}>
+            <tbody>
+              <tr>
+                {/* معلومات العميل والطلب */}
+                <td style={{ width: '50%', verticalAlign: 'top', padding: 0 }}>
+                  <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', height: '100%' }}>
+                    <h3 style={{ fontSize: '1.3rem', margin: '0 0 1rem 0', color: '#0f172a', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem', fontWeight: 'bold' }}>معلومات العميل والطلب</h3>
+                    <table style={{ width: '100%', fontSize: '1.1rem', lineHeight: '1.8' }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ color: '#64748b', width: '130px', fontWeight: 'bold' }}>اسم العميل:</td>
+                          <td style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1.2rem' }}>{selectedOrder.customerName}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ color: '#64748b', fontWeight: 'bold' }}>حالة الطلبية:</td>
+                          <td><span style={{ background: '#e2e8f0', padding: '4px 10px', borderRadius: '4px', fontWeight: 'bold', color: '#334155' }}>{selectedOrder.status || '---'}</span></td>
+                        </tr>
+                        {selectedOrder.deliveryDate && (
+                          <tr>
+                            <td style={{ color: '#64748b', fontWeight: 'bold' }}>تاريخ التسليم:</td>
+                            <td>
+                              <span style={{ fontWeight: '900', color: '#dc2626', fontSize: '1.4rem', borderBottom: '2px solid #fca5a5', paddingBottom: '2px' }}>
+                                {selectedOrder.deliveryDate}
+                              </span>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </td>
+                {/* معلومات إدارية */}
+                <td style={{ width: '50%', verticalAlign: 'top', padding: 0 }}>
+                  <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', height: '100%' }}>
+                    <h3 style={{ fontSize: '1.3rem', margin: '0 0 1rem 0', color: '#0f172a', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem', fontWeight: 'bold' }}>معلومات إدارية</h3>
+                    <table style={{ width: '100%', fontSize: '1.1rem', lineHeight: '1.8' }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ color: '#64748b', width: '140px', fontWeight: 'bold' }}>أُنشئت بواسطة:</td>
+                          <td style={{ fontWeight: 'bold', color: '#0f172a' }}>{selectedOrder.createdBy || '---'}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ color: '#64748b', fontWeight: 'bold' }}>آخر إجراء بواسطة:</td>
+                          <td style={{ fontWeight: 'bold', color: '#0f172a' }}>{selectedOrder.lastActionBy || '---'}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
 
           {selectedOrder.orderNotes && (
             <div style={{ background: '#fff', padding: '1rem 1.5rem', borderRadius: '8px', border: '1px solid #93c5fd', borderRight: '4px solid #3b82f6', marginBottom: '2rem' }}>
@@ -1225,41 +2262,77 @@ const AdminSales = ({ user }) => {
 
           {/* Items Table */}
           <h3 style={{ fontSize: '1.4rem', color: '#0f172a', marginBottom: '1rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', fontWeight: 'bold' }}>تفاصيل الأصناف المطلوبة</h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '2rem' }}>
+          <table className="print-items-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '2rem' }}>
             <thead>
               <tr style={{ background: '#f1f5f9' }}>
-                <th style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'center', width: '40px', color: '#334155', fontSize: '1.1rem' }}>#</th>
+                <th style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'right', width: '40px', color: '#334155', fontSize: '1.1rem' }}>#</th>
                 <th style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'right', color: '#334155', fontSize: '1.1rem' }}>اسم الصنف</th>
-                <th style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'center', width: '100px', color: '#334155', fontSize: '1.1rem' }}>الكمية</th>
-                <th style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'center', width: '140px', color: '#334155', fontSize: '1.1rem' }}>حالة الصنف</th>
+                <th style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'right', width: '110px', color: '#334155', fontSize: '1.1rem' }}>الكمية المطلوبة</th>
+                <th style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'right', width: '125px', color: '#334155', fontSize: '1.1rem' }}>المتوفر بالمخزون</th>
+                <th style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'right', width: '140px', color: '#334155', fontSize: '1.1rem' }}>حالة الصنف</th>
                 <th style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'right', color: '#334155', fontSize: '1.1rem' }}>ملاحظات إضافية</th>
               </tr>
             </thead>
             <tbody>
-              {(selectedOrder.items || []).map((item, idx) => (
-                <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
-                  <td style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'center', fontWeight: 'bold', color: '#64748b', fontSize: '1.1rem' }}>{idx + 1}</td>
-                  <td style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'right', fontWeight: 'bold', color: '#0f172a', fontSize: '1.2rem' }}>{item.productName}</td>
-                  <td style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'center', fontWeight: '900', color: '#0f172a', fontSize: '1.3rem' }}>{item.quantity}</td>
-                  <td style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                    <span style={{ fontSize: '1.15rem', fontWeight: '900', color: '#0f172a' }}>{item.itemStatus || '---'}</span>
-                  </td>
-                  <td style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'right', color: '#334155', fontSize: '1.1rem', fontWeight: '500' }}>{item.notes || '---'}</td>
-                </tr>
-              ))}
+              {(selectedOrder.items || []).map((item, idx) => {
+                const availableQty = getProductStockQuantity(item.productName);
+                const breakdown = getProductStockBreakdown(item.productName);
+                return (
+                  <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                    <td style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'right', fontWeight: 'bold', color: '#64748b', fontSize: '1.1rem' }}>{idx + 1}</td>
+                    <td style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'right', fontWeight: 'bold', color: '#0f172a', fontSize: '1.2rem' }}>{item.productName}</td>
+                    <td style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'right', fontWeight: '900', color: '#0f172a', fontSize: '1.3rem' }}>{item.quantity}</td>
+                    <td style={{
+                      padding: '12px',
+                      border: '1px solid #cbd5e1',
+                      textAlign: 'right',
+                      verticalAlign: 'middle'
+                    }}>
+                      {breakdown.length === 0 ? (
+                        <div style={{ display: 'inline-block', textAlign: 'right', fontWeight: '900', fontSize: '1.15rem', color: '#dc2626', backgroundColor: '#fee2e2', padding: '6px 16px', borderRadius: '8px', border: '1px solid #fca5a5' }}>غير متوفر</div>
+                      ) : (
+                        <div style={{ display: 'block', textAlign: 'right', width: '100%' }}>
+                          {breakdown.map((b, bIdx) => {
+                            const isZero = availableQty === null || availableQty <= 0;
+                            const isPartial = availableQty < item.quantity;
+                            const bgColor = isZero ? '#fee2e2' : isPartial ? '#fef3c7' : '#dcfce7';
+                            const textColor = isZero ? '#dc2626' : isPartial ? '#d97706' : '#10b981';
+                            const borderColor = isZero ? '#fca5a5' : isPartial ? '#fcd34d' : '#86efac';
+                            
+                            return (
+                              <div key={bIdx} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap', backgroundColor: bgColor, color: textColor, padding: '4px 12px', borderRadius: '8px', border: `1px solid ${borderColor}`, boxShadow: '0 1px 2px rgba(0,0,0,0.02)', marginBottom: '6px' }}>
+                                <span style={{ fontSize: '0.95rem', fontWeight: 'bold', opacity: 0.9 }}>{b.warehouse}:</span>
+                                <span style={{ fontWeight: '950', fontSize: '1.15rem' }}>{b.quantity}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'right' }}>
+                      <span style={{ fontSize: '1.15rem', fontWeight: '900', color: '#0f172a' }}>{item.itemStatus === 'قيد الإنتاج' ? 'إنتاج قيد الخياطة' : item.itemStatus === 'قيد التحضير' ? 'إنتاج قيد التحضير' : (item.itemStatus || '---')}</span>
+                    </td>
+                    <td style={{ padding: '12px', border: '1px solid #cbd5e1', textAlign: 'right', color: '#334155', fontSize: '1.1rem', fontWeight: '500' }}>{item.notes || '---'}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 
-          {/* Signatures */}
-          <div style={{ marginTop: '5rem', display: 'flex', justifyContent: 'space-around', padding: '0 2rem' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ borderTop: '2px solid #cbd5e1', width: '220px', paddingTop: '1rem', fontWeight: 'bold', color: '#334155', fontSize: '1.1rem' }}>توقيع مسؤول المخزون</div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ borderTop: '2px solid #cbd5e1', width: '220px', paddingTop: '1rem', fontWeight: 'bold', color: '#334155', fontSize: '1.1rem' }}>توقيع مسؤول الطلبيات</div>
-            </div>
-          </div>
-          
+          {/* Signatures Table */}
+          <table className="signatures-container" style={{ width: '100%', marginTop: '5rem', marginBottom: '2rem', borderCollapse: 'collapse' }}>
+            <tbody>
+              <tr>
+                <td style={{ width: '50%', textAlign: 'center', border: 'none', padding: 0 }}>
+                  <div style={{ display: 'inline-block', borderTop: '2px solid #cbd5e1', width: '220px', paddingTop: '1rem', fontWeight: 'bold', color: '#334155', fontSize: '1.1rem' }}>توقيع مسؤول المخزون</div>
+                </td>
+                <td style={{ width: '50%', textAlign: 'center', border: 'none', padding: 0 }}>
+                  <div style={{ display: 'inline-block', borderTop: '2px solid #cbd5e1', width: '220px', paddingTop: '1rem', fontWeight: 'bold', color: '#334155', fontSize: '1.1rem' }}>توقيع مسؤول الطلبيات</div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
           <div style={{ marginTop: '3rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>
             تم طباعة هذا المستند من نظام {globalSettings.siteName}
           </div>
@@ -1268,60 +2341,87 @@ const AdminSales = ({ user }) => {
       )}
 
       <div className="no-print">
-        <div className="flex-responsive mb-6">
-          <div>
-            <h2 className="text-2xl font-bold flex items-center gap-2">
-              <ShoppingCart className="text-primary" /> إدارة الطلبيات
-            </h2>
-            <p className="text-muted">تسجيل وتتبع طلبيات العملاء</p>
-          </div>
+        <div className="flex justify-between items-center" style={{ marginBottom: isMobile ? '12px' : '24px', marginTop: isMobile ? '8px' : '0' }}>
+          <h2 className="text-2xl font-bold flex items-center gap-2 m-0 text-right" style={{ fontSize: isMobile ? '1.25rem' : '1.5rem' }}>
+            <ShoppingCart className="text-primary" /> إدارة الطلبات
+          </h2>
+          {(canPerformAction(user, 'ADD', 'SALES', globalSettings)) && (
+            <div className="flex items-center gap-2">
+            <button
+              className="btn btn-outline flex items-center gap-2"
+              onClick={handleShowDrafts}
+              style={{ height: '38px', borderRadius: '10px', whiteSpace: 'nowrap' }}
+            >
+              <Archive size={17} /> المسودات {drafts.length > 0 && `(${drafts.length})`}
+            </button>
+            <button
+              className="btn btn-primary flex items-center gap-2"
+              onClick={() => handleOpenModal()}
+              disabled={loading}
+              style={{
+                height: '38px',
+                borderRadius: '10px',
+                fontSize: isMobile ? '12px' : '14px',
+                padding: isMobile ? '0 12px' : '0 16px',
+                whiteSpace: 'nowrap',
+                opacity: loading ? 0.6 : 1,
+                cursor: loading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              <Plus size={18} /> طلبية جديدة
+            </button>
+            </div>
+          )}
         </div>
 
+        {/* Filter Bar */}
         <div className="glass-panel mb-4 no-print" style={{ padding: '1rem' }}>
-          <div className="flex gap-4 items-center justify-between w-full flex-wrap">
-            <div className="flex items-center gap-3 w-full md:max-w-md">
-              <Search className="text-muted" size={20} />
-              <input 
-                type="text" 
-                placeholder="بحث سريع (رقم، عميل)..." 
-                className="input-field flex-1" 
-                style={{ marginBottom: 0 }}
+          <div className="flex flex-col gap-3 w-full">
+            {/* Row 1: Search */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+              <Search className="text-slate-400" size={20} />
+              <input
+                type="text"
+                placeholder="بحث سريع (رقم، عميل)..."
+                className="input-field flex-1"
+                style={{ marginBottom: 0, height: '44px', borderRadius: '12px' }}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <select 
-                className="input-field hidden md:block" 
-                style={{ marginBottom: 0, minWidth: '150px' }}
+
+            {/* Row 2: Status & Filter button */}
+            <div className="flex items-center gap-3 w-full">
+              <select
+                className="input-field flex-1"
+                style={{ marginBottom: 0, height: '44px', borderRadius: '12px' }}
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
               >
                 <option value="">جميع الحالات</option>
+                <option value="معلق">معلق</option>
                 {globalSettings.salesStatuses.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-              
-              <button 
+              <button
                 className="btn btn-primary flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow-md"
                 onClick={() => setShowFilterModal(true)}
+                style={{
+                  height: '44px',
+                  padding: '0 20px',
+                  borderRadius: '12px',
+                  fontWeight: 'bold',
+                  fontSize: '15px',
+                  border: 'none',
+                  color: 'white',
+                  backgroundColor: 'var(--primary)'
+                }}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-filter"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
                 <span>تصفية</span>
                 {(filterOrderNumber || dateFrom || dateTo || selectedCustomer || selectedStatus || filterCreatedBy) && (
                   <span className="bg-white text-primary rounded-full px-2 py-0.5 text-[0.7rem] font-bold mr-1">نشط</span>
                 )}
               </button>
-
-              {canPerformAction(user, 'ADD', 'SALES', globalSettings) && (
-                <button 
-                  className="btn btn-primary flex items-center gap-2 shadow-sm" 
-                  onClick={() => handleOpenModal()} 
-                  disabled={loading}
-                  style={loading ? {opacity: 0.6, cursor: 'not-allowed'} : {}}
-                >
-                  <Plus size={18} /> طلبية جديدة
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -1330,10 +2430,10 @@ const AdminSales = ({ user }) => {
           <div className="modal-overlay no-print" style={{ zIndex: 1000 }}>
             <div className="modal-content animate-fade-in" style={{ maxWidth: '500px' }}>
               <div className="flex justify-between items-center mb-4 border-b pb-2">
-                <h3 className="text-xl font-bold flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-filter text-primary"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg> تصفية مخصصة</h3>
+                <h3 className="text-xl font-bold flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-filter text-primary"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg> تصفية مخصصة</h3>
                 <button className="btn btn-outline" style={{ padding: '0.5rem' }} onClick={() => setShowFilterModal(false)}><X size={18} /></button>
               </div>
-              
+
               <div className="space-y-4">
                 <div className="input-group">
                   <label>رقم الطلبية</label>
@@ -1360,6 +2460,7 @@ const AdminSales = ({ user }) => {
                   <label>الحالة</label>
                   <select className="input-field" value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
                     <option value="">جميع الحالات</option>
+                    <option value="معلق">معلق</option>
                     {globalSettings.salesStatuses.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
@@ -1377,7 +2478,7 @@ const AdminSales = ({ user }) => {
               <div className="flex gap-4 mt-6 pt-4 border-t">
                 <button className="btn btn-primary flex-1" onClick={() => setShowFilterModal(false)}>تطبيق</button>
                 <button className="btn btn-outline flex-1" onClick={() => {
-                  setFilterOrderNumber(''); setDateFrom(''); setDateTo(''); setSelectedCustomer(''); setSelectedStatus(''); setFilterCreatedBy('');
+                  setFilterOrderNumber(''); setDateFrom(''); setDateTo(''); setSelectedCustomer(''); setSelectedStatus('معلق'); setFilterCreatedBy('');
                 }}>تفريغ</button>
               </div>
             </div>
@@ -1386,75 +2487,684 @@ const AdminSales = ({ user }) => {
 
         {loading ? (
           <div className="text-center py-10">جاري التحميل...</div>
+        ) : isMobile ? (
+          <div className="flex flex-col gap-4 no-print" style={{ padding: '0 8px 120px 8px' }}>
+            {filteredOrders.length > 0 ? (
+              filteredOrders.map(order => (
+                <div
+                  key={order.id}
+                  style={{
+                    backgroundColor: '#ffffff',
+                    borderRadius: '16px',
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                    padding: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    marginBottom: '16px'
+                  }}
+                >
+                  {/* Card Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px', direction: 'rtl', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'right', flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap', maxWidth: '100%', overflow: 'hidden' }}>
+                        <span style={{ fontStyle: 'normal', fontWeight: '800', color: '#0284c7', fontSize: '1.1rem', whiteSpace: 'nowrap' }}>{order.orderNumber}</span>
+                        <div
+                          style={{
+                            padding: '0 6px',
+                            height: '22px',
+                            borderRadius: '6px',
+                            backgroundColor: '#0d9488',
+                            color: '#ffffff',
+                            fontWeight: 'bold',
+                            fontSize: '0.65rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 2px 4px rgba(13,148,136,0.15)',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0
+                          }}
+                          title="عدد الأصناف"
+                        >
+                          {getBandsText(order.items ? order.items.length : 0)}
+                        </div>
+                      </div>
+                      {(() => {
+                        const elements = [];
+
+                        const linkedDb = (productionOrders || []).find(po =>
+                          (po.salesOrderId && po.salesOrderId === order.id) ||
+                          (po.salesOrderNumber && po.salesOrderNumber === order.orderNumber) ||
+                          (po.orderNotes && po.orderNotes.includes(order.orderNumber))
+                        );
+                        const prodCount = order.items ? order.items.filter(i => i.itemStatus === 'قيد الإنتاج' || i.itemStatus === 'إنتاج قيد الخياطة' || i.itemStatus === 'تم الإنتاج').length : 0;
+
+                        if (linkedDb) {
+                          const finalCount = (linkedDb.items && linkedDb.items.length) || prodCount;
+                          elements.push(
+                            <div key="prod" style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '2px', backgroundColor: '#fef2f2', padding: '2px 6px', borderRadius: '20px', whiteSpace: 'nowrap' }}>
+                                {linkedDb.orderNumber} 📌
+                              </span>
+                              {finalCount > 0 && (
+                                <div style={{ padding: '0 6px', height: '20px', borderRadius: '6px', backgroundColor: '#ea580c', color: '#ffffff', fontWeight: 'bold', fontSize: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(234,88,12,0.15)', whiteSpace: 'nowrap' }} title="عدد أصناف الإنتاج">
+                                  {getBandsText(finalCount)}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        } else {
+                          const notes = order.notes || '';
+                          const linkedMatch = notes.match(/PRO-\d+/);
+                          if (linkedMatch) {
+                            const matchedPo = (productionOrders || []).find(po => po.orderNumber === linkedMatch[0]);
+                            const finalCount = (matchedPo && matchedPo.items && matchedPo.items.length) || prodCount;
+                            elements.push(
+                              <div key="prod-match" style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '2px', backgroundColor: '#fef2f2', padding: '2px 6px', borderRadius: '20px', whiteSpace: 'nowrap' }}>
+                                  {linkedMatch[0]} 📌
+                                </span>
+                                {finalCount > 0 && (
+                                  <div style={{ padding: '0 6px', height: '20px', borderRadius: '6px', backgroundColor: '#ea580c', color: '#ffffff', fontWeight: 'bold', fontSize: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(234,88,12,0.15)', whiteSpace: 'nowrap' }} title="عدد أصناف الإنتاج">
+                                    {getBandsText(finalCount)}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+                        }
+
+                        const linkedPrep = (preparationOrders || []).find(po =>
+                          (po.salesOrderId && po.salesOrderId === order.id) ||
+                          (po.salesOrderNumber && po.salesOrderNumber === order.orderNumber) ||
+                          (po.orderNotes && po.orderNotes.includes(order.orderNumber))
+                        );
+                        const prepCount = order.items ? order.items.filter(i => i.itemStatus === 'قيد التحضير').length : 0;
+
+                        if (linkedPrep) {
+                          const finalCount = (linkedPrep.items && linkedPrep.items.length) || prepCount;
+                          elements.push(
+                            <div key="prep" style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '2px', backgroundColor: '#fef2f2', padding: '2px 6px', borderRadius: '20px', whiteSpace: 'nowrap' }}>
+                                {linkedPrep.orderNumber} 📌
+                              </span>
+                              {finalCount > 0 && (
+                                <div style={{ padding: '0 6px', height: '20px', borderRadius: '6px', backgroundColor: '#ea580c', color: '#ffffff', fontWeight: 'bold', fontSize: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(234,88,12,0.15)', whiteSpace: 'nowrap' }} title="عدد أصناف التحضير">
+                                  {getBandsText(finalCount)}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        } else {
+                          const notes = order.notes || '';
+                          const prepMatch = notes.match(/PREP-\d+/);
+                          if (prepMatch) {
+                            const matchedPo = (preparationOrders || []).find(po => po.orderNumber === prepMatch[0]);
+                            const finalCount = (matchedPo && matchedPo.items && matchedPo.items.length) || prepCount;
+                            elements.push(
+                              <div key="prep-match" style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '2px', backgroundColor: '#fef2f2', padding: '2px 6px', borderRadius: '20px', whiteSpace: 'nowrap' }}>
+                                  {prepMatch[0]} 📌
+                                </span>
+                                {finalCount > 0 && (
+                                  <div style={{ padding: '0 6px', height: '20px', borderRadius: '6px', backgroundColor: '#ea580c', color: '#ffffff', fontWeight: 'bold', fontSize: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(234,88,12,0.15)', whiteSpace: 'nowrap' }} title="عدد أصناف التحضير">
+                                    {getBandsText(finalCount)}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+                        }
+
+                        return elements.length > 0 ? elements : null;
+                      })()}
+                    </div>
+
+                    {/* Status Select with Checkmark Icon */}
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <select
+                        disabled={isOrderTotallyFrozen(order)}
+                        title={isOrderTotallyFrozen(order) ? (order.stockDeducted ? 'لا يمكن تعديل الطلبية لأنه تم تدقيقها وخصمها من المخزون' : (isOrderFrozenByProductionOrPreparation(order) ? 'لا يمكن التعديل لأن الطلبية قيد التنفيذ في قسم الإنتاج أو التحضير' : 'لا يمكن تعديل حالة الطلبية لأن موظف التوصيل قد استلمها')) : ''}
+                        style={{
+                          textAlign: 'center',
+                          textAlignLast: 'center',
+                          height: '34px',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          width: 'auto',
+                          minWidth: '145px',
+                          maxWidth: '175px',
+                          backgroundColor: getStatusBadgeStyle(order.status).bg,
+                          color: getStatusBadgeStyle(order.status).text,
+                          border: 'none',
+                          borderRadius: '20px',
+                          appearance: 'none',
+                          backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(getStatusBadgeStyle(order.status).text)}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                          backgroundRepeat: 'no-repeat',
+                          backgroundPosition: 'left 12px center',
+                          backgroundSize: '12px',
+                          paddingLeft: '28px',
+                          paddingRight: '32px',
+                          cursor: isOrderTotallyFrozen(order) ? 'not-allowed' : 'pointer',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                          margin: 0,
+                          direction: 'rtl'
+                        }}
+                        value={order.status || 'جديد'}
+                        onChange={(e) => handleUpdateStatus(order, e.target.value)}
+                      >
+                        {(globalSettings.salesStatuses || []).map((status) => (
+                          <option key={status} value={status} className="bg-white text-slate-800 font-normal">
+                            {status}
+                          </option>
+                        ))}
+                      </select>
+                      {/* Checkmark circle icon */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          pointerEvents: 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '50%',
+                          backgroundColor: getStatusBadgeStyle(order.status).text,
+                          color: '#ffffff',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                        }}
+                      >
+                        <Check size={10} strokeWidth={4} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Details Grid */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: '10px',
+                      direction: 'rtl',
+                      marginTop: '4px'
+                    }}
+                  >
+                    {/* Item 1: العميل (Spans 2 columns) */}
+                    <div
+                      style={{
+                        gridColumn: 'span 2',
+                        backgroundColor: '#f8fafc',
+                        borderRadius: '12px',
+                        padding: '10px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        direction: 'rtl',
+                        borderLeft: '3px solid #22c55e',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                        minWidth: 0
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'right', minWidth: 0, flex: 1 }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold', marginBottom: '2px' }}>العميل</span>
+                        <span style={{ color: '#1e293b', fontSize: '0.85rem', fontWeight: '800', width: '100%' }} className="truncate">{order.customerName}</span>
+                      </div>
+                      <div
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          backgroundColor: '#f0fdf4',
+                          color: '#22c55e',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginLeft: '8px',
+                          flexShrink: 0
+                        }}
+                      >
+                        <User size={16} />
+                      </div>
+                    </div>
+
+                    {/* Item 2: تاريخ الطلب */}
+                    <div
+                      style={{
+                        backgroundColor: '#f8fafc',
+                        borderRadius: '12px',
+                        padding: '10px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        direction: 'rtl',
+                        borderLeft: '3px solid #3b82f6',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                        minWidth: 0
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'right', minWidth: 0, flex: 1 }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold', marginBottom: '2px' }}>تاريخ الطلب</span>
+                        <span style={{ color: '#1e293b', fontSize: '0.85rem', fontWeight: '800', width: '100%' }} className="truncate">{order.orderDate || '---'}</span>
+                      </div>
+                      <div
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          backgroundColor: '#eff6ff',
+                          color: '#3b82f6',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginLeft: '8px',
+                          flexShrink: 0
+                        }}
+                      >
+                        <Calendar size={16} />
+                      </div>
+                    </div>
+
+                    {/* Item 3: تاريخ التسليم */}
+                    <div
+                      style={{
+                        backgroundColor: '#f8fafc',
+                        borderRadius: '12px',
+                        padding: '10px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        direction: 'rtl',
+                        borderLeft: '3px solid #ec4899',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                        minWidth: 0
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'right', minWidth: 0, flex: 1 }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold', marginBottom: '2px' }}>تاريخ التسليم</span>
+                        <span style={{ color: '#1e293b', fontSize: '0.85rem', fontWeight: '800', width: '100%' }} className="truncate">{order.deliveryDate || '---'}</span>
+                      </div>
+                      <div
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          backgroundColor: '#fdf2f8',
+                          color: '#ec4899',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginLeft: '8px',
+                          flexShrink: 0
+                        }}
+                      >
+                        <Calendar size={16} />
+                      </div>
+                    </div>
+
+                    {/* Item 4: آخر إجراء */}
+                    <div
+                      style={{
+                        backgroundColor: '#f8fafc',
+                        borderRadius: '12px',
+                        padding: '10px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        direction: 'rtl',
+                        borderLeft: '3px solid #f59e0b',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                        minWidth: 0
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'right', minWidth: 0, flex: 1 }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold', marginBottom: '2px' }}>آخر إجراء</span>
+                        <span style={{ color: '#1e293b', fontSize: '0.85rem', fontWeight: '800', width: '100%' }} className="truncate">{order.lastActionBy || '---'}</span>
+                      </div>
+                      <div
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          backgroundColor: '#fffbeb',
+                          color: '#f59e0b',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginLeft: '8px',
+                          flexShrink: 0
+                        }}
+                      >
+                        <Clock size={16} />
+                      </div>
+                    </div>
+
+                    {/* Item 5: أنشئت بواسطة */}
+                    <div
+                      style={{
+                        backgroundColor: '#f8fafc',
+                        borderRadius: '12px',
+                        padding: '10px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        direction: 'rtl',
+                        borderLeft: '3px solid #a855f7',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                        minWidth: 0
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'right', minWidth: 0, flex: 1 }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold', marginBottom: '2px' }}>أنشئت بواسطة</span>
+                        <span style={{ color: '#1e293b', fontSize: '0.85rem', fontWeight: '800', width: '100%' }} className="truncate">{order.createdBy || '---'}</span>
+                      </div>
+                      <div
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          backgroundColor: '#faf5ff',
+                          color: '#a855f7',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginLeft: '8px',
+                          flexShrink: 0
+                        }}
+                      >
+                        <Briefcase size={16} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Actions Footer */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      borderTop: '1px solid #f1f5f9',
+                      paddingTop: '12px',
+                      marginTop: '8px',
+                      width: '100%',
+                      direction: 'rtl'
+                    }}
+                  >
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', width: '100%' }}>
+                      {/* Button 1: معاينة */}
+                      <button
+                        onClick={() => handleOpenPreview(order)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          padding: '8px 16px',
+                          borderRadius: '12px',
+                          border: '1px solid #cbd5e1',
+                          backgroundColor: '#f8fafc',
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                          fontWeight: 'bold',
+                          color: '#475569',
+                          flex: 1
+                        }}
+                      >
+                        <Eye size={15} className="text-slate-500" />
+                        <span>معاينة</span>
+                      </button>
+
+                      {/* Button 2: تعديل */}
+                      {(canPerformAction(user, 'EDIT', 'SALES', globalSettings)) && !isOrderTotallyFrozen(order) && (
+                        <button
+                          onClick={() => handleOpenModal(order)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            padding: '8px 16px',
+                            borderRadius: '12px',
+                            border: '1px solid #bfdbfe',
+                            backgroundColor: '#eff6ff',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            fontWeight: 'bold',
+                            color: '#1d4ed8',
+                            flex: 1
+                          }}
+                        >
+                          <Edit2 size={15} className="text-blue-500" />
+                          <span>تحديث</span>
+                        </button>
+                      )}
+
+                      {/* Button 3: حذف */}
+                      {canPerformAction(user, 'DELETE', 'SALES', globalSettings) && !isOrderTotallyFrozen(order) && (
+                        <button
+                          onClick={() => handleDelete(order.id)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            padding: '8px 16px',
+                            borderRadius: '12px',
+                            border: '1px solid #fca5a5',
+                            backgroundColor: '#fef2f2',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            fontWeight: 'bold',
+                            color: '#dc2626',
+                            flex: 1
+                          }}
+                        >
+                          <Trash2 size={15} className="text-red-500" />
+                          <span>حذف</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-12 text-slate-400 bg-white border border-slate-200 rounded-2xl p-6">
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-primary shadow-sm border border-slate-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><circle cx="12" cy="13" r="3" /><path d="m14.5 15.5 2.5 2.5" /></svg>
+                  </div>
+                  <p className="font-bold text-slate-700 text-lg">لا توجد طلبات حالياً</p>
+                  <p className="text-sm text-slate-500">قم بإنشاء طلبية جديدة أو تعديل الفلاتر لعرض الطلبات</p>
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
           <div className="table-container glass-panel">
             <table>
               <thead>
                 <tr>
                   <th className="text-center cursor-pointer hover:text-primary transition-colors" onClick={() => handleSort('orderNumber')}>
-                    <div className="flex items-center justify-center gap-1">رقم الطلب <ArrowUpDown size={14} className="text-muted" /></div>
+                    <div className="flex items-center justify-center gap-1">رقم الطلب {getSortIcon('orderNumber')}</div>
                   </th>
                   <th className="text-right cursor-pointer hover:text-primary transition-colors" onClick={() => handleSort('customerName')}>
-                    <div className="flex items-center justify-start gap-1">العميل <ArrowUpDown size={14} className="text-muted" /></div>
+                    <div className="flex items-center justify-start gap-1">العميل {getSortIcon('customerName')}</div>
                   </th>
                   <th className="text-center">أنشئت بواسطة</th>
                   <th className="text-center">آخر إجراء</th>
                   <th className="text-center cursor-pointer hover:text-primary transition-colors" onClick={() => handleSort('orderDate')}>
-                    <div className="flex items-center justify-center gap-1">التاريخ <ArrowUpDown size={14} className="text-muted" /></div>
+                    <div className="flex items-center justify-center gap-1">التاريخ {getSortIcon('orderDate')}</div>
                   </th>
                   <th className="text-center cursor-pointer hover:text-primary transition-colors" onClick={() => handleSort('status')}>
-                    <div className="flex items-center justify-center gap-1">الحالة <ArrowUpDown size={14} className="text-muted" /></div>
+                    <div className="flex items-center justify-center gap-1">الحالة {getSortIcon('status')}</div>
                   </th>
                   <th className="text-center" style={{ textAlign: 'center' }}>تغيير الحالة</th>
                   <th className="text-center" style={{ textAlign: 'center' }}>إجراءات</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredOrders.map(order => (
-                  <tr key={order.id}>
-                    <td data-label="رقم الطلب" className="font-bold text-primary text-center">{order.orderNumber}</td>
-                    <td data-label="العميل" className="text-right font-bold text-slate-800">{order.customerName}</td>
-                    <td data-label="أنشئت بواسطة" className="text-xs text-center">{order.createdBy || '---'}</td>
-                    <td data-label="آخر إجراء" className="text-xs font-semibold text-center">{order.lastActionBy || '---'}</td>
-                    <td data-label="التاريخ" className="text-center">{order.orderDate}</td>
-                    <td data-label="الحالة" className="text-center">
-                      <span 
-                        className={`badge ${getStatusBadgeClass(order.status)}`}
-                        style={{ width: '130px', height: '36px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                      >
-                        {order.status || 'جديد'}
-                        {order.status === 'تم تأجيل التوصيل' && order.postponedDate && ` (${order.postponedDate})`}
-                      </span>
-                    </td>
-                    <td data-label="تغيير الحالة" style={{ textAlign: 'center' }}>
-                      <select 
-                        className="input-field cursor-pointer" 
-                        style={{ padding: '0 0.5rem', minWidth: '160px', width: 'auto', height: '36px', fontSize: '13px', borderRadius: '8px', marginBottom: 0, border: '1px solid var(--primary-light)', backgroundColor: '#f8fafc', margin: '0 auto', textAlign: 'center' }}
-                        value={order.status || 'جديد'}
-                        onChange={(e) => handleUpdateStatus(order, e.target.value)}
-                      >
-                        {globalSettings.salesStatuses.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </td>
-                    <td data-label="إجراءات" style={{ textAlign: 'center' }}>
-                      <div className="flex flex-wrap gap-2 justify-center items-center">
-                        <button className="btn-premium-view" title="معاينة" onClick={() => handleOpenPreview(order)}>
-                          <Eye size={16} />
-                        </button>
-                        {canPerformAction(user, 'EDIT', 'SALES', globalSettings) && (
-                          <button className="btn-premium-edit" title="تعديل" onClick={() => handleOpenModal(order)}>
-                            <Edit2 size={16} />
-                          </button>
-                        )}
-                        {canPerformAction(user, 'DELETE', 'SALES', globalSettings) && (
-                          <button className="btn-premium-delete" title="حذف" onClick={() => handleDelete(order.id)}>
-                            <Trash2 size={16} />
-                          </button>
-                        )}
+                {filteredOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan="8" className="text-center py-12 text-slate-400">
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-primary shadow-sm border border-slate-100">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><circle cx="12" cy="13" r="3" /><path d="m14.5 15.5 2.5 2.5" /></svg>
+                        </div>
+                        <p className="font-bold text-slate-700 text-lg">لا توجد طلبات حالياً</p>
+                        <p className="text-sm text-slate-500">قم بإنشاء طلبية جديدة أو تعديل الفلاتر لعرض الطلبات</p>
                       </div>
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredOrders.map(order => (
+                    <tr key={order.id}>
+                      <td data-label="رقم الطلب" className="font-bold text-primary text-center">
+                        <div>{order.orderNumber}</div>
+                        {(() => {
+                          const elements = [];
+
+                          const linkedProd = (productionOrders || []).find(po =>
+                            (po.salesOrderId && po.salesOrderId === order.id) ||
+                            (po.salesOrderNumber && po.salesOrderNumber === order.orderNumber) ||
+                            (po.orderNotes && po.orderNotes.includes(order.orderNumber))
+                          );
+                          if (linkedProd) {
+                            elements.push(
+                              <div key={`pro-${linkedProd.id || 'match'}`} style={{ fontSize: '13px', color: '#dc2626', fontWeight: 'bold', marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                📌 {linkedProd.orderNumber}
+                              </div>
+                            );
+                          } else {
+                            const notes = order.notes || order.orderNotes || '';
+                            const prodMatch = notes.match(/PRO-\d+/);
+                            if (prodMatch) {
+                              elements.push(
+                                <div key="pro-match" style={{ fontSize: '13px', color: '#dc2626', fontWeight: 'bold', marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                  📌 {prodMatch[0]}
+                                </div>
+                              );
+                            }
+                          }
+
+                          const linkedPrep = (preparationOrders || []).find(po =>
+                            (po.salesOrderId && po.salesOrderId === order.id) ||
+                            (po.salesOrderNumber && po.salesOrderNumber === order.orderNumber) ||
+                            (po.orderNotes && po.orderNotes.includes(order.orderNumber))
+                          );
+                          if (linkedPrep) {
+                            elements.push(
+                              <div key={`prep-${linkedPrep.id || 'match'}`} style={{ fontSize: '13px', color: '#dc2626', fontWeight: 'bold', marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                📌 {linkedPrep.orderNumber}
+                              </div>
+                            );
+                          } else {
+                            const notes = order.notes || order.orderNotes || '';
+                            const prepMatch = notes.match(/PREP-\d+/);
+                            if (prepMatch) {
+                              elements.push(
+                                <div key="prep-match" style={{ fontSize: '13px', color: '#dc2626', fontWeight: 'bold', marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                  📌 {prepMatch[0]}
+                                </div>
+                              );
+                            }
+                          }
+
+                          return elements.length > 0 ? elements : null;
+                        })()}
+                      </td>
+                      <td data-label="العميل" className="text-right font-bold text-slate-800">{order.customerName}</td>
+                      <td data-label="أنشئت بواسطة" className="text-xs text-center">{order.createdBy || '---'}</td>
+                      <td data-label="آخر إجراء" className="text-xs font-semibold text-center">{order.lastActionBy || '---'}</td>
+                      <td data-label="التاريخ" className="text-center">{order.orderDate}</td>
+                      <td data-label="الحالة" className="text-center">
+                        {(() => {
+                          const colors = getSalesStatusColor(order.status || 'جديد');
+                          return (
+                            <span
+                              className="badge font-bold"
+                              style={{
+                                width: '130px',
+                                height: '36px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '13px',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                backgroundColor: colors.bg,
+                                color: colors.text,
+                                border: `1px solid ${colors.border}`
+                              }}
+                            >
+                              {order.status || 'جديد'}
+                              {order.status === 'تم تأجيل التوصيل' && order.postponedDate && ` (${order.postponedDate})`}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td data-label="تغيير الحالة" style={{ textAlign: 'center' }}>
+                        {(() => {
+                          const colors = getSalesStatusColor(order.status || 'جديد');
+                          return (
+                            <select
+                              className="input-field cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
+                              style={{
+                                padding: '0 0.5rem',
+                                minWidth: '160px',
+                                width: 'auto',
+                                height: '36px',
+                                fontSize: '13px',
+                                borderRadius: '8px',
+                                marginBottom: 0,
+                                backgroundColor: colors.bg,
+                                color: colors.text,
+                                border: `1px solid ${colors.border}`,
+                                margin: '0 auto',
+                                textAlign: 'center',
+                                fontWeight: 'bold',
+                                transition: 'all 0.3s ease'
+                              }}
+                              value={order.status || 'جديد'}
+                              onChange={(e) => handleUpdateStatus(order, e.target.value)}
+                              disabled={isOrderTotallyFrozen(order)}
+                              title={isOrderTotallyFrozen(order) ? (order.stockDeducted ? 'لا يمكن تعديل الطلبية لأنه تم تدقيقها وخصمها من المخزون' : (isOrderFrozenByProductionOrPreparation(order) ? 'لا يمكن التعديل لأن الطلبية قيد التنفيذ في قسم الإنتاج أو التحضير' : 'لا يمكن تعديل حالة الطلبية لأن موظف التوصيل قد استلمها')) : ''}
+                            >
+                              {globalSettings.salesStatuses.map(s => (
+                                <option key={s} value={s} className="bg-white text-slate-800 font-normal">
+                                  {s}
+                                </option>
+                              ))}
+                            </select>
+                          );
+                        })()}
+                      </td>
+                      <td data-label="إجراءات" style={{ textAlign: 'center' }}>
+                        <div className="flex flex-wrap gap-2 justify-center items-center">
+                          <button className="btn-premium-view" title="معاينة" onClick={() => handleOpenPreview(order)}>
+                            <Eye size={16} />
+                          </button>
+                          <button className="btn-premium-copy" title="نسخ الطلب كمسودة جديدة" onClick={() => handleCopyOrder(order)}>
+                            <Copy size={16} />
+                          </button>
+                          {(canPerformAction(user, 'EDIT', 'SALES', globalSettings)) && !isOrderTotallyFrozen(order) && (
+                            <button className="btn-premium-edit" title="تعديل" onClick={() => handleOpenModal(order)}>
+                              <Edit2 size={16} />
+                            </button>
+                          )}
+                          {canPerformAction(user, 'DELETE', 'SALES', globalSettings) && !isOrderTotallyFrozen(order) && (
+                            <button className="btn-premium-delete" title="حذف" onClick={() => handleDelete(order.id)}>
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -1463,68 +3173,126 @@ const AdminSales = ({ user }) => {
         {showModal && (
           <div className="modal-overlay">
             <div className="modal-content wide animate-fade-in">
-              <div className="flex justify-between items-center mb-4 border-b pb-2">
-                  <h3 className="text-xl font-bold">
-                    {editingOrder ? `تعديل طلبية ${editingOrder.orderNumber}` : 'إنشاء طلبية جديدة'}
-                  </h3>
+              <div className="flex justify-between items-center mb-4 border-b pb-2 sales-modal-header">
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <FileText size={20} className="text-primary" />
+                  {editingOrder ? (
+                    <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
+                      <span>تعديل طلبية {editingOrder.orderNumber}</span>
+                      {linkedProductionOrder ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/60 shadow-sm">
+                          كرت الإنتاج: {linkedProductionOrder.orderNumber} ({linkedProductionOrder.status})
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                          لا يوجد كرت إنتاج مرتبط
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <span>إنشاء طلبية جديدة</span>
+                      <span className="text-xs font-bold px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">مسودة</span>
+                    </div>
+                  )}
+                </h3>
                 <button className="btn btn-outline" style={{ padding: '0.5rem' }} onClick={() => setShowModal(false)}><X size={18} /></button>
               </div>
               <form onSubmit={handleSubmit}>
-                <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 mb-6">
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+                <div className="bg-slate-50 p-4 md:p-5 rounded-xl border border-slate-200 mb-6 sales-info-card">
+                  <div className="grid order-dates-grid gap-3 md:gap-5">
                     {/* الصف الأول: رقم الطلب والتاريخين */}
-                    <div className="md:col-span-4 input-group mb-0">
-                      <label className="font-bold text-slate-700 mb-2 block flex items-center gap-2"><ShoppingCart size={16} className="text-primary"/> رقم الطلب</label>
-                      <input type="text" className="input-field bg-slate-100 font-bold text-primary" style={{ height: '42px', textAlign: 'center' }} value={formData.orderNumber || ''} readOnly disabled />
-                    </div>
-                    
-                    <div className="md:col-span-4 input-group mb-0">
-                      <label className="font-bold text-slate-700 mb-2 block flex items-center gap-2"><Calendar size={16} className="text-primary"/> تاريخ الطلب</label>
-                      <Flatpickr className="input-field" style={{ height: '42px', backgroundColor: 'white' }} value={formData.orderDate} onChange={([d]) => setFormData({...formData, orderDate: getLocalDateStr(d)})} options={{ dateFormat: 'Y-m-d', disableMobile: true }} />
-                    </div>
-                    
-                    <div className="md:col-span-4 input-group mb-0">
-                      <label className="font-bold text-slate-700 mb-2 block flex items-center gap-2"><Calendar size={16} className="text-orange-500"/> تاريخ التسليم</label>
-                      <Flatpickr className="input-field" style={{ height: '42px', backgroundColor: 'white' }} value={formData.deliveryDate || ''} onChange={([d]) => setFormData({...formData, deliveryDate: getLocalDateStr(d)})} options={{ dateFormat: 'Y-m-d', disableMobile: true }} />
+                    <div className="col-span-1 md:col-span-4 input-group mb-0">
+                      <label className="font-bold text-slate-700 mb-2 block flex items-center gap-1 text-xs md:text-sm">
+                        <ShoppingCart size={14} className="text-primary" /> رقم الطلب المتوقع (لا يُعتمد إلا بعد الحفظ)
+                      </label>
+                      <input type="text" className="input-field bg-slate-100 font-bold text-primary text-xs md:text-sm px-3 text-center" style={{ height: '42px', textAlign: 'center' }} value={formData.orderNumber || ''} readOnly disabled />
                     </div>
 
-                    {/* الصف الثاني: العميل وزر الإضافة */}
-                    <div className="md:col-span-12 input-group mb-0">
-                      <label className="flex items-center gap-2 mb-2 font-bold text-slate-700"><User size={16} className="text-primary"/> العميل</label>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <Select 
-                            options={customers.map(c => ({ value: c.id, label: c.name }))}
-                            value={formData.customerId ? { value: formData.customerId, label: formData.customerName } : null}
-                            onChange={(selected) => handleCustomerChange({ target: { value: selected ? selected.value : '' } })}
-                            placeholder="اختر عميل أو ابحث هنا..."
-                            isClearable
-                            isSearchable
-                            styles={{
-                              control: (base) => ({
-                                ...base,
-                                borderColor: '#e2e8f0',
-                                borderRadius: '8px',
-                                minHeight: '42px',
-                                boxShadow: 'none',
-                                '&:hover': {
-                                  borderColor: 'var(--primary-light)'
-                                }
-                              }),
-                              option: (base, state) => ({
-                                ...base,
-                                backgroundColor: state.isSelected ? 'var(--primary)' : state.isFocused ? '#f1f5f9' : 'white',
-                                color: state.isSelected ? 'white' : '#1e293b',
-                                textAlign: 'right'
-                              }),
-                              menu: (base) => ({
-                                ...base,
-                                zIndex: 9999
-                              })
-                            }}
-                          />
-                        </div>
-                        <button type="button" className="btn btn-primary flex items-center justify-center gap-2 shadow-sm transition-all h-[42px]" onClick={handleAddNewCustomer} style={{ whiteSpace: 'nowrap', height: '42px' }}>
+                    <div className="col-span-1 md:col-span-4 input-group mb-0">
+                      <label className="font-bold text-slate-700 mb-2 block flex items-center gap-1 text-xs md:text-sm">
+                        <Calendar size={14} className="text-primary" /> تاريخ الطلب
+                      </label>
+                      <Flatpickr
+                        className="input-field text-xs md:text-sm px-3 text-center"
+                        style={{ height: '42px', backgroundColor: 'white' }}
+                        value={formData.orderDate}
+                        onChange={([d]) => {
+                          const newOrderDate = getLocalDateStr(d);
+                          setFormData(prev => {
+                            const updated = { ...prev, orderDate: newOrderDate };
+                            if (prev.deliveryDate && prev.deliveryDate < newOrderDate) {
+                              updated.deliveryDate = newOrderDate;
+                            }
+                            return updated;
+                          });
+                        }}
+                        options={{
+                          dateFormat: 'Y-m-d',
+                          disableMobile: true,
+                          minDate: editingOrder ? undefined : getLocalDateStr(new Date(new Date().setDate(new Date().getDate() - 2))),
+                          maxDate: editingOrder ? undefined : getLocalDateStr(new Date(new Date().setDate(new Date().getDate() + 2)))
+                        }}
+                      />
+                    </div>
+
+                    <div className="col-span-1 md:col-span-4 input-group mb-0">
+                      <label className="font-bold text-slate-700 mb-2 block flex items-center gap-1 text-xs md:text-sm">
+                        <Calendar size={14} className="text-orange-500" /> تاريخ التسليم
+                      </label>
+                      <Flatpickr
+                        className="input-field text-xs md:text-sm px-3 text-center"
+                        style={{ height: '42px', backgroundColor: 'white' }}
+                        value={formData.deliveryDate || ''}
+                        onChange={([d]) => setFormData({ ...formData, deliveryDate: getLocalDateStr(d) })}
+                        options={{
+                          dateFormat: 'Y-m-d',
+                          disableMobile: true,
+                          minDate: formData.orderDate || getLocalDateStr(new Date())
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-4 md:p-5 rounded-xl border border-slate-200 mb-6 customer-card">
+                  <div className="flex flex-col gap-2">
+                    <label className="flex items-center gap-2 mb-1 font-bold text-slate-700 text-xs md:text-sm"><User size={16} className="text-primary" /> العميل</label>
+                    <div className="flex flex-col md:flex-row md:items-center gap-2 w-full">
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <Select
+                          options={customers.map(c => ({ value: c.id, label: c.name }))}
+                          value={formData.customerId ? { value: formData.customerId, label: formData.customerName } : null}
+                          onChange={(selected) => handleCustomerChange({ target: { value: selected ? selected.value : '' } })}
+                          placeholder="اختر عميل أو ابحث هنا..."
+                          isClearable
+                          isSearchable
+                          styles={{
+                            control: (base) => ({
+                              ...base,
+                              borderColor: '#e2e8f0',
+                              borderRadius: '8px',
+                              minHeight: '42px',
+                              boxShadow: 'none',
+                              '&:hover': {
+                                borderColor: 'var(--primary-light)'
+                              }
+                            }),
+                            option: (base, state) => ({
+                              ...base,
+                              backgroundColor: state.isSelected ? 'var(--primary)' : state.isFocused ? '#f1f5f9' : 'white',
+                              color: state.isSelected ? 'white' : '#1e293b',
+                              textAlign: 'right'
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              zIndex: 9999
+                            })
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-end w-full md:w-auto">
+                        <button type="button" className="btn btn-primary flex items-center justify-center gap-2 shadow-sm transition-all h-[42px] w-full md:w-auto text-sm" onClick={handleAddNewCustomer} style={{ whiteSpace: 'nowrap', height: '42px' }}>
                           <Plus size={16} strokeWidth={2} /> إضافة عميل جديد
                         </button>
                       </div>
@@ -1533,27 +3301,32 @@ const AdminSales = ({ user }) => {
                 </div>
 
                 <div className="mb-6">
-                  <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-100 flex-wrap gap-3">
+                  <div className="items-header-container mb-3 pb-2 border-b border-slate-100">
                     <h4 className="font-bold text-lg flex items-center gap-2 text-slate-800"><Package size={20} className="text-primary" /> الأصناف المطلوبـة</h4>
-                    <div className="flex gap-2">
-                      <button type="button" className="btn btn-outline flex items-center gap-1 border-primary text-primary hover:bg-primary hover:text-white transition-colors h-9 px-3 text-sm" onClick={handleAddNewStockItem}>
-                        <Plus size={14} /> صنف للمخزون
-                      </button>
-                      <button type="button" className="btn btn-primary flex items-center gap-1 h-9 px-3 text-sm shadow-sm" onClick={handleAddItem}>
+                    <div className="items-header-buttons">
+                      {hasPermission(user, 'stock_quick_add', 'add') && (
+                        <button type="button" className="btn btn-outline flex items-center justify-center gap-1 border-primary text-primary hover:bg-primary hover:text-white transition-colors" onClick={handleAddNewStockItem}>
+                          <Plus size={14} /> صنف للمخزون
+                        </button>
+                      )}
+                      <button type="button" className="btn btn-primary flex items-center justify-center gap-1 shadow-sm" onClick={handleAddItem}>
                         <Plus size={14} /> سطر جديد للطلبية
+                      </button>
+                      <button type="button" className="btn btn-secondary flex items-center justify-center gap-1 shadow-sm" style={{ backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' }} onClick={() => setShowMultiColorModal(true)}>
+                        <Layers size={14} className="text-primary" /> ألوان متعددة
                       </button>
                     </div>
                   </div>
-                  
-                  <div className="modal-table-container rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+
+                  <div className="modal-table-container rounded-xl border border-slate-200 overflow-hidden shadow-sm hidden md:block">
                     <table className="modal-table w-full">
                       <thead className="bg-slate-100 text-slate-700">
                         <tr>
                           <th style={{ width: '60px', padding: '12px 10px', textAlign: 'center' }}>الترتيب</th>
-                          <th style={{ padding: '12px 10px', textAlign: 'center', width: '35%' }}>اسم الصنف</th>
-                          <th style={{ width: '90px', padding: '12px 10px', textAlign: 'center' }}>الكمية</th>
-                          <th style={{ padding: '12px 10px', textAlign: 'center', width: '30%' }}>ملاحظات</th>
-                          <th style={{ width: '130px', padding: '12px 10px', textAlign: 'center' }}>حالة الصنف</th>
+                          <th style={{ padding: '12px 10px', textAlign: 'center', width: '43%' }}>اسم الصنف</th>
+                          <th style={{ width: '65px', padding: '12px 10px', textAlign: 'center' }}>الكمية</th>
+                          <th style={{ padding: '12px 10px', textAlign: 'center', width: '22%' }}>ملاحظات</th>
+                          <th style={{ width: '190px', padding: '12px 10px', textAlign: 'center' }}>حالة الصنف</th>
                           <th style={{ width: '100px', padding: '12px 10px', textAlign: 'center' }}></th>
                         </tr>
                       </thead>
@@ -1580,107 +3353,583 @@ const AdminSales = ({ user }) => {
                             </td>
                             <td className="p-2 text-center align-middle">
                               <SearchableDropdown
-                                options={Array.from(new Set(stock.map(s => s.name).filter(Boolean)))}
+                                options={stockOptions}
                                 value={item.productName}
                                 onChange={(val) => handleItemChange(index, 'productName', val)}
-                                onBlur={() => {
-                                  const val = item.productName;
-                                  const validOptions = Array.from(new Set(stock.map(s => s.name).filter(Boolean)));
-                                  if (val && !validOptions.includes(val)) {
-                                    Swal.fire('تنبيه', 'يجب اختيار صنف موجود في المخزون أو إضافته أولاً', 'warning');
-                                    handleItemChange(index, 'productName', '');
+                                onBlur={(currentVal) => {
+                                  let val = currentVal !== undefined ? currentVal : item.productName;
+                                  if (typeof val !== 'string') val = String(val || '');
+                                  if (val) {
+                                    val = val.replace(/\s*\(المتوفر:\s*[-+]?\d+\)/, '').trim();
+                                  }
+                                  if (val && !validStockOptions[val]) {
+                                    handleItemChange(index, 'productName', item.productName || '');
                                   }
                                 }}
+                                disabled={isItemStatusDisabled(item)}
                               />
+                              {item.productName && (
+                                <div className="mt-2 flex flex-col items-center gap-1">
+                                  {(() => {
+                                    const qty = getProductStockQuantity(item.productName);
+                                    const prodStatus = getProductionItemStatus(formData, item);
+                                    const badges = [];
+                                    if (prodStatus === 'ملغي') {
+                                      badges.push(
+                                        <span key="cancelled" style={{ fontSize: '10px', fontWeight: '800' }} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 border border-red-300 shadow-sm transition-all duration-300">
+                                          تم إلغاء هذا الصنف من الإنتاج
+                                        </span>
+                                      );
+                                    }
+                                    if (qty === null || qty <= 0) {
+                                      badges.push(
+                                        <span key="stock" style={{ fontSize: '10px', fontWeight: '800' }} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200/60 shadow-sm transition-all duration-300">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-red-500" style={{ width: '4px', height: '4px' }}></span>
+                                          المتوفر: 0 (غير متوفر)
+                                        </span>
+                                      );
+                                    } else {
+                                      const breakdown = getProductStockBreakdown(item.productName);
+                                      const breakdownStr = breakdown.map(b => `${b.warehouse} (${b.quantity})`).join(' | ');
+                                      badges.push(
+                                        <span key="stock" style={{ fontSize: '10px', fontWeight: '800' }} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200/60 shadow-sm transition-all duration-300">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" style={{ width: '4px', height: '4px' }}></span>
+                                          المتوفر: {breakdownStr || `${qty} (مستودع غير محدد)`}
+                                        </span>
+                                      );
+                                    }
+                                    return badges;
+                                  })()}
+                                </div>
+                              )}
                             </td>
                             <td className="p-2 text-center align-middle">
-                              <input 
-                                type="text" 
-                                className="w-full border border-slate-200 rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-center mx-auto" 
-                                style={{ height: '38px', maxWidth: '80px' }} 
-                                value={item.quantity} 
+                              <input
+                                type="text"
+                                className="w-full border border-slate-200 rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-center mx-auto"
+                                style={{ height: '38px', maxWidth: '50px' }}
+                                value={item.quantity}
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   if (val === '' || /^\d{1,4}$/.test(val)) {
                                     handleItemChange(index, 'quantity', val);
                                   }
-                                }} 
+                                }}
+                                disabled={isItemStatusDisabled(item)}
                               />
                             </td>
                             <td className="p-2 text-center align-middle">
-                              <input type="text" className="w-full border border-slate-200 rounded-lg px-3 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-center" style={{ height: '38px' }} value={item.notes} onChange={(e) => handleItemChange(index, 'notes', e.target.value)} placeholder="ملاحظات..." />
+                              <input type="text" className="w-full border border-slate-200 rounded-lg px-3 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-center disabled:opacity-75 disabled:bg-slate-50 disabled:cursor-not-allowed" style={{ height: '38px' }} value={item.notes} onChange={(e) => handleItemChange(index, 'notes', e.target.value)} placeholder="ملاحظات..." disabled={isItemStatusDisabled(item)} />
                             </td>
                             <td className="p-2 text-center align-middle">
-                               <select 
-                                 className="w-full border border-slate-200 rounded-lg px-2 bg-slate-50 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-center mx-auto disabled:opacity-70 disabled:cursor-not-allowed" 
-                                 style={{ height: '38px', fontSize: '0.85rem' }} 
-                                 value={item.itemStatus || ''} 
-                                 onChange={(e) => handleItemChange(index, 'itemStatus', e.target.value)}
-                                 disabled={item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'جاهز'}
-                                 title={item.itemStatus === 'قيد الإنتاج' ? 'لا يمكن تعديل حالة الصنف من قسم المبيعات لأنه قيد الإنتاج' : (item.itemStatus === 'جاهز' ? 'الصنف جاهز ومجمد تلقائياً من الإنتاج' : '')}
-                               >
-                                 <option value="">-- اختر --</option>
-                                 {(globalSettings.salesItemStatuses || []).map(s => <option key={s} value={s}>{s}</option>)}
-                               </select>
-                             </td>
+
+                              <select
+                                className="w-full border border-slate-200 rounded-lg bg-slate-50 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-center mx-auto disabled:opacity-70 disabled:cursor-not-allowed font-bold text-slate-700"
+                                style={{
+                                  height: '38px',
+                                  fontSize: '0.8rem',
+                                  appearance: 'none',
+                                  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                                  backgroundRepeat: 'no-repeat',
+                                  backgroundPosition: 'left 8px center',
+                                  backgroundSize: '14px',
+                                  paddingLeft: '24px',
+                                  paddingRight: '4px',
+                                  minWidth: '130px'
+                                }}
+                                value={item.itemStatus || ''}
+                                onChange={(e) => handleItemChange(index, 'itemStatus', e.target.value)}
+                                disabled={isItemStatusDisabled(item)}
+                                title={(() => {
+                                  if (!isItemStatusDisabled(item)) return '';
+                                  if (linkedProductionOrder && linkedProductionOrder.items) {
+                                    const prodItem = linkedProductionOrder.items.find(pi => {
+                                      const name1 = String(pi.productName || '').trim().replace(/\s+/g, ' ');
+                                      const name2 = String(item.productName || '').trim().replace(/\s+/g, ' ');
+                                      return name1 === name2 || name1.includes(name2) || name2.includes(name1);
+                                    });
+                                    if (prodItem) {
+                                      return `لا يمكن تعديل الحالة لأن الصنف قيد الإنتاج بحالة (${prodItem.status || 'معلق'}) ولم ينتهِ أو يُلغَ بعد`;
+                                    }
+                                  }
+                                  if (item.itemStatus === 'قيد التحضير' && linkedPreparationOrder && linkedPreparationOrder.items) {
+                                    const prepItem = linkedPreparationOrder.items.find(pi => {
+                                      const name1 = String(pi.productName || '').trim().replace(/\s+/g, ' ');
+                                      const name2 = String(item.productName || '').trim().replace(/\s+/g, ' ');
+                                      return name1 === name2 || name1.includes(name2) || name2.includes(name1);
+                                    });
+                                    if (prepItem) {
+                                      return `لا يمكن تعديل الحالة لأن الصنف قيد التحضير بحالة (${prepItem.status || 'معلق'}) ولم ينتهِ أو يُلغَ بعد`;
+                                    }
+                                    return 'لا يمكن تعديل الحالة لأن الصنف قيد التحضير';
+                                  }
+                                  return 'لا يمكن تعديل الحالة لأن الصنف قيد التنفيذ';
+                                })()}
+                              >
+                                <option value="">-- اختر --</option>
+                                {(() => {
+                                  let statuses = globalSettings.salesItemStatuses || [];
+                                  if (!statuses.includes('قيد التحضير')) statuses = [...statuses, 'قيد التحضير'];
+                                  if (item.itemStatus === 'ملغي' && !statuses.includes('ملغي')) statuses = [...statuses, 'ملغي'];
+                                  return statuses;
+                                })().map(s => <option key={s} value={s}>{s === 'قيد الإنتاج' ? 'إنتاج قيد الخياطة' : s === 'قيد التحضير' ? 'إنتاج قيد التحضير' : s}</option>)}
+                              </select>
+                            </td>
                             <td className="p-2 text-center align-middle">
-                               <div className="flex gap-2 justify-center items-center">
-                                 {item.itemStatus === 'قيد الإنتاج' && isAdmin(user) && (
-                                   <button type="button" className={item.hasProductionDetails ? "icon-btn text-primary hover:bg-primary/10" : "icon-btn icon-btn-add"} onClick={() => handleAddProductionItem(index)} title={item.hasProductionDetails ? 'تعديل تفاصيل الإنتاج' : 'إضافة لكرت الإنتاج'}>
-                                     {item.hasProductionDetails ? <Edit2 size={16} strokeWidth={2} /> : <Plus size={16} strokeWidth={2} />}
-                                   </button>
-                                 )}
-                                 {(() => {
-                                   const isStarted = item.hasProductionDetails && linkedProductionOrder && (
-                                     (linkedProductionOrder.items?.find(pi => pi.productName === item.productName)?.status || 'لم يتم التنفيذ') !== 'لم يتم التنفيذ'
-                                   );
-                                   const isDisabled = formData.items.length === 1 || isStarted;
-                                   
-                                   return (
-                                     <button 
-                                       type="button" 
-                                       className={`icon-btn ${isDisabled ? 'opacity-50 cursor-not-allowed text-slate-400' : 'icon-btn-delete'}`} 
-                                       onClick={() => handleRemoveItem(index)} 
-                                       disabled={isDisabled} 
-                                       title={isStarted ? 'لا يمكن حذف الصنف لأن قسم الإنتاج قد بدأ العمل عليه' : 'حذف الصنف'}
-                                     >
-                                       <Trash2 size={16} strokeWidth={2} />
-                                     </button>
-                                   );
-                                 })()}
-                               </div>
+                              <div className="flex gap-2 justify-center items-center">
+                                {(item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة') && (isAdmin(user) || user?.level === 'مشرف' || user?.role === 'مشرف' || user?.level === 'supervisor' || user?.role === 'supervisor' || user?.hasProductionAccess || hasPermission(user, 'production', 'add') || hasPermission(user, 'production', 'edit')) && (
+                                  <button type="button" className={`${item.hasProductionDetails ? "icon-btn text-primary hover:bg-primary/10" : "icon-btn icon-btn-add"} ${isItemStatusDisabled(item) ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => handleAddProductionItem(index)} title={isItemStatusDisabled(item) ? 'لا يمكن التعديل لأن الصنف قيد التنفيذ' : (item.hasProductionDetails ? 'تعديل تفاصيل الإنتاج' : 'إضافة لكرت الإنتاج')} disabled={isItemStatusDisabled(item)}>
+                                    {item.hasProductionDetails ? <Edit2 size={16} strokeWidth={2} /> : <Plus size={16} strokeWidth={2} />}
+                                  </button>
+                                )}
+                                {item.itemStatus === 'قيد التحضير' && (isAdmin(user) || user?.level === 'مشرف' || user?.role === 'مشرف' || user?.level === 'supervisor' || user?.role === 'supervisor' || user?.hasPreparationAccess || user?.permissions?.preparation?.add || user?.role?.permissions?.preparation?.add) && (
+                                  <button type="button" className={`${item.hasPreparationDetails ? "icon-btn text-emerald-600 hover:bg-emerald-50" : "icon-btn icon-btn-add"} ${isItemStatusDisabled(item) ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => handleAddPreparationItem(index)} title={isItemStatusDisabled(item) ? 'لا يمكن التعديل لأن الصنف قيد التنفيذ' : (item.hasPreparationDetails ? 'تعديل تفاصيل التحضير' : 'إضافة لكرت التحضير')} disabled={isItemStatusDisabled(item)}>
+                                    {item.hasPreparationDetails ? <Edit2 size={16} strokeWidth={2} /> : <Plus size={16} strokeWidth={2} />}
+                                  </button>
+                                )}
+                                {(() => {
+                                  const isDisabled = formData.items.length === 1 || isItemStatusDisabled(item);
+
+                                  return (
+                                    <button
+                                      type="button"
+                                      className={`icon-btn ${isDisabled ? 'opacity-50 cursor-not-allowed text-slate-400' : 'icon-btn-delete'}`}
+                                      onClick={() => handleRemoveItem(index)}
+                                      disabled={isDisabled}
+                                      title={isItemStatusDisabled(item) ? (isAdmin(user) ? 'حذف الصنف (متاح للمدير)' : 'لا يمكن حذف الصنف لأن قسم الإنتاج/التحضير قد بدأ العمل عليه ولم ينتهِ أو يُلغَ بعد') : 'حذف الصنف'}
+                                    >
+                                      <Trash2 size={16} strokeWidth={2} />
+                                    </button>
+                                  );
+                                })()}
+                              </div>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Mobile Card List Layout (Visible only on mobile) */}
+                  <div className="mobile-only-card-list md:hidden space-y-4 mt-2">
+                    {formData.items.map((item, index) => {
+                      const itemThemes = [
+                        { border: '#3b82f6', text: '#2563eb', lightBg: '#eff6ff' },
+                        { border: '#10b981', text: '#059669', lightBg: '#ecfdf5' },
+                        { border: '#8b5cf6', text: '#7c3aed', lightBg: '#f5f3ff' },
+                        { border: '#f97316', text: '#ea580c', lightBg: '#fff7ed' }
+                      ];
+                      const theme = itemThemes[index % 4];
+                      return (
+                        <div
+                          key={index}
+                          style={{
+                            backgroundColor: '#ffffff',
+                            borderRadius: '16px',
+                            border: '1px solid #e2e8f0',
+                            borderLeft: `5px solid ${theme.border}`,
+                            padding: '16px',
+                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.03)',
+                            marginBottom: '16px',
+                            position: 'relative',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '12px'
+                          }}
+                        >
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '0',
+                              right: '24px',
+                              backgroundColor: theme.border,
+                              color: '#ffffff',
+                              padding: '4px 10px',
+                              borderRadius: '0 0 8px 8px',
+                              fontSize: '0.8rem',
+                              fontWeight: 'bold',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                              zIndex: 2
+                            }}
+                          >
+                            {String(index + 1).padStart(2, '0')}
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', direction: 'rtl', gap: '8px' }}>
+                            <div
+                              style={{
+                                color: theme.border,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginTop: '12px',
+                                flexShrink: 0
+                              }}
+                            >
+                              <Package size={20} />
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <select
+                                className="input-field mb-0 text-center font-bold"
+                                style={{
+                                  margin: 0,
+                                  textAlign: 'center',
+                                  textAlignLast: 'center',
+                                  height: '30px',
+                                  borderRadius: '8px',
+                                  border: `1px solid ${getStatusBadgeStyle(item.itemStatus || "").text}25`,
+                                  backgroundColor: getStatusBadgeStyle(item.itemStatus || "").bg,
+                                  color: getStatusBadgeStyle(item.itemStatus || "").text,
+                                  appearance: 'none',
+                                  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(getStatusBadgeStyle(item.itemStatus || "").text)}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                                  backgroundRepeat: 'no-repeat',
+                                  backgroundPosition: 'left 8px center',
+                                  backgroundSize: '10px',
+                                  paddingLeft: '22px',
+                                  paddingRight: '10px',
+                                  paddingTop: 0,
+                                  paddingBottom: 0,
+                                  lineHeight: 'normal',
+                                  fontSize: '0.75rem',
+                                  maxWidth: '120px',
+                                  cursor: 'pointer',
+                                  outline: 'none'
+                                }}
+                                value={item.itemStatus || ""}
+                                onChange={(e) => handleItemChange(index, 'itemStatus', e.target.value)}
+                                disabled={isItemStatusDisabled(item)}
+                              >
+                                <option value="">-- اختر --</option>
+                                {(() => {
+                                  let statuses = globalSettings.salesItemStatuses || [];
+                                  if (!statuses.includes('قيد التحضير')) statuses = [...statuses, 'قيد التحضير'];
+                                  if (item.itemStatus === 'ملغي' && !statuses.includes('ملغي')) statuses = [...statuses, 'ملغي'];
+                                  return statuses;
+                                })().map(s => (
+                                  <option key={s} value={s} className="bg-white text-slate-800 font-normal">{s === 'قيد الإنتاج' ? 'إنتاج قيد الخياطة' : s === 'قيد التحضير' ? 'إنتاج قيد التحضير' : s}</option>
+                                ))}
+                              </select>
+
+                              {(item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة') && (isAdmin(user) || user?.level === 'مشرف' || user?.role === 'مشرف' || user?.level === 'supervisor' || user?.role === 'supervisor' || user?.hasProductionAccess) && (
+                                <button
+                                  type="button"
+                                  className="transition-all"
+                                  onClick={() => handleAddProductionItem(index)}
+                                  title={item.hasProductionDetails ? 'تعديل تفاصيل الإنتاج' : 'إضافة لكرت الإنتاج'}
+                                  style={{
+                                    width: '30px',
+                                    height: '30px',
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    backgroundColor: item.hasProductionDetails ? '#eff6ff' : '#ecfdf5',
+                                    color: item.hasProductionDetails ? '#3b82f6' : '#10b981',
+                                    border: `1px solid ${item.hasProductionDetails ? '#dbeafe' : '#d1fae5'}`,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  {item.hasProductionDetails ? <Edit2 size={14} strokeWidth={2.5} /> : <Plus size={14} strokeWidth={2.5} />}
+                                </button>
+                              )}
+
+                              {item.itemStatus === 'قيد التحضير' && (isAdmin(user) || user?.level === 'مشرف' || user?.role === 'مشرف' || user?.level === 'supervisor' || user?.role === 'supervisor' || user?.hasPreparationAccess || user?.permissions?.preparation?.add || user?.role?.permissions?.preparation?.add) && (
+                                <button
+                                  type="button"
+                                  className="transition-all"
+                                  onClick={() => handleAddPreparationItem(index)}
+                                  title={item.hasPreparationDetails ? 'تعديل تفاصيل التحضير' : 'إضافة لكرت التحضير'}
+                                  style={{
+                                    width: '30px',
+                                    height: '30px',
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    backgroundColor: item.hasPreparationDetails ? '#ecfdf5' : '#f0fdf4',
+                                    color: item.hasPreparationDetails ? '#059669' : '#16a34a',
+                                    border: `1px solid ${item.hasPreparationDetails ? '#d1fae5' : '#bbf7d0'}`,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  {item.hasPreparationDetails ? <Edit2 size={14} strokeWidth={2.5} /> : <Plus size={14} strokeWidth={2.5} />}
+                                </button>
+                              )}
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <button
+                                  type="button"
+                                  className="transition-all hover:bg-slate-200"
+                                  style={{
+                                    width: '30px',
+                                    height: '30px',
+                                    borderRadius: '8px',
+                                    backgroundColor: index === 0 ? '#f8fafc' : '#f1f5f9',
+                                    color: index === 0 ? '#cbd5e1' : '#475569',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    border: 'none',
+                                    cursor: index === 0 ? 'not-allowed' : 'pointer'
+                                  }}
+                                  onClick={() => handleMoveItem(index, -1)}
+                                  disabled={index === 0}
+                                  title="تحريك لأعلى"
+                                >
+                                  <ArrowUp size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="transition-all hover:bg-slate-200"
+                                  style={{
+                                    width: '30px',
+                                    height: '30px',
+                                    borderRadius: '8px',
+                                    backgroundColor: index === formData.items.length - 1 ? '#f8fafc' : '#f1f5f9',
+                                    color: index === formData.items.length - 1 ? '#cbd5e1' : '#475569',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    border: 'none',
+                                    cursor: index === formData.items.length - 1 ? 'not-allowed' : 'pointer'
+                                  }}
+                                  onClick={() => handleMoveItem(index, 1)}
+                                  disabled={index === formData.items.length - 1}
+                                  title="تحريك لأسفل"
+                                >
+                                  <ArrowDown size={14} />
+                                </button>
+                              </div>
+
+                              {(() => {
+                                const isDisabled = formData.items.length === 1 || isItemStatusDisabled(item);
+                                return (
+                                  <button
+                                    type="button"
+                                    className="transition-all"
+                                    style={{
+                                      width: '30px',
+                                      height: '30px',
+                                      borderRadius: '8px',
+                                      backgroundColor: isDisabled ? '#f8fafc' : '#fef2f2',
+                                      color: isDisabled ? '#cbd5e1' : '#ef4444',
+                                      border: isDisabled ? '1px solid #f1f5f9' : '1px solid #fee2e2',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      cursor: isDisabled ? 'not-allowed' : 'pointer'
+                                    }}
+                                    onClick={() => handleRemoveItem(index)}
+                                    disabled={isDisabled}
+                                    title={isItemStatusDisabled(item) ? (isAdmin(user) ? 'حذف الصنف (متاح للمدير)' : 'لا يمكن حذف الصنف لأن قسم الإنتاج/التحضير قد بدأ العمل عليه ولم ينتهِ أو يُلغَ بعد') : 'حذف الصنف'}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                );
+                              })()}
+                            </div>
+                          </div>
+
+                          {/* Field 1: اسم الصنف Dropdown & Stock Message */}
+                          <div className="space-y-1">
+                            <SearchableDropdown
+                              options={(() => {
+                                const grouped = {};
+                                stock.forEach(s => {
+                                  if (!s.name) return;
+                                  const sName = String(s.name || '').trim();
+                                  const specSuffix = s.spec ? ` - ${String(s.spec).trim()}` : '';
+                                  const key = `${sName}${specSuffix}`;
+                                  if (!grouped[key]) {
+                                    grouped[key] = {
+                                      name: sName,
+                                      spec: String(s.spec || '').trim(),
+                                      totalQuantity: 0
+                                    };
+                                  }
+                                  grouped[key].totalQuantity += Number(s.quantity || 0);
+                                });
+                                  return Object.keys(grouped)
+                                    .sort((a, b) => {
+                                      const isModelA = String(a).trim().startsWith('موديل');
+                                      const isModelB = String(b).trim().startsWith('موديل');
+                                      if (isModelA && !isModelB) return -1;
+                                      if (!isModelA && isModelB) return 1;
+                                      return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+                                    })
+                                    .map(key => {
+                                      const g = grouped[key];
+                                      return `${key} (المتوفر: ${g.totalQuantity})`;
+                                    });
+                              })()}
+                              value={item.productName}
+                              onChange={(val) => handleItemChange(index, 'productName', val)}
+                              onBlur={(currentVal) => {
+                                let val = currentVal !== undefined ? currentVal : item.productName;
+                                if (typeof val !== 'string') val = String(val || '');
+                                if (val) {
+                                  val = val.replace(/\s*\(المتوفر:\s*[-+]?\d+\)/, '').trim();
+                                }
+                                const validOptions = Object.keys(
+                                  stock.reduce((acc, s) => {
+                                    if (!s.name) return acc;
+                                    const sName = String(s.name || '').trim();
+                                    const specSuffix = s.spec ? ` - ${String(s.spec).trim()}` : '';
+                                    acc[`${sName}${specSuffix}`] = true;
+                                    return acc;
+                                  }, {})
+                                );
+                                if (val && !validOptions.includes(val)) {
+                                  handleItemChange(index, 'productName', item.productName || '');
+                                }
+                              }}
+                              disabled={isItemStatusDisabled(item)}
+                            />
+                            {item.productName && (
+                              <div className="mt-1 text-center">
+                                {(() => {
+                                  const qty = getProductStockQuantity(item.productName);
+                                  if (qty === null || qty <= 0) {
+                                    return (
+                                      <span style={{ fontSize: '11px', fontWeight: '800', color: theme.border }}>
+                                        المتوفر: 0 (غير متوفر)
+                                      </span>
+                                    );
+                                  }
+                                  const breakdown = getProductStockBreakdown(item.productName);
+                                  const breakdownStr = breakdown.map(b => `${b.warehouse} (${b.quantity})`).join(' | ');
+                                  return (
+                                    <span style={{ fontSize: '11px', fontWeight: '800', color: theme.text }}>
+                                      المتوفر: {breakdownStr || `${qty} (مستودع غير محدد)`}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Quantity and Notes side-by-side (Explicit Flex Layout to prevent collapsing) */}
+                          <div style={{ display: 'flex', gap: '12px', width: '100%', direction: 'rtl', marginTop: '4px' }}>
+                            {/* Quantity Column */}
+                            <div style={{ width: '30%', display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'center' }}>
+                              <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: theme.text, display: 'block' }}>الكمية</label>
+                              <input
+                                type="text"
+                                className="border border-slate-200 rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-center px-2"
+                                style={{ height: '38px', width: '100%', backgroundColor: '#ffffff' }}
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === '' || /^\d{1,4}$/.test(val)) {
+                                    handleItemChange(index, 'quantity', val);
+                                  }
+                                }}
+                                placeholder="الكمية"
+                                disabled={isItemStatusDisabled(item)}
+                              />
+                            </div>
+
+                            {/* Notes Column */}
+                            <div style={{ width: '70%', display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'right' }}>
+                              <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: theme.text, display: 'block' }}>ملاحظات الصنف</label>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  backgroundColor: theme.lightBg || '#f8fafc',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '8px',
+                                  padding: '4px 8px',
+                                  height: '38px',
+                                  width: '100%',
+                                  direction: 'rtl',
+                                  gap: '8px'
+                                }}
+                              >
+                                {/* Edit Icon Square */}
+                                <div
+                                  style={{
+                                    width: '26px',
+                                    height: '26px',
+                                    borderRadius: '6px',
+                                    border: `1px solid ${theme.border}`,
+                                    backgroundColor: '#ffffff',
+                                    color: theme.border,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  <Edit2 size={12} />
+                                </div>
+                                {/* Text Input */}
+                                <input
+                                  type="text"
+                                  style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    outline: 'none',
+                                    boxShadow: 'none',
+                                    width: '100%',
+                                    height: '100%',
+                                    fontSize: '0.8rem',
+                                    color: '#1e293b',
+                                    padding: 0,
+                                    margin: 0
+                                  }}
+                                  value={item.notes || ''}
+                                  onChange={(e) => handleItemChange(index, 'notes', e.target.value)}
+                                  placeholder="لا توجد ملاحظات"
+                                  disabled={isItemStatusDisabled(item)}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 mb-8">
+                {/* أزرار إضافة سطور من أسفل القائمة لتسهيل العمل */}
+                <div className="flex justify-center mt-2 mb-6">
+                  <button type="button" className="btn btn-outline flex items-center justify-center gap-2 border-dashed border-2 border-slate-300 text-slate-500 hover:text-primary hover:border-primary hover:bg-primary/5 w-full md:w-1/2 rounded-xl py-3 transition-all font-bold" onClick={handleAddItem}>
+                    <Plus size={18} strokeWidth={2} /> سطر جديد للطلبية
+                  </button>
+                </div>
+
+                <div className="bg-slate-50 p-4 md:p-5 rounded-xl border border-slate-200 mb-8 sales-extra-container">
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
-                    <div className="md:col-span-4 input-group mb-0">
-                      <label className="font-bold text-slate-700 mb-2 block flex items-center gap-2"><Activity size={16} className="text-primary"/> حالة الطلبية</label>
-                      <select className="input-field" style={{ height: '42px', backgroundColor: 'white' }} value={formData.status || 'جديد'} onChange={(e) => setFormData({...formData, status: e.target.value})}>
-                        {globalSettings.salesStatuses.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                    <div className="md:col-span-8 input-group mb-0">
-                      <label className="font-bold text-slate-700 mb-2 block flex items-center gap-2"><FileText size={16} className="text-slate-500"/> ملاحظات الطلبية</label>
+                    <div className="md:col-span-12 input-group mb-0 relative">
+                      <label className="font-bold text-slate-700 mb-2 block flex items-center gap-2 text-xs md:text-sm"><FileText size={16} className="text-slate-500" /> ملاحظات الطلبية</label>
                       <textarea
                         className="input-field"
-                        rows="1"
-                        style={{ minHeight: '42px', backgroundColor: 'white', resize: 'vertical' }}
+                        rows="3"
+                        maxLength={250}
+                        style={{ minHeight: '80px', backgroundColor: 'white', resize: 'vertical', paddingBottom: '20px' }}
                         value={formData.orderNotes || ''}
-                        onChange={(e) => setFormData({...formData, orderNotes: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, orderNotes: e.target.value.slice(0, 250) })}
                         placeholder="أضف أية ملاحظات عامة تخص هذه الطلبية..."
                       />
+                      <span className="absolute bottom-2 left-3 text-[10px] text-slate-400 font-bold">
+                        {(formData.orderNotes || '').length}/250
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 <div className="premium-modal-actions">
-                  <button type="submit" className="btn-premium-save">{editingOrder ? 'حفظ التعديلات' : 'حفظ الطلبية'}</button>
+                  {!editingOrder && draftSaveState && (
+                    <span className="text-xs font-bold text-slate-500 flex items-center gap-1" aria-live="polite">
+                      <CheckCircle size={14} className="text-emerald-500" /> {draftSaveState}
+                    </span>
+                  )}
+                  <button type="submit" className="btn-premium-save flex items-center justify-center gap-1">
+                    <FileText size={16} />
+                    {editingOrder ? 'حفظ التعديلات' : 'حفظ الطلبية'}
+                  </button>
                   <button type="button" className="btn-premium-cancel" onClick={() => setShowModal(false)}>إلغاء</button>
                 </div>
               </form>
@@ -1689,228 +3938,1060 @@ const AdminSales = ({ user }) => {
         )}
 
         {showPreview && selectedOrder && (
-          <div className="modal-overlay no-print">
-            <div className="modal-content wide animate-fade-in">
-              <div className="flex justify-between items-center mb-4 border-b pb-2">
-                <h3 className="text-xl font-bold">معاينة الطلبية وتصدير PDF</h3>
-                <button className="btn btn-outline" style={{ padding: '0.5rem' }} onClick={() => setShowPreview(false)}><X size={18} /></button>
-              </div>
-              
-              <div className="bg-white p-8 border rounded-2xl shadow-sm mb-6 relative overflow-hidden" style={{ direction: 'rtl', fontFamily: 'Tajawal, sans-serif' }}>
-                <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full" style={{ zIndex: 0 }}></div>
-                <div className="absolute bottom-0 left-0 w-24 h-24 bg-primary/5 rounded-tr-full" style={{ zIndex: 0 }}></div>
-                
-                <div className="flex justify-between items-start mb-8 pb-6 border-b border-slate-100 relative" style={{ zIndex: 1 }}>
-                  <div>
-                    <h2 className="text-2xl font-black text-slate-800 mb-2 flex items-center gap-2">
-                      <span className="text-primary">طلبية رقم</span> #{selectedOrder.orderNumber}
-                    </h2>
-                    {selectedOrder.productionOrderNumber && (
-                      <div className="mb-2 inline-flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-xl">
-                        <span className="text-red-600 font-black text-xl">مرتبطة بكرت إنتاج:</span>
-                        <span className="text-red-700 font-black text-2xl tracking-wider" dir="ltr">{selectedOrder.productionOrderNumber}</span>
+          isMobile ? (
+            <div className="modal-overlay no-print" style={{ zIndex: 10500 }}>
+              <div
+                className="modal-content animate-fade-in"
+                style={{
+                  width: '100vw',
+                  height: '100vh',
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  margin: 0,
+                  borderRadius: 0,
+                  padding: 0,
+                  backgroundColor: '#f8fafc',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden'
+                }}
+              >
+                {/* Header */}
+                <div
+                  style={{
+                    backgroundColor: '#ffffff',
+                    borderBottom: '1px solid #e2e8f0',
+                    padding: '12px 16px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    direction: 'rtl'
+                  }}
+                >
+                  <div style={{ width: '38px' }} />
+
+                  <div style={{ textAlign: 'center' }}>
+                    <h3 style={{ fontSize: '1rem', fontWeight: '800', color: '#1e293b', margin: 0 }}>تفاصيل الطلبية</h3>
+                    <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '2px', fontWeight: 'bold' }}>{selectedOrder.orderNumber}#</div>
+                  </div>
+
+                  <div
+                    onClick={() => setShowPreview(false)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '10px',
+                      border: '1px solid #e2e8f0',
+                      cursor: 'pointer',
+                      backgroundColor: '#ffffff'
+                    }}
+                  >
+                    <X size={18} className="text-slate-600" />
+                  </div>
+                </div>
+
+                {/* Scrollable Content Pane */}
+                <div
+                  style={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    padding: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px',
+                    paddingBottom: '20px',
+                    direction: 'rtl'
+                  }}
+                >
+                  {/* First Block: Stats cards */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    {/* Left Card: Order No */}
+                    <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '12px', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid #e2e8f0' }}>
+                      <div style={{ backgroundColor: '#f0f9ff', color: '#0284c7', padding: '8px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <FileText size={20} />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold' }}>رقم الطلب</span>
+                        <span style={{ color: '#0284c7', fontWeight: '800', fontSize: '0.85rem', marginTop: '4px' }}>{selectedOrder.orderNumber}#</span>
+                      </div>
+                    </div>
+
+                    {/* Right Card: Due Date */}
+                    <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '12px', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid #e2e8f0' }}>
+                      <div style={{ backgroundColor: '#eff6ff', color: '#2563eb', padding: '8px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Calendar size={20} />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold' }}>تاريخ التسليم</span>
+                        <span style={{ color: '#1e293b', fontSize: '0.85rem', fontWeight: '800', marginTop: '4px' }}>{selectedOrder.deliveryDate || '---'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Second Block: Details Grid Card */}
+                  <div
+                    style={{
+                      backgroundColor: '#ffffff',
+                      borderRadius: '16px',
+                      border: '1px solid #e2e8f0',
+                      padding: '16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px'
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        border: '1px solid #f1f5f9',
+                        borderRadius: '12px',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      {/* Row 1 Right: اسم العميل */}
+                      <div style={{ gridColumn: '2', gridRow: '1', borderBottom: '1px solid #f1f5f9', borderLeft: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', padding: '10px 8px', textAlign: 'right' }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.72rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                          <User size={12} style={{ color: '#0284c7' }} /> اسم العميل
+                        </span>
+                        <span style={{ color: '#1e293b', fontSize: '0.82rem', fontWeight: '800' }}>{selectedOrder.customerName}</span>
+                      </div>
+
+                      {/* Row 1 Left: الحالة */}
+                      <div style={{ gridColumn: '1', gridRow: '1', borderBottom: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', padding: '10px 8px', textAlign: 'right' }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.72rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                          <Activity size={12} style={{ color: getStatusBadgeStyle(selectedOrder.status).text }} /> الحالة
+                        </span>
+                        <span style={{ color: getStatusBadgeStyle(selectedOrder.status).text, fontSize: '0.82rem', fontWeight: '800' }}>{selectedOrder.status || 'جديد'}</span>
+                      </div>
+
+                      {/* Row 2 Right: أنشئت بواسطة */}
+                      <div style={{ gridColumn: '2', gridRow: '2', borderBottom: '1px solid #f1f5f9', borderLeft: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', padding: '10px 8px', textAlign: 'right' }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.72rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                          <User size={12} style={{ color: '#64748b' }} /> أنشئت بواسطة
+                        </span>
+                        <span style={{ color: '#1e293b', fontSize: '0.82rem', fontWeight: '800' }}>{selectedOrder.createdBy || '---'}</span>
+                      </div>
+
+                      {/* Row 2 Left: تاريخ الإنشاء */}
+                      <div style={{ gridColumn: '1', gridRow: '2', borderBottom: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', padding: '10px 8px', textAlign: 'right' }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.72rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                          <Calendar size={12} style={{ color: '#64748b' }} /> تاريخ الإنشاء
+                        </span>
+                        <span style={{ color: '#1e293b', fontSize: '0.82rem', fontWeight: '800' }}>{selectedOrder.orderDate || '---'}</span>
+                      </div>
+
+                      {/* Row 3 Right: آخر إجراء */}
+                      <div style={{ gridColumn: '2', gridRow: '3', borderLeft: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', padding: '10px 8px', textAlign: 'right' }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.72rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                          <User size={12} style={{ color: '#64748b' }} /> آخر إجراء
+                        </span>
+                        <span style={{ color: '#1e293b', fontSize: '0.82rem', fontWeight: '800' }}>{selectedOrder.lastActionBy || '---'}</span>
+                      </div>
+
+                      {/* Row 3 Left: كرت الإنتاج */}
+                      <div style={{ gridColumn: '1', gridRow: '3', display: 'flex', flexDirection: 'column', padding: '10px 8px', textAlign: 'right' }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.72rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                          <FileText size={12} style={{ color: '#64748b' }} /> كرت الإنتاج / التحضير
+                        </span>
+                        <span style={{ color: '#1e293b', fontSize: '0.82rem', fontWeight: '800' }}>
+                          {(() => {
+                            const linkedDb = (productionOrders || []).find(po =>
+                              (po.salesOrderId && po.salesOrderId === selectedOrder.id) ||
+                              (po.salesOrderNumber && po.salesOrderNumber === selectedOrder.orderNumber) ||
+                              (po.orderNotes && po.orderNotes.includes(selectedOrder.orderNumber))
+                            );
+                            const prodNumber = linkedDb ? linkedDb.orderNumber : selectedOrder.productionOrderNumber;
+                            const prodItems = (selectedOrder.items || []).filter(i => i.itemStatus === 'قيد الإنتاج' || i.itemStatus === 'إنتاج قيد الخياطة' || i.itemStatus === 'تم الإنتاج');
+                            const count = (linkedDb && linkedDb.items) ? linkedDb.items.length : prodItems.length;
+                            const countText = count > 0 ? (count === 1 ? 'صنف واحد' : count === 2 ? 'صنفان' : `${count} أصناف`) : '';
+
+                            const linkedPrepDb = (preparationOrders || []).find(po =>
+                              (po.salesOrderId && po.salesOrderId === selectedOrder.id) ||
+                              (po.salesOrderNumber && po.salesOrderNumber === selectedOrder.orderNumber) ||
+                              (po.orderNotes && po.orderNotes.includes(selectedOrder.orderNumber))
+                            );
+                            const prepNumber = linkedPrepDb ? linkedPrepDb.orderNumber : selectedOrder.preparationOrderNumber;
+                            const prepItems = (selectedOrder.items || []).filter(i => i.itemStatus === 'قيد التحضير');
+                            const countPrep = (linkedPrepDb && linkedPrepDb.items) ? linkedPrepDb.items.length : prepItems.length;
+                            const countPrepText = countPrep > 0 ? (countPrep === 1 ? 'صنف واحد' : countPrep === 2 ? 'صنفان' : `${countPrep} أصناف`) : '';
+
+                            const texts = [];
+                            if (prodNumber) texts.push(count > 0 ? `${prodNumber} (${countText})` : prodNumber);
+                            if (prepNumber) texts.push(countPrep > 0 ? `${prepNumber} (${countPrepText})` : prepNumber);
+
+                            return texts.length > 0 ? texts.join(' | ') : 'لا يوجد';
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Order Notes */}
+                    {selectedOrder.orderNotes && (
+                      <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'right' }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.72rem', fontWeight: 'bold' }}>ملاحظات الطلبية</span>
+                        <span style={{ color: '#475569', fontSize: '0.82rem', fontWeight: 'bold' }}>{selectedOrder.orderNotes}</span>
                       </div>
                     )}
-                    <div className="text-slate-500 font-bold flex items-center gap-2">
-                      <Calendar size={16} /> {selectedOrder.orderDate}
-                    </div>
                   </div>
-                  <div className="text-left">
-                    <div className="inline-flex items-center px-4 py-2 rounded-xl text-sm font-bold bg-primary/10 text-primary">
-                      الحالة: {selectedOrder.status || '---'}
+
+                  {/* Third Block: Items details Card */}
+                  <div
+                    style={{
+                      backgroundColor: '#ffffff',
+                      borderRadius: '16px',
+                      border: '1px solid #e2e8f0',
+                      padding: '16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px'
+                    }}
+                  >
+                    {/* Card Title */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' }}>
+                      <Package size={18} className="text-primary" />
+                      <span style={{ fontSize: '0.95rem', fontWeight: '800', color: '#1e293b' }}>تفاصيل الأصناف</span>
+                    </div>
+
+                    {/* Summary Grid */}
+                    {(() => {
+                      const items = selectedOrder.items || [];
+                      const readyQty = items.filter(i => i.itemStatus === 'جاهز' || i.itemStatus === 'تم الإنتاج' || i.itemStatus === 'تم التسليم' || i.itemStatus === 'منتهي').length;
+                      const inProdQty = items.filter(i => i.itemStatus === 'قيد الإنتاج' || i.itemStatus === 'إنتاج قيد الخياطة').length;
+                      const inPrepQty = items.filter(i => !i.itemStatus || i.itemStatus === 'قيد التجهيز' || i.itemStatus === 'جديد').length;
+                      const remainingQty = inProdQty + inPrepQty;
+                      return (
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(4, 1fr)',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '12px',
+                            overflow: 'hidden',
+                            marginTop: '4px',
+                            marginBottom: '8px',
+                            backgroundColor: '#ffffff'
+                          }}
+                        >
+                          <div style={{ borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 2px', textAlign: 'center' }}>
+                            <span style={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 'bold', marginBottom: '4px' }}>جاهز</span>
+                            <CheckCircle size={14} style={{ color: '#10b981', marginBottom: '4px' }} />
+                            <span style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: 'bold' }}>{readyQty}</span>
+                          </div>
+                          <div style={{ borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 2px', textAlign: 'center' }}>
+                            <span style={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 'bold', marginBottom: '4px' }}>قيد التجهيز</span>
+                            <Package size={14} style={{ color: '#8b5cf6', marginBottom: '4px' }} />
+                            <span style={{ color: '#8b5cf6', fontSize: '0.85rem', fontWeight: 'bold' }}>{inPrepQty}</span>
+                          </div>
+                          <div style={{ borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 2px', textAlign: 'center' }}>
+                            <span style={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 'bold', marginBottom: '4px' }}>قيد الإنتاج</span>
+                            <Clipboard size={14} style={{ color: '#3b82f6', marginBottom: '4px' }} />
+                            <span style={{ color: '#3b82f6', fontSize: '0.85rem', fontWeight: 'bold' }}>{inProdQty}</span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 2px', textAlign: 'center' }}>
+                            <span style={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 'bold', marginBottom: '4px' }}>المتبقي</span>
+                            <Clock size={14} style={{ color: '#f59e0b', marginBottom: '4px' }} />
+                            <span style={{ color: '#f59e0b', fontSize: '0.85rem', fontWeight: 'bold' }}>{remainingQty}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Items Cards Layout */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {(selectedOrder.items || []).map((item, idx) => {
+                        const itemThemes = [
+                          { border: '#3b82f6', text: '#2563eb', lightBg: '#eff6ff' },
+                          { border: '#10b981', text: '#059669', lightBg: '#ecfdf5' },
+                          { border: '#8b5cf6', text: '#7c3aed', lightBg: '#f5f3ff' },
+                          { border: '#f97316', text: '#ea580c', lightBg: '#fff7ed' }
+                        ];
+                        const theme = itemThemes[idx % 4];
+                        return (
+                          <div
+                            key={idx}
+                            style={{
+                              backgroundColor: '#ffffff',
+                              borderRadius: '16px',
+                              border: '1px solid #e2e8f0',
+                              borderLeft: `5px solid ${theme.border}`,
+                              padding: '16px',
+                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.03)',
+                              position: 'relative',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '12px',
+                              direction: 'rtl'
+                            }}
+                          >
+                            {/* Dog-ear Ribbon Badge */}
+                            <div
+                              style={{
+                                position: 'absolute',
+                                top: '0',
+                                right: '24px',
+                                backgroundColor: theme.border,
+                                color: '#ffffff',
+                                padding: '4px 10px',
+                                borderRadius: '0 0 8px 8px',
+                                fontSize: '0.8rem',
+                                fontWeight: 'bold',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                zIndex: 2
+                              }}
+                            >
+                              {String(idx + 1).padStart(2, '0')}
+                            </div>
+
+                            {/* Card Header */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', direction: 'rtl', gap: '8px' }}>
+                              {/* Right side: Simple Package Icon */}
+                              <div
+                                style={{
+                                  color: theme.border,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  marginTop: '12px',
+                                  flexShrink: 0
+                                }}
+                              >
+                                <Package size={20} />
+                              </div>
+
+                              {/* Left side: Status Badge */}
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  height: '24px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 'bold',
+                                  backgroundColor: getStatusBadgeStyle(item.itemStatus || "").bg,
+                                  color: getStatusBadgeStyle(item.itemStatus || "").text,
+                                  borderRadius: '6px',
+                                  padding: '0 8px',
+                                  direction: 'rtl'
+                                }}
+                              >
+                                {item.itemStatus || 'جديد'}
+                              </span>
+                            </div>
+
+                            {/* Product Name & Stock Msg */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'right', marginTop: '4px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.9rem' }}>{item.productName}</span>
+                                {(() => {
+                                  const prodStatus = getProductionItemStatus(selectedOrder, item);
+                                  if (prodStatus === 'ملغي') {
+                                    return (
+                                      <span style={{ fontSize: '10px', fontWeight: '800', backgroundColor: '#fee2e2', color: '#ef4444', padding: '2px 8px', borderRadius: '6px', border: '1px solid #fecaca', display: 'inline-flex', alignItems: 'center' }}>
+                                        تم إلغاء الإنتاج
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
+                              {(() => {
+                                const qty = getProductStockQuantity(item.productName);
+                                if (qty === null || qty <= 0) {
+                                  return (
+                                    <span style={{ fontSize: '11px', fontWeight: '800', color: theme.border }}>
+                                      المتوفر: 0 (غير متوفر)
+                                    </span>
+                                  );
+                                }
+                                const breakdown = getProductStockBreakdown(item.productName);
+                                const breakdownStr = breakdown.map(b => `${b.warehouse} (${b.quantity})`).join(' | ');
+                                return (
+                                  <span style={{ fontSize: '11px', fontWeight: '800', color: theme.text }}>
+                                    المتوفر: {breakdownStr || `${qty} (مستودع غير محدد)`}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+
+                            {/* Quantity and Notes side-by-side */}
+                            <div style={{ display: 'flex', gap: '12px', width: '100%', direction: 'rtl', textAlign: 'right' }}>
+                              {/* Quantity Column */}
+                              <div style={{ width: '75px', display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'center', flexShrink: 0 }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: theme.text, display: 'block' }}>الكمية</label>
+                                <div
+                                  style={{
+                                    height: '38px',
+                                    border: '1px solid #cbd5e1',
+                                    backgroundColor: '#ffffff',
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: '900',
+                                    color: '#0f172a',
+                                    fontSize: '1rem'
+                                  }}
+                                >
+                                  {item.quantity}
+                                </div>
+                              </div>
+
+                              {/* Notes Column */}
+                              <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'right' }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: theme.text, display: 'block' }}>ملاحظات الصنف</label>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    backgroundColor: theme.lightBg || '#f8fafc',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '8px',
+                                    padding: '8px 12px',
+                                    minHeight: '38px',
+                                    height: 'auto',
+                                    direction: 'rtl',
+                                    width: '100%'
+                                  }}
+                                >
+                                  <span style={{ fontSize: '0.8rem', color: item.notes ? '#1e293b' : '#94a3b8', fontWeight: 'bold', wordBreak: 'break-word' }}>
+                                    {item.notes || 'لا توجد ملاحظات'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 bg-slate-50 p-6 rounded-xl border border-slate-100 relative" style={{ zIndex: 1 }}>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-slate-400 text-sm font-bold">اسم العميل</span>
-                    <span className="text-slate-800 font-bold text-lg">{selectedOrder.customerName}</span>
+                {/* Sticky Footer */}
+                <div
+                  style={{
+                    backgroundColor: '#ffffff',
+                    borderTop: '1px solid #e2e8f0',
+                    padding: '16px 16px calc(24px + env(safe-area-inset-bottom, 0px)) 16px',
+                    display: 'flex',
+                    gap: '8px',
+                    direction: 'rtl',
+                    boxShadow: '0 -4px 6px -1px rgba(0,0,0,0.05)'
+                  }}
+                >
+                  <button
+                    onClick={triggerPrint}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '4px',
+                      padding: '10px 8px',
+                      borderRadius: '12px',
+                      border: 'none',
+                      backgroundColor: 'var(--primary)',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      fontWeight: 'bold',
+                      color: 'white',
+                      flex: 1
+                    }}
+                  >
+                    <Printer size={15} />
+                    <span>طباعة / تصدير PDF</span>
+                  </button>
+                  <button
+                    onClick={() => setShowPreview(false)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '4px',
+                      padding: '10px 8px',
+                      borderRadius: '12px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#f8fafc',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      fontWeight: 'bold',
+                      color: '#475569',
+                      flex: 1
+                    }}
+                  >
+                    <span>إغلاق</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="modal-overlay no-print">
+              <div className="modal-content wide animate-fade-in">
+                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                  <h3 className="text-xl font-bold">معاينة الطلبية وتصدير PDF</h3>
+                  <button className="btn btn-outline" style={{ padding: '0.5rem' }} onClick={() => setShowPreview(false)}><X size={18} /></button>
+                </div>
+
+                <div className="bg-white p-8 border rounded-2xl shadow-sm mb-6 relative overflow-hidden" style={{ direction: 'rtl', fontFamily: 'Tajawal, sans-serif' }}>
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full" style={{ zIndex: 0 }}></div>
+                  <div className="absolute bottom-0 left-0 w-24 h-24 bg-primary/5 rounded-tr-full" style={{ zIndex: 0 }}></div>
+
+                  <div className="flex justify-between items-start mb-8 pb-6 border-b border-slate-100 relative" style={{ zIndex: 1 }}>
+                    <div>
+                      <h2 className="text-2xl font-black text-slate-800 mb-2 flex items-center gap-2">
+                        <span className="text-primary">طلبية رقم</span> #{selectedOrder.orderNumber}
+                      </h2>
+                      {(() => {
+                        const linkedDb = (productionOrders || []).find(po =>
+                          (po.salesOrderId && po.salesOrderId === selectedOrder.id) ||
+                          (po.salesOrderNumber && po.salesOrderNumber === selectedOrder.orderNumber) ||
+                          (po.orderNotes && po.orderNotes.includes(selectedOrder.orderNumber))
+                        );
+                        const prodNumber = linkedDb ? linkedDb.orderNumber : selectedOrder.productionOrderNumber;
+
+                        const linkedPrepDb = (preparationOrders || []).find(po =>
+                          (po.salesOrderId && po.salesOrderId === selectedOrder.id) ||
+                          (po.salesOrderNumber && po.salesOrderNumber === selectedOrder.orderNumber) ||
+                          (po.orderNotes && po.orderNotes.includes(selectedOrder.orderNumber))
+                        );
+                        const prepNumber = linkedPrepDb ? linkedPrepDb.orderNumber : selectedOrder.preparationOrderNumber;
+
+                        const elements = [];
+                        if (prodNumber) {
+                          elements.push(
+                            <div key="prod" className="mb-2 inline-flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-xl ml-2">
+                              <span className="text-red-600 font-black text-xl">مرتبطة بكرت إنتاج:</span>
+                              <span className="text-red-700 font-black text-2xl tracking-wider" dir="ltr">{prodNumber}</span>
+                            </div>
+                          );
+                        }
+                        if (prepNumber) {
+                          elements.push(
+                            <div key="prep" className="mb-2 inline-flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-xl ml-2">
+                              <span className="text-red-600 font-black text-xl">مرتبطة بكرت تحضير:</span>
+                              <span className="text-red-700 font-black text-2xl tracking-wider" dir="ltr">{prepNumber}</span>
+                            </div>
+                          );
+                        }
+                        return elements.length > 0 ? <div>{elements}</div> : null;
+                      })()}
+                      <div className="text-slate-500 font-bold flex items-center gap-2">
+                        <Calendar size={16} /> {selectedOrder.orderDate}
+                      </div>
+                    </div>
+                    <div className="text-left">
+                      <div className="inline-flex items-center px-4 py-2 rounded-xl text-sm font-bold bg-primary/10 text-primary">
+                        الحالة: {selectedOrder.status || '---'}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-slate-400 text-sm font-bold">تاريخ التسليم</span>
-                    <span className="text-slate-800 font-bold text-lg" style={{ color: '#dc2626' }}>{selectedOrder.deliveryDate || 'غير محدد'}</span>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 bg-slate-50 p-6 rounded-xl border border-slate-100 relative" style={{ zIndex: 1 }}>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-slate-400 text-sm font-bold">اسم العميل</span>
+                      <span className="text-slate-800 font-bold text-lg">{selectedOrder.customerName}</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-slate-400 text-sm font-bold">تاريخ التسليم</span>
+                      <span className="text-slate-800 font-bold text-lg" style={{ color: '#dc2626' }}>{selectedOrder.deliveryDate || 'غير محدد'}</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-slate-400 text-sm font-bold">ملاحظات الطلبية</span>
+                      <span className="text-slate-800 font-bold">{selectedOrder.orderNotes || 'لا توجد ملاحظات'}</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-slate-400 text-sm font-bold">أُنشئت بواسطة</span>
+                      <span className="text-slate-700 font-bold">{selectedOrder.createdBy || '---'}</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-slate-400 text-sm font-bold">آخر إجراء</span>
+                      <span className="text-slate-700 font-bold">{selectedOrder.lastActionBy || '---'}</span>
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-slate-400 text-sm font-bold">ملاحظات الطلبية</span>
-                    <span className="text-slate-800 font-bold">{selectedOrder.orderNotes || 'لا توجد ملاحظات'}</span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-slate-400 text-sm font-bold">أُنشئت بواسطة</span>
-                    <span className="text-slate-700 font-bold">{selectedOrder.createdBy || '---'}</span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-slate-400 text-sm font-bold">آخر إجراء</span>
-                    <span className="text-slate-700 font-bold">{selectedOrder.lastActionBy || '---'}</span>
+
+                  <h4 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2 relative" style={{ zIndex: 1 }}>
+                    <Package size={20} className="text-primary" /> الأصناف المطلوبة
+                  </h4>
+
+                  <div className="overflow-hidden rounded-xl border-2 border-slate-300 relative" style={{ zIndex: 1 }}>
+                    <table className="w-full text-right" style={{ borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr className="bg-slate-200 text-slate-800 text-sm text-right">
+                          <th className="p-3 font-bold border border-slate-300 w-12 text-right">#</th>
+                          <th className="p-3 font-bold border border-slate-300 text-right">اسم الصنف</th>
+                          <th className="p-3 font-bold border border-slate-300 text-right" style={{ width: '110px' }}>الكمية المطلوبة</th>
+                          <th className="p-3 font-bold border border-slate-300 text-right" style={{ width: '130px' }}>المتوفر بالمخزون</th>
+                          <th className="p-3 font-bold border border-slate-300 text-right" style={{ width: '120px' }}>الحالة</th>
+                          <th className="p-3 font-bold border border-slate-300 text-right">ملاحظات الصنف</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(selectedOrder.items || []).map((item, i) => {
+                          const availableQty = getProductStockQuantity(item.productName);
+                          const breakdown = getProductStockBreakdown(item.productName);
+                          return (
+                            <tr key={i} className="hover:bg-slate-50 transition-colors text-right">
+                              <td className="p-3 text-right text-slate-700 font-bold border border-slate-300">{i + 1}</td>
+                              <td className="p-3 font-bold text-primary border border-slate-300 text-right">{item.productName}</td>
+                              <td className="p-3 text-right font-black text-slate-800 bg-slate-50/50 border border-slate-300">{item.quantity}</td>
+                              <td className="p-3 border border-slate-300 text-xs font-bold text-right" style={{
+                                color: availableQty === null || availableQty <= 0 ? '#dc2626' : availableQty < item.quantity ? '#d97706' : '#10b981',
+                                backgroundColor: availableQty === null || availableQty <= 0 ? '#fef2f2' : availableQty < item.quantity ? '#fffbeb' : '#f0fdf4'
+                              }}>
+                                {breakdown.length === 0 ? (
+                                  <div className="text-right font-black" style={{ fontSize: '0.85rem' }}>غير متوفر</div>
+                                ) : (
+                                  <div className="flex flex-col gap-1 text-right">
+                                    {breakdown.map((b, bIdx) => (
+                                      <div key={bIdx} className="flex justify-start gap-2 whitespace-nowrap">
+                                        <span>• {b.warehouse}:</span>
+                                        <span className="font-black">{b.quantity}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="p-3 text-right border border-slate-300">
+                                <span className="inline-flex px-3 py-1 rounded-md text-xs font-bold bg-white text-slate-700 border border-slate-300 shadow-sm text-right">
+                                  {item.itemStatus || '---'}
+                                </span>
+                              </td>
+                              <td className="p-3 text-sm text-slate-700 font-bold border border-slate-300 text-right">{item.notes || '---'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
 
-                <h4 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2 relative" style={{ zIndex: 1 }}>
-                  <Package size={20} className="text-primary" /> الأصناف المطلوبة
-                </h4>
-                
-                <div className="overflow-hidden rounded-xl border-2 border-slate-300 relative" style={{ zIndex: 1 }}>
-                  <table className="w-full text-right" style={{ borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr className="bg-slate-200 text-slate-800 text-sm">
-                        <th className="p-3 font-bold border border-slate-300 w-12 text-center">#</th>
-                        <th className="p-3 font-bold border border-slate-300">اسم الصنف</th>
-                        <th className="p-3 font-bold border border-slate-300 text-center">الكمية</th>
-                        <th className="p-3 font-bold border border-slate-300 text-center">الحالة</th>
-                        <th className="p-3 font-bold border border-slate-300">ملاحظات الصنف</th>
+                <div className="flex gap-4">
+                  <button className="btn btn-primary flex-1" onClick={isMobile ? triggerSharePDF : triggerPrint}><Printer size={18} /> طباعة / تصدير PDF</button>
+                  <button className="btn btn-outline flex-1" onClick={() => setShowPreview(false)}>إغلاق</button>
+                </div>
+              </div>
+            </div>
+          )
+        )}
+
+        {/* Variants Modal */}
+        {showVariantsModal && variantModalIndex !== null && (
+          <div className="modal-overlay no-print" style={{ zIndex: 10600 }}>
+            {isMobile ? (
+              <div
+                className="modal-content animate-fade-in"
+                style={{
+                  width: '100vw',
+                  height: '100vh',
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  margin: 0,
+                  borderRadius: 0,
+                  padding: 0,
+                  backgroundColor: '#f8fafc',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  direction: 'rtl'
+                }}
+              >
+                {/* Mobile Header */}
+                <div
+                  style={{
+                    backgroundColor: '#ffffff',
+                    borderBottom: '1px solid #e2e8f0',
+                    padding: '12px 16px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}
+                >
+                  <div style={{ color: '#0f766e', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px' }}>
+                    <Package size={22} />
+                  </div>
+
+                  <div style={{ textAlign: 'center', flex: 1, padding: '0 8px' }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: '800', color: '#1e293b', margin: 0 }}>تفاصيل الألوان والكميات للصنف:</h3>
+                    <div style={{ fontSize: '0.85rem', color: '#0f766e', marginTop: '2px', fontWeight: 'bold' }}>
+                      {formData.items[variantModalIndex]?.productName}
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => setShowVariantsModal(false)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '10px',
+                      border: '1px solid #e2e8f0',
+                      cursor: 'pointer',
+                      backgroundColor: '#ffffff'
+                    }}
+                  >
+                    <X size={18} className="text-slate-600" />
+                  </div>
+                </div>
+
+                {/* Scrollable Content Pane */}
+                <div
+                  style={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    padding: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px',
+                    paddingBottom: '20px'
+                  }}
+                >
+
+                  {/* Variants list */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {productionVariants.map((variant, idx) => {
+                      const itemThemes = [
+                        { border: '#0f766e', text: '#0f766e', lightBg: '#f0fdf4' },
+                        { border: '#3b82f6', text: '#2563eb', lightBg: '#eff6ff' },
+                        { border: '#8b5cf6', text: '#7c3aed', lightBg: '#f5f3ff' },
+                        { border: '#f97316', text: '#ea580c', lightBg: '#fff7ed' }
+                      ];
+                      const theme = itemThemes[idx % 4];
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            backgroundColor: '#ffffff',
+                            borderRadius: '16px',
+                            border: '1px solid #e2e8f0',
+                            borderRight: `5px solid ${theme.border}`,
+                            padding: '16px',
+                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.03)',
+                            position: 'relative',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '12px'
+                          }}
+                        >
+                          {/* Card Header (Ribbon on the right, Delete on the left) */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '24px', marginBottom: '4px' }}>
+                            {/* Ribbon Badge (First child -> Renders on the Right in RTL) */}
+                            <div
+                              style={{
+                                backgroundColor: theme.border,
+                                color: '#ffffff',
+                                padding: '4px 12px',
+                                borderRadius: '6px',
+                                fontSize: '0.85rem',
+                                fontWeight: 'bold',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                              }}
+                            >
+                              {String(idx + 1).padStart(2, '0')}
+                            </div>
+
+                            {/* Delete button (Second child -> Renders on the Left in RTL) */}
+                            <button
+                              type="button"
+                              className="transition-all"
+                              style={{
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '6px',
+                                backgroundColor: productionVariants.length <= 1 ? '#f8fafc' : '#fef2f2',
+                                color: productionVariants.length <= 1 ? '#cbd5e1' : '#ef4444',
+                                border: productionVariants.length <= 1 ? '1px solid #f1f5f9' : '1px solid #fee2e2',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: productionVariants.length <= 1 ? 'not-allowed' : 'pointer'
+                              }}
+                              onClick={() => handleRemoveVariant(idx)}
+                              disabled={productionVariants.length <= 1}
+                              title="حذف اللون"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+
+                          {/* Dropdown: اللون / الموديل */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'right' }}>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#475569' }}>اللون / الموديل</label>
+                            <SearchableDropdown
+                              options={globalSettings.stockColors || []}
+                              value={variant.colorModel}
+                              onChange={(val) => handleVariantChange(idx, 'colorModel', val)}
+                              placeholder="اختر اللون..."
+                            />
+                          </div>
+
+                          {/* Three boxes side-by-side: Quantity, Thickness, Size */}
+                          <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                            {/* Qty (Left in DOM -> Left visually because of Flex alignment) */}
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'center' }}>
+                              <label style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#475569' }}>الكمية</label>
+                              <input
+                                type="number"
+                                className="input-field text-center font-bold"
+                                style={{ height: '38px', borderRadius: '8px', border: '1px solid #e2e8f0', margin: 0, padding: '0 4px', fontSize: '0.85rem', color: '#0f766e' }}
+                                value={variant.quantity}
+                                onChange={(e) => handleVariantChange(idx, 'quantity', e.target.value)}
+                                min="1"
+                              />
+                            </div>
+
+                            {/* Thickness (Middle) */}
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'center' }}>
+                              <label style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#475569' }}>السماكة (سم)</label>
+                              <input
+                                type="text"
+                                className="input-field text-center"
+                                style={{ height: '38px', borderRadius: '8px', border: '1px solid #e2e8f0', margin: 0, padding: '0 4px', fontSize: '0.85rem' }}
+                                value={variant.thickness}
+                                onChange={(e) => handleVariantChange(idx, 'thickness', e.target.value)}
+                              />
+                            </div>
+
+                            {/* Size (Right in DOM -> Right visually in RTL) */}
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'center' }}>
+                              <label style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#475569' }}>المقاس (سم)</label>
+                              <input
+                                type="text"
+                                className="input-field text-center"
+                                style={{ height: '38px', borderRadius: '8px', border: '1px solid #e2e8f0', margin: 0, padding: '0 4px', fontSize: '0.85rem' }}
+                                placeholder="مثال 200*200"
+                                value={variant.sizeCm}
+                                onChange={(e) => handleVariantChange(idx, 'sizeCm', e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Notes Textarea */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'right', position: 'relative' }}>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#475569' }}>الملاحظات</label>
+                            <textarea
+                              className="input-field"
+                              rows="2"
+                              maxLength={200}
+                              style={{ minHeight: '60px', borderRadius: '8px', border: '1px solid #e2e8f0', margin: 0, padding: '8px 12px', paddingBottom: '20px', fontSize: '0.85rem', resize: 'vertical' }}
+                              placeholder="أضف أية تفاصيل إضافية..."
+                              value={variant.notes || ''}
+                              onChange={(e) => handleVariantChange(idx, 'notes', e.target.value.slice(0, 200))}
+                            />
+                            <span style={{ position: 'absolute', bottom: '6px', left: '10px', fontSize: '9px', color: '#94a3b8', fontWeight: 'bold' }}>
+                              {(variant.notes || '').length}/200
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Dash Card: Add Another Color */}
+                  <div
+                    onClick={handleAddVariant}
+                    style={{
+                      backgroundColor: '#f8fafc',
+                      border: '2px dashed #cbd5e1',
+                      borderRadius: '16px',
+                      padding: '16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s'
+                    }}
+                    className="hover:border-primary hover:bg-slate-50"
+                  >
+                    <div style={{ backgroundColor: '#eff6ff', color: '#2563eb', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Plus size={20} />
+                    </div>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#0f766e' }}>إضافة لون آخر</span>
+                    <span style={{ fontSize: '0.72rem', color: '#64748b' }}>يمكنك إضافة أكثر من لون للصنف</span>
+                  </div>
+                </div>
+
+                {/* Mobile Sticky Footer */}
+                <div
+                  style={{
+                    backgroundColor: '#ffffff',
+                    borderTop: '1px solid #e2e8f0',
+                    padding: '16px 16px calc(24px + env(safe-area-inset-bottom, 0px)) 16px',
+                    display: 'flex',
+                    gap: '8px',
+                    boxShadow: '0 -4px 6px -1px rgba(0,0,0,0.05)'
+                  }}
+                >
+                  <button
+                    onClick={handleSaveVariants}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      padding: '12px 16px',
+                      borderRadius: '12px',
+                      border: 'none',
+                      backgroundColor: '#0f766e',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      fontWeight: 'bold',
+                      color: 'white',
+                      flex: 1
+                    }}
+                  >
+                    <Save size={16} />
+                    <span>حفظ</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowVariantsModal(false)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      padding: '12px 16px',
+                      borderRadius: '12px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#f8fafc',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      fontWeight: 'bold',
+                      color: '#475569',
+                      flex: 1
+                    }}
+                  >
+                    <span>إلغاء</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="modal-content wide animate-fade-in" style={{ maxWidth: '900px' }}>
+                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                  <h3 className="text-xl font-bold flex items-center gap-2">
+                    <Package className="text-primary" />
+                    <span>تفصيل الألوان والكميات للصنف: {formData.items[variantModalIndex]?.productName}</span>
+                  </h3>
+                  <button type="button" className="btn btn-outline" style={{ padding: '0.5rem' }} onClick={() => setShowVariantsModal(false)}><X size={18} /></button>
+                </div>
+
+
+                <div className="overflow-x-auto mb-4 border border-slate-200 rounded-xl">
+                  <table className="w-full text-right bg-white" style={{ borderCollapse: 'collapse' }}>
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="p-3 text-slate-700 font-bold" style={{ width: '25%' }}>اللون / الموديل</th>
+                        <th className="p-3 text-slate-700 font-bold text-center" style={{ width: '15%' }}>الكمية</th>
+                        <th className="p-3 text-slate-700 font-bold text-center" style={{ width: '15%' }}>المقاس (سم)</th>
+                        <th className="p-3 text-slate-700 font-bold text-center" style={{ width: '15%' }}>السماكة (سم)</th>
+                        <th className="p-3 text-slate-700 font-bold" style={{ width: '20%' }}>ملاحظات</th>
+                        <th className="p-3 text-slate-700 font-bold text-center" style={{ width: '10%' }}>حذف</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(selectedOrder.items || []).map((item, i) => (
-                        <tr key={i} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-3 text-center text-slate-700 font-bold border border-slate-300">{i + 1}</td>
-                          <td className="p-3 font-bold text-primary border border-slate-300">{item.productName}</td>
-                          <td className="p-3 text-center font-black text-slate-800 bg-slate-50/50 border border-slate-300">{item.quantity}</td>
-                          <td className="p-3 text-center border border-slate-300">
-                            <span className="inline-flex px-3 py-1 rounded-md text-xs font-bold bg-white text-slate-700 border border-slate-300 shadow-sm">
-                              {item.itemStatus || '---'}
-                            </span>
+                      {productionVariants.map((variant, idx) => (
+                        <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
+                          <td className="p-2">
+                            <SearchableDropdown
+                              options={globalSettings.stockColors || []}
+                              value={variant.colorModel}
+                              onChange={(val) => handleVariantChange(idx, 'colorModel', val)}
+                              placeholder="اختر اللون..."
+                            />
                           </td>
-                          <td className="p-3 text-sm text-slate-700 font-bold border border-slate-300">{item.notes || '---'}</td>
+                          <td className="p-2">
+                            <input
+                              type="number"
+                              className="input-field w-full mb-0 text-center font-bold text-primary"
+                              value={variant.quantity}
+                              onChange={(e) => handleVariantChange(idx, 'quantity', e.target.value)}
+                              min="1"
+                            />
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="text"
+                              className="input-field w-full mb-0 text-center"
+                              placeholder="مثال 200*200"
+                              value={variant.sizeCm}
+                              onChange={(e) => handleVariantChange(idx, 'sizeCm', e.target.value)}
+                            />
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="text"
+                              className="input-field w-full mb-0 text-center"
+                              value={variant.thickness}
+                              onChange={(e) => handleVariantChange(idx, 'thickness', e.target.value)}
+                            />
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="text"
+                              className="input-field w-full mb-0"
+                              placeholder="ملاحظات..."
+                              value={variant.notes || ''}
+                              onChange={(e) => handleVariantChange(idx, 'notes', e.target.value)}
+                            />
+                          </td>
+                          <td className="p-2 text-center">
+                            <button
+                              type="button"
+                              className="icon-btn icon-btn-delete mx-auto disabled:opacity-50"
+                              onClick={() => handleRemoveVariant(idx)}
+                              disabled={productionVariants.length <= 1}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              </div>
 
-              <div className="flex gap-4">
-                <button className="btn btn-primary flex-1" onClick={triggerPrint}><Printer size={18} /> طباعة / تصدير PDF</button>
-                <button className="btn btn-outline flex-1" onClick={() => setShowPreview(false)}>إغلاق</button>
+                <div className="flex justify-start mb-6">
+                  <button type="button" className="btn btn-outline border-dashed border-2 flex items-center gap-2 text-slate-600 hover:text-primary hover:border-primary transition-colors" onClick={handleAddVariant}>
+                    <Plus size={16} /> إضافة لون آخر
+                  </button>
+                </div>
+
+                <div className="flex gap-4">
+                  <button className="btn btn-primary flex-1" onClick={handleSaveVariants}>حفظ</button>
+                  <button className="btn btn-outline flex-1" onClick={() => setShowVariantsModal(false)}>إلغاء</button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
-        {/* Variants Modal */}
-        {showVariantsModal && variantModalIndex !== null && (
-          <div className="modal-overlay no-print" style={{ zIndex: 2000 }}>
-            <div className="modal-content wide animate-fade-in" style={{ maxWidth: '900px' }}>
-              <div className="flex justify-between items-center mb-4 border-b pb-2">
-                <h3 className="text-xl font-bold flex items-center gap-2">
-                  <Package className="text-primary" />
-                  <span>تفصيل الألوان والكميات للصنف: {formData.items[variantModalIndex]?.productName}</span>
-                </h3>
-                <button type="button" className="btn btn-outline" style={{ padding: '0.5rem' }} onClick={() => setShowVariantsModal(false)}><X size={18} /></button>
-              </div>
-
-              <div className="mb-4 bg-primary/10 border border-primary/20 p-4 rounded-xl flex justify-between items-center">
-                <div>
-                  <span className="text-slate-600 font-bold">الكمية المطلوبة الإجمالية للصنف:</span>
-                  <span className="font-black text-primary text-xl mr-2">{formData.items[variantModalIndex]?.quantity}</span>
-                </div>
-                <div>
-                  <span className="text-slate-600 font-bold">المجموع الحالي للألوان:</span>
-                  <span className={`font-black text-xl mr-2 ${productionVariants.reduce((s, v) => s + (Number(v.quantity)||0), 0) !== Number(formData.items[variantModalIndex]?.quantity) ? 'text-red-500' : 'text-emerald-600'}`}>
-                    {productionVariants.reduce((s, v) => s + (Number(v.quantity)||0), 0)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto mb-4 border border-slate-200 rounded-xl">
-                <table className="w-full text-right bg-white" style={{ borderCollapse: 'collapse' }}>
-                  <thead className="bg-slate-50 border-b border-slate-200">
-                    <tr>
-                      <th className="p-3 text-slate-700 font-bold" style={{ width: '25%' }}>اللون / الموديل</th>
-                      <th className="p-3 text-slate-700 font-bold text-center" style={{ width: '15%' }}>الكمية</th>
-                      <th className="p-3 text-slate-700 font-bold text-center" style={{ width: '15%' }}>المقاس (سم)</th>
-                      <th className="p-3 text-slate-700 font-bold text-center" style={{ width: '15%' }}>السماكة (سم)</th>
-                      <th className="p-3 text-slate-700 font-bold" style={{ width: '20%' }}>ملاحظات</th>
-                      <th className="p-3 text-slate-700 font-bold text-center" style={{ width: '10%' }}>حذف</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {productionVariants.map((variant, idx) => (
-                      <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="p-2">
-                          <select 
-                            className="input-field w-full mb-0 bg-white" 
-                            value={variant.colorModel} 
-                            onChange={(e) => handleVariantChange(idx, 'colorModel', e.target.value)}
-                          >
-                            <option value="">اختر اللون...</option>
-                            {(globalSettings.stockColors || []).map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                        </td>
-                        <td className="p-2">
-                          <input 
-                            type="number" 
-                            className="input-field w-full mb-0 text-center font-bold text-primary" 
-                            value={variant.quantity} 
-                            onChange={(e) => handleVariantChange(idx, 'quantity', e.target.value)}
-                            min="1"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <input 
-                            type="text" 
-                            className="input-field w-full mb-0 text-center" 
-                            placeholder="مثال 200*200"
-                            value={variant.sizeCm} 
-                            onChange={(e) => handleVariantChange(idx, 'sizeCm', e.target.value)}
-                          />
-                        </td>
-                        <td className="p-2">
-                          <input 
-                            type="text" 
-                            className="input-field w-full mb-0 text-center" 
-                            value={variant.thickness} 
-                            onChange={(e) => handleVariantChange(idx, 'thickness', e.target.value)}
-                          />
-                        </td>
-                        <td className="p-2">
-                          <input 
-                            type="text" 
-                            className="input-field w-full mb-0" 
-                            placeholder="ملاحظات..."
-                            value={variant.productionNotes} 
-                            onChange={(e) => handleVariantChange(idx, 'productionNotes', e.target.value)}
-                          />
-                        </td>
-                        <td className="p-2 text-center">
-                          <button 
-                            type="button" 
-                            className="icon-btn icon-btn-delete mx-auto disabled:opacity-50"
-                            onClick={() => handleRemoveVariant(idx)}
-                            disabled={productionVariants.length <= 1}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              
-              <div className="flex justify-start mb-6">
-                <button type="button" className="btn btn-outline border-dashed border-2 flex items-center gap-2 text-slate-600 hover:text-primary hover:border-primary transition-colors" onClick={handleAddVariant}>
-                  <Plus size={16} /> إضافة لون آخر
-                </button>
-              </div>
-
-              <div className="flex gap-4">
-                <button className="btn btn-primary flex-1" onClick={handleSaveVariants}>حفظ الألوان للإنتاج</button>
-                <button className="btn btn-outline flex-1" onClick={() => setShowVariantsModal(false)}>إلغاء</button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Preparation Variants Modal */}
+        <PreparationVariantsModal
+          isMobile={isMobile}
+          showModal={showPreparationVariantsModal}
+          setShowModal={setShowPreparationVariantsModal}
+          variantModalIndex={preparationVariantModalIndex}
+          variants={preparationVariants}
+          setVariants={setPreparationVariants}
+          formData={formData}
+          globalSettings={globalSettings}
+          handleVariantChange={handlePreparationVariantChange}
+          handleRemoveVariant={handleRemovePreparationVariant}
+          handleAddVariant={handleAddPreparationVariant}
+          handleSaveVariants={handleSavePreparationVariants}
+        />
 
       </div>
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         #print-portal { display: none; }
-        @media print {
-          @page { margin: 0.5cm; }
-          #root { display: none !important; }
-          #print-portal { display: block !important; }
-          .sales-print-layout { display: block !important; background: white; width: 100%; }
-        }
         .badge-info { background: #e0f2f1; color: #00796b; border: 1px solid #b2dfdb; }
         .badge-cutting { background: #fff3e0; color: #ef6c00; border: 1px solid #ffcc80; }
         .badge-warehouse { background: #fffde7; color: #fbc02d; border: 1px solid #fff59d; }
@@ -1918,7 +4999,381 @@ const AdminSales = ({ user }) => {
         .badge-danger { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
         .badge-delivery { background: #e3f2fd; color: #1e3a8a; border: 1px solid #bfdbfe; }
         .badge-warning { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+        .mobile-only-card-list {
+          display: none !important;
+        }
+
+        @media (min-width: 768px) {
+          .modal-content.wide {
+            max-width: 1050px !important;
+          }
+          .sales-info-card {
+            margin-bottom: 0 !important;
+            border-bottom: none !important;
+            border-bottom-left-radius: 0 !important;
+            border-bottom-right-radius: 0 !important;
+          }
+          .customer-card {
+            border-top: none !important;
+            border-top-left-radius: 0 !important;
+            border-top-right-radius: 0 !important;
+            padding-top: 0 !important;
+            margin-top: 0 !important;
+          }
+        }
+
+        @media (max-width: 767px) {
+          /* Full screen modal sheet */
+          .modal-overlay {
+            padding: 0 !important;
+            background: white !important;
+            align-items: flex-start !important;
+            overflow-y: auto !important;
+          }
+          .modal-content.wide {
+            max-width: 100% !important;
+            max-height: none !important;
+            height: auto !important;
+            min-height: 100vh !important;
+            border-radius: 0 !important;
+            padding: 1.2rem 0.5rem 120px 0.5rem !important;
+            box-shadow: none !important;
+            display: flex !important;
+            flex-direction: column !important;
+          }
+          .modal-content.wide form {
+            flex: 1 !important;
+            display: flex !important;
+            flex-direction: column !important;
+          }
+          
+          /* Title Bar */
+          .sales-modal-header {
+            display: flex !important;
+            flex-direction: row !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            border-bottom: 1px solid #f1f5f9 !important;
+            padding-bottom: 0.75rem !important;
+            margin-bottom: 1.25rem !important;
+          }
+          .sales-modal-header button.btn-outline {
+            background: #f8fafc !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 12px !important;
+            color: #64748b !important;
+            width: 38px !important;
+            height: 38px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0 !important;
+          }
+
+          /* Info Card */
+          .sales-info-card {
+            background: white !important;
+            border: 1px solid #f1f5f9 !important;
+            border-radius: 1rem !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
+            padding: 1rem !important;
+            margin-bottom: 1rem !important;
+          }
+          .order-dates-grid {
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 8px !important;
+          }
+          .order-dates-grid .input-field {
+            font-size: 11px !important;
+            padding: 0 4px !important;
+          }
+          .order-dates-grid label {
+            font-size: 10px !important;
+            margin-bottom: 4px !important;
+          }
+
+          /* Customer Card */
+          .customer-card {
+            background: white !important;
+            border: 1px solid #f1f5f9 !important;
+            border-radius: 1rem !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
+            padding: 1rem !important;
+            margin-bottom: 1.25rem !important;
+          }
+          .customer-card button {
+            width: 100% !important;
+            background-color: #13898f !important;
+            color: white !important;
+            font-weight: bold !important;
+            border-radius: 8px !important;
+            height: 42px !important;
+          }
+
+          /* Items section header buttons */
+          .items-header-container {
+            display: flex !important;
+            flex-direction: column-reverse !important;
+            border-bottom: none !important;
+            margin-bottom: 0.5rem !important;
+            padding-bottom: 0 !important;
+            gap: 12px !important;
+          }
+          .items-header-container h4 {
+            font-size: 15px !important;
+          }
+          .items-header-buttons {
+            display: flex !important;
+            flex-direction: row-reverse !important;
+            gap: 8px !important;
+            width: 100% !important;
+          }
+          .items-header-buttons button {
+            flex: 1 !important;
+            height: 42px !important;
+            border-radius: 8px !important;
+            font-size: 13px !important;
+            font-weight: bold !important;
+          }
+          .items-header-buttons button.btn-primary {
+            background-color: #13898f !important;
+          }
+          .items-header-buttons button.btn-outline {
+            border: 1px solid #e2e8f0 !important;
+            color: #64748b !important;
+            background-color: white !important;
+          }
+
+          /* Table inputs & alignment */
+          .modal-table {
+            table-layout: fixed !important;
+            width: 100% !important;
+          }
+          .modal-table-container {
+            display: none !important;
+          }
+          .mobile-only-card-list {
+            display: block !important;
+          }
+          .modal-table th, .modal-table td {
+            padding: 6px 2px !important;
+            font-size: 11px !important;
+          }
+          .modal-table input[type="text"], .modal-table select {
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 8px !important;
+            height: 32px !important;
+            font-size: 11px !important;
+            padding: 0 4px !important;
+          }
+          /* Explicit cell widths on mobile */
+          .modal-table th:nth-child(1), .modal-table td:nth-child(1) {
+            width: 30px !important;
+            min-width: 30px !important;
+          }
+          .modal-table th:nth-child(2), .modal-table td:nth-child(2) {
+            width: 135px !important;
+            min-width: 135px !important;
+          }
+          .modal-table th:nth-child(3), .modal-table td:nth-child(3) {
+            width: 40px !important;
+            min-width: 40px !important;
+          }
+          .modal-table th:nth-child(4), .modal-table td:nth-child(4) {
+            width: 65px !important;
+            min-width: 65px !important;
+          }
+          .modal-table th:nth-child(5), .modal-table td:nth-child(5) {
+            width: 65px !important;
+            min-width: 65px !important;
+          }
+          .modal-table th:nth-child(6), .modal-table td:nth-child(6) {
+            width: 24px !important;
+            min-width: 24px !important;
+          }
+          
+          /* Dropdown arrow position override */
+          .modal-table td:nth-child(2) input {
+            padding: 0 1.25rem 0 0.25rem !important;
+            font-size: 10px !important;
+          }
+          .modal-table td:nth-child(3) input {
+            max-width: 100% !important;
+            padding: 0 !important;
+            text-align: center !important;
+          }
+          
+          /* Stack the sorting buttons */
+          .modal-table td:nth-child(1) .flex-center,
+          .modal-table td:nth-child(1) .flex {
+            gap: 2px !important;
+            flex-direction: column !important;
+          }
+          .modal-table td:nth-child(1) button {
+            padding: 0 !important;
+            width: 16px !important;
+            height: 16px !important;
+          }
+          .modal-table td:nth-child(1) button svg {
+            width: 12px !important;
+            height: 12px !important;
+          }
+          
+          /* Stack action buttons / shrink trash bin */
+          .modal-table td:nth-child(6) .flex {
+            gap: 4px !important;
+            justify-content: center !important;
+          }
+          .modal-table td:nth-child(6) button {
+            width: 24px !important;
+            height: 24px !important;
+            padding: 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+          }
+          .modal-table td:nth-child(6) button svg {
+            width: 13px !important;
+            height: 13px !important;
+          }
+
+          /* Extra cards */
+          .sales-extra-container {
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+            margin-bottom: 1.5rem !important;
+          }
+          .sales-extra-container .grid {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 12px !important;
+          }
+          .sales-extra-container .input-group {
+            background: white !important;
+            border: 1px solid #f1f5f9 !important;
+            border-radius: 1rem !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
+            padding: 1rem !important;
+            margin-bottom: 0 !important;
+          }
+
+          /* Footer Actions */
+          .premium-modal-actions {
+            display: flex !important;
+            flex-direction: row-reverse !important;
+            gap: 12px !important;
+            margin-top: auto !important;
+            padding-top: 1rem !important;
+          }
+          .premium-modal-actions button {
+            flex: 1 !important;
+            height: 44px !important;
+            border-radius: 10px !important;
+            font-size: 14px !important;
+            font-weight: bold !important;
+            margin: 0 !important;
+          }
+          .premium-modal-actions button.btn-premium-save {
+            background-color: #13898f !important;
+            color: white !important;
+          }
+          .premium-modal-actions button.btn-premium-cancel {
+            background-color: #f8fafc !important;
+            border: 1px solid #e2e8f0 !important;
+            color: #64748b !important;
+          }
+
+          /* SweetAlert Popup Compact Design on Mobile */
+          .premium-modal-container .premium-modal-popup {
+            width: 95% !important;
+            padding: 0.75rem 0.5rem !important;
+          }
+          .premium-modal-container .premium-modal-header {
+            padding-bottom: 0.5rem !important;
+            margin-bottom: 0.5rem !important;
+          }
+          .premium-modal-container .premium-modal-title {
+            font-size: 14px !important;
+          }
+          .premium-modal-container .premium-modal-title svg {
+            width: 18px !important;
+            height: 18px !important;
+          }
+          .premium-modal-container .premium-modal-close {
+            width: 28px !important;
+            height: 28px !important;
+          }
+          .premium-modal-container .premium-form {
+            margin-top: 0.25rem !important;
+          }
+          .premium-modal-container .swal-grid {
+            gap: 6px !important;
+          }
+           .premium-modal-container .premium-form-group {
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: flex-end !important;
+            margin-bottom: 0 !important;
+          }
+          .premium-modal-container .premium-form-group label {
+            font-size: 10px !important;
+            margin-bottom: 2px !important;
+            text-align: right !important;
+          }
+          .premium-modal-container .premium-input {
+            height: 32px !important;
+            font-size: 11px !important;
+            padding: 0.25rem 0.5rem !important;
+            border-radius: 6px !important;
+            width: 100% !important;
+          }
+          .premium-modal-container button#swal-add-location-btn {
+            width: 32px !important;
+            height: 32px !important;
+            border-radius: 6px !important;
+            font-size: 14px !important;
+          }
+          .premium-modal-container .swal-col-6 {
+            grid-column: span 6 !important;
+          }
+          .premium-modal-container .swal-full-width {
+            grid-column: span 12 !important;
+          }
+          .premium-modal-container .swal-hide-mobile {
+            display: none !important;
+          }
+          .preview-item-badge {
+            display: inline-flex !important;
+            height: 28px !important;
+            font-size: 0.78rem !important;
+            width: auto !important;
+            padding: 0 10px !important;
+            border-radius: 6px !important;
+          }
+          .premium-modal-container .premium-modal-actions {
+            margin-top: 0.75rem !important;
+            padding-top: 0.5rem !important;
+            display: flex !important;
+            flex-direction: row-reverse !important;
+            gap: 8px !important;
+          }
+          .premium-modal-container .premium-modal-actions button {
+            height: 36px !important;
+            font-size: 12px !important;
+            flex: 1 !important;
+            margin: 0 !important;
+          }
+        }
       `}} />
+      <MultiColorSelectionModal
+        isOpen={showMultiColorModal}
+        onClose={() => setShowMultiColorModal(false)}
+        onAddItems={handleAddMultiColors}
+        stockColors={globalSettings.stockColors || []}
+        stock={stock}
+      />
     </>
   );
 };
