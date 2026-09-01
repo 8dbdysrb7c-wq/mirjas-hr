@@ -274,10 +274,32 @@ const HRSalaries = ({ user }) => {
   const periodStatus = currentPeriod ? currentPeriod.status : 'open';
 
   const handleStatusChange = async (newStatus) => {
-    Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false });
-    Swal.showLoading();
     try {
       if (newStatus === 'archived') {
+        const negativeBalances = salaryData.filter(emp => Number(emp.netSalary) < 0);
+        if (negativeBalances.length > 0) {
+          const nextMonthDate = new Date(`${selectedMonth}-01T00:00:00`);
+          nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+          const nextMonth = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}`;
+          const rowsHtml = negativeBalances.map(emp => `
+            <div style="display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid #fee2e2">
+              <span>${emp.name || emp.employeeName || emp.id}</span>
+              <strong dir="ltr" style="color:#dc2626">${Math.abs(Number(emp.netSalary)).toFixed(2)} د.أ</strong>
+            </div>`).join('');
+          const result = await Swal.fire({
+            icon: 'warning',
+            title: 'رواتب بصافي سالب',
+            html: `<div style="text-align:right"><p>عند ترحيل وإغلاق شهر <strong>${selectedMonth}</strong> سيتم إنشاء طلب سلفة معلّق للشهر <strong>${nextMonth}</strong> لكل موظف أدناه:</p><div style="margin-top:12px">${rowsHtml}</div><p style="margin-top:14px;color:#64748b;font-size:13px">لن تُخصم السلفة من راتب الشهر التالي إلا بعد اعتمادها من قسم السلف.</p></div>`,
+            showCancelButton: true,
+            confirmButtonText: 'ترحيل وإنشاء طلبات السلف',
+            cancelButtonText: 'إلغاء',
+            confirmButtonColor: '#0f766e'
+          });
+          if (!result.isConfirmed) return;
+        }
+
+        Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false });
+        Swal.showLoading();
         const cycle = getCycleDates(selectedMonth, hrSettings.salaryCycleStartDay || 1);
         
         // Find processed advances, violations, bonuses
@@ -309,6 +331,8 @@ const HRSalaries = ({ user }) => {
         const archived = await archiveHRSalaryPeriod(selectedMonth, salaryData, user);
         if (!archived) throw new Error('تعذر حفظ دورة الرواتب ونسخة الأرشيف');
       } else if (newStatus === 'open') {
+        Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false });
+        Swal.showLoading();
         const reopened = await unarchiveHRSalaryPeriod(selectedMonth, user);
         if (!reopened) throw new Error('تعذر إلغاء ترحيل دورة الرواتب');
         
@@ -332,6 +356,8 @@ const HRSalaries = ({ user }) => {
           await updateDoc(doc(db, 'hr_bonuses', bon.id), { processedInPeriod: null });
         }
       } else {
+        Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false });
+        Swal.showLoading();
         const saved = await saveHRSalaryPeriod(selectedMonth, newStatus, user);
         if (!saved) throw new Error('تعذر تحديث حالة دورة الرواتب');
       }

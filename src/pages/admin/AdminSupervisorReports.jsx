@@ -1591,11 +1591,11 @@ const AdminSupervisorReports = ({ user }) => {
 
                               {/* Metadata container */}
                               <div style={{ backgroundColor: '#eef7f8', borderRadius: '20px', padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                {/* Row 1: الامتثال بالإضافات */}
+                                {/* Row 1: الهاتف بالأمانات */}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.35rem 0', borderBottom: '1px solid #dbeef0' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#334155' }}>
                                     <Shield size={16} className="text-[#334155]" />
-                                    <span style={{ fontWeight: 'extrabold', fontSize: '0.75rem' }}>الامتثال بالإضافات</span>
+                                    <span style={{ fontWeight: 'extrabold', fontSize: '0.75rem' }}>الهاتف بالأمانات</span>
                                   </div>
                                   <span style={{
                                     display: 'inline-flex',

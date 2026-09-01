@@ -1284,7 +1284,10 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
               {filteredPunches.length === 0 ? (
                 <tr><td colSpan="9" className="p-8 text-center text-slate-500 font-bold">لا توجد طلبات مطابقة</td></tr>
               ) : filteredPunches.map(p => {
-                const emp = employees.find(e => String(e.id || '').trim() === String(p.employeeId || '').trim() || String(e.name || '').trim() === String(p.employeeName || '').trim());
+                const punchEmployeeId = String(p.employeeId || '').trim();
+                const emp = punchEmployeeId
+                  ? employees.find(e => String(e.id || '').trim() === punchEmployeeId)
+                  : employees.find(e => String(e.name || '').trim() === String(p.employeeName || '').trim());
                 const pDate = new Date(p.date || p.createdAt);
                 const currentMonthStr = `${pDate.getFullYear()}-${String(pDate.getMonth() + 1).padStart(2, '0')}`;
                 const bonusPunches = emp?.bonusMissingPunches?.[currentMonthStr] || 0;
@@ -1316,7 +1319,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
                       {p.employeeId}
                     </td>
                     <td className="p-5 font-bold text-slate-800 whitespace-nowrap text-right">
-                      {p.employeeName}
+                      {emp?.name || p.employeeName}
                     </td>
                     <td className="p-5 whitespace-nowrap text-slate-800 font-bold text-sm text-center">
                       <div className="flex items-center justify-center gap-2">
