@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, User } from 'lucide-react';
+import { AlertTriangle, Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, User, Check } from 'lucide-react';
 import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
-import { getEmployees, getHRViolations, saveHRViolation, deleteHRViolation } from '../../store';
+import { getEmployees, getHRViolations, saveHRViolation, deleteHRViolation, syncEvaluatedDailyReportViolations } from '../../store';
 import Swal from 'sweetalert2';
 import HRDateFilter from '../../components/ui/HRDateFilter';
 
@@ -51,6 +51,7 @@ const HRViolations = ({ user }) => {
 
   const fetchData = async () => {
     setLoading(true);
+    await syncEvaluatedDailyReportViolations();
     const [violationsData, empsData] = await Promise.all([getHRViolations(), getEmployees()]);
     setViolations(violationsData);
     setEmployees(empsData);
@@ -81,6 +82,17 @@ const HRViolations = ({ user }) => {
       await deleteHRViolation(id);
       fetchData();
     }
+  };
+
+  const handleApproval = async (violation, status) => {
+    await saveHRViolation({
+      ...violation,
+      status,
+      approvedBy: user?.name || 'المدير',
+      approvedAt: new Date().toISOString()
+    }, user);
+    Swal.fire('تم', status === 'موافق' ? 'تم اعتماد المخالفة والخصم' : 'تم رفض المخالفة', 'success');
+    fetchData();
   };
 
   if (loading) return <div className="text-center p-8">جاري التحميل...</div>;
@@ -292,6 +304,7 @@ const HRViolations = ({ user }) => {
                 <div className="flex items-center gap-2">الإجراء المتخذ {renderSortIcon('action')}</div></th>
               <th className="cursor-pointer hover:bg-gray-100 transition-colors" onClick={() =>handleSort('deductionAmount')}>
                 <div className="flex items-center gap-2">قيمة الخصم {renderSortIcon('deductionAmount')}</div></th>
+              <th>حالة الاعتماد</th>
               <th>ملاحظات</th>
               <th>إجراءات</th>
             </tr>
@@ -305,16 +318,29 @@ const HRViolations = ({ user }) => {
                 <td className="text-rose-600 font-medium">{v.type}</td>
                 <td>{v.action}</td>
                 <td className="font-bold text-rose-600">{v.deductionAmount ? `${v.deductionAmount} د.أ` : '-'}</td>
+                <td className="font-bold">
+                  <span className={v.status === 'موافق' ? 'text-emerald-600' : v.status === 'مرفوض' ? 'text-rose-600' : 'text-amber-600'}>
+                    {v.status || 'معتمد'}
+                  </span>
+                </td>
                 <td className="text-muted text-sm">{v.notes}</td>
                 <td>
-                  {!v.processedInPeriod && (
-                    <button onClick={() => handleDelete(v.id)} className="icon-btn icon-btn-delete"><Trash2 size={18}/></button>
-                  )}
+                  <div className="flex gap-2 justify-center">
+                    {v.status === 'معلق' && (
+                      <>
+                        <button onClick={() => handleApproval(v, 'موافق')} className="icon-btn icon-btn-success" title="اعتماد المخالفة"><Check size={18}/></button>
+                        <button onClick={() => handleApproval(v, 'مرفوض')} className="icon-btn icon-btn-delete" title="رفض المخالفة"><X size={18}/></button>
+                      </>
+                    )}
+                    {!v.processedInPeriod && (
+                      <button onClick={() => handleDelete(v.id)} className="icon-btn icon-btn-delete"><Trash2 size={18}/></button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
             {violations.filter(v => v.status !== 'محذوف').length === 0 && (
-              <tr><td colSpan="8" className="py-10 text-center text-muted">لا توجد مخالفات مسجلة</td></tr>
+              <tr><td colSpan="9" className="py-10 text-center text-muted">لا توجد مخالفات مسجلة</td></tr>
             )}
           </tbody>
         </table>

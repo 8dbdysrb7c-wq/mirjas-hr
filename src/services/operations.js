@@ -11,7 +11,7 @@ import {
   limit,
   orderBy
 } from 'firebase/firestore';
-import { syncToHRAttendance } from './hr';
+import { syncToHRAttendance, syncDailyReportViolations } from './hr';
 import { createActivityNotification, isAddAction, resolveModuleKeyFromLog, ACTIVITY_ITEM_LABELS } from './settings';
 import { triggerWhatsAppRouting } from './whatsappRouter';
 
@@ -40,6 +40,7 @@ export const saveReport = async (report) => {
   try {
     const id = report.id || `${report.userId}_${report.date}`;
     await setDoc(doc(db, 'reports', id), report);
+    await syncDailyReportViolations({ ...report, id });
     if (report.userId && report.date && report.status === 'موافق') {
       await syncToHRAttendance(report.userId, report.userName, report.date, report.timeIn, report.timeOut);
     }

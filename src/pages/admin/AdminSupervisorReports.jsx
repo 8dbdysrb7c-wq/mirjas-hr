@@ -662,10 +662,15 @@ const AdminSupervisorReports = ({ user }) => {
 
       if (currentUserPerms.evaluations) {
         for (const ev of evaluationsArray) {
-          let empDailyReport = employeeReports.find(r => String(r.userId || '').trim() === String(ev.employeeId).trim() || String(r.employeeId || '').trim() === String(ev.employeeId).trim());
+          let empDailyReport = employeeReports.find(r =>
+            (String(r.userId || '').trim() === String(ev.employeeId).trim()
+              || String(r.employeeId || '').trim() === String(ev.employeeId).trim())
+            && r.date === date
+          );
 
-          if (!empDailyReport && ev.rating === 'لم يقدم تقرير') {
+          if (!empDailyReport && (ev.rating === 'لم يقدم تقرير' || ev.rating === 'غائب')) {
             const empUser = employees.find(e => String(e.id) === String(ev.employeeId));
+            const isAbsent = ev.rating === 'غائب';
             empDailyReport = {
               id: `rep_${ev.employeeId}_${date}`,
               userId: ev.employeeId,
@@ -675,10 +680,11 @@ const AdminSupervisorReports = ({ user }) => {
               timeIn: '',
               timeOut: '',
               status: 'معتمد',
-              finalScore: 40,
+              finalScore: isAbsent ? 0 : 40,
+              finalRating: ev.rating,
               phoneUsages: 0,
               tasks: [],
-              notes: 'تم تقييم الموظف من قبل المشرف لعدم تقديمه التقرير اليومي',
+              notes: isAbsent ? 'تم تسجيل الموظف غائبًا من قبل المشرف' : 'تم تقييم الموظف من قبل المشرف لعدم تقديمه التقرير اليومي',
               createdAt: new Date().toISOString()
             };
           }
@@ -690,7 +696,11 @@ const AdminSupervisorReports = ({ user }) => {
               ...empDailyReport,
               supervisorRating: ev.rating,
               supervisorReason: ev.reason,
-              finalScore: supervisorScore
+              finalScore: supervisorScore,
+              finalRating: ev.rating,
+              status: 'تم التقييم',
+              evaluatedAt: new Date().toISOString(),
+              evaluatedBy: user.name
             };
             await saveReport(updatedEmpReport);
 
