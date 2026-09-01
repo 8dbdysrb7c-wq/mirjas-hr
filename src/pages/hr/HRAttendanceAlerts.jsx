@@ -107,10 +107,17 @@ const HRAttendanceAlerts = ({ user }) => {
     const findEmployee = (id, name) => {
       const idStr = String(id || '').trim().toLowerCase();
       const nameStr = String(name || '').trim().toLowerCase();
-      return employees.find(e => 
-        String(e.id).trim().toLowerCase() === idStr || 
-        String(e.name || '').trim().toLowerCase() === nameStr
-      );
+
+      // An employee ID is authoritative. Falling back to the name while an ID
+      // exists can attach one attendance record to another employee who happens
+      // to have the same name.
+      if (idStr) {
+        return employees.find(e => String(e.id).trim().toLowerCase() === idStr);
+      }
+
+      return nameStr
+        ? employees.find(e => String(e.name || '').trim().toLowerCase() === nameStr)
+        : undefined;
     };
 
     // 1. Build a unified list of records combining processed attendance records, employee reports, supervisor reports, and raw logs
@@ -276,9 +283,11 @@ const HRAttendanceAlerts = ({ user }) => {
       const empNameStr = String(emp.name || '').trim().toLowerCase();
 
       const isMatch = (id, name) => {
-        if (id && String(id).trim().toLowerCase() === empIdStr) return true;
-        if (name && empNameStr && String(name).trim().toLowerCase() === empNameStr) return true;
-        return false;
+        const recordId = String(id || '').trim().toLowerCase();
+        if (recordId) return recordId === empIdStr;
+
+        const recordName = String(name || '').trim().toLowerCase();
+        return Boolean(recordName && empNameStr && recordName === empNameStr);
       };
       
       const shiftStartMins = parseTime(shiftStart);
