@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { getEmployees, saveEmployees, getDepartments, saveEmployee, deleteEmployee, getGlobalSettings, isAdmin, canPerformAction, addLog, getRoles } from '../../store';
 import Select from '../../components/SearchSelect';
-import { Plus, Edit2, Trash2, X, Key, Shield, User, Fingerprint, ArrowUpDown } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Key, Shield, User, Fingerprint, ArrowUpDown, Copy } from 'lucide-react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import flatpickr from 'flatpickr';
 import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import 'flatpickr/dist/themes/airbnb.css';
+import UserAccessDesigner from '../../components/UserAccessDesigner';
 
 const MySwal = withReactContent(Swal);
 
@@ -30,6 +31,7 @@ const getNextAnnualRaiseDate = (joinDateStr) => {
 };
 
 const AdminEmployees = ({ user }) => {
+  const [accessEmployee, setAccessEmployee] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState({});
   const [showModal, setShowModal] = useState(false);
@@ -110,8 +112,9 @@ const AdminEmployees = ({ user }) => {
     fetchData();
   }, []);
 
-  const handleOpenModal = (emp = null) => {
-    const isEdit = !!emp;
+  const handleOpenModal = (emp = null, options = {}) => {
+    const isClone = !!emp && options.clone === true;
+    const isEdit = !!emp && !isClone;
     let nextId = 'EMP-0001';
     if (!isEdit && employees.length > 0) {
       let maxNum = 0;
@@ -132,6 +135,9 @@ const AdminEmployees = ({ user }) => {
       transportationAllowance: emp.transportationAllowance || '',
       phone: emp.phone || '',
       employmentStatus: emp.employmentStatus || 'فعال',
+      employmentType: emp.employmentType || 'permanent',
+      contractEndDate: emp.contractEndDate || '',
+      terminationDate: emp.terminationDate || emp.serviceEndDate || '',
       hrNotes: emp.hrNotes || '',
       vacationBalance: emp.vacationBalance || '0',
       sickLeaveBalance: emp.sickLeaveBalance || '0',
@@ -150,6 +156,62 @@ const AdminEmployees = ({ user }) => {
       shiftStart: emp.shiftStart || '08:00',
       shiftEnd: emp.shiftEnd || '16:00',
       workLocationId: emp.workLocationId || ''
+    } : isClone ? {
+      id: nextId,
+      name: '',
+      jobTitle: emp.jobTitle || '',
+      department: emp.department || (emp.roles && emp.roles[0]) || '',
+      joinDate: new Date().toISOString().split('T')[0],
+      dateOfBirth: '',
+      basicSalary: '',
+      transportationAllowance: '',
+      phone: '',
+      employmentStatus: 'فعال',
+      employmentType: emp.employmentType || 'permanent',
+      contractEndDate: '',
+      terminationDate: '',
+      hrNotes: '',
+      vacationBalance: '14',
+      sickLeaveBalance: '14',
+      allowedLeaveTypes: emp.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'],
+      allowedMissingPunches: emp.allowedMissingPunches !== undefined ? emp.allowedMissingPunches : 0,
+      bonusMissingPunches: 0,
+      directManager: emp.directManager || '',
+      roles: [...(emp.roles || [])],
+      level: emp.level || 'موظف عادي',
+      password: '12345678',
+      hasOverviewAccess: emp.hasOverviewAccess ?? true,
+      hasLiveAccess: emp.hasLiveAccess ?? false,
+      hasEmployeesAccess: emp.hasEmployeesAccess ?? false,
+      hasSalesAccess: emp.hasSalesAccess ?? false,
+      hasProductionAccess: emp.hasProductionAccess ?? false,
+      hasProductionTasksAccess: emp.hasProductionTasksAccess ?? false,
+      hasPreparationAccess: emp.hasPreparationAccess ?? false,
+      hasPreparationTasksAccess: emp.hasPreparationTasksAccess ?? false,
+      hasDeliveryAccess: emp.hasDeliveryAccess ?? false,
+      hasReportsAccess: emp.hasReportsAccess ?? false,
+      hasCustomersAccess: emp.hasCustomersAccess ?? false,
+      hasRepVisitsAccess: emp.hasRepVisitsAccess ?? false,
+      hasSettingsAccess: emp.hasSettingsAccess ?? false,
+      hasStockAccess: emp.hasStockAccess ?? false,
+      hasSupervisorTasksAccess: emp.hasSupervisorTasksAccess ?? false,
+      hasSupervisorReportsAccess: emp.hasSupervisorReportsAccess ?? false,
+      hasSiteSettingsAccess: emp.hasSiteSettingsAccess ?? false,
+      hasLogsAccess: emp.hasLogsAccess ?? false,
+      role: emp.role || null,
+      permissions: emp.permissions || null,
+      supervisorPermissions: { ...(emp.supervisorPermissions || { attendance: true, smoking: true, absences: true, evaluations: true, orders: true }) },
+      assignedEmployees: [],
+      workShiftName: emp.workShiftName || '',
+      shiftStart: emp.shiftStart || '08:00',
+      shiftEnd: emp.shiftEnd || '16:00',
+      workLocationId: emp.workLocationId || '',
+      allowAdvances: emp.allowAdvances ?? true,
+      useCustomAdvancePeriods: emp.useCustomAdvancePeriods ?? false,
+      customAdvancePeriods: Array.isArray(emp.customAdvancePeriods) ? emp.customAdvancePeriods.map(period => ({ ...period })) : [],
+      hasSocialSecurity: false,
+      socialSecuritySalary: '',
+      isHazardousProfession: emp.isHazardousProfession ?? false
     } : {
       id: nextId,
       name: '',
@@ -160,6 +222,9 @@ const AdminEmployees = ({ user }) => {
       transportationAllowance: '',
       phone: '',
       employmentStatus: 'فعال',
+      employmentType: 'permanent',
+      contractEndDate: '',
+      terminationDate: '',
       hrNotes: '',
       vacationBalance: '14',
       sickLeaveBalance: '14',
@@ -240,7 +305,7 @@ const AdminEmployees = ({ user }) => {
         <div class="premium-modal-header">
           <div class="premium-modal-title">
              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-cog text-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 16v1"/><path d="M19 21v1"/><path d="M22 19h-1"/><path d="M17 19h-1"/><circle cx="19" cy="19" r="2"/></svg>
-             <span>${isEdit ? 'تعديل بيانات المستخدم' : 'إضافة مستخدم جديد'}</span>
+             <span>${isEdit ? 'تعديل بيانات المستخدم' : isClone ? 'إنشاء موظف من ملف منسوخ' : 'إضافة مستخدم جديد'}</span>
           </div>
           <div class="premium-modal-close" onclick="Swal.close()">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -248,6 +313,7 @@ const AdminEmployees = ({ user }) => {
         </div>
         
         <div class="premium-form">
+          ${isClone ? `<div style="margin-bottom:16px;padding:12px 14px;border:1px solid #7dd3fc;border-radius:12px;background:#f0f9ff;color:#075985;font-weight:800;line-height:1.7">تم نسخ القالب الوظيفي والصلاحيات من <strong>${emp.name}</strong>. لم تُنسخ الهوية أو الهاتف أو الراتب أو الأرصدة أو السجلات. راجع جميع الحقول قبل الاعتماد.</div>` : ''}
           <div class="grid grid-cols-12 gap-x-8 gap-y-4">
             <div class="col-span-4 premium-form-group">
               <label><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-fingerprint text-muted"><path d="M2 12a10 10 0 0 1 18-6"/><path d="M7 12a5 5 0 0 1 5-5"/><path d="M12 12h.01"/><path d="M22 12a10 10 0 0 1-18 6"/><path d="M12 17a5 5 0 0 1-5-5"/><path d="M17 12a5 5 0 0 0-5-5"/></svg> الرقم الوظيفي</label>
@@ -464,13 +530,32 @@ const AdminEmployees = ({ user }) => {
             </div>
 
             <div class="col-span-4 premium-form-group">
+              <label>نوع التوظيف</label>
+              <select id="swal-employment-type" class="premium-input" onchange="document.getElementById('swal-contract-end-container').style.display = this.value === 'fixed_term' ? 'block' : 'none'">
+                <option value="permanent" ${initialData.employmentType === 'permanent' ? 'selected' : ''}>موظف دائم</option>
+                <option value="fixed_term" ${initialData.employmentType === 'fixed_term' ? 'selected' : ''}>عقد محدد المدة</option>
+                <option value="daily_worker" ${initialData.employmentType === 'daily_worker' ? 'selected' : ''}>موظف مياومة</option>
+              </select>
+            </div>
+
+            <div id="swal-contract-end-container" class="col-span-4 premium-form-group" style="display: ${initialData.employmentType === 'fixed_term' ? 'block' : 'none'};">
+              <label>تاريخ انتهاء العقد</label>
+              <input id="swal-contract-end-date" class="premium-input bg-white" placeholder="اختر تاريخ انتهاء العقد" value="${initialData.contractEndDate || ''}">
+            </div>
+
+            <div class="col-span-4 premium-form-group">
               <label>الحالة الوظيفية</label>
-              <select id="swal-employment-status" class="premium-input" onchange="document.getElementById('swal-hr-notes-container').style.display = this.value === 'فعال' ? 'none' : 'block'">
+              <select id="swal-employment-status" class="premium-input" onchange="const hidden = this.value === 'فعال'; document.getElementById('swal-hr-notes-container').style.display = hidden ? 'none' : 'block'; document.getElementById('swal-termination-date-container').style.display = hidden ? 'none' : 'block'">
                 <option value="فعال" ${initialData.employmentStatus === 'فعال' ? 'selected' : ''}>فعال</option>
                 <option value="موقوف" ${initialData.employmentStatus === 'موقوف' ? 'selected' : ''}>موقوف</option>
                 <option value="مستقيل" ${initialData.employmentStatus === 'مستقيل' ? 'selected' : ''}>مستقيل</option>
                 <option value="منتهي خدمات" ${initialData.employmentStatus === 'منتهي خدمات' ? 'selected' : ''}>منتهي خدمات</option>
               </select>
+            </div>
+
+            <div id="swal-termination-date-container" class="col-span-4 premium-form-group" style="display: ${initialData.employmentStatus === 'فعال' ? 'none' : 'block'};">
+              <label>تاريخ انتهاء الخدمة</label>
+              <input id="swal-termination-date" class="premium-input bg-white" placeholder="اختر تاريخ انتهاء الخدمة" value="${initialData.terminationDate || ''}">
             </div>
 
             <div id="swal-hr-notes-container" class="col-span-12 premium-form-group" style="display: ${initialData.employmentStatus === 'فعال' ? 'none' : 'block'};">
@@ -503,12 +588,14 @@ const AdminEmployees = ({ user }) => {
         </div>
       `,
       showCancelButton: true,
-      confirmButtonText: 'حفظ البيانات',
+      confirmButtonText: isClone ? 'اعتماد وإنشاء الموظف' : 'حفظ البيانات',
       cancelButtonText: 'إلغاء',
       focusConfirm: false,
       didOpen: () => {
         flatpickr('#swal-dob', { locale: Arabic, disableMobile: true, dateFormat: 'Y-m-d' });
         flatpickr('#swal-annual-raise', { locale: Arabic, disableMobile: true, dateFormat: 'Y-m-d' });
+        flatpickr('#swal-termination-date', { locale: Arabic, disableMobile: true, dateFormat: 'Y-m-d' });
+        flatpickr('#swal-contract-end-date', { locale: Arabic, disableMobile: true, dateFormat: 'Y-m-d' });
         flatpickr('#swal-join-date', { 
           locale: Arabic, 
           disableMobile: true, 
@@ -547,6 +634,9 @@ const AdminEmployees = ({ user }) => {
         const bonusMissingPunches = { ...(initialData.bonusMissingPunches || {}) };
         bonusMissingPunches[currentMonthStr] = bonusPunchesRaw !== '' && bonusPunchesRaw !== undefined ? parseInt(bonusPunchesRaw) : 0;
         const employmentStatus = document.getElementById('swal-employment-status')?.value || 'فعال';
+        const employmentType = document.getElementById('swal-employment-type')?.value || 'permanent';
+        const contractEndDate = employmentType === 'fixed_term' ? (document.getElementById('swal-contract-end-date')?.value || '') : '';
+        const terminationDate = employmentStatus === 'فعال' ? '' : (document.getElementById('swal-termination-date')?.value || '');
         const hrNotes = document.getElementById('swal-hr-notes')?.value || '';
         
         const hasSocialSecurity = document.getElementById('swal-has-social-security')?.checked || false;
@@ -621,8 +711,24 @@ const AdminEmployees = ({ user }) => {
           Swal.showValidationMessage('يرجى ملء جميع الحقول المطلوبة');
           return false;
         }
+        if (employmentStatus !== 'فعال' && !terminationDate) {
+          Swal.showValidationMessage('يرجى تحديد تاريخ انتهاء الخدمة للموظف غير الفعال');
+          return false;
+        }
+        if (employmentType === 'fixed_term' && !contractEndDate) {
+          Swal.showValidationMessage('يرجى تحديد تاريخ انتهاء العقد محدد المدة');
+          return false;
+        }
+        if (contractEndDate && joinDate && contractEndDate < joinDate) {
+          Swal.showValidationMessage('تاريخ انتهاء العقد لا يمكن أن يسبق تاريخ التعيين');
+          return false;
+        }
+        if (terminationDate && joinDate && terminationDate < joinDate) {
+          Swal.showValidationMessage('تاريخ انتهاء الخدمة لا يمكن أن يسبق تاريخ التعيين');
+          return false;
+        }
         return { 
-          id, name, jobTitle, department, directManager, phone, dateOfBirth, joinDate, annualRaiseDate, basicSalary, transportationAllowance, employmentStatus, vacationBalance, sickLeaveBalance, allowedMissingPunches, bonusMissingPunches, allowedLeaveTypes, hrNotes, level, password, 
+          id, name, jobTitle, department, directManager, phone, dateOfBirth, joinDate, annualRaiseDate, basicSalary, transportationAllowance, employmentStatus, employmentType, contractEndDate, terminationDate, vacationBalance, sickLeaveBalance, allowedMissingPunches, bonusMissingPunches, allowedLeaveTypes, hrNotes, level, password, 
           workShiftName, shiftStart, shiftEnd, workLocationId, hasSocialSecurity, socialSecuritySalary, isHazardousProfession,
           allowAdvances, useCustomAdvancePeriods, customAdvancePeriods,
           hasOverviewAccess, hasLiveAccess, hasEmployeesAccess, hasSalesAccess, 
@@ -671,8 +777,8 @@ const AdminEmployees = ({ user }) => {
           userName: user.name,
           userId: user.id,
           module: 'الموظفين',
-          action: isEdit ? 'تعديل' : 'إضافة',
-          details: `${isEdit ? 'تعديل' : 'إضافة'} الموظف: ${savingData.name} (${savingData.id})`
+          action: isEdit ? 'تعديل' : isClone ? 'نسخ وإضافة' : 'إضافة',
+          details: `${isEdit ? 'تعديل' : isClone ? `إنشاء ملف الموظف من قالب ${emp.name}` : 'إضافة'}: ${savingData.name} (${savingData.id})`
         });
       }
     });
@@ -835,6 +941,7 @@ const AdminEmployees = ({ user }) => {
 
   return (
     <div className="space-y-4" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      {accessEmployee && isAdmin(user) && <UserAccessDesigner employee={accessEmployee} employees={employees} actor={user} onClose={() => setAccessEmployee(null)} />}
       <div className="glass-card flex justify-between items-center">
         <div>
           <h3>إدارة الموظفين والصلاحيات</h3>
@@ -923,9 +1030,15 @@ const AdminEmployees = ({ user }) => {
                     <td data-label="المسمى الوظيفي">{emp.jobTitle || '-'}</td>
                     <td data-label="إجراءات">
                       <div className="flex gap-2 justify-center">
+                        {isAdmin(user) && <button className="icon-btn" title="تخصيص واجهة وصلاحيات المستخدم" onClick={() => setAccessEmployee(emp)}><Shield size={16} /></button>}
                         {canPerformAction(user, 'EDIT', 'EMPLOYEES', globalSettings) && (
                           <button className="icon-btn icon-btn-edit" title="تعديل" onClick={() => handleOpenModal(emp)}>
                             <Edit2 size={16} />
+                          </button>
+                        )}
+                        {canPerformAction(user, 'ADD', 'EMPLOYEES', globalSettings) && (
+                          <button className="icon-btn" title="نسخ كقالب لموظف جديد" onClick={() => handleOpenModal(emp, { clone: true })} style={{ backgroundColor: '#ecfeff', color: '#0891b2', border: '1px solid #a5f3fc' }}>
+                            <Copy size={16} />
                           </button>
                         )}
                         {canPerformAction(user, 'EDIT', 'EMPLOYEES', globalSettings) && (

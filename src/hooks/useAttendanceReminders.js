@@ -7,8 +7,13 @@ export const useAttendanceReminders = (isAdminOnline) => {
 
   useEffect(() => {
     if (!isAdminOnline) return;
+    let cachedEmployees = null;
+    let employeesLoadedAt = 0;
+    let checking = false;
 
     const checkReminders = async () => {
+      if (checking) return;
+      checking = true;
       try {
         const settings = await getGlobalSettings();
         const remindersConfig = settings?.whatsappConfig?.reminders || {};
@@ -23,9 +28,17 @@ export const useAttendanceReminders = (isAdminOnline) => {
         const currentM = now.getMinutes();
         const currentTotalMins = currentH * 60 + currentM;
 
-        const employees = await getEmployees();
-        const allAttendance = await getHRAttendance();
-        const todayAttendance = allAttendance.filter(a => a.date === dateStr);
+        if (!cachedEmployees || Date.now() - employeesLoadedAt >= 300000) {
+          cachedEmployees = await getEmployees();
+          employeesLoadedAt = Date.now();
+        }
+        const employees = cachedEmployees.filter(emp => [emp.shiftStart, emp.shiftEnd].some(time => {
+          if (!time) return false;
+          const [hours, minutes] = time.split(':').map(Number);
+          return currentTotalMins === hours * 60 + minutes - 5;
+        }));
+        if (!employees.length) return;
+        const todayAttendance = await getHRAttendance(dateStr);
         const holidays = await getHolidays();
 
         // Get today's active holidays
@@ -126,6 +139,8 @@ export const useAttendanceReminders = (isAdminOnline) => {
         }
       } catch (error) {
         console.error("Error in attendance reminder cron:", error);
+      } finally {
+        checking = false;
       }
     };
 

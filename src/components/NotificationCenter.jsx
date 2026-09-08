@@ -8,6 +8,7 @@ import {
   getGlobalSettings,
   getNotificationRoleOptions,
   getNotificationsForUser,
+  watchNotificationsForUser,
   markNotificationAsRead
 } from '../store';
 
@@ -203,9 +204,18 @@ const NotificationCenter = ({ user, onNavigate }) => {
   };
 
   useEffect(() => {
-    loadNotifications();
-    const intervalId = window.setInterval(loadNotifications, 30000);
-    return () => window.clearInterval(intervalId);
+    let cancelled = false;
+    let unsubscribe;
+    const connect = async () => {
+      const globalSettings = await getGlobalSettings();
+      if (cancelled) return;
+      setSettings(globalSettings);
+      unsubscribe = watchNotificationsForUser(user, globalSettings, setNotifications, console.error);
+      const employeeList = canSendSpecialNotification(user, globalSettings) ? await getEmployees() : [];
+      if (!cancelled) setEmployees(employeeList);
+    };
+    connect().catch(console.error);
+    return () => { cancelled = true; unsubscribe?.(); };
   }, [user.id]);
 
   const unreadNotifications = notifications.filter(

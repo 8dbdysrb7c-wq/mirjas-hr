@@ -7,6 +7,11 @@ export const getProductCosting = async (productId) => {
   return snap.exists() ? { ...snap.data(), id: snap.id } : null;
 };
 
+export const getProductCostings = async () => {
+  const snap = await getDocs(collection(db, 'product_costings'));
+  return snap.docs.map(document => ({ ...document.data(), id: document.id }));
+};
+
 export const getProductCostingHistory = async (productId) => {
   if (!productId) return [];
   const snap = await getDocs(query(collection(db, 'product_costing_history'), where('productId', '==', String(productId))));

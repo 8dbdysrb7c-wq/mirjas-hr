@@ -1,4 +1,6 @@
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
+import { startVisiblePolling } from '../../utils/visiblePolling';
 import { getOrders, getSalesOrders, getMissions, getSmokingLogs, getGlobalSettings, saveSmokingLog, saveOrder, saveSalesOrder, saveMission, deleteMission, getEmployees, getAttendanceLogs, saveAttendanceLog, getSupervisorReports } from '../../store';
 import { CheckCircle2, AlertTriangle, Truck, Package, MessageSquare, Save, Activity, Clock, PlusCircle, Check, X, ClipboardList, ChefHat, ShieldCheck, Eye, Users, UserMinus, UserCheck, User, Calendar, ArrowUpDown, ArrowRight, ChevronDown } from 'lucide-react';
 import SewingMachineIcon from '../../components/SewingMachineIcon';
@@ -94,13 +96,7 @@ const AdminLive = ({ user, onBack }) => {
   };
 
   useEffect(() => {
-    let isMounted = true;
-    if (isMounted) fetchData();
-    const intervalId = window.setInterval(fetchData, 30000); // refresh every 30s
-    return () => {
-      isMounted = false;
-      window.clearInterval(intervalId);
-    };
+    return startVisiblePolling(fetchData, 30000);
   }, []);
 
   const handleUpdateOrderField = async (orderId, field, value) => {
@@ -497,7 +493,7 @@ const AdminLive = ({ user, onBack }) => {
           // Hide admin account itself, but show all other staff/employees
           if (String(e.id) === 'admin' || e.role === 'admin' || e.level === 'admin' || e.level === 'إدارة') return false;
           // Hide inactive, resigned, or terminated employees
-          if (['غير فعال', 'مستقيل', 'منتهي خدمات'].includes(e.employmentStatus || e.status)) return false;
+          if (!isActiveEmployee(e)) return false;
           return true;
         });
 

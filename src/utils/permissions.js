@@ -23,6 +23,14 @@ const LEGACY_ACCESS_KEYS = {
   'hr_leaves': 'hasHRAccess',
   'hr_overtime': 'hasHRAccess',
   'hr_attendance': 'hasHRAccess',
+  'hr_attendance_alerts': 'hasHRAccess',
+  'hr_missing_punches': 'hasHRAccess',
+  'hr_petitions': 'hasHRAccess',
+  'hr_assets': 'hasHRAccess',
+  'hr_bonuses_violations': 'hasHRAccess',
+  'hr_salary_reports': 'hasHRAccess',
+  'hr_settlement': 'hasHRAccess',
+  'hr_employee_alerts': 'hasHRAccess',
   'employees': 'hasEmployeesAccess',
   'customers': 'hasCustomersAccess',
   'reports': 'hasReportsAccess',
@@ -35,6 +43,7 @@ const LEGACY_ACCESS_KEYS = {
   'overview': 'hasOverviewAccess',
   'live': 'hasLiveAccess',
   'rep_visits': 'hasRepVisitsAccess',
+  'assigned_missions': 'hasDeliveryAccess',
   'site_settings': 'hasSiteSettingsAccess',
   'preparation': 'hasPreparationAccess',
   'preparation_tasks': 'hasPreparationTasksAccess'
@@ -78,7 +87,12 @@ export const hasPermission = (user, module, action = 'view') => {
   }
 
   if (targetModule === 'hr') {
-    const hrSubmods = ['hr_employees', 'hr_salaries', 'hr_advances', 'hr_leaves', 'hr_overtime', 'hr_attendance'];
+    const hrSubmods = [
+      'hr_employees', 'hr_salaries', 'hr_advances', 'hr_leaves', 'hr_overtime',
+      'hr_attendance', 'hr_attendance_alerts', 'hr_missing_punches', 'hr_petitions',
+      'hr_assets', 'hr_bonuses_violations', 'hr_salary_reports', 'hr_settlement',
+      'hr_employee_alerts'
+    ];
     
     const hasAnyGranularSetting = hrSubmods.some(sm => user.permissions?.[sm] !== undefined);
     

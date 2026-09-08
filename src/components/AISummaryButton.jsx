@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { startVisiblePolling } from '../utils/visiblePolling';
 import { Activity, BrainCircuit, Clock3, Package, RefreshCw, Sparkles, TrendingUp } from 'lucide-react';
 import { getLogs, getMissions, getOrders, getReports, getSalesOrders, getStock } from '../store';
 
@@ -187,9 +188,7 @@ const AISummaryButton = () => {
   };
 
   useEffect(() => {
-    loadSnapshot();
-    const intervalId = window.setInterval(loadSnapshot, 60000);
-    return () => window.clearInterval(intervalId);
+    return startVisiblePolling(loadSnapshot, 300000);
   }, []);
 
   useEffect(() => {

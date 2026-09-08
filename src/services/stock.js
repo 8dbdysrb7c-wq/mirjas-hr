@@ -7,7 +7,8 @@ import {
   deleteDoc, 
   query, 
   where,
-  getDoc
+  getDoc,
+  runTransaction
 } from 'firebase/firestore';
 
 export const getStock = async () => {
@@ -21,11 +22,142 @@ export const getStock = async () => {
 };
 
 import { cascadeStockItemUpdate } from './cascadeUpdates';
+import { isPackagingCategory, packagingNumber, packagingSequence } from '../utils/packagingNumbers';
+import { isFinishedGoodsCategory, finishedGoodsNumber, finishedGoodsSequence } from '../utils/finishedGoodsNumbers';
+import { isSewingConsumablesCategory, sewingConsumablesNumber, sewingConsumablesSequence } from '../utils/sewingConsumablesNumbers';
 
-export const saveStockItem = async (item) => {
+export const saveStockItem = async (item, options = {}) => {
   try {
     let oldName = null;
     const docRef = item.id ? doc(db, 'stock', item.id) : doc(collection(db, 'stock'));
+    if (isFinishedGoodsCategory(item.category)) {
+      const counterRef = doc(db, 'stock_sequences', 'FG');
+      const counterSnapshot = await getDoc(counterRef);
+      let initialLast = 0;
+      if (!counterSnapshot.exists()) {
+        const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'FG-'), where('itemNumber', '<', 'FG.')));
+        initialLast = Math.max(0, ...existing.docs.map(row => finishedGoodsSequence(row.data().itemNumber)));
+      }
+      const savedFGItem = await runTransaction(db, async transaction => {
+        const counter = await transaction.get(counterRef);
+        const existing = item.id ? await transaction.get(docRef) : null;
+        const source = options.sourceItemId ? await transaction.get(doc(db, 'stock', options.sourceItemId)) : null;
+        if (item.id && !existing?.exists()) throw new Error('الصنف لم يعد موجودًا؛ حدّث القائمة');
+        oldName = existing?.exists() ? existing.data().name : null;
+        if (options.sourceItemId && !source?.exists()) throw new Error('الصنف الأصلي لم يعد موجودًا؛ حدّث القائمة');
+        let last = Math.max(initialLast, Number(counter.data()?.lastNumber) || 0);
+        let number;
+        if (existing?.exists() && isFinishedGoodsCategory(existing.data().category) && existing.data().itemNumber) {
+          number = existing.data().itemNumber;
+        } else if (source?.exists()) {
+          if (!isFinishedGoodsCategory(source.data().category)) throw new Error('تصنيف الصنف الأصلي تغيّر؛ حدّث القائمة');
+          number = source.data().itemNumber;
+        } else {
+          // Check if item with identical clean name already exists
+          const cleanName = String(item.name || '').replace(/\s+/g, ' ').trim();
+          const existingSameNameSnap = await getDocs(query(collection(db, 'stock'), where('name', '==', cleanName)));
+          const matchingDoc = existingSameNameSnap.docs.find(d => isFinishedGoodsCategory(d.data().category) && d.data().itemNumber);
+          if (matchingDoc) {
+            number = matchingDoc.data().itemNumber;
+          } else {
+            number = finishedGoodsNumber(++last);
+          }
+        }
+        last = Math.max(last, finishedGoodsSequence(number));
+        const saved = { ...item, id: docRef.id, itemNumber: number, updatedAt: new Date().toISOString() };
+        transaction.set(counterRef, { lastNumber: last }, { merge: true });
+        transaction.set(docRef, saved);
+        return saved;
+      });
+      if (oldName && oldName !== item.name) cascadeStockItemUpdate(savedFGItem.itemNumber, oldName, item.name);
+      return savedFGItem;
+    }
+
+    if (isPackagingCategory(item.category)) {
+      const counterRef = doc(db, 'stock_sequences', 'PKG');
+      const counterSnapshot = await getDoc(counterRef);
+      let initialLast = 0;
+      if (!counterSnapshot.exists()) {
+        const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'PKG-'), where('itemNumber', '<', 'PKG.')));
+        initialLast = Math.max(0, ...existing.docs.map(row => packagingSequence(row.data().itemNumber)));
+      }
+      const savedPackagingItem = await runTransaction(db, async transaction => {
+        const counter = await transaction.get(counterRef);
+        const existing = item.id ? await transaction.get(docRef) : null;
+        const source = options.sourceItemId ? await transaction.get(doc(db, 'stock', options.sourceItemId)) : null;
+        if (item.id && !existing?.exists()) throw new Error('الصنف لم يعد موجودًا؛ حدّث القائمة');
+        oldName = existing?.exists() ? existing.data().name : null;
+        if (options.sourceItemId && !source?.exists()) throw new Error('الصنف الأصلي لم يعد موجودًا؛ حدّث القائمة');
+        let last = Math.max(initialLast, Number(counter.data()?.lastNumber) || 0);
+        let number;
+        if (existing?.exists() && isPackagingCategory(existing.data().category) && existing.data().itemNumber) {
+          number = existing.data().itemNumber;
+        } else if (source?.exists()) {
+          if (!isPackagingCategory(source.data().category)) throw new Error('تصنيف الصنف الأصلي تغيّر؛ حدّث القائمة');
+          number = source.data().itemNumber;
+        } else {
+          // Check if item with identical clean name already exists
+          const cleanName = String(item.name || '').replace(/\s+/g, ' ').trim();
+          const existingSameNameSnap = await getDocs(query(collection(db, 'stock'), where('name', '==', cleanName)));
+          const matchingDoc = existingSameNameSnap.docs.find(d => isPackagingCategory(d.data().category) && d.data().itemNumber);
+          if (matchingDoc) {
+            number = matchingDoc.data().itemNumber;
+          } else {
+            number = packagingNumber(++last);
+          }
+        }
+        last = Math.max(last, packagingSequence(number));
+        const saved = { ...item, id: docRef.id, itemNumber: number, updatedAt: new Date().toISOString() };
+        transaction.set(counterRef, { lastNumber: last }, { merge: true });
+        transaction.set(docRef, saved);
+        return saved;
+      });
+      if (oldName && oldName !== item.name) cascadeStockItemUpdate(savedPackagingItem.itemNumber, oldName, item.name);
+      return savedPackagingItem;
+    }
+
+    if (isSewingConsumablesCategory(item.category)) {
+      const counterRef = doc(db, 'stock_sequences', 'CON');
+      const counterSnapshot = await getDoc(counterRef);
+      let initialLast = 0;
+      if (!counterSnapshot.exists()) {
+        const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'CON-'), where('itemNumber', '<', 'CON.')));
+        initialLast = Math.max(0, ...existing.docs.map(row => sewingConsumablesSequence(row.data().itemNumber)));
+      }
+      const savedCONItem = await runTransaction(db, async transaction => {
+        const counter = await transaction.get(counterRef);
+        const existing = item.id ? await transaction.get(docRef) : null;
+        const source = options.sourceItemId ? await transaction.get(doc(db, 'stock', options.sourceItemId)) : null;
+        if (item.id && !existing?.exists()) throw new Error('الصنف لم يعد موجودًا؛ حدّث القائمة');
+        oldName = existing?.exists() ? existing.data().name : null;
+        if (options.sourceItemId && !source?.exists()) throw new Error('الصنف الأصلي لم يعد موجودًا؛ حدّث القائمة');
+        let last = Math.max(initialLast, Number(counter.data()?.lastNumber) || 0);
+        let number;
+        if (existing?.exists() && isSewingConsumablesCategory(existing.data().category) && existing.data().itemNumber) {
+          number = existing.data().itemNumber;
+        } else if (source?.exists()) {
+          if (!isSewingConsumablesCategory(source.data().category)) throw new Error('تصنيف الصنف الأصلي تغيّر؛ حدّث القائمة');
+          number = source.data().itemNumber;
+        } else {
+          // Check if item with identical clean name already exists
+          const cleanName = String(item.name || '').replace(/\s+/g, ' ').trim();
+          const existingSameNameSnap = await getDocs(query(collection(db, 'stock'), where('name', '==', cleanName)));
+          const matchingDoc = existingSameNameSnap.docs.find(d => isSewingConsumablesCategory(d.data().category) && d.data().itemNumber);
+          if (matchingDoc) {
+            number = matchingDoc.data().itemNumber;
+          } else {
+            number = sewingConsumablesNumber(++last);
+          }
+        }
+        last = Math.max(last, sewingConsumablesSequence(number));
+        const saved = { ...item, id: docRef.id, itemNumber: number, updatedAt: new Date().toISOString() };
+        transaction.set(counterRef, { lastNumber: last }, { merge: true });
+        transaction.set(docRef, saved);
+        return saved;
+      });
+      if (oldName && oldName !== item.name) cascadeStockItemUpdate(savedCONItem.itemNumber, oldName, item.name);
+      return savedCONItem;
+    }
     
     if (item.id) {
       const existingDoc = await getDoc(docRef);
@@ -47,6 +179,27 @@ export const saveStockItem = async (item) => {
     console.error("Error in saveStockItem:", error);
     return null;
   }
+};
+
+// The bill of materials belongs to the inventory item, independently from the
+// temporary costing calculator. Keep it identical across all locations/colors
+// that share the same item number.
+export const saveStockItemComponents = async (itemNumber, materials = []) => {
+  if (!itemNumber) throw new Error('ITEM_NUMBER_REQUIRED');
+  const snapshot = await getDocs(query(collection(db, 'stock'), where('itemNumber', '==', itemNumber)));
+  const safeMaterials = materials.map(material => ({
+    itemNumber: material.itemNumber || '',
+    name: material.name || '',
+    spec: material.spec || '',
+    quantityPerUnit: Number(material.quantityPerUnit) || 0,
+    unit: material.unit || '',
+    wastePercent: Number(material.wastePercent) || 0
+  }));
+  await Promise.all(snapshot.docs.map(document => setDoc(document.ref, {
+    materials: safeMaterials,
+    componentsUpdatedAt: new Date().toISOString()
+  }, { merge: true })));
+  return safeMaterials;
 };
 
 export const deleteStockItem = async (id) => {
@@ -79,6 +232,56 @@ export const getStockVouchers = async () => {
 export const saveStockVoucher = async (voucher) => {
   try {
     let voucherToSave = { ...voucher };
+    const existingVoucher = voucherToSave.id
+      ? await getDoc(doc(db, 'stock_vouchers', voucherToSave.id))
+      : null;
+
+    // Keep the voucher ledger explicit and prevent accidental double application.
+    voucherToSave.status = voucherToSave.status || 'معتمد';
+    voucherToSave.items = Array.isArray(voucherToSave.items) ? voucherToSave.items : [];
+    if (voucherToSave.items.length === 0) {
+      throw new Error('لا يمكن حفظ سند مخزون بدون أصناف');
+    }
+    for (const item of voucherToSave.items) {
+      if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) {
+        throw new Error(`كمية غير صحيحة للصنف ${item.name || item.itemNumber || ''}`);
+      }
+    }
+
+    // Editing an applied voucher is metadata-only. Quantity corrections must use
+    // the existing revert flow followed by a new voucher.
+    if (existingVoucher?.exists() && existingVoucher.data().status !== 'مسودة') {
+      const updatedVoucher = {
+        ...existingVoucher.data(),
+        notes: voucherToSave.notes || existingVoucher.data().notes || '',
+        updatedAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, 'stock_vouchers', voucherToSave.id), updatedVoucher);
+      return { ...updatedVoucher, id: voucherToSave.id };
+    }
+
+    // Validate the complete outgoing voucher before saving or changing balances.
+    if (voucherToSave.status !== 'مسودة' && voucherToSave.type !== 'إدخال' && !(voucherToSave.type === 'تسوية' && voucherToSave.adjustmentType === 'زيادة')) {
+      const requestedByStockId = new Map();
+      for (const voucherItem of voucherToSave.items) {
+        const qSource = query(collection(db, 'stock'), where('itemNumber', '==', voucherItem.itemNumber));
+        const sourceSnapshot = await getDocs(qSource);
+        const sourceDoc = voucherItem.stockId
+          ? sourceSnapshot.docs.find(d => d.id === voucherItem.stockId)
+          : sourceSnapshot.docs.find(d => {
+              const data = d.data();
+              return data.warehouse === voucherToSave.warehouse &&
+                (data.location || '') === (voucherItem.location || '') &&
+                (data.spec || '') === (voucherItem.spec || '');
+            });
+        if (!sourceDoc) throw new Error(`الصنف ${voucherItem.name || voucherItem.itemNumber} غير موجود في المستودع المحدد`);
+        const requested = (requestedByStockId.get(sourceDoc.id) || 0) + Number(voucherItem.quantity);
+        requestedByStockId.set(sourceDoc.id, requested);
+        if (requested > Number(sourceDoc.data().quantity || 0)) {
+          throw new Error(`الكمية المتوفرة للصنف ${voucherItem.name || voucherItem.itemNumber} لا تكفي لإتمام الصرف`);
+        }
+      }
+    }
     if (!voucherToSave.id) {
       const vouchers = await getStockVouchers();
       if (!voucherToSave.voucherNumber) {
@@ -113,7 +316,9 @@ export const saveStockVoucher = async (voucher) => {
       const qSource = query(collection(db, 'stock'), where('itemNumber', '==', voucherItem.itemNumber));
       const sourceSnapshot = await getDocs(qSource);
       
-      const sourceDoc = sourceSnapshot.docs.find(docSnap => {
+      const sourceDoc = voucherItem.stockId
+        ? sourceSnapshot.docs.find(docSnap => docSnap.id === voucherItem.stockId)
+        : sourceSnapshot.docs.find(docSnap => {
         const data = docSnap.data();
         return data.warehouse === voucherToSave.warehouse &&
                (data.location || '') === (voucherItem.location || '') &&
@@ -221,7 +426,35 @@ export const approveAuditVouchers = async (orderNumber) => {
     const snapshot = await getDocs(qDrafts);
     if (snapshot.empty) return false;
 
-    const promises = snapshot.docs.map(async (docSnap) => {
+    // Resolve and validate all lines first. Approval is refused as a whole when
+    // one material is missing or insufficient, so managers do not get a partly
+    // deducted order that looks completed in the UI.
+    const requestedByStockId = new Map();
+    for (const draftDoc of snapshot.docs) {
+      const voucher = draftDoc.data();
+      for (const voucherItem of (voucher.items || [])) {
+        const quantity = Number(voucherItem.quantity);
+        if (!Number.isFinite(quantity) || quantity <= 0) return false;
+        const qSource = query(collection(db, 'stock'), where('itemNumber', '==', voucherItem.itemNumber));
+        const sourceSnapshot = await getDocs(qSource);
+        const sourceDoc = voucherItem.stockId
+          ? sourceSnapshot.docs.find(d => d.id === voucherItem.stockId)
+          : sourceSnapshot.docs.find(d => {
+              const data = d.data();
+              return data.warehouse === voucher.warehouse &&
+                (data.location || '') === (voucherItem.location || '') &&
+                (data.spec || '') === (voucherItem.spec || '');
+            });
+        if (!sourceDoc) return false;
+        const requested = (requestedByStockId.get(sourceDoc.id) || 0) + quantity;
+        requestedByStockId.set(sourceDoc.id, requested);
+        if (requested > Number(sourceDoc.data().quantity || 0)) return false;
+      }
+    }
+
+    const outgoingVoucherDocs = snapshot.docs.filter(docSnap => ['إخراج', 'إتلاف'].includes(docSnap.data().type));
+    if (outgoingVoucherDocs.length === 0) return true;
+    const promises = outgoingVoucherDocs.map(async (docSnap) => {
       const voucher = docSnap.data();
       voucher.id = docSnap.id;
       voucher.status = 'معتمد';
@@ -232,7 +465,9 @@ export const approveAuditVouchers = async (orderNumber) => {
       for (const voucherItem of voucher.items) {
         const qSource = query(collection(db, 'stock'), where('itemNumber', '==', voucherItem.itemNumber));
         const sourceSnapshot = await getDocs(qSource);
-        const sourceDoc = sourceSnapshot.docs.find(d => {
+        const sourceDoc = voucherItem.stockId
+          ? sourceSnapshot.docs.find(d => d.id === voucherItem.stockId)
+          : sourceSnapshot.docs.find(d => {
           const data = d.data();
           return data.warehouse === voucher.warehouse &&
                  (data.location || '') === (voucherItem.location || '') &&
@@ -465,7 +700,9 @@ export const revertAuditVouchers = async (orderNumber) => {
     const snapshot = await getDocs(qVouchers);
     if (snapshot.empty) return true; // Nothing to revert
 
-    const promises = snapshot.docs.map(async (docSnap) => {
+    const outgoingVoucherDocs = snapshot.docs.filter(docSnap => ['إخراج', 'إتلاف'].includes(docSnap.data().type));
+    if (outgoingVoucherDocs.length === 0) return true;
+    const promises = outgoingVoucherDocs.map(async (docSnap) => {
       const voucher = docSnap.data();
       
       // 2. Revert the stock quantities (add back the deducted items)
@@ -541,227 +778,5 @@ export const revertReceiptVouchers = async (orderNumber) => {
   } catch (error) {
     console.error("Error in revertReceiptVouchers:", error);
     return false;
-  }
-};
-
-export const syncProductionOrderToWIPStock = async (order) => {
-  try {
-    const activeStatuses = ["مرحلة القص", "مرحلة الخياطة", "مرحلة التغليف", "مرحلة المستودع", "منتهي", "تحت التنفيذ"];
-    const isActive = activeStatuses.includes(order.status);
-    
-    // Get all current stock items for this production order in WIP
-    const q = query(collection(db, 'stock'), where('location', '==', order.orderNumber));
-    const querySnapshot = await getDocs(q);
-    const existingWIPDocs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-      .filter(d => String(d.warehouse).includes('إنتاج قيد'));
-
-    if (!isActive || order.status === 'ملغي') {
-      // Delete all WIP stock items for this order
-      for (const docSnap of existingWIPDocs) {
-        await deleteDoc(doc(db, 'stock', docSnap.id));
-      }
-      return;
-    }
-
-    // Load all stock items to find matching SKUs, categories, units
-    const allStockSnapshot = await getDocs(collection(db, 'stock'));
-    const allStock = allStockSnapshot.docs.map(d => d.data());
-
-    // Load all approved stock vouchers for this order to find quantity sold from WIP
-    const vouchersSnapshot = await getDocs(collection(db, 'stock_vouchers'));
-    const approvedVouchers = vouchersSnapshot.docs.map(d => d.data()).filter(v => 
-      v.status !== 'مسودة' && 
-      v.type === 'إخراج' && 
-      String(v.warehouse).includes('إنتاج قيد')
-    );
-
-    for (const item of (order.items || [])) {
-      const specParts = [];
-      if (item.colorModel) specParts.push(item.colorModel);
-      if (item.sizeCm) specParts.push(item.sizeCm);
-      if (item.thickness) specParts.push(item.thickness);
-      if (item.flapSize) specParts.push(`قلاب ${item.flapSize}`);
-      if (item.packagingType) specParts.push(item.packagingType);
-      const spec = specParts.join(' - ');
-
-      const itemName = item.productName || item.name || 'صنف غير مسمى';
-
-      const existingWIPDoc = existingWIPDocs.find(d => 
-        d.name === itemName && 
-        d.spec === spec
-      );
-
-      const matchingMainStock = allStock.find(s => 
-        s.name === itemName && 
-        s.spec === spec
-      ) || allStock.find(s => s.name === itemName)
-        || allStock.find(s => s.name && (itemName.includes(s.name) || s.name.includes(itemName)));
-
-      const itemNumber = matchingMainStock?.itemNumber || `WIP-${order.orderNumber}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-      const category = matchingMainStock?.category || 'أغطية وبياضات';
-      const unit = matchingMainStock?.unit || 'قطعة';
-
-      let quantitySold = 0;
-      approvedVouchers.forEach(v => {
-        (v.items || []).forEach(vItem => {
-          if (vItem.location === order.orderNumber && vItem.name === itemName && vItem.spec === spec) {
-            quantitySold += Number(vItem.quantity || 0);
-          }
-        });
-      });
-
-      const wipQty = Math.max(0, Number(item.quantity || 0) - quantitySold);
-
-      const targetDocId = existingWIPDoc?.id || doc(collection(db, 'stock')).id;
-
-      let targetWarehouse = 'مستودع إنتاج قيد الخياطة';
-
-      await setDoc(doc(db, 'stock', targetDocId), {
-        id: targetDocId,
-        itemNumber,
-        name: itemName,
-        category,
-        warehouse: targetWarehouse,
-        location: order.orderNumber, // production order number is stored in location
-        spec,
-        quantity: wipQty,
-        unit,
-        minLimit: 0,
-        lastMovement: 'بدء إنتاج',
-        lastMovementDate: new Date().toISOString().split('T')[0],
-        updatedAt: new Date().toISOString()
-      });
-    }
-
-    // Delete any WIP stock items for items that were removed from the production order
-    for (const wipDoc of existingWIPDocs) {
-      const stillExists = (order.items || []).some(item => {
-        const itemName = item.productName || item.name || 'صنف غير مسمى';
-        const specParts = [];
-        if (item.colorModel) specParts.push(item.colorModel);
-        if (item.sizeCm) specParts.push(item.sizeCm);
-        if (item.thickness) specParts.push(item.thickness);
-        if (item.flapSize) specParts.push(`قلاب ${item.flapSize}`);
-        if (item.packagingType) specParts.push(item.packagingType);
-        const spec = specParts.join(' - ');
-        return itemName === wipDoc.name && spec === wipDoc.spec;
-      });
-      if (!stillExists) {
-        await deleteDoc(doc(db, 'stock', wipDoc.id));
-      }
-    }
-  } catch (error) {
-    console.error("Error in syncProductionOrderToWIPStock:", error);
-  }
-};
-
-export const syncPreparationOrderToWIPStock = async (order) => {
-  try {
-    const activeStatuses = ["تم استلام كرت الانتاج", "مرحلة المستودع", "مرحلة الحشوة", "مرحلة التطريز", "مرحلة التشطيب", "منتهي", "تحت التنفيذ"];
-    const isActive = activeStatuses.includes(order.status);
-    
-    // Get all current stock items for this preparation order in WIP
-    const q = query(collection(db, 'stock'), where('location', '==', order.orderNumber));
-    const querySnapshot = await getDocs(q);
-    const existingWIPDocs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-      .filter(d => String(d.warehouse).includes('إنتاج قيد'));
-
-    if (!isActive || order.status === 'ملغي') {
-      // Delete all WIP stock items for this order
-      for (const docSnap of existingWIPDocs) {
-        await deleteDoc(doc(db, 'stock', docSnap.id));
-      }
-      return;
-    }
-
-    // Load all stock items to find matching SKUs, categories, units
-    const allStockSnapshot = await getDocs(collection(db, 'stock'));
-    const allStock = allStockSnapshot.docs.map(d => d.data());
-
-    // Load all approved stock vouchers for this order to find quantity sold from WIP
-    const vouchersSnapshot = await getDocs(collection(db, 'stock_vouchers'));
-    const approvedVouchers = vouchersSnapshot.docs.map(d => d.data()).filter(v => 
-      v.status !== 'مسودة' && 
-      v.type === 'إخراج' && 
-      String(v.warehouse).includes('إنتاج قيد')
-    );
-
-    for (const item of (order.items || [])) {
-      const specParts = [];
-      if (item.colorModel) specParts.push(item.colorModel);
-      if (item.sizeCm) specParts.push(item.sizeCm);
-      if (item.thickness) specParts.push(item.thickness);
-      if (item.flapSize) specParts.push(`قلاب ${item.flapSize}`);
-      if (item.packagingType) specParts.push(item.packagingType);
-      const spec = specParts.join(' - ');
-
-      const itemName = item.productName || item.name || 'صنف غير مسمى';
-
-      const existingWIPDoc = existingWIPDocs.find(d => 
-        d.name === itemName && 
-        d.spec === spec
-      );
-
-      const matchingMainStock = allStock.find(s => 
-        s.name === itemName && 
-        s.spec === spec
-      ) || allStock.find(s => s.name === itemName)
-        || allStock.find(s => s.name && (itemName.includes(s.name) || s.name.includes(itemName)));
-
-      const itemNumber = matchingMainStock?.itemNumber || `WIP-${order.orderNumber}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-      const category = matchingMainStock?.category || 'أغطية وبياضات';
-      const unit = matchingMainStock?.unit || 'قطعة';
-
-      let quantitySold = 0;
-      approvedVouchers.forEach(v => {
-        (v.items || []).forEach(vItem => {
-          if (vItem.location === order.orderNumber && vItem.name === itemName && vItem.spec === spec) {
-            quantitySold += Number(vItem.quantity || 0);
-          }
-        });
-      });
-
-      const wipQty = Math.max(0, Number(item.quantity || 0) - quantitySold);
-
-      const targetDocId = existingWIPDoc?.id || doc(collection(db, 'stock')).id;
-
-      let targetWarehouse = 'مستودع إنتاج قيد التحضير';
-
-      await setDoc(doc(db, 'stock', targetDocId), {
-        id: targetDocId,
-        itemNumber,
-        name: itemName,
-        category,
-        warehouse: targetWarehouse,
-        location: order.orderNumber, // production order number is stored in location
-        spec,
-        quantity: wipQty,
-        unit,
-        minLimit: 0,
-        lastMovement: 'بدء تحضير',
-        lastMovementDate: new Date().toISOString().split('T')[0],
-        updatedAt: new Date().toISOString()
-      });
-    }
-
-    // Delete any WIP stock items for items that were removed from the preparation order
-    for (const wipDoc of existingWIPDocs) {
-      const stillExists = (order.items || []).some(item => {
-        const itemName = item.productName || item.name || 'صنف غير مسمى';
-        const specParts = [];
-        if (item.colorModel) specParts.push(item.colorModel);
-        if (item.sizeCm) specParts.push(item.sizeCm);
-        if (item.thickness) specParts.push(item.thickness);
-        if (item.flapSize) specParts.push(`قلاب ${item.flapSize}`);
-        if (item.packagingType) specParts.push(item.packagingType);
-        const spec = specParts.join(' - ');
-        return itemName === wipDoc.name && spec === wipDoc.spec;
-      });
-      if (!stillExists) {
-        await deleteDoc(doc(db, 'stock', wipDoc.id));
-      }
-    }
-  } catch (error) {
-    console.error("Error in syncPreparationOrderToWIPStock:", error);
   }
 };

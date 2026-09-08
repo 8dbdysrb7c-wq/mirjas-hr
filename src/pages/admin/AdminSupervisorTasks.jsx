@@ -1,3 +1,4 @@
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import { getSupervisorTasks, saveSupervisorTask, deleteSupervisorTask, getEmployees, isAdmin } from '../../store';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
@@ -66,7 +67,7 @@ const AdminSupervisorTasks = ({ user }) => {
     
     // Only show supervisors/admins in assignee list
     const supervisors = fetchedEmployees.filter(e => e.level === 'supervisor' || e.level === 'مشرف' || e.level === 'إدارة' || isAdmin(e));
-    setEmployees(supervisors);
+    setEmployees(supervisors.filter(isActiveEmployee));
     setLoading(false);
   };
 

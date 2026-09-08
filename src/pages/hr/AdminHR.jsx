@@ -1,5 +1,9 @@
+import { awaitsPetitionAdmin } from '../../utils/petitionConversation';
+import { watchPetitions } from '../../services/petitionConversation';
+import { startVisiblePolling } from '../../utils/visiblePolling';
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
-import { getHRLeaves, getMissingPunches, getHRAdvances, getEmployees, getHRAttendance, getHRAssets, getGlobalSettings, getHRViolations, getAttendanceLogs, getReports, getSupervisorReports, getHRPetitions } from '../../store';
+import { getHRLeaves, getMissingPunches, getHRAdvances, getEmployees, getHRAttendance, getHRAssets, getGlobalSettings, getHRViolations, getHRBonuses, getAttendanceLogs, getReports, getSupervisorReports, getHRPetitions, getEmployeeAlerts } from '../../store';
 import { Users, Clock, Calendar, AlertTriangle, FileText, Settings, Shield, Menu, X, Fingerprint, History, DollarSign, Gift, Bell, BarChart2, ArrowUpDown, Package } from 'lucide-react';
 import HRDashboard from './HRDashboard';
 import HRAttendance from './HRAttendance';
@@ -16,12 +20,41 @@ import HRAssets from './HRAssets';
 import EmployeeProfile from './EmployeeProfile';
 import HRSettlement from './HRSettlement';
 import HRPetitions from './HRPetitions';
+import HREmployeeAlerts from './HREmployeeAlerts';
+import { hasPermission } from '../../utils/permissions';
 import './hr.css';
+
+const HR_TAB_PERMISSIONS = {
+  attendance: 'hr_attendance',
+  leaves: 'hr_leaves',
+  'attendance-alerts': 'hr_attendance_alerts',
+  'missing-punches': 'hr_missing_punches',
+  overtime: 'hr_overtime',
+  advances: 'hr_advances',
+  petitions: 'hr_petitions',
+  assets: 'hr_assets',
+  'bonuses-violations': 'hr_bonuses_violations',
+  salaries: 'hr_salaries',
+  'salary-reports': 'hr_salary_reports',
+  settlement: 'hr_settlement',
+  'employee-alerts': 'hr_employee_alerts'
+};
 
 const AdminHR = ({ user, notificationTarget }) => {
   const [activeTab, setActiveTab] = useState('attendance');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
+  const [approvalFilters, setApprovalFilters] = useState({ dateMode: 'month', selectedMonth: new Date().toISOString().slice(0, 7), searchTerm: '' });
+  const [approvalRequests, setApprovalRequests] = useState([]);
+  const pendingApprovalCount = approvalRequests.filter(request => {
+    if (request.status !== 'معلق') return false;
+    if (approvalFilters.searchTerm && String(request.employeeId) !== String(approvalFilters.searchTerm)) return false;
+    if (!request.date) return false;
+    const date = new Date(request.date).toISOString().slice(0, 10);
+    if (approvalFilters.dateMode === 'day') return date === approvalFilters.selectedDate;
+    if (approvalFilters.dateMode === 'month') return date.slice(0, 7) === approvalFilters.selectedMonth;
+    return date >= approvalFilters.startDate && date <= approvalFilters.endDate;
+  }).length;
   const [pendingCounts, setPendingCounts] = useState({
     leaves: 0,
     overtime: 0,
@@ -37,18 +70,22 @@ const AdminHR = ({ user, notificationTarget }) => {
     }
   }, [notificationTarget]);
 
+  useEffect(() => {
+    if (!hasPermission(user, 'hr_petitions', 'view')) return;
+    return watchPetitions(user, true, rows => setPendingCounts(counts => ({ ...counts, petitions: rows.filter(awaitsPetitionAdmin).length })), console.error);
+  }, [user.id]);
+
   const fetchCounts = async () => {
-    const [leaves, mps, advances, petitions, empsRaw, attendance, assetsData, settings, violations, rawLogs, employeeReports, supervisorReports] = await Promise.all([
-      getHRLeaves(), getMissingPunches(), getHRAdvances(), getHRPetitions(), getEmployees(), getHRAttendance(), getHRAssets(), getGlobalSettings(), getHRViolations(),
-      getAttendanceLogs(), getReports(), getSupervisorReports()
+    const [leaves, mps, advances, empsRaw, attendance, assetsData, settings, violations, rawLogs, employeeReports, supervisorReports, employeeAlerts, bonuses] = await Promise.all([
+      getHRLeaves(), getMissingPunches(), getHRAdvances(), getEmployees(), getHRAttendance(), getHRAssets(), getGlobalSettings(), getHRViolations(),
+      getAttendanceLogs(), getReports(), getSupervisorReports(), getEmployeeAlerts(), getHRBonuses()
     ]);
     
-    const emps = empsRaw.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && !['غير فعال', 'مستقيل', 'منتهي خدمات'].includes(e.employmentStatus || e.status));
+    const emps = empsRaw.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && isActiveEmployee(e));
     
     const pendingLeaves = leaves.filter(l => l.type !== 'بدل عمل إضافي' && l.status === 'معلق').length;
     const pendingOvertime = leaves.filter(l => l.type === 'بدل عمل إضافي' && l.status === 'معلق').length;
     const pendingAdvances = advances.filter(a => a.status === 'معلق').length;
-    const pendingPetitions = petitions.filter(p => p.status === 'معلق').length;
     const activeAssets = assetsData.filter(a => a.status === 'نشطة').length;
 
     const todayStr = new Date().toLocaleDateString('en-CA');
@@ -255,30 +292,33 @@ const AdminHR = ({ user, notificationTarget }) => {
        }
     });
     
-    setPendingCounts({
+    setApprovalRequests([...violations, ...bonuses]);
+    setPendingCounts(current => ({
+      ...current,
       leaves: pendingLeaves,
       overtime: pendingOvertime,
       'missing-punches': pendingMpsCount,
       advances: pendingAdvances,
-      petitions: pendingPetitions,
       assets: activeAssets,
       'attendance-alerts': pendingAlerts
-    });
+      , 'employee-alerts': employeeAlerts.filter(alert => !alert.archived && alert.status === 'pending').length
+    }));
   };
 
   useEffect(() => {
-    fetchCounts();
-    // Refresh counts every 30 seconds
-    const intervalId = setInterval(fetchCounts, 30000);
-    return () => clearInterval(intervalId);
+    return startVisiblePolling(fetchCounts, 300000);
   }, []);
 
   const renderContent = () => {
     if (activeTab === 'employee-profile' && selectedEmployeeId) {
       return <EmployeeProfile user={user} employeeId={selectedEmployeeId} onBack={() => setActiveTab('employees')} />;
     }
+
+    const resolvedActiveTab = hasPermission(user, HR_TAB_PERMISSIONS[activeTab])
+      ? activeTab
+      : Object.keys(HR_TAB_PERMISSIONS).find(tab => hasPermission(user, HR_TAB_PERMISSIONS[tab]));
     
-    switch (activeTab) {
+    switch (resolvedActiveTab) {
       case 'dashboard': return <HRDashboard user={user} onNavigate={setActiveTab} />;
       case 'attendance': return <HRAttendance user={user} />;
       case 'leaves': return <HRLeaves user={user} refreshCounts={fetchCounts} />;
@@ -287,29 +327,31 @@ const AdminHR = ({ user, notificationTarget }) => {
       case 'missing-punches': return <HRMissingPunches user={user} refreshCounts={fetchCounts} />;
       case 'attendance-alerts': return <HRAttendanceAlerts user={user} />;
       case 'overtime': return <HROvertime user={user} refreshCounts={fetchCounts} />;
-      case 'bonuses-violations': return <HRBonusesAndViolations user={user} />;
+      case 'bonuses-violations': return <HRBonusesAndViolations user={user} refreshCounts={fetchCounts} onFiltersChange={setApprovalFilters} />;
       case 'salaries': return <HRSalaries user={user} />;
       case 'salary-reports': return <HRSalaryReports user={user} />;
       case 'assets': return <HRAssets user={user} />;
       case 'settlement': return <HRSettlement user={user} />;
+      case 'employee-alerts': return <HREmployeeAlerts user={user} />;
       default: return <HRAttendance user={user} />;
     }
   };
 
   const navItems = [
-    { id: 'attendance', label: 'الحضور والانصراف', icon: <Clock />, color: '#14b8a6', bgLight: '#ccfbf1', customBadge: 'اليوم' },
-    { id: 'leaves', label: 'الإجازات والمغادرات', icon: <Calendar />, color: '#3b82f6', bgLight: '#dbeafe', badgeNum: pendingCounts['leaves'] || 0 },
-    { id: 'attendance-alerts', label: 'تنبيهات الحضور والانصراف', icon: <AlertTriangle />, color: '#f43f5e', bgLight: '#ffe4e6', badgeNum: pendingCounts['attendance-alerts'] || 0 },
-    { id: 'missing-punches', label: 'الختمات الناقصة', icon: <Fingerprint />, color: '#8b5cf6', bgLight: '#f3e8ff', badgeNum: pendingCounts['missing-punches'] || 0 },
-    { id: 'overtime', label: 'العمل الإضافي', icon: <Clock />, color: '#f59e0b', bgLight: '#fef3c7', badgeNum: pendingCounts['overtime'] || 0 },
-    { id: 'advances', label: 'السلف', icon: <DollarSign />, color: '#10b981', bgLight: '#d1fae5', badgeNum: pendingCounts['advances'] || 0 },
-    { id: 'petitions', label: 'الاستدعاءات', icon: <FileText />, color: '#3b82f6', bgLight: '#dbeafe', badgeNum: pendingCounts['petitions'] || 0 },
-    { id: 'assets', label: 'العهدة', icon: <Package />, color: '#0ea5e9', bgLight: '#e0f2fe', badgeNum: pendingCounts['assets'] || 0 },
-    { id: 'bonuses-violations', label: 'المكافآت والمخالفات', icon: <ArrowUpDown />, color: '#a855f7', bgLight: '#f3e8ff', badgeNum: 0 },
-    { id: 'salaries', label: 'الرواتب', icon: <FileText />, color: '#6366f1', bgLight: '#e0e7ff', badgeNum: 0 },
-    { id: 'salary-reports', label: 'مركز التقارير', icon: <BarChart2 />, color: '#2563eb', bgLight: '#dbeafe', customBadge: 'التقارير' },
-    { id: 'settlement', label: 'مخالصة وبراءة ذمة', icon: <FileText />, color: '#f43f5e', bgLight: '#ffe4e6', customBadge: 'مهم' }
-  ];
+    { id: 'attendance', permission: 'hr_attendance', label: 'الحضور والانصراف', icon: <Clock />, color: '#14b8a6', bgLight: '#ccfbf1', customBadge: 'اليوم' },
+    { id: 'leaves', permission: 'hr_leaves', label: 'الإجازات والمغادرات', icon: <Calendar />, color: '#3b82f6', bgLight: '#dbeafe', badgeNum: pendingCounts['leaves'] || 0 },
+    { id: 'attendance-alerts', permission: 'hr_attendance_alerts', label: 'تنبيهات الحضور والانصراف', icon: <AlertTriangle />, color: '#f43f5e', bgLight: '#ffe4e6', badgeNum: pendingCounts['attendance-alerts'] || 0 },
+    { id: 'missing-punches', permission: 'hr_missing_punches', label: 'الختمات الناقصة', icon: <Fingerprint />, color: '#8b5cf6', bgLight: '#f3e8ff', badgeNum: pendingCounts['missing-punches'] || 0 },
+    { id: 'overtime', permission: 'hr_overtime', label: 'العمل الإضافي', icon: <Clock />, color: '#f59e0b', bgLight: '#fef3c7', badgeNum: pendingCounts['overtime'] || 0 },
+    { id: 'advances', permission: 'hr_advances', label: 'السلف', icon: <DollarSign />, color: '#10b981', bgLight: '#d1fae5', badgeNum: pendingCounts['advances'] || 0 },
+    { id: 'petitions', permission: 'hr_petitions', label: 'الاستدعاءات', icon: <FileText />, color: '#3b82f6', bgLight: '#dbeafe', badgeNum: pendingCounts['petitions'] || 0 },
+    { id: 'assets', permission: 'hr_assets', label: 'العهدة', icon: <Package />, color: '#0ea5e9', bgLight: '#e0f2fe', badgeNum: pendingCounts['assets'] || 0 },
+    { id: 'bonuses-violations', permission: 'hr_bonuses_violations', label: 'المكافآت والمخالفات', icon: <ArrowUpDown />, color: '#a855f7', bgLight: '#f3e8ff', badgeNum: pendingApprovalCount },
+    { id: 'salaries', permission: 'hr_salaries', label: 'الرواتب', icon: <FileText />, color: '#6366f1', bgLight: '#e0e7ff' },
+    { id: 'salary-reports', permission: 'hr_salary_reports', label: 'مركز التقارير', icon: <BarChart2 />, color: '#2563eb', bgLight: '#dbeafe', customBadge: 'التقارير' },
+    { id: 'settlement', permission: 'hr_settlement', label: 'مخالصة وبراءة ذمة', icon: <FileText />, color: '#f43f5e', bgLight: '#ffe4e6', customBadge: 'مهم' },
+    { id: 'employee-alerts', permission: 'hr_employee_alerts', label: 'تنبيهات الموظفين', icon: <Bell />, color: '#ea580c', bgLight: '#ffedd5', badgeNum: pendingCounts['employee-alerts'] || 0 }
+  ].filter(item => hasPermission(user, item.permission));
 
   const handleNavClick = (id) => {
     setActiveTab(id);
@@ -354,7 +396,7 @@ const AdminHR = ({ user, notificationTarget }) => {
                   {item.label}
                 </span>
                 
-                <div style={{
+                {(item.customBadge !== undefined || item.badgeNum !== undefined) && <div style={{
                   backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : item.bgLight,
                   color: isActive ? '#ffffff' : item.color,
                   padding: '4px 14px',
@@ -368,8 +410,8 @@ const AdminHR = ({ user, notificationTarget }) => {
                   border: isActive ? 'none' : `1px solid ${item.color}20`
                 }}>
                   <span>{item.customBadge ? item.customBadge : item.badgeNum}</span>
-                  {React.cloneElement(item.icon, { size: 13, strokeWidth: 2.5 })}
-                </div>
+                  {!item.hideBadgeIcon && React.cloneElement(item.icon, { size: 13, strokeWidth: 2.5 })}
+                </div>}
               </div>
             );
           })}

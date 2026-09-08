@@ -51,6 +51,100 @@ export const getHRAuditLogs = async () => {
   }
 };
 
+export const createEmployeeAlert = async (alertData) => {
+  const now = new Date().toISOString();
+  const payload = {
+    employeeId: String(alertData.employeeId || ''),
+    employeeName: alertData.employeeName || '',
+    message: String(alertData.message || '').trim(),
+    source: alertData.source || 'الموارد البشرية',
+    sourceReference: alertData.sourceReference || '',
+    status: 'pending',
+    sentAt: now,
+    receivedAt: null,
+    sentById: alertData.sentById || '',
+    sentByName: alertData.sentByName || '',
+    archived: false,
+    archivedAt: null
+  };
+  if (!payload.employeeId || !payload.message) throw new Error('بيانات التنبيه غير مكتملة');
+  const ref = await addDoc(collection(db, 'employee_alerts'), payload);
+  return { id: ref.id, ...payload };
+};
+
+export const createEmployeeAlerts = async ({ employees = [], ...alertData }) => {
+  const recipients = employees.filter(employee => employee?.id != null);
+  const message = String(alertData.message || '').trim();
+  if (!recipients.length || !message) throw new Error('بيانات التنبيه أو المستلمين غير مكتملة');
+
+  const now = new Date().toISOString();
+  const commonPayload = {
+    message,
+    source: alertData.source || 'الموارد البشرية',
+    sourceReference: alertData.sourceReference || '',
+    status: 'pending',
+    sentAt: now,
+    receivedAt: null,
+    sentById: alertData.sentById || '',
+    sentByName: alertData.sentByName || '',
+    archived: false,
+    archivedAt: null
+  };
+
+  // Firestore batches are limited to 500 writes. Keep some room for future additions.
+  for (let start = 0; start < recipients.length; start += 450) {
+    const batch = writeBatch(db);
+    recipients.slice(start, start + 450).forEach(employee => {
+      const ref = doc(collection(db, 'employee_alerts'));
+      batch.set(ref, {
+        ...commonPayload,
+        employeeId: String(employee.id),
+        employeeName: employee.name || ''
+      });
+    });
+    await batch.commit();
+  }
+
+  return { count: recipients.length, sentAt: now };
+};
+
+export const getEmployeeAlerts = async () => {
+  const snapshot = await getDocs(collection(db, 'employee_alerts'));
+  return snapshot.docs.map(row => ({ id: row.id, ...row.data() })).sort((a, b) => String(b.sentAt || '').localeCompare(String(a.sentAt || '')));
+};
+
+export const acknowledgeEmployeeAlert = async (alertId, employee) => {
+  const ref = doc(db, 'employee_alerts', alertId);
+  const snapshot = await getDoc(ref);
+  if (!snapshot.exists()) throw new Error('التنبيه غير موجود');
+  const alert = snapshot.data();
+  if (String(alert.employeeId) !== String(employee.id)) throw new Error('هذا التنبيه غير مرتبط بالموظف الحالي');
+  if (alert.status === 'received') return { id: alertId, ...alert };
+  const receivedAt = new Date().toISOString();
+  await updateDoc(ref, { status: 'received', receivedAt, receivedById: String(employee.id), receivedByName: employee.name || '' });
+  return { id: alertId, ...alert, status: 'received', receivedAt };
+};
+
+export const deleteEmployeeAlert = async (alertId) => {
+  const ref = doc(db, 'employee_alerts', alertId);
+  const snapshot = await getDoc(ref);
+  if (!snapshot.exists()) throw new Error('التنبيه غير موجود');
+  const alert = snapshot.data();
+  if (alert.status === 'received') throw new Error('لا يمكن حذف تنبيه تم استلامه؛ يمكنك أرشفته بدلًا من ذلك');
+  await deleteDoc(ref);
+  return true;
+};
+
+export const archiveEmployeeAlert = async (alertId, userContext = {}) => {
+  const ref = doc(db, 'employee_alerts', alertId);
+  const snapshot = await getDoc(ref);
+  if (!snapshot.exists()) throw new Error('التنبيه غير موجود');
+  const alert = snapshot.data();
+  if (alert.status !== 'received') throw new Error('لا يمكن أرشفة التنبيه قبل استلامه');
+  await updateDoc(ref, { archived: true, archivedAt: new Date().toISOString(), archivedById: userContext.id || '', archivedByName: userContext.name || '' });
+  return true;
+};
+
 export const getHRSalaryPeriods = async () => {
   try {
     const querySnapshot = await getDocs(collection(db, 'hr_salary_periods'));
@@ -237,7 +331,7 @@ export const isDateLocked = async (dateStr) => {
     
     const periods = await getHRSalaryPeriods();
     const period = periods.find(p => p.id === periodKey);
-    return period && period.status === 'locked';
+    return Boolean(period && ['locked', 'archived'].includes(period.status));
   } catch (error) {
     console.error("Error in isDateLocked:", error);
     return false;
@@ -361,13 +455,16 @@ export const syncToHRAttendance = async (userId, userName, date, timeIn, timeOut
   }
 };
 
-export const getHRAttendance = async () => {
+export const getHRAttendance = async (date = null) => {
   try {
-    const q = query(collection(db, 'hr_attendance'), orderBy('date', 'desc'));
+    const q = date
+      ? query(collection(db, 'hr_attendance'), where('date', '==', date))
+      : query(collection(db, 'hr_attendance'), orderBy('date', 'desc'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.error("Error in getHRAttendance:", error);
+    if (date) throw error; // Never treat a failed reminder lookup as absence.
     return [];
   }
 };
@@ -655,6 +752,19 @@ export const getHRAdvances = async () => {
 
 export const saveHRAdvance = async (advance, userContext = null) => {
   try {
+    if (!advance.id && advance.date) {
+      const today = new Date();
+      const todayStr = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+      if (advance.date < todayStr) {
+        const isSiteOwner = String(userContext?.id || '').trim().toLowerCase() === 'admin';
+        if (!isSiteOwner) {
+          throw new Error('إدخال سلفة بتاريخ سابق متاح لمالك الموقع فقط');
+        }
+        if (await isDateLocked(advance.date)) {
+          throw new Error('لا يمكن إضافة سلفة ضمن فترة رواتب مُرحّلة أو مقفلة');
+        }
+      }
+    }
     const docRef = advance.id ? doc(db, 'hr_advances', advance.id) : doc(collection(db, 'hr_advances'));
     const data = { ...advance, updatedAt: new Date().toISOString() };
     if (!advance.id) data.createdAt = new Date().toISOString();
@@ -904,12 +1014,14 @@ export const saveHRViolation = async (violation, userContext = null) => {
   }
 };
 
-export const syncDailyReportViolations = async (report) => {
+export const syncDailyReportViolations = async (report, approvedLeaves = null) => {
   const employeeId = String(report.userId || report.employeeId || '').trim();
   const employeeName = report.userName || report.employeeName || '';
   const date = report.date;
   if (!employeeId || !date) return [];
 
+  // Compliance violations are created only after the supervisor has completed
+  // the employee evaluation, never when the employee first submits the report.
   const isSupervisorEvaluated = Boolean(
     report.evaluatedAt
     || report.supervisorRating
@@ -917,13 +1029,59 @@ export const syncDailyReportViolations = async (report) => {
   );
   if (!isSupervisorEvaluated) return [];
 
+  let leaves = approvedLeaves;
+  if (!Array.isArray(leaves)) {
+    const leavesSnapshot = await getDocs(collection(db, 'hr_leaves'));
+    leaves = leavesSnapshot.docs.map(leaveDoc => ({ id: leaveDoc.id, ...leaveDoc.data() }));
+  }
+  const hasApprovedLeave = leaves.some(leave => {
+    const status = String(leave.status || '').trim();
+    if (!['موافق', 'موافق عليه', 'مقبول'].includes(status)) return false;
+    if (!String(leave.type || '').trim().startsWith('إجازة')) return false;
+
+    const leaveEmployeeId = String(leave.employeeId || '').trim();
+    const matchesEmployee = leaveEmployeeId
+      ? leaveEmployeeId === employeeId
+      : String(leave.employeeName || '').trim() === String(employeeName).trim();
+    if (!matchesEmployee) return false;
+
+    return leave.date === date
+      || Boolean(leave.startDate && leave.endDate && leave.startDate <= date && leave.endDate >= date);
+  });
+
   const candidates = [];
   const rating = String(report.finalRating || report.supervisorRating || '').trim();
-  if (rating === 'لم يقدم تقرير') {
-    candidates.push({ key: 'missing_report', type: 'عدم تقديم التقرير اليومي', amount: 1, notes: 'تم إنشاء المخالفة آليًا لعدم تقديم تقرير العمل اليومي.' });
+  if (rating === 'لم يقدم تقرير' && !hasApprovedLeave) {
+    candidates.push({
+      key: 'missing_report',
+      type: 'عدم تقديم التقرير اليومي',
+      amount: 1,
+      notes: 'تم إنشاء المخالفة آليًا لعدم تقديم تقرير العمل اليومي.'
+    });
+  }
+
+  if (rating === 'لم يقدم تقرير' && hasApprovedLeave) {
+    const violationId = `daily_report_missing_report_${employeeId}_${date}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const violationRef = doc(db, 'hr_violations', violationId);
+    const violationSnapshot = await getDoc(violationRef);
+    if (violationSnapshot.exists()) {
+      const violation = violationSnapshot.data();
+      if (violation.autoGeneratedFromDailyReport && !violation.processedInPeriod) {
+        await setDoc(violationRef, {
+          status: 'محذوف',
+          deletedAt: new Date().toISOString(),
+          deletedReason: 'لدى الموظف إجازة معتمدة في تاريخ التقرير'
+        }, { merge: true });
+      }
+    }
   }
   if (report.phoneSafe === false) {
-    candidates.push({ key: 'phone_not_safe', type: 'الهاتف ليس بالأمانات', amount: 5, notes: 'تم إنشاء المخالفة آليًا لأن التقرير اليومي أفاد بأن الهاتف ليس بالأمانات.' });
+    candidates.push({
+      key: 'phone_not_safe',
+      type: 'الهاتف ليس بالأمانات',
+      amount: 5,
+      notes: 'تم إنشاء المخالفة آليًا لأن التقرير اليومي أفاد بأن الهاتف ليس بالأمانات.'
+    });
   }
 
   const created = [];
@@ -931,6 +1089,7 @@ export const syncDailyReportViolations = async (report) => {
     const violationId = `daily_report_${candidate.key}_${employeeId}_${date}`.replace(/[^a-zA-Z0-9_-]/g, '_');
     const violationRef = doc(db, 'hr_violations', violationId);
     if ((await getDoc(violationRef)).exists()) continue;
+
     const now = new Date().toISOString();
     const violation = {
       employeeId,
@@ -954,14 +1113,18 @@ export const syncDailyReportViolations = async (report) => {
 };
 
 export const syncEvaluatedDailyReportViolations = async () => {
-  const snapshot = await getDocs(collection(db, 'reports'));
+  const [snapshot, leavesSnapshot] = await Promise.all([
+    getDocs(collection(db, 'reports')),
+    getDocs(collection(db, 'hr_leaves'))
+  ]);
   const evaluatedReports = snapshot.docs
     .map(reportDoc => ({ id: reportDoc.id, ...reportDoc.data() }))
     .filter(report => report.evaluatedAt || report.supervisorRating || report.status === 'تم التقييم');
+  const approvedLeaves = leavesSnapshot.docs.map(leaveDoc => ({ id: leaveDoc.id, ...leaveDoc.data() }));
 
   const created = [];
   for (const report of evaluatedReports) {
-    const reportViolations = await syncDailyReportViolations(report);
+    const reportViolations = await syncDailyReportViolations(report, approvedLeaves);
     created.push(...reportViolations);
   }
   return created;

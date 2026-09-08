@@ -2,6 +2,7 @@ import { db } from '../firebase';
 import { 
   collection, 
   getDocs, 
+  onSnapshot,
   doc, 
   getDoc, 
   setDoc, 
@@ -55,10 +56,11 @@ export const defaultGlobalSettings = {
   logoUrl: "/logo-mrsleep.png",
   primaryColor: "#0f172a",
   itemStatuses: ["مخزون", "قيد التشغيل", "مباع", "تالف", "مفقود", "مرتجع"],
-  productionStatuses: ["لم يتم التنفيذ", "مرحلة القص", "مرحلة المستودع", "مرحلة الخياطة", "مرحلة التغليف", "منتهي", "ملغي"],
+  productionStatuses: ["لم يتم التنفيذ", "تم استلام كرت الإنتاج", "مرحلة القص", "مرحلة المستودع", "مرحلة الخياطة", "بانتظار استلام التغليف", "مرحلة التغليف", "إنتاج مختلط", "منتهي", "ملغي"],
   preparationStatuses: ["لم يتم التنفيذ", "تم استلام كرت الانتاج", "مرحلة المستودع", "مرحلة الحشوة", "مرحلة التطريز", "مرحلة التشطيب", "منتهي", "ملغي"],
   salesStatuses: ["جديد", "قيد التجهيز", "جاهز للتوصيل", "تم تسليمها للتوصيل", "تم التوصيل", "ملغي", "مرفوض"],
-  salesItemStatuses: ["جديد", "قيد التجهيز", "جاهز للتسليم", "تم التسليم", "مرتجع", "قيد التحضير"],
+  salesItemStatuses: ["جديد", "قيد التجهيز", "إنتاج قيد الخياطة", "إنتاج قيد التغليف", "جاهز للتسليم", "تم التسليم", "مرتجع", "قيد التحضير"],
+  salesCommissionTiers: {},
   customerSectors: ["المستشفيات", "شركات خاصة", "شخصي", "مول", "اثاث مكتبي", "اثاث منزلي ومفروشات", "أطفال وبيبي", "ستائر", "مستلزمات طبية", "الحرامات", "الأدوات المنزلية", "الفنادق", "الشقق الفندقية", "بياضات", "الفرشات", "جمعيات ومنظمات", "حكومي", "جهة عسكرية", "الجامعات والمدارس"],
   stockLocations: Array.from({ length: 45 }, (_, i) => `A${i + 1}`),
   userTypes: [
@@ -429,6 +431,15 @@ export const createActivityNotification = async ({
   });
 };
 
+export const watchNotificationsForUser = (user, settings, next, error) => {
+  const preferences = normalizeNotificationSettings(settings);
+  const source = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(150));
+  return onSnapshot(source, snapshot => next(snapshot.docs
+    .map(row => ({ ...row.data(), id: row.id }))
+    .filter(notification => notificationMatchesUser(notification, user, settings)
+      && !(preferences.hideReadNotifications && notification.readBy?.[user.id]))), error);
+};
+
 export const getNotificationsForUser = async (user, settings) => {
   try {
     const resolvedSettings = settings || await getGlobalSettings();
@@ -582,16 +593,71 @@ export const saveScoringConfig = async (config) => {
 
 export const getGlobalSettings = async () => {
   const data = await getDocData('settings', 'globalSettings', defaultGlobalSettings);
+  const removedVirtualWarehouses = new Set([
+    'مستودع إنتاج قيد الخياطة',
+    'مستودع إنتاج قيد التغليف',
+    'مستودع قبل الخياطة',
+    'بانتظار استلام التغليف',
+    'مستودع إنتاج قيد التحضير'
+  ]);
+  if (data && Array.isArray(data.warehouses)) {
+    const physicalWarehouses = data.warehouses.filter(warehouse => !removedVirtualWarehouses.has(warehouse));
+    if (physicalWarehouses.length !== data.warehouses.length) {
+      data.warehouses = physicalWarehouses;
+      await setDocData('settings', 'globalSettings', data);
+    }
+  }
   
   if (data && Array.isArray(data.productionStatuses)) {
-    const statuses = [...data.productionStatuses];
+    const canonicalizeProductionStatus = value => {
+      const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+      if (normalized === 'تم استلام كرت الانتاج' || normalized === 'تم استلام كرت الإنتاج') return 'تم استلام كرت الإنتاج';
+      if (['مرحلة المستودع', 'مرحلة مستودع قبل الخياطة', 'مستودع قبل الخياطة'].includes(normalized)) return 'مرحلة المستودع';
+      return normalized;
+    };
+    const originalStatuses = [...data.productionStatuses];
+    const statuses = [...new Set(originalStatuses.map(canonicalizeProductionStatus).filter(Boolean))];
+    if (!statuses.includes('تم استلام كرت الإنتاج')) {
+      const cuttingIdx = statuses.indexOf('مرحلة القص');
+      statuses.splice(cuttingIdx === -1 ? 1 : cuttingIdx, 0, 'تم استلام كرت الإنتاج');
+    }
+    if (!statuses.includes('إنتاج مختلط')) {
+      const finishedIdx = statuses.indexOf('منتهي');
+      statuses.splice(finishedIdx === -1 ? statuses.length : finishedIdx, 0, 'إنتاج مختلط');
+    }
+    if (!statuses.includes('بانتظار استلام التغليف')) {
+      const packagingIdx = statuses.indexOf('مرحلة التغليف');
+      statuses.splice(packagingIdx === -1 ? statuses.length : packagingIdx, 0, 'بانتظار استلام التغليف');
+    }
     const warehouseIdx = statuses.indexOf('مرحلة المستودع');
     const cuttingIdx = statuses.indexOf('مرحلة القص');
     if (warehouseIdx !== -1 && cuttingIdx !== -1 && warehouseIdx !== cuttingIdx + 1) {
       statuses.splice(warehouseIdx, 1);
       const newCuttingIdx = statuses.indexOf('مرحلة القص');
       statuses.splice(newCuttingIdx + 1, 0, 'مرحلة المستودع');
+    }
+    const productionStatusesChanged = JSON.stringify(statuses) !== JSON.stringify(originalStatuses);
+    if (productionStatusesChanged) {
       data.productionStatuses = statuses;
+      await setDocData('settings', 'globalSettings', data);
+    }
+  }
+
+  if (data) {
+    const requiredProductionSalesStatuses = ['إنتاج قيد الخياطة', 'إنتاج قيد التغليف'];
+    const salesItemStatuses = Array.isArray(data.salesItemStatuses)
+      ? [...data.salesItemStatuses]
+      : [...defaultGlobalSettings.salesItemStatuses];
+    let statusesChanged = false;
+    requiredProductionSalesStatuses.forEach((status) => {
+      if (!salesItemStatuses.includes(status)) {
+        const readyIndex = salesItemStatuses.indexOf('جاهز للتسليم');
+        salesItemStatuses.splice(readyIndex === -1 ? salesItemStatuses.length : readyIndex, 0, status);
+        statusesChanged = true;
+      }
+    });
+    if (statusesChanged) {
+      data.salesItemStatuses = salesItemStatuses;
       await setDocData('settings', 'globalSettings', data);
     }
   }

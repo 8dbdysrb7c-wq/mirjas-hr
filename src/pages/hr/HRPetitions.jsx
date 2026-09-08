@@ -1,3 +1,6 @@
+import PetitionConversation from '../../components/PetitionConversation';
+import { petitionStatus, awaitsPetitionAdmin } from '../../utils/petitionConversation';
+import { watchPetitions } from '../../services/petitionConversation';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -8,7 +11,8 @@ import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import { TableContainer, TableHead, TableRow, TableHeader, TableBody, TableCell, Badge } from '../../components/ui';
 import HRDateFilter from '../../components/ui/HRDateFilter';
-import { getHRPetitions, saveHRPetition, createNotification, getEmployees } from '../../store';
+import { getEmployees } from '../../store';
+import { firestoreErrorMessage } from '../../utils/firestoreError';
 import { triggerWhatsAppRouting } from '../../services/whatsappRouter';
 
 const MySwal = withReactContent(Swal);
@@ -44,7 +48,8 @@ export default function HRPetitions({ user }) {
   const [employees, setEmployees] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('معلق');
+  const [statusFilter, setStatusFilter] = useState('بانتظار الإدارة');
+  const [conversationId, setConversationId] = useState(null);
 
   // Date Filter State
   const [dateMode, setDateMode] = useState('month');
@@ -56,8 +61,7 @@ export default function HRPetitions({ user }) {
   const loadPetitions = async () => {
     setIsLoading(true);
     try {
-      const [data, emps] = await Promise.all([getHRPetitions(), getEmployees()]);
-      setPetitions(data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+      const emps = await getEmployees();
       setEmployees(emps);
     } catch (error) {
       console.error(error);
@@ -69,83 +73,10 @@ export default function HRPetitions({ user }) {
 
   useEffect(() => {
     loadPetitions();
-  }, []);
+    return watchPetitions(user, true, rows => setPetitions(rows.sort((a,b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)))), err => MySwal.fire('تعذر تحديث الاستدعاءات', firestoreErrorMessage(err, 'تحميل الاستدعاءات'), 'error'));
+  }, [user.id]);
 
-  const handleAction = async (petition, action) => {
-    const { value: notes } = await MySwal.fire({
-      title: action === 'approve' ? 'موافقة على الاستدعاء' : 'رفض الاستدعاء',
-      input: 'textarea',
-      inputLabel: action === 'approve' ? 'ملاحظات الإدارة (إجباري)' : 'سبب الرفض (إجباري)',
-      inputPlaceholder: 'أدخل الملاحظات هنا...',
-      inputValidator: (value) => {
-        if (!value) {
-          return 'يجب إدخال الملاحظات للموظف!';
-        }
-      },
-      showCancelButton: true,
-      confirmButtonText: 'حفظ',
-      cancelButtonText: 'إلغاء',
-      confirmButtonColor: action === 'approve' ? '#10b981' : '#ef4444'
-    });
-
-    if (notes) {
-      try {
-        const status = action === 'approve' ? 'مقبول' : 'مرفوض';
-        const updatedPetition = {
-          ...petition,
-          status,
-          [action === 'approve' ? 'approvalReason' : 'rejectionReason']: notes,
-          actionBy: user.name,
-          actionDate: new Date().toISOString()
-        };
-
-        await saveHRPetition(updatedPetition);
-
-        await createNotification({
-          settingKey: 'petitions',
-          targetEmployeeId: petition.employeeId,
-          moduleKey: 'hr',
-          moduleLabel: 'الموارد البشرية',
-          title: `تم ${action === 'approve' ? 'قبول' : 'رفض'} طلب الاستدعاء`,
-          message: `عنوان الطلب: ${petition.title}\nالملاحظات: ${notes}`,
-          target: { tab: 'hr_requests' }
-        });
-        
-        triggerWhatsAppRouting('petitions', 'status_update', {
-          employeeId: petition.employeeId,
-          employeeName: petition.employeeName,
-          title: petition.title,
-          status: status,
-          adminNotes: notes
-        });
-
-        MySwal.fire('نجاح', 'تم تحديث حالة الطلب بنجاح', 'success');
-        loadPetitions();
-      } catch (err) {
-        console.error(err);
-        MySwal.fire('خطأ', 'حدث خطأ أثناء تحديث حالة الطلب', 'error');
-      }
-    }
-  };
-
-  const handleView = (petition) => {
-    MySwal.fire({
-      title: petition.title,
-      html: `
-        <div style="text-align: right; direction: rtl; line-height: 1.6;">
-          <div style="margin-bottom: 15px; color: #475569; white-space: pre-wrap; font-size: 15px;">${petition.text || 'لا يوجد نص'}</div>
-          ${(petition.approvalReason || petition.rejectionReason) ? `
-            <div style="margin-top: 15px; padding: 10px; border-radius: 8px; border: 1px solid ${petition.status === 'مقبول' ? '#d1fae5' : '#fee2e2'}; background-color: ${petition.status === 'مقبول' ? '#ecfdf5' : '#fef2f2'}; color: ${petition.status === 'مقبول' ? '#065f46' : '#991b1b'}; font-size: 14px;">
-              <strong>${petition.status === 'مقبول' ? 'ملاحظة الإدارة:' : 'سبب الرفض:'}</strong>
-              <div style="margin-top: 5px;">${petition.approvalReason || petition.rejectionReason}</div>
-            </div>
-          ` : ''}
-        </div>
-      `,
-      confirmButtonText: 'إغلاق',
-      confirmButtonColor: '#1a8d9b'
-    });
-  };
+  const handleView = petition => setConversationId(petition.id);
 
   const employeeNameOptions = [...employees]
     .sort((a, b) => String(a.name).localeCompare(String(b.name)))
@@ -157,7 +88,7 @@ export default function HRPetitions({ user }) {
 
   const filteredPetitions = petitions.filter(p => {
     const matchesSearch = !searchTerm || String(p.employeeId) === String(searchTerm) || String(p.employeeName) === String(searchTerm);
-    const matchesStatus = statusFilter === 'الكل' || p.status === statusFilter;
+    const matchesStatus = statusFilter === 'الكل' || (statusFilter === 'بانتظار الإدارة' ? awaitsPetitionAdmin(p) : petitionStatus(p) === statusFilter);
     
     let matchesDate = true;
     const pDateStr = p.date || (p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '');
@@ -234,9 +165,9 @@ export default function HRPetitions({ user }) {
           style={{ minWidth: '200px', height: '42px', width: 'auto' }}
         >
           <option value="الكل">جميع الحالات</option>
-          <option value="معلق">قيد الانتظار</option>
-          <option value="مقبول">مقبول</option>
-          <option value="مرفوض">مرفوض</option>
+          <option value="بانتظار الإدارة">بانتظار الإدارة / جديد</option>
+          <option value="بانتظار الموظف">بانتظار الموظف</option>
+          <option value="مغلق">مغلق</option>
         </select>
       </div>
 
@@ -296,7 +227,7 @@ export default function HRPetitions({ user }) {
                           petition.status === 'مرفوض' ? 'danger' :
                           'warning'
                         }>
-                          {petition.status === 'معلق' ? 'قيد الانتظار' : petition.status}
+                          {petitionStatus(petition)}{petition.reopenRequested ? ' · طلب إعادة فتح' : ''}
                         </Badge>
                       </TableCell>
                       <TableCell className="px-4 py-3">
@@ -305,32 +236,11 @@ export default function HRPetitions({ user }) {
                             onClick={() => handleView(petition)}
                             className="icon-btn hover:bg-blue-50"
                             style={{ borderColor: '#bfdbfe', color: '#3b82f6', backgroundColor: '#ffffff' }}
-                            title="معاينة"
+                            title="فتح المحادثة"
                           >
                             <Eye size={18} />
                           </button>
-                          {petition.status === 'معلق' ? (
-                            <>
-                              <button 
-                                onClick={() => handleAction(petition, 'approve')}
-                                className="icon-btn hover:bg-emerald-50"
-                                style={{ borderColor: '#d1fae5', color: '#10b981', backgroundColor: '#ffffff' }}
-                                title="موافقة"
-                              >
-                                <Check size={18} />
-                              </button>
-                              <button 
-                                onClick={() => handleAction(petition, 'reject')}
-                                className="icon-btn hover:bg-red-50"
-                                style={{ borderColor: '#fee2e2', color: '#ef4444', backgroundColor: '#ffffff' }}
-                                title="رفض"
-                              >
-                                <X size={18} />
-                              </button>
-                            </>
-                          ) : (
-                            <span className="text-slate-400 text-xs font-bold mr-2">- تمت المعالجة -</span>
-                          )}
+
                         </div>
                       </TableCell>
                     </TableRow>
@@ -341,6 +251,7 @@ export default function HRPetitions({ user }) {
           </div>
         </TableContainer>
       )}
+      {conversationId && <PetitionConversation petitionId={conversationId} user={user} adminView onClose={() => setConversationId(null)} />}
     </motion.div>
   );
 }

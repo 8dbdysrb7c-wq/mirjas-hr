@@ -17,6 +17,7 @@ const GENERAL_MODULES = {
   supervisor_tasks: 'مهام المشرفين',
   supervisor_reports: 'تقارير المشرفين',
   rep_visits: 'زيارات المندوبين',
+  assigned_missions: 'المهمات المكلّف بها',
   scoring: 'التقييمات / النقاط',
   site_settings: 'إعدادات النظام / الصلاحيات',
   employees: 'إعدادات الموظفين',
@@ -44,6 +45,14 @@ const HR_MODULES = {
   hr_leaves: 'الإجازات والمغادرات',
   hr_overtime: 'ساعات العمل الإضافي',
   hr_attendance: 'سجلات الحضور والغياب',
+  hr_attendance_alerts: 'تنبيهات الحضور والانصراف',
+  hr_missing_punches: 'الختمات الناقصة',
+  hr_petitions: 'الاستدعاءات',
+  hr_assets: 'العهدة',
+  hr_bonuses_violations: 'المكافآت والمخالفات',
+  hr_salary_reports: 'تقارير الرواتب',
+  hr_settlement: 'المخالصة وبراءة الذمة',
+  hr_employee_alerts: 'تنبيهات الموظفين',
 };
 
 const MODULES = {
@@ -180,7 +189,16 @@ export default function RolesSettingsTab() {
           'overview': 'hasOverviewAccess',
           'live': 'hasLiveAccess',
           'rep_visits': 'hasRepVisitsAccess',
-          'site_settings': 'hasSiteSettingsAccess'
+          'assigned_missions': 'hasDeliveryAccess',
+          'site_settings': 'hasSiteSettingsAccess',
+          'hr_attendance_alerts': 'hasHRAccess',
+          'hr_missing_punches': 'hasHRAccess',
+          'hr_petitions': 'hasHRAccess',
+          'hr_assets': 'hasHRAccess',
+          'hr_bonuses_violations': 'hasHRAccess',
+          'hr_salary_reports': 'hasHRAccess',
+          'hr_settlement': 'hasHRAccess',
+          'hr_employee_alerts': 'hasHRAccess'
         };
 
         Object.keys(MODULES).forEach(mod => {

@@ -1,5 +1,7 @@
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
-import { Gift, Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, User } from 'lucide-react';
+import { Gift, Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, User, Bell } from 'lucide-react';
+import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
@@ -12,7 +14,7 @@ const getLocalDateStr = (d) => {
   return new Date(d.getTime() - offset * 60000).toISOString().split('T')[0];
 };
 
-const HRBonuses = ({ user }) => {
+const HRBonuses = ({ user, refreshCounts }) => {
   const [bonuses, setBonuses] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [employees, setEmployees] = useState([]);
@@ -73,6 +75,7 @@ const HRBonuses = ({ user }) => {
     Swal.fire('نجاح', 'تم تسجيل المكافأة بنجاح', 'success');
     setShowModal(false);
     fetchData();
+    refreshCounts?.();
   };
 
   const handleDelete = async (id) => {
@@ -80,6 +83,7 @@ const HRBonuses = ({ user }) => {
     if (res.isConfirmed) {
       await deleteHRBonus(id, user);
       fetchData();
+      refreshCounts?.();
     }
   };
 
@@ -292,9 +296,12 @@ const HRBonuses = ({ user }) => {
                 <td className="font-bold text-emerald-600">{b.amount} د.أ</td>
                 <td className="text-muted text-sm">{b.notes}</td>
                 <td>
-                  {!b.processedInPeriod && (
-                    <button onClick={() => handleDelete(b.id)} className="icon-btn icon-btn-delete"><Trash2 size={18}/></button>
-                  )}
+                  <div className="flex gap-2 justify-center">
+                    <button onClick={() => promptEmployeeAlert({ employeeId: b.employeeId, employeeName: b.employeeName, source: 'المكافآت والبدلات', sourceReference: `${b.type || 'مكافأة'} ${b.date || ''}`, suggestedMessage: `تم تسجيل ${b.type || 'مكافأة'} لك بتاريخ ${b.date || 'غير محدد'}${b.amount ? ` بقيمة ${b.amount} د.أ` : ''}.${b.notes ? `\nالملاحظات: ${b.notes}` : ''}`, user })} className="icon-btn" style={{ color: '#c2410c', background: '#fff7ed', borderColor: '#fdba74' }} title="إرسال تنبيه للموظف"><Bell size={17}/></button>
+                    {!b.processedInPeriod && (
+                      <button onClick={() => handleDelete(b.id)} className="icon-btn icon-btn-delete"><Trash2 size={18}/></button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -322,7 +329,7 @@ const HRBonuses = ({ user }) => {
                   <label>الموظف</label>
                   <select required value={formData.employeeId} onChange={e=>setFormData({...formData, employeeId: e.target.value})} className="input-field">
                     <option value="">-- اختر الموظف --</option>
-                    {employees.filter(emp => emp.isActive !== false && emp.status !== 'مستقيل').map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+                    {employees.filter(isActiveEmployee).map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
                   </select>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>

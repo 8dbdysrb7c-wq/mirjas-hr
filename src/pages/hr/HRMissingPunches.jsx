@@ -1,5 +1,6 @@
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect, useMemo } from 'react';
-import { Clock, Check, X, Search, Filter, Fingerprint, Undo2, Trash2, User, ArrowUpDown, ArrowUp, ArrowDown, MessageCircle, Plus, Eye, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
+import { Bell, Clock, Check, X, Search, Filter, Fingerprint, Undo2, Trash2, User, ArrowUpDown, ArrowUp, ArrowDown, MessageCircle, Plus, Eye, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { getMissingPunches, updateMissingPunchStatus, deleteMissingPunch, saveHRAuditLog, getEmployees, saveHRViolation, saveMissingPunch, getHRAttendance, saveHRAttendance, saveEmployee, getHRLeaves, saveHRLeave } from '../../store';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification, sendTemplatedWhatsAppNotification } from '../../utils/whatsappService';
@@ -7,6 +8,7 @@ import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import 'flatpickr/dist/themes/light.css';
+import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [year, setYear] = useState(() => parseInt(selectedMonth.split('-')[0]) || new Date().getFullYear());
@@ -264,7 +266,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
     setLoading(true);
     const data = await getMissingPunches();
     const allEmps = await getEmployees();
-    const emps = allEmps.filter(e => e.name !== 'المدير العام' && e.id !== 'admin' && e.level !== 'admin' && !['غير فعال', 'مستقيل', 'منتهي خدمات'].includes(e.employmentStatus || e.status));
+    const emps = allEmps.filter(e => e.name !== 'المدير العام' && e.id !== 'admin' && e.level !== 'admin' && isActiveEmployee(e));
     const attendance = await getHRAttendance();
     const leaves = await getHRLeaves();
 
@@ -351,7 +353,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
 
     const combined = [...data, ...virtualPunches].filter(p => p.employeeName !== 'المدير العام' && p.employeeId !== 'admin');
     setPunches(combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
-    setEmployees(emps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && !['غير فعال', 'مستقيل', 'منتهي خدمات'].includes(e.employmentStatus || e.status)));
+    setEmployees(emps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && isActiveEmployee(e)));
     setLoading(false);
   };
 
@@ -1379,6 +1381,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
                     </td>
                     <td className="p-5">
                       <div className="flex justify-center items-center gap-3">
+                        <button onClick={() => promptEmployeeAlert({ employeeId: p.employeeId, employeeName: emp?.name || p.employeeName, source: 'الختمات الناقصة', sourceReference: `${p.type || 'ختمة'} ${p.date || ''}`, suggestedMessage: `يوجد لديك سجل ختمة ناقصة (${p.type || 'دخول/خروج'}) بتاريخ ${p.date || 'غير محدد'}. يرجى مراجعة الختمات والالتزام بتسجيل الدوام.`, user })} className="shrink-0" style={{ background: '#fff7ed', border: '1px solid #fdba74', color: '#c2410c', padding: '7px 10px', borderRadius: 8, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}><Bell size={15}/> إرسال تنبيه</button>
                         {p.status === 'معلق' || p.status === 'قيد المراجعة' ? (
                           p.isVirtual ? (
                             <>

@@ -1,3 +1,4 @@
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import { Users, UserCheck, UserX, Clock, Calendar, AlertTriangle, FileText, ChevronLeft, Plus } from 'lucide-react';
 import { getEmployees, getHRLeaves, getHRAttendance, getHRViolations } from '../../store';
@@ -19,7 +20,7 @@ const HRDashboard = ({ user, onNavigate }) => {
         getHRAttendance(),
         getHRViolations()
       ]);
-      setEmployees(empsData);
+      setEmployees(empsData.filter(isActiveEmployee));
       setLeaves(leavesData);
       setAttendance(attendanceData);
       setViolations(violationsData);

@@ -6,11 +6,20 @@ import 'flatpickr/dist/themes/airbnb.css';
 import { Package, Plus, Search, Edit2, Trash2, Layers, AlertTriangle, ArrowUpDown, Filter, X, Save, History, User, MapPin, Box, Copy, ChevronDown, ChevronRight, Printer, FileText, Download, Upload, Calendar, ClipboardList, Eye, Palette } from 'lucide-react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
-import { getStock, saveStockItem, deleteStockItem, deleteMultipleStockItems, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStockVouchers, saveStockVoucher, deleteStockVoucher, getCustomers, saveCustomer, getEmployees, getSalesOrders, getMissions, canPerformStockAction, saveSalesOrder, getStocktakes, saveStocktake, approveStocktake, deleteStocktakeAndRevert, approveAuditVouchers, deleteDraftVouchers, revertAuditVouchers, revertReceiptVouchers, savePreparationOrder, getHRAssets, getOrders, saveOrder, getPreparationOrders } from '../../store';
+import { getStock, saveStockItem, saveStockItemComponents, deleteStockItem, deleteMultipleStockItems, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStockVouchers, saveStockVoucher, deleteStockVoucher, getCustomers, saveCustomer, getEmployees, getSalesOrders, getMissions, canPerformStockAction, saveSalesOrder, getStocktakes, saveStocktake, approveStocktake, deleteStocktakeAndRevert, approveAuditVouchers, deleteDraftVouchers, revertAuditVouchers, revertReceiptVouchers, savePreparationOrder, getHRAssets, getOrders, saveOrder, getPreparationOrders, getProductCostings } from '../../store';
 import { advancedSearch, matchesSearch, useDebounce } from '../../utils/searchEngine';
 import { hasPermission } from '../../utils/permissions';
+import MultiColorSelectionModal from '../../components/MultiColorSelectionModal';
+import { buildReservedQuantityMap, getAvailableQuantity } from '../../utils/stockAvailability';
+import './stock-desktop.css';
 
 const MySwal = withReactContent(Swal);
+const escapeMarkup = value => String(value ?? '')
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#039;');
 
 const AdminStock = ({ user, notificationTarget }) => {
   const [stock, setStock] = useState([]);
@@ -32,6 +41,7 @@ const AdminStock = ({ user, notificationTarget }) => {
   const [expandedRows, setExpandedRows] = useState([]);
   const [productionTypeFilter, setProductionTypeFilter] = useState('all');
   const [productionSubTab, setProductionSubTab] = useState('disbursement');
+  const [productionAuditFilterStatus, setProductionAuditFilterStatus] = useState('pending');
   const stockStatusFilterRef = useRef(null);
 
   // States for Vouchers
@@ -41,8 +51,10 @@ const AdminStock = ({ user, notificationTarget }) => {
   const [employees, setEmployees] = useState([]);
   const [salesOrders, setSalesOrders] = useState([]);
   const [productionOrders, setProductionOrders] = useState([]);
+  const [productCostings, setProductCostings] = useState([]);
   const [missions, setMissions] = useState([]);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const [showVoucherMultiColorModal, setShowVoucherMultiColorModal] = useState(false);
   const [voucherType, setVoucherType] = useState('إدخال');
   const [voucherForm, setVoucherForm] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -412,7 +424,7 @@ const AdminStock = ({ user, notificationTarget }) => {
 
     const fetchData = async () => {
     setLoading(true);
-    const [stockData, settingsData, vouchersData, customersData, employeesData, salesData, missionsData, stocktakesData, assetsData, productionData, preparationData] = await Promise.all([
+    const [stockData, settingsData, vouchersData, customersData, employeesData, salesData, missionsData, stocktakesData, assetsData, productionData, preparationData, costingData] = await Promise.all([
       getStock(),
       getGlobalSettings(),
       getStockVouchers(),
@@ -423,7 +435,8 @@ const AdminStock = ({ user, notificationTarget }) => {
       getStocktakes(),
       getHRAssets(),
       getOrders(),
-      getPreparationOrders()
+      getPreparationOrders(),
+      getProductCostings()
     ]);
 
     // Auto-sync locations
@@ -462,6 +475,7 @@ const AdminStock = ({ user, notificationTarget }) => {
       ...(preparationData || []).map(o => ({ ...o, productionType: 'preparation' }))
     ];
     setProductionOrders(combinedProductionData);
+    setProductCostings(costingData || []);
     
     setMissions(missionsData || []);
     setStocktakes(stocktakesData || []);
@@ -536,7 +550,19 @@ const AdminStock = ({ user, notificationTarget }) => {
     return acc;
   }, {}));
 
-  groupedStockRaw = groupedStockRaw.map(g => ({ ...g, statusLabel: getStatus({quantity: g.totalQuantity, minLimit: g.minLimit}).label, warehouse: g.locations[0]?.warehouse || '' }));
+  const reservedQuantityMap = buildReservedQuantityMap(salesOrders);
+  groupedStockRaw = groupedStockRaw.map(g => {
+    const stockKeys = new Set(g.locations.map(location => `${String(location.name || g.name || '').trim()}${location.spec ? ` - ${String(location.spec).trim()}` : ''}`));
+    const reservedQuantity = [...stockKeys].reduce((sum, key) => sum + Number(reservedQuantityMap[key] || 0), 0);
+    const availableQuantity = getAvailableQuantity(g.totalQuantity, reservedQuantity);
+    return {
+      ...g,
+      reservedQuantity,
+      availableQuantity,
+      statusLabel: getStatus({ quantity: availableQuantity, minLimit: g.minLimit }).label,
+      warehouse: g.locations[0]?.warehouse || ''
+    };
+  });
   const groupedStock = applySort(groupedStockRaw);
 
   const handleSelectGroup = (itemNumber, locations) => {
@@ -564,19 +590,43 @@ const AdminStock = ({ user, notificationTarget }) => {
 
   const pendingAudits = vouchers.filter(v => v.status === 'مسودة' && v.orderNumber);
   const getDraftForOrder = (orderNumber) => pendingAudits.filter(v => v.orderNumber === orderNumber);
+  const getOrderLedgerState = (order) => {
+    const orderVouchers = vouchers.filter(v => v.orderNumber === order.orderNumber);
+    const approvedVouchers = orderVouchers.filter(v => v.status === 'معتمد');
+    const draftVouchers = orderVouchers.filter(v => v.status === 'مسودة');
+    const ledgerDeducted = approvedVouchers.some(v => v.type === 'إخراج' || v.type === 'إتلاف');
+    const hasMismatch = Boolean(order.stockDeducted) !== ledgerDeducted && draftVouchers.length === 0;
+    return { orderVouchers, approvedVouchers, draftVouchers, ledgerDeducted, hasMismatch };
+  };
 
   const productionOrdersToAuditRaw = productionOrders.filter(o => o.status !== 'ملغى' && o.status !== 'ملغي' && !o.ignoredAudit);
   const productionOrdersToAudit = productionOrdersToAuditRaw.map(o => {
     const drafts = getDraftForOrder(o.orderNumber);
+    const ledger = getOrderLedgerState(o);
     let responsibleUser = '-';
-    if (o.stockDeducted) {
+    if (ledger.ledgerDeducted) {
       const deductionVouchers = vouchers.filter(v => v.orderNumber === o.orderNumber && v.status === 'معتمد');
       if (deductionVouchers.length > 0) responsibleUser = deductionVouchers[0].createdBy;
     } else if (drafts.length > 0) {
       responsibleUser = drafts[0].createdBy;
     }
-    return { ...o, hasDraft: drafts.length > 0, draftCreatedBy: responsibleUser, isProduction: true };
+    return {
+      ...o,
+      stockDeducted: ledger.ledgerDeducted,
+      storedStockDeducted: Boolean(o.stockDeducted),
+      hasLedgerMismatch: ledger.hasMismatch,
+      hasDraft: drafts.length > 0,
+      draftCreatedBy: responsibleUser,
+      isProduction: true
+    };
   }).sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
+  const pendingProductionAuditCount = productionOrdersToAudit.filter(order =>
+    !order.stockDeducted && !order.ignoredMaterialAudit
+  ).length;
+  const pendingProductionReceiptCount = productionOrdersToAudit.filter(order =>
+    !order.stockReceived && !order.ignoredReceiptAudit
+  ).length;
+  const totalPendingProductionCount = pendingProductionAuditCount + pendingProductionReceiptCount;
 
   const ordersToAuditRaw = salesOrders.filter(o => {
     if (o.ignoredAudit) return false;
@@ -587,10 +637,11 @@ const AdminStock = ({ user, notificationTarget }) => {
   });
   const ordersToAudit = ordersToAuditRaw.map(o => {
     const drafts = getDraftForOrder(o.orderNumber);
+    const ledger = getOrderLedgerState(o);
     // If it's already deducted, we might want to get the actual voucher creator, but for now we just show who drafted it if there's a draft
     // If it's deducted, there are no drafts. Let's find the actual voucher to get the creator.
     let responsibleUser = '-';
-    if (o.stockDeducted) {
+    if (ledger.ledgerDeducted) {
       const deductionVouchers = vouchers.filter(v => v.orderNumber === o.orderNumber && v.status === 'معتمد');
       if (deductionVouchers.length > 0) responsibleUser = deductionVouchers[0].createdBy;
     } else if (drafts.length > 0) {
@@ -598,7 +649,10 @@ const AdminStock = ({ user, notificationTarget }) => {
     }
     
     return { 
-      ...o, 
+      ...o,
+      stockDeducted: ledger.ledgerDeducted,
+      storedStockDeducted: Boolean(o.stockDeducted),
+      hasLedgerMismatch: ledger.hasMismatch,
       hasDraft: drafts.length > 0, 
       draftCreatedBy: responsibleUser,
       isProduction: false 
@@ -719,6 +773,16 @@ const AdminStock = ({ user, notificationTarget }) => {
           } else if (order.productionType === 'preparation') {
             await savePreparationOrder(updated);
           }
+          const linkedSalesOrder = salesOrders.find(salesOrder =>
+            (order.salesOrderId && salesOrder.id === order.salesOrderId) ||
+            (order.salesOrderNumber && salesOrder.orderNumber === order.salesOrderNumber)
+          );
+          if (linkedSalesOrder) {
+            await saveSalesOrder({
+              ...linkedSalesOrder,
+              items: (linkedSalesOrder.items || []).map(item => ({ ...item, receivedReservedQuantity: 0 }))
+            });
+          }
           Swal.fire('تم!', 'تم إلغاء الاستلام وتعديل المخزون بنجاح.', 'success');
           fetchData();
         } else {
@@ -795,7 +859,7 @@ const AdminStock = ({ user, notificationTarget }) => {
     });
   };
 
-  const handleIgnoreAudit = async (order) => {
+  const handleIgnoreAudit = async (order, scope = 'sales') => {
     MySwal.fire({
       title: 'تجاهل الطلبية؟',
       text: 'هل أنت متأكد أنك تريد تجاهل هذه الطلبية وإخفاءها من هذه القائمة؟',
@@ -807,7 +871,13 @@ const AdminStock = ({ user, notificationTarget }) => {
     }).then(async (result) => {
       if (result.isConfirmed) {
         if (order.isProduction) {
-          await saveOrder({ ...order, ignoredAudit: true });
+          const ignoreField = scope === 'material' ? 'ignoredMaterialAudit' : 'ignoredReceiptAudit';
+          const updatedOrder = { ...order, [ignoreField]: true };
+          delete updatedOrder.isProduction;
+          delete updatedOrder.hasDraft;
+          delete updatedOrder.draftCreatedBy;
+          if (order.productionType === 'preparation') await savePreparationOrder(updatedOrder);
+          else await saveOrder(updatedOrder);
         } else {
           await saveSalesOrder({ ...order, ignoredAudit: true });
         }
@@ -982,7 +1052,35 @@ const AdminStock = ({ user, notificationTarget }) => {
       }));
       setAuditItems(draftItems);
     } else {
-      const parsedItems = (order.items || []).map(item => {
+      const normalizeName = value => String(value || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('ar');
+      const suggestedMaterials = order.isProduction
+        ? (order.items || []).flatMap(productionItem => {
+            const productName = productionItem.productName || productionItem.name || '';
+            const stockRecipe = latestStock.find(stockItem =>
+              (productionItem.itemNumber && stockItem.itemNumber === productionItem.itemNumber)
+              || normalizeName(stockItem.name) === normalizeName(productName)
+            );
+            const costing = productCostings.find(row => normalizeName(row.productName) === normalizeName(productName));
+            const recipeMaterials = Array.isArray(stockRecipe?.materials) && stockRecipe.materials.length
+              ? stockRecipe.materials
+              : (costing?.materials || []);
+            return recipeMaterials.filter(material => material.name && Number(material.quantityPerUnit) > 0).map(material => ({
+              name: material.name,
+              quantity: Number((Number(material.quantityPerUnit) * Number(productionItem.quantity || 0)).toFixed(3)),
+              expectedQuantity: Number((Number(material.quantityPerUnit) * Number(productionItem.quantity || 0)).toFixed(3)),
+              sourceProduct: productName,
+              unit: material.unit || '',
+              notes: ''
+            }));
+          })
+        : [];
+      // Production/preparation materials are never inferred from the finished
+      // product itself. With no saved recipe, start empty and require the user
+      // to add the actually issued materials manually.
+      const sourceItems = order.isProduction
+        ? suggestedMaterials
+        : (order.items || []);
+      const parsedItems = sourceItems.map(item => {
         const name = item.productName || item.name || '';
         const itemNum = item.itemNumber || '';
         const matchedStock = findBestMatch(latestStock, null, itemNum, name);
@@ -999,6 +1097,8 @@ const AdminStock = ({ user, notificationTarget }) => {
           stockId,
           availableQuantity: availableQty,
           unit,
+          expectedQuantity: Number(item.expectedQuantity ?? item.quantity) || 0,
+          notes: item.notes || '',
           isExtra: false
         };
       });
@@ -1057,6 +1157,11 @@ const AdminStock = ({ user, notificationTarget }) => {
 
     for (let i = 0; i < validItems.length; i++) {
       const item = validItems[i];
+      const selectedStockItem = stock.find(stockItem => stockItem.id === item.stockId);
+      if (auditOrder.isProduction && !selectedStockItem) {
+        Swal.fire('خطأ', `يرجى اختيار مادة فعلية من المخزون في السطر ${i + 1}`, 'error');
+        return;
+      }
       if (!item.warehouse) {
         Swal.fire('خطأ', `يرجى اختيار المستودع للصنف في السطر ${i + 1} (${item.name})`, 'error');
         return;
@@ -1083,7 +1188,10 @@ const AdminStock = ({ user, notificationTarget }) => {
           unit: stockItem?.unit || '',
           category: stockItem?.category || '',
           minLimit: Number(stockItem?.minLimit || 0),
-          packagingType: item.packagingType || ''
+          packagingType: item.packagingType || '',
+          expectedQuantity: Number(item.expectedQuantity || 0),
+          variance: Number((Number(item.quantity) - Number(item.expectedQuantity || 0)).toFixed(3)),
+          notes: item.notes || ''
         });
         return acc;
       }, {});
@@ -1112,7 +1220,8 @@ const AdminStock = ({ user, notificationTarget }) => {
           createdById: user.id || '',
           items: wItems
         };
-        await saveStockVoucher(payload);
+        const savedVoucher = await saveStockVoucher(payload);
+        if (!savedVoucher) throw new Error(`تعذر إنشاء سند الصرف للمستودع ${warehouse}`);
       }
 
       // Mark order as deducted only if approved directly
@@ -1151,7 +1260,7 @@ const AdminStock = ({ user, notificationTarget }) => {
       fetchData();
     } catch (err) {
       setLoading(false);
-      Swal.fire('خطأ', 'حدث خطأ أثناء تثبيت الخصم', 'error');
+      Swal.fire('تعذر إتمام الصرف', err?.message || 'حدث خطأ أثناء تثبيت الخصم', 'error');
     }
   };
 
@@ -1827,7 +1936,7 @@ const AdminStock = ({ user, notificationTarget }) => {
 
     let title = 'إضافة صنف جديد للمخزون';
     if (isEdit) title = 'تعديل صنف';
-    else if (isCopy) title = 'إضافة لون/موقع آخر لنفس الصنف';
+    else if (isCopy) title = 'إضافة مخزن / لون / موقع آخر لنفس الصنف';
 
     const custodyItemLocs = item ? assets.flatMap(a => (a.items || []).filter(i => i.name === item.name).flatMap(i => (i.location || '').split(/[,، -]/).filter(Boolean))) : [];
     const allItemLocations = item ? stock.filter(s => s.itemNumber === item.itemNumber).flatMap(s => (s.location || '').split(/[,، -]/).filter(Boolean)) : [];
@@ -1835,6 +1944,34 @@ const AdminStock = ({ user, notificationTarget }) => {
     
     const custodyAllLocs = assets.flatMap(a => (a.items || []).flatMap(i => (i.location || '').split(/[,، -]/).filter(Boolean)));
     const allSystemLocations = [...new Set([...(globalSettings.stockLocations || []), ...stock.flatMap(s => (s.location || '').split(/[,، -]/).filter(Boolean)), ...custodyAllLocs])].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+
+    const normalizeProductValue = value => String(value || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('ar');
+    const existingCosting = productCostings.find(costing =>
+      String(costing.productCode || costing.stockItemNumber || '') === String(initialData.itemNumber || '')
+      || String(costing.productId || costing.id || '') === String(initialData.id || '')
+      || normalizeProductValue(costing.productName) === normalizeProductValue(initialData.name)
+    ) || null;
+    const storedMaterials = Array.isArray(initialData.materials)
+      ? initialData.materials
+      : (existingCosting?.materials || []); // One-time compatibility with old calculator data.
+    const initialMaterials = Array.isArray(storedMaterials)
+      ? storedMaterials.map(material => ({
+          itemNumber: material.itemNumber || '',
+          name: material.name || '',
+          spec: material.spec || '',
+          quantityPerUnit: Number(material.quantityPerUnit) || 0,
+          unit: material.unit || '',
+          wastePercent: Number(material.wastePercent) || 0
+        }))
+      : [];
+    const componentOptions = [...new Map(stock
+      .filter(stockItem => stockItem.category !== 'بضاعة جاهزة' && stockItem.itemNumber !== initialData.itemNumber)
+      .map(stockItem => {
+        const key = `${stockItem.itemNumber || stockItem.name}__${stockItem.spec || ''}`;
+        return [key, {
+          itemNumber: stockItem.itemNumber || '', name: stockItem.name || '', spec: stockItem.spec || '', unit: stockItem.unit || ''
+        }];
+      })).values()].sort((a, b) => String(a.name).localeCompare(String(b.name), 'ar'));
 
     MySwal.fire({
       customClass: {
@@ -1849,11 +1986,75 @@ const AdminStock = ({ user, notificationTarget }) => {
       didOpen: () => {
         const categorySelect = document.getElementById('swal-category');
         const itemNumberInput = document.getElementById('swal-itemNumber');
+        const nameInput = document.getElementById('swal-name');
+
+        const updateItemNumber = () => {
+          if (isEdit || !itemNumberInput) return;
+          const enteredName = nameInput ? nameInput.value.trim() : '';
+          if (enteredName) {
+            const existing = stock.find(s => s.name && s.name.trim() === enteredName && s.itemNumber);
+            if (existing) {
+              itemNumberInput.value = existing.itemNumber;
+              if (existing.category && categorySelect && categorySelect.value !== existing.category) {
+                categorySelect.value = existing.category;
+                const componentsSection = document.getElementById('finished-item-components');
+                if (componentsSection) componentsSection.style.display = existing.category === 'بضاعة جاهزة' ? 'block' : 'none';
+              }
+              return;
+            }
+          }
+          if (categorySelect) {
+            itemNumberInput.value = generateNextID(categorySelect.value);
+          }
+        };
+
         if (categorySelect && itemNumberInput) {
           categorySelect.addEventListener('change', (e) => {
-            itemNumberInput.value = generateNextID(e.target.value);
+            updateItemNumber();
+            const componentsSection = document.getElementById('finished-item-components');
+            if (componentsSection) componentsSection.style.display = e.target.value === 'بضاعة جاهزة' ? 'block' : 'none';
           });
         }
+
+        if (nameInput && !isEdit) {
+          nameInput.addEventListener('input', updateItemNumber);
+          nameInput.addEventListener('change', updateItemNumber);
+        }
+
+        const componentRows = document.getElementById('component-rows');
+        const addComponentButton = document.getElementById('add-component-row');
+        const optionsMarkup = componentOptions.map(option => {
+          const value = encodeURIComponent(JSON.stringify(option));
+          const label = `${option.itemNumber ? `${option.itemNumber} — ` : ''}${option.name}${option.spec ? ` — ${option.spec}` : ''}`;
+          return `<option value="${value}">${escapeMarkup(label)}</option>`;
+        }).join('');
+        const addComponentRow = (material = {}) => {
+          if (!componentRows) return;
+          const row = document.createElement('div');
+          row.className = 'stock-component-row';
+          row.innerHTML = `
+            <select class="premium-input component-product" aria-label="المادة المكوّنة">
+              <option value="">اختر المادة</option>${optionsMarkup}
+            </select>
+            <input class="premium-input component-quantity" type="number" min="0.001" step="0.001" value="${escapeMarkup(material.quantityPerUnit || '')}" placeholder="الكمية للوحدة">
+            <input class="premium-input component-unit" value="${escapeMarkup(material.unit || '')}" placeholder="الوحدة" readonly>
+            <input class="premium-input component-waste" type="number" min="0" step="0.1" value="${escapeMarkup(material.wastePercent || 0)}" placeholder="هدر %">
+            <button type="button" class="component-remove" title="حذف المكوّن">×</button>`;
+          const select = row.querySelector('.component-product');
+          const matchedOption = componentOptions.find(option =>
+            (material.itemNumber && option.itemNumber === material.itemNumber && (!material.spec || option.spec === material.spec))
+            || (!material.itemNumber && normalizeProductValue(option.name) === normalizeProductValue(material.name))
+          );
+          if (matchedOption) select.value = encodeURIComponent(JSON.stringify(matchedOption));
+          select.addEventListener('change', () => {
+            const selected = select.value ? JSON.parse(decodeURIComponent(select.value)) : {};
+            row.querySelector('.component-unit').value = selected.unit || '';
+          });
+          row.querySelector('.component-remove').addEventListener('click', () => row.remove());
+          componentRows.appendChild(row);
+        };
+        initialMaterials.forEach(addComponentRow);
+        addComponentButton?.addEventListener('click', () => addComponentRow());
         
         const addLocBtn = document.getElementById('add-new-location-btn');
         const locSelect = document.getElementById('swal-location');
@@ -1899,7 +2100,10 @@ const AdminStock = ({ user, notificationTarget }) => {
             </div>
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label>اسم الصنف</label>
-              <input id="swal-name" class="premium-input" placeholder="مثال: قماش أبيض تركي" value="${initialData.name}">
+              <input id="swal-name" class="premium-input" list="stock-name-suggestions" placeholder="مثال: قماش أبيض تركي" value="${initialData.name}">
+              <datalist id="stock-name-suggestions">
+                ${[...new Set(stock.map(s => s.name?.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ar')).map(n => `<option value="${escapeMarkup(n)}"></option>`).join('')}
+              </datalist>
             </div>
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label>التصنيف</label>
@@ -1915,10 +2119,11 @@ const AdminStock = ({ user, notificationTarget }) => {
             </div>
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label>المخزن</label>
-              <select id="swal-warehouse" class="premium-input">
-                <option value="" disabled>اختر المخزن</option>
-                ${globalSettings.warehouses?.map(w => `<option value="${w}" ${initialData.warehouse === w ? 'selected' : ''}>${w}</option>`).join('')}
-              </select>
+              <input id="swal-warehouse" class="premium-input" list="stock-warehouse-options" value="${escapeMarkup(initialData.warehouse || '')}" placeholder="اختر مخزنًا أو اكتب اسم مخزن جديد">
+              <datalist id="stock-warehouse-options">
+                ${[...new Set([...(globalSettings.warehouses || []), ...stock.map(s => s.warehouse)].filter(Boolean))].map(w => `<option value="${escapeMarkup(w)}"></option>`).join('')}
+              </datalist>
+              <small style="color:#64748b;display:block;margin-top:6px">يمكنك كتابة اسم مخزن جديد لإضافته عند حفظ الصنف.</small>
             </div>
 
             <div class="premium-form-group col-span-12 md:col-span-4">
@@ -1953,13 +2158,14 @@ const AdminStock = ({ user, notificationTarget }) => {
               </select>
             </div>
             <div class="premium-form-group col-span-12 md:col-span-4">
-              <label>الكمية الحالية</label>
+              <label>الكمية / الرصيد الحالي</label>
               <div class="flex gap-2">
-                <input id="swal-quantity" type="number" class="premium-input" style="flex: 2; margin-bottom: 0;" value="${initialData.quantity}">
+                <input id="swal-quantity" type="number" step="any" class="premium-input" style="flex: 2; margin-bottom: 0;" value="${isEdit ? initialData.quantity : 0}">
                 <select id="swal-unit" class="premium-input" style="flex: 1; margin-bottom: 0;">
                   ${globalSettings.stockUnits?.map(u => `<option value="${u}" ${initialData.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
                 </select>
               </div>
+              <small style="color:#64748b;font-weight:700;display:block;margin-top:6px">يمكن تعديل الكمية مباشرة وحفظها من بطاقة المادة.</small>
             </div>
             <div class="premium-form-group col-span-12 md:col-span-4">
               <label>الحد الأدنى (تنبيه)</label>
@@ -1988,6 +2194,15 @@ const AdminStock = ({ user, notificationTarget }) => {
               <label>ملاحظات</label>
               <textarea id="swal-notes" class="premium-input" placeholder="أي ملاحظات..." style="min-height: 80px;">${initialData.notes || ''}</textarea>
             </div>
+
+            <div id="finished-item-components" class="col-span-12 stock-components-card" style="display:${initialData.category === 'بضاعة جاهزة' ? 'block' : 'none'}">
+              <div class="stock-components-header">
+                <div><strong>مكوّنات الصنف (اختياري)</strong><small>يمكن حفظ الصنف دون مكوّنات. تُحفظ الصفوف المكتملة فقط وتُتجاهل الصفوف الناقصة.</small></div>
+                <button id="add-component-row" type="button">+ إضافة مكوّن</button>
+              </div>
+              <div class="stock-components-labels"><span>المادة / المواصفة</span><span>الكمية للوحدة</span><span>الوحدة</span><span>الهدر %</span><span></span></div>
+              <div id="component-rows"></div>
+            </div>
           </div>
         </div>
       `,
@@ -2001,7 +2216,7 @@ const AdminStock = ({ user, notificationTarget }) => {
           itemCode: document.getElementById('swal-itemCode').value,
           name: document.getElementById('swal-name').value,
           category: document.getElementById('swal-category').value,
-          warehouse: document.getElementById('swal-warehouse').value,
+          warehouse: document.getElementById('swal-warehouse').value.trim(),
           location: document.getElementById('swal-location').value,
           spec: document.getElementById('swal-spec').value,
           quantity: Number(document.getElementById('swal-quantity').value),
@@ -2011,11 +2226,38 @@ const AdminStock = ({ user, notificationTarget }) => {
           lastMovementDate: document.getElementById('swal-lastMovementDate').value,
           lastRecipient: document.getElementById('swal-lastRecipient').value,
           notes: document.getElementById('swal-notes').value,
+          materials: [...document.querySelectorAll('#component-rows .stock-component-row')].map(row => {
+            const selectedValue = row.querySelector('.component-product').value;
+            const selected = selectedValue ? JSON.parse(decodeURIComponent(selectedValue)) : {};
+            return {
+              itemNumber: selected.itemNumber || '', name: selected.name || '', spec: selected.spec || '',
+              quantityPerUnit: Number(row.querySelector('.component-quantity').value) || 0,
+              unit: row.querySelector('.component-unit').value || selected.unit || '',
+              wastePercent: Number(row.querySelector('.component-waste').value) || 0
+            };
+          }).filter(material => material.name && material.quantityPerUnit > 0),
           id: isEdit ? item.id : null
         };
 
+        data.name = data.name.trim();
         if (!data.itemNumber || !data.name || !data.warehouse) {
           Swal.showValidationMessage('يرجى ملء الاسم ورقم الصنف والمخزن');
+          return false;
+        }
+
+        if (!isEdit) {
+          const existingSameName = stock.find(s => s.name && s.name.trim() === data.name && s.itemNumber);
+          if (existingSameName) {
+            data.itemNumber = existingSameName.itemNumber;
+          } else {
+            const isDuplicateSku = stock.some(s => s.itemNumber === data.itemNumber && s.name && s.name.trim() !== data.name);
+            if (isDuplicateSku) {
+              data.itemNumber = generateNextID(data.category);
+            }
+          }
+        }
+        if (!Number.isFinite(data.quantity)) {
+          Swal.showValidationMessage('يرجى إدخال كمية صحيحة');
           return false;
         }
         if (data.itemCode && data.itemCode.trim().length !== 13) {
@@ -2038,8 +2280,21 @@ const AdminStock = ({ user, notificationTarget }) => {
       }
     }).then(async (result) => {
       if (result.isConfirmed) {
-        const res = await saveStockItem(result.value);
+        const res = await saveStockItem(result.value, { sourceItemId: isCopy ? item.id : null });
         if (res) {
+          result.value.itemNumber = res.itemNumber;
+          if (!(globalSettings.warehouses || []).includes(result.value.warehouse)) {
+            const latestSettings = await getGlobalSettings();
+            const updatedSettings = {
+              ...latestSettings,
+              warehouses: [...new Set([...(latestSettings.warehouses || []), result.value.warehouse])]
+            };
+            await saveGlobalSettings(updatedSettings);
+            setGlobalSettings(updatedSettings);
+          }
+          if (result.value.category === 'بضاعة جاهزة') {
+            await saveStockItemComponents(res.itemNumber, result.value.materials);
+          }
           await addLog({
             userName: user.name,
             userId: user.id,
@@ -2074,7 +2329,7 @@ const AdminStock = ({ user, notificationTarget }) => {
       inputValue: item.quantity,
       inputAttributes: {
         min: 0,
-        step: 1,
+        step: 0.001,
         style: 'text-align: center; font-size: 1.5rem; font-weight: bold; border: 2px solid #e2e8f0; border-radius: 8px; padding: 10px;'
       },
       showCancelButton: true,
@@ -2083,9 +2338,16 @@ const AdminStock = ({ user, notificationTarget }) => {
     });
 
     if (newQuantity !== undefined && newQuantity !== null && newQuantity !== '') {
-      const parsedQty = parseInt(newQuantity);
+      const parsedQty = Number(newQuantity);
       if (parsedQty >= 0) {
         await saveStockItem({ ...item, quantity: parsedQty, lastMovement: 'تعديل سريع', lastMovementDate: new Date().toISOString().split('T')[0] });
+        await addLog({
+          userName: user.name,
+          userId: user.id,
+          module: 'المخزون',
+          action: 'تعديل كمية مباشر',
+          details: `${item.name} (${item.itemNumber}) — ${item.warehouse}: من ${Number(item.quantity || 0)} إلى ${parsedQty}`
+        });
         fetchData();
         MySwal.fire({ icon: 'success', title: 'تم التحديث', timer: 1000, showConfirmButton: false });
       }
@@ -2140,6 +2402,10 @@ const AdminStock = ({ user, notificationTarget }) => {
 
     if (order && type === 'إدخال') {
       // Prefill for production receiving
+      const previousReceipts = vouchers.filter(v => v.orderNumber === order.orderNumber && v.type === 'إدخال' && v.status !== 'مسودة');
+      const receivedForItem = item => previousReceipts.reduce((sum, voucher) => sum + (voucher.items || []).filter(line =>
+        (line.itemNumber && item.itemNumber && line.itemNumber === item.itemNumber) || String(line.name || '').trim() === String(item.productName || item.name || '').trim()
+      ).reduce((lineSum, line) => lineSum + Number(line.quantity || 0), 0), 0);
       initialItems = (order.items || []).map(item => {
         const pName = item.productName || item.name || '';
         const pSpec = item.colorModel || item.spec || '';
@@ -2177,7 +2443,9 @@ const AdminStock = ({ user, notificationTarget }) => {
           name: existingStock ? existingStock.name : pName,
           category: existingStock ? existingStock.category : 'بضاعة جاهزة',
           spec: existingStock ? existingStock.spec : pSpec,
-          quantity: Number(item.quantity) || 1,
+          quantity: Math.max(0, Number(item.quantity || 0) - receivedForItem(item)) || Number(item.quantity) || 1,
+          expectedQuantity: Number(item.quantity) || 0,
+          previouslyReceived: receivedForItem(item),
           unit: existingStock ? existingStock.unit : 'عدد',
           minLimit: 0,
           isNewItem: !existingStock
@@ -2220,10 +2488,65 @@ const AdminStock = ({ user, notificationTarget }) => {
     }));
   };
 
+  const handleAddVoucherMultiColors = (itemsToAdd) => {
+    const stockById = new Map(stock.map(item => [item.id, item]));
+    const colorLabelForStockItem = item => {
+      const parent = item.parentItemId ? stockById.get(item.parentItemId) : null;
+      const baseName = parent?.name || String(item.name || '').split(' - ')[0].trim();
+      let color = String(item.spec || '').trim();
+      if (!color && String(item.name || '').includes(' - ')) color = String(item.name).split(' - ').pop().trim();
+      if (!color) color = 'أساسي';
+      if ((item.warehouse || 'الرئيسي') !== 'الرئيسي') color = `${color} (مستودع: ${item.warehouse})`;
+      return `${baseName} - ${color}`;
+    };
+
+    const voucherWarehouseStock = stock.filter(item => !voucherForm.warehouse || item.warehouse === voucherForm.warehouse);
+    const rows = itemsToAdd.map(selected => {
+      const selectedLabel = String(selected.productName || '');
+      const selectedWithoutWarehouse = selectedLabel.replace(/\s*\(مستودع:[^)]+\)\s*$/, '').trim();
+      const matched = voucherWarehouseStock.find(item => colorLabelForStockItem(item) === selectedLabel) || voucherWarehouseStock.find(item => {
+        const spec = String(item.spec || '').trim();
+        const parent = item.parentItemId ? stockById.get(item.parentItemId) : null;
+        const baseName = String(parent?.name || item.name || '').split(' - ')[0].trim();
+        return spec && selectedWithoutWarehouse === `${baseName} - ${spec}`;
+      });
+      if (!matched) return null;
+      return {
+        stockId: matched.id,
+        itemNumber: matched.itemNumber,
+        name: matched.name,
+        category: matched.category || '',
+        spec: matched.spec || '',
+        quantity: Number(selected.quantity) || 0,
+        unit: matched.unit || globalSettings.stockUnits?.[0] || 'عدد',
+        minLimit: matched.minLimit || 0,
+        location: matched.location || '',
+        availableQuantity: Number(matched.quantity) || 0,
+        notes: selected.notes || ''
+      };
+    }).filter(Boolean);
+
+    setVoucherForm(previous => {
+      const nextItems = previous.items.filter(item => item.stockId || item.name);
+      rows.forEach(row => {
+        const existingIndex = nextItems.findIndex(item => item.stockId === row.stockId);
+        if (existingIndex >= 0) {
+          nextItems[existingIndex] = { ...nextItems[existingIndex], quantity: (Number(nextItems[existingIndex].quantity) || 0) + row.quantity };
+        } else {
+          nextItems.push(row);
+        }
+      });
+      return { ...previous, items: nextItems };
+    });
+  };
+
   const updateVoucherItem = (index, field, value) => {
     setVoucherForm(prev => {
       const updatedItems = [...prev.items];
-      const item = { ...updatedItems[index], [field]: value };
+      const limitedValue = field === 'quantity' && (voucherType === 'إدخال' || voucherType === 'إخراج')
+        ? String(value || '').replace(/\D/g, '').slice(0, 5)
+        : value;
+      const item = { ...updatedItems[index], [field]: limitedValue };
       
       if (voucherType === 'إدخال' && field === 'itemNumber' && !item.isNewItem) {
         const existing = stock.find(s => s.itemNumber === value);
@@ -2351,7 +2674,21 @@ const AdminStock = ({ user, notificationTarget }) => {
         const orderNum = voucherForm.orderNumber;
         const pOrder = productionOrders.find(o => o.orderNumber === orderNum);
         if (pOrder) {
-          const updated = { ...pOrder, stockReceived: true };
+          const priorReceipts = vouchers.filter(v => v.orderNumber === orderNum && v.type === 'إدخال' && v.status !== 'مسودة');
+          const allReceiptLines = [...priorReceipts.flatMap(v => v.items || []), ...(result.items || [])];
+          const receiptSummary = (pOrder.items || []).map(item => {
+            const requested = Number(item.quantity || 0);
+            const received = allReceiptLines.filter(line =>
+              (line.itemNumber && item.itemNumber && line.itemNumber === item.itemNumber) || String(line.name || '').trim() === String(item.productName || item.name || '').trim()
+            ).reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+            return { itemNumber: item.itemNumber || '', productName: item.productName || item.name || '', requested, received, difference: received - requested };
+          });
+          const updated = {
+            ...pOrder,
+            stockReceived: receiptSummary.every(line => line.received >= line.requested),
+            stockReceiptSummary: receiptSummary,
+            lastStockReceiptAt: new Date().toISOString()
+          };
           delete updated.hasDraft;
           delete updated.draftCreatedBy;
           delete updated.isProduction;
@@ -2359,6 +2696,28 @@ const AdminStock = ({ user, notificationTarget }) => {
             await saveOrder(updated);
           } else if (pOrder.productionType === 'preparation') {
             await savePreparationOrder(updated);
+          }
+
+          const linkedSalesOrder = salesOrders.find(salesOrder =>
+            (pOrder.salesOrderId && salesOrder.id === pOrder.salesOrderId) ||
+            (pOrder.salesOrderNumber && salesOrder.orderNumber === pOrder.salesOrderNumber)
+          );
+          if (linkedSalesOrder) {
+            const normalizeProduct = value => String(value || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('ar');
+            const updatedSalesItems = (linkedSalesOrder.items || []).map(salesItem => {
+              const salesName = normalizeProduct(salesItem.productName || salesItem.name);
+              const matchingReceipts = receiptSummary.filter(receipt => {
+                const receiptName = normalizeProduct(receipt.productName);
+                return receiptName === salesName || receiptName.includes(salesName) || salesName.includes(receiptName);
+              });
+              if (matchingReceipts.length === 0) return salesItem;
+              const received = matchingReceipts.reduce((sum, receipt) => sum + Number(receipt.received || 0), 0);
+              return {
+                ...salesItem,
+                receivedReservedQuantity: Math.min(Number(salesItem.quantity || 0), received)
+              };
+            });
+            await saveSalesOrder({ ...linkedSalesOrder, items: updatedSalesItems });
           }
         }
       }
@@ -2694,7 +3053,7 @@ const AdminStock = ({ user, notificationTarget }) => {
       icon: <AlertTriangle />,
       color: '#8b5cf6',
       bgLight: '#f3e8ff',
-      customBadge: `${ordersToAudit.filter(o => !o.stockDeducted).length} طلبية`,
+      customBadge: `${ordersToAudit.filter(o => !o.stockDeducted && !o.hasDraft).length} غير مدققة`,
       onClick: () => setActiveStockTab('audit'),
       isActive: activeStockTab === 'audit'
     },
@@ -2704,8 +3063,8 @@ const AdminStock = ({ user, notificationTarget }) => {
       icon: <Package />,
       color: '#ec4899',
       bgLight: '#fce7f3',
-      customBadge: `${productionOrdersToAudit.filter(o => !o.stockDeducted).length} طلبية`,
-      onClick: () => setActiveStockTab('production'),
+      customBadge: `${totalPendingProductionCount} طلبية`,
+      onClick: () => { setActiveStockTab('production'); setProductionSubTab('disbursement'); setProductionAuditFilterStatus('pending'); },
       isActive: activeStockTab === 'production'
     },
     {
@@ -3032,12 +3391,7 @@ const AdminStock = ({ user, notificationTarget }) => {
               onChange={(e) => setFilters({...filters, warehouse: e.target.value})}
             >
               <option value="">جميع المستودعات</option>
-              {/* Default explicitly requested warehouses to ensure they never disappear */}
-              <option value="مستودع إنتاج قيد الخياطة">مستودع إنتاج قيد الخياطة</option>
-              <option value="مستودع إنتاج قيد التحضير">مستودع إنتاج قيد التحضير</option>
-              <option disabled>──────────</option>
-              {/* Filter out the explicitly added ones from the mapped list to prevent duplicates, safe rendering */}
-              {(globalSettings?.warehouses || []).filter(w => w !== 'مستودع إنتاج قيد الخياطة' && w !== 'مستودع إنتاج قيد التحضير').map(w => (
+              {(globalSettings?.warehouses || []).map(w => (
                 <option key={w} value={w}>{w}</option>
               ))}
             </select>
@@ -3104,8 +3458,14 @@ const AdminStock = ({ user, notificationTarget }) => {
             </div>
           </div>
 
-          <div className="table-container glass-panel overflow-x-auto">
-            <table className="min-w-[1000px]">
+          <div className="table-container glass-panel overflow-x-auto stock-list-panel">
+            <div className="stock-list-heading">
+              <h2><Box size={25} /> قائمة الأصناف</h2>
+              {hasPermission(user, 'stock_view', 'add') && (
+                <button type="button" onClick={() => handleOpenModal()}><Plus size={20} /> إضافة صنف جديد</button>
+              )}
+            </div>
+            <table className="stock-overview-table">
               <thead>
                 <tr>
                   <th className="w-10 text-center">
@@ -3135,7 +3495,7 @@ const AdminStock = ({ user, notificationTarget }) => {
                   <th onClick={() => handleSort('spec')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
                     <div className="flex items-center justify-center gap-2">المواصفة <ArrowUpDown size={14} className="text-muted" /></div>
                   </th>
-                  <th onClick={() => handleSort('totalQuantity')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
+                  <th onClick={() => handleSort('availableQuantity')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
                     <div className="flex items-center justify-center gap-2">الكمية <ArrowUpDown size={14} className="text-muted" /></div>
                   </th>
                   <th onClick={() => handleSort('minLimit')} className="cursor-pointer hover:bg-slate-50 transition-colors text-center">
@@ -3155,7 +3515,7 @@ const AdminStock = ({ user, notificationTarget }) => {
                   const isExpanded = expandedRows.includes(group.itemNumber);
                   const isAllSelected = group.locations.every(loc => selectedItems.includes(loc.id));
                   const isSomeSelected = group.locations.some(loc => selectedItems.includes(loc.id));
-                  const status = getStatus({ quantity: group.totalQuantity, minLimit: group.minLimit });
+                  const status = getStatus({ quantity: group.availableQuantity, minLimit: group.minLimit });
                   const uniqueSpecs = [...new Set(group.locations.map(l => l.spec).filter(Boolean))];
                   const displaySpec = uniqueSpecs.length > 1 ? 'متعدد الألوان' : (uniqueSpecs[0] || group.spec || '-');
                   return (
@@ -3197,19 +3557,13 @@ const AdminStock = ({ user, notificationTarget }) => {
                           </div>
                         </td>
                         <td className="text-sm text-muted text-center">{displaySpec}</td>
-                        <td className="text-center" onClick={(e) => {
-                          if (group.locations.length === 1 && hasPermission(user, 'stock_view', 'edit')) {
-                            handleQuickQuantityEdit(e, group.locations[0]);
-                          } else {
-                            e.stopPropagation();
-                            toggleRow(group.itemNumber);
-                          }
-                        }}>
-                          <div className="flex flex-col items-center justify-center gap-1">
-                            <span className={`font-bold ${status.color.replace('bg-', 'text-')} flex items-center gap-1 ${group.locations.length === 1 && hasPermission(user, 'stock_view', 'edit') ? 'cursor-pointer hover:opacity-80 px-2 py-0.5 bg-slate-100 rounded-lg transition-all' : ''}`} title={group.locations.length === 1 ? 'انقر لتعديل الكمية سريعاً' : ''}>
-                              {group.totalQuantity}
-                              {group.locations.length === 1 && hasPermission(user, 'stock_view', 'edit') && <Edit2 size={12} className="text-muted" />}
-                            </span>
+                        <td className="text-center">
+                          <div className="stock-balance flex items-center justify-center gap-1 text-xs font-black whitespace-nowrap" title={group.locations.length === 1 && hasPermission(user, 'stock_view', 'edit') ? 'اضغط لتعديل الكمية مباشرة' : undefined} onClick={group.locations.length === 1 && hasPermission(user, 'stock_view', 'edit') ? (e) => handleQuickQuantityEdit(e, group.locations[0]) : undefined} style={{cursor:group.locations.length === 1 && hasPermission(user, 'stock_view', 'edit')?'pointer':'default'}}>
+                            <span className="stock-balance-part text-slate-700"><small className="stock-balance-label stock-balance-onhand">الموجود</small><strong>{group.totalQuantity}</strong></span>
+                            <span className="stock-balance-slash text-slate-300">/</span>
+                            <span className="stock-balance-part text-amber-600"><small className="stock-balance-label stock-balance-reserved">المحجوز</small><strong>{group.reservedQuantity}</strong></span>
+                            <span className="stock-balance-slash text-slate-300">/</span>
+                            <span className={`stock-balance-part ${group.availableQuantity > 0 ? 'text-emerald-600' : 'text-red-600'}`}><small className="stock-balance-label stock-balance-available">المتاح</small><strong>{group.availableQuantity}</strong></span>
                           </div>
                         </td>
                         <td className="text-center">
@@ -3234,7 +3588,7 @@ const AdminStock = ({ user, notificationTarget }) => {
                               </button>
                             )}
                             {hasPermission(user, 'stock_view', 'add') && (
-                              <button className="icon-btn icon-btn-add" title="إضافة لون/موقع آخر لنفس الصنف"
+                              <button className="icon-btn icon-btn-add" title="إضافة مخزن / لون / موقع آخر لنفس الصنف"
                                 onClick={() => handleOpenModal(group.locations[0], true)}>
                                 <Plus size={16} strokeWidth={2} />
                               </button>
@@ -3274,15 +3628,11 @@ const AdminStock = ({ user, notificationTarget }) => {
                             </td>
                             <td className="text-sm text-muted text-center">-</td>
                             <td className="text-sm text-muted text-center">{loc.spec}</td>
-                            <td className="text-center" onClick={(e) => {
-                              if (hasPermission(user, 'stock_view', 'edit')) {
-                                handleQuickQuantityEdit(e, loc);
-                              }
-                            }}>
+                            <td className="text-center">
                               <div className="flex justify-center">
-                                <span className={`font-bold ${locStatus.color.replace('bg-', 'text-')} flex items-center gap-1 ${hasPermission(user, 'stock_view', 'edit') ? 'cursor-pointer hover:opacity-80 px-2 py-0.5 bg-white rounded-lg shadow-sm border border-slate-100 transition-all' : ''}`} title="انقر لتعديل الكمية سريعاً">
+                                <span className={`font-bold ${locStatus.color.replace('bg-', 'text-')} flex items-center gap-1 px-2 py-0.5 bg-white rounded-lg shadow-sm border border-slate-100`} title={hasPermission(user, 'stock_view', 'edit')?'اضغط لتعديل الكمية مباشرة':'الرصيد الفعلي لهذا الموقع'} onClick={hasPermission(user, 'stock_view', 'edit')?(e)=>handleQuickQuantityEdit(e,loc):undefined} style={{cursor:hasPermission(user, 'stock_view', 'edit')?'pointer':'default'}}>
                                   {loc.quantity}
-                                  {hasPermission(user, 'stock_view', 'edit') && <Edit2 size={12} className="text-muted" />}
+                                  {hasPermission(user, 'stock_view', 'edit')&&<Edit2 size={12}/>} 
                                 </span>
                               </div>
                             </td>
@@ -3320,10 +3670,11 @@ const AdminStock = ({ user, notificationTarget }) => {
                   );
                 })}
                 {groupedStock.length === 0 && (
-                  <tr><td colSpan="10" className="text-center p-10 text-muted italic">لا توجد أصناف تطابق البحث</td></tr>
+                  <tr><td colSpan="13" className="text-center p-10 text-muted italic">لا توجد أصناف تطابق البحث</td></tr>
                 )}
               </tbody>
             </table>
+            <div className="stock-list-footer">عرض {groupedStock.length} صنف</div>
           </div>
         </>
       )}
@@ -3514,7 +3865,6 @@ const AdminStock = ({ user, notificationTarget }) => {
         const unappliedAudits = ordersToAudit.filter(o => o.stockDeducted && vouchers.some(v => v.orderNumber === o.orderNumber && v.status === 'مسودة'));
         const unappliedProductionAudits = productionOrdersToAudit.filter(o => o.stockDeducted && vouchers.some(v => v.orderNumber === o.orderNumber && v.status === 'مسودة'));
         const totalUnapplied = unappliedAudits.length + unappliedProductionAudits.length;
-
         return (
           <>
             {totalUnapplied > 0 && isAdmin(user) && (
@@ -3546,11 +3896,12 @@ const AdminStock = ({ user, notificationTarget }) => {
             <select 
               className="input-field text-sm" 
               style={{ width: 'auto', minWidth: '200px', marginBottom: 0, height: '40px', borderRadius: '12px', padding: '0 1.5rem 0 0.8rem' }}
-              value={auditFilterStatus} 
+              value={auditFilterStatus === 'issues' ? 'pending' : auditFilterStatus} 
               onChange={e => setAuditFilterStatus(e.target.value)}
             >
               <option value="all">سجل جميع الطلبات</option>
               <option value="pending">طلبات غير مدققة</option>
+              <option value="waiting">بانتظار موافقة الإدارة</option>
               <option value="approved">طلبات مدققة</option>
             </select>
           </div>
@@ -3577,8 +3928,10 @@ const AdminStock = ({ user, notificationTarget }) => {
               </thead>
               <tbody>
                 {applySort(ordersToAudit.filter(o => {
-                  if (auditFilterStatus === 'pending') return !o.stockDeducted;
-                  if (auditFilterStatus === 'approved') return o.stockDeducted;
+                  if (auditFilterStatus === 'pending') return !o.stockDeducted && !o.hasDraft;
+                  if (auditFilterStatus === 'waiting') return o.hasDraft;
+                  if (auditFilterStatus === 'approved') return o.stockDeducted && !o.hasDraft;
+                  if (auditFilterStatus === 'issues') return !o.stockDeducted && !o.hasDraft;
                   if (auditFilterStatus === 'rejected') return false;
                   return true;
                 })).map(order => (
@@ -3605,7 +3958,9 @@ const AdminStock = ({ user, notificationTarget }) => {
                     {order.draftCreatedBy}
                   </td>
                   <td className="text-center">
-                    {order.stockDeducted ? (
+                    {order.hasLedgerMismatch ? (
+                      <span className="badge bg-rose-100 text-rose-800 font-bold">تعارض بين الطلب والسند</span>
+                    ) : order.stockDeducted ? (
                       vouchers.some(v => v.orderNumber === order.orderNumber && v.status === 'مسودة') ? (
                         <div className="flex flex-col items-center gap-1">
                           <span className="badge bg-rose-100 text-rose-800 font-bold">معلق (لم يخصم فعلياً!)</span>
@@ -3730,9 +4085,10 @@ const AdminStock = ({ user, notificationTarget }) => {
           {/* Two Big Separation Buttons */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 mt-4">
             <button
-              onClick={() => setProductionSubTab('disbursement')}
+              onClick={() => { setProductionSubTab('disbursement'); setProductionAuditFilterStatus('pending'); }}
               style={{
                 display: 'flex',
+                position: 'relative',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '14px',
@@ -3761,13 +4117,15 @@ const AdminStock = ({ user, notificationTarget }) => {
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '17px', fontWeight: '900' }}>صرف المواد الخام للإنتاج</div>
                 <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '2px' }}>تدقيق وصرف المواد الأولية وبدء التصنيع</div>
+                <div className="production-pending-count">غير مدققة <strong>{pendingProductionAuditCount}</strong></div>
               </div>
             </button>
 
             <button
-              onClick={() => setProductionSubTab('receipt')}
+              onClick={() => { setProductionSubTab('receipt'); setProductionAuditFilterStatus('pending'); }}
               style={{
                 display: 'flex',
+                position: 'relative',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '14px',
@@ -3796,6 +4154,7 @@ const AdminStock = ({ user, notificationTarget }) => {
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '17px', fontWeight: '900' }}>استلام المنتجات الجاهزة</div>
                 <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '2px' }}>إدخال المواد تامة الصنع لمستودع البضاعة الجاهزة</div>
+                <div className="production-pending-count">غير مستلمة <strong>{pendingProductionReceiptCount}</strong></div>
               </div>
             </button>
           </div>
@@ -3845,16 +4204,16 @@ const AdminStock = ({ user, notificationTarget }) => {
                 }}
               >طلبات إنتاج قيد التحضير</button>
 
-              <select 
-                className="input-field text-sm" 
-                style={{ width: 'auto', minWidth: '150px', marginBottom: 0, height: '40px', borderRadius: '12px', padding: '0 1.5rem 0 0.8rem' }}
-                value={auditFilterStatus} 
-                onChange={e => setAuditFilterStatus(e.target.value)}
+              <select
+                className="input-field text-sm"
+                style={{ width: 'auto', minWidth: '145px', marginBottom: 0, height: '40px', borderRadius: '12px', padding: '0 1.5rem 0 0.8rem' }}
+                value={productionAuditFilterStatus}
+                onChange={e => setProductionAuditFilterStatus(e.target.value)}
               >
-                <option value="all">سجل جميع الطلبات</option>
-                <option value="pending">طلبات غير مدققة</option>
-                <option value="approved">طلبات مدققة</option>
+                <option value="pending">{productionSubTab === 'disbursement' ? 'غير مدققة' : 'غير مستلمة'}</option>
+                <option value="approved">{productionSubTab === 'disbursement' ? 'مدققة' : 'مستلمة'}</option>
               </select>
+
             </div>
           </div>
           <div className="table-container glass-panel overflow-x-auto mt-4">
@@ -3880,11 +4239,13 @@ const AdminStock = ({ user, notificationTarget }) => {
                 {(() => {
                   const filteredOrders = applySort(productionOrdersToAudit.filter(o => {
                     if (productionSubTab === 'disbursement') {
-                      if (auditFilterStatus === 'pending' && o.stockDeducted) return false;
-                      if (auditFilterStatus === 'approved' && !o.stockDeducted) return false;
+                      if (o.ignoredMaterialAudit) return false;
+                      if (productionAuditFilterStatus === 'pending' && o.stockDeducted) return false;
+                      if (productionAuditFilterStatus === 'approved' && !o.stockDeducted) return false;
                     } else {
-                      if (auditFilterStatus === 'pending' && o.stockReceived) return false;
-                      if (auditFilterStatus === 'approved' && !o.stockReceived) return false;
+                      if (o.ignoredReceiptAudit) return false;
+                      if (productionAuditFilterStatus === 'pending' && o.stockReceived) return false;
+                      if (productionAuditFilterStatus === 'approved' && !o.stockReceived) return false;
                     }
                     if (productionTypeFilter !== 'all' && o.productionType !== productionTypeFilter) return false;
                     return true;
@@ -3933,7 +4294,9 @@ const AdminStock = ({ user, notificationTarget }) => {
                       </td>
                       <td className="text-center">
                         {productionSubTab === 'disbursement' ? (
-                          order.stockDeducted ? (
+                          order.hasLedgerMismatch ? (
+                            <span className="badge bg-rose-100 text-rose-800 font-bold" style={{ display: 'inline-block', width: '90%', padding: '6px' }}>تعارض بين الطلب والسند</span>
+                          ) : order.stockDeducted ? (
                             vouchers.some(v => v.orderNumber === order.orderNumber && v.status === 'مسودة') ? (
                               <div className="flex flex-col items-center gap-1">
                                 <span className="badge bg-rose-100 text-rose-800 font-bold mb-1.5" style={{ display: 'inline-block', width: '90%', padding: '6px' }}>معلق (لم يخصم فعلياً!)</span>
@@ -4027,7 +4390,7 @@ const AdminStock = ({ user, notificationTarget }) => {
                                     title="تجاهل" 
                                     variant="ignore" 
                                     icon={<X size={14} strokeWidth={3} />} 
-                                    onClick={() => handleIgnoreAudit(order)} 
+                                    onClick={() => handleIgnoreAudit(order, 'material')} 
                                   />
                                 )}
                               </>
@@ -4059,7 +4422,7 @@ const AdminStock = ({ user, notificationTarget }) => {
                                   title="تجاهل" 
                                   variant="ignore" 
                                   icon={<X size={14} strokeWidth={3} />} 
-                                  onClick={() => handleIgnoreAudit(order)} 
+                                  onClick={() => handleIgnoreAudit(order, 'receipt')} 
                                 />
                               </>
                             )
@@ -4723,6 +5086,19 @@ const AdminStock = ({ user, notificationTarget }) => {
                   style={{ background:'var(--primary)', color:'#fff', border:'none', borderRadius:'12px', padding:'0.5rem 1.2rem', cursor:'pointer', fontSize:'0.85rem', fontWeight:700 }}>
                   <Plus size={14} /> إضافة سطر جديد
                 </button>
+                {(voucherType === 'إدخال' || voucherType === 'إخراج') && (
+                  <button type="button" onClick={() => {
+                    if (!voucherForm.warehouse) {
+                      Swal.fire('اختر المستودع', 'يرجى اختيار المستودع أولاً لعرض ألوانه المتاحة.', 'info');
+                      return;
+                    }
+                    setShowVoucherMultiColorModal(true);
+                  }}
+                    className="btn flex items-center gap-1 transition-all hover:shadow-md"
+                    style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #cbd5e1', borderRadius:'12px', padding:'0.5rem 1.2rem', cursor:'pointer', fontSize:'0.85rem', fontWeight:800 }}>
+                    <Layers size={14} className="text-primary" /> ألوان متعددة
+                  </button>
+                )}
               </div>
             </div>
 
@@ -4732,7 +5108,7 @@ const AdminStock = ({ user, notificationTarget }) => {
                   <tr>
                     <th className="w-10 text-muted">#</th>
                     <th>الصنف المستودع *</th>
-                    <th className="w-28">الكمية *</th>
+                    <th className="w-36">الكمية *</th>
                     <th className="w-24">الوحدة</th>
                     <th className="w-48">ملاحظات</th>
                     <th className="w-12"></th>
@@ -4793,9 +5169,9 @@ const AdminStock = ({ user, notificationTarget }) => {
                       </td>
                       <td>
                         <div className="flex flex-col items-center">
-                          <input type="number" min="1" max={voucherType === 'إخراج' ? (item.availableQuantity || 99999) : undefined} 
+                          <input type="number" min="1" max={voucherType === 'إخراج' && Number(item.availableQuantity) > 0 ? Math.min(99999, Number(item.availableQuantity)) : 99999}
                             className="input-field m-0 h-10 text-center text-sm font-bold"
-                            style={{ borderColor: voucherType === 'إخراج' && Number(item.quantity) > Number(item.availableQuantity) ? 'red' : undefined }}
+                            style={{ minWidth: '125px', borderColor: voucherType === 'إخراج' && Number(item.quantity) > Number(item.availableQuantity) ? 'red' : undefined }}
                             value={item.quantity} onChange={e => updateVoucherItem(idx, 'quantity', e.target.value)} />
                           {voucherType === 'إخراج' && item.availableQuantity > 0 && (
                             <span className="text-[10px] text-muted mt-1 text-center whitespace-nowrap">متبقي: {item.availableQuantity}</span>
@@ -4852,7 +5228,7 @@ const AdminStock = ({ user, notificationTarget }) => {
                   <span className="bg-amber-100 text-amber-600 p-2 rounded-xl">
                     <AlertTriangle size={24} />
                   </span>
-                  تدقيق طلبية وخصم من المخزون
+                  {auditOrder.isProduction ? 'صرف مواد الإنتاج والتحضير' : 'تدقيق طلبية وخصم من المخزون'}
                 </h3>
                 <p className="text-slate-500 text-lg mt-2 font-bold">
                   طلبية رقم: <span className="text-primary">{auditOrder.orderNumber}</span> - العميل: <span className="text-primary">{auditOrder.customerName}</span>
@@ -4888,9 +5264,11 @@ const AdminStock = ({ user, notificationTarget }) => {
                   <tr>
                     <th className="p-4 text-slate-700 font-black text-sm w-12 text-center">#</th>
                     <th className="p-4 text-slate-700 font-black text-sm">اسم الصنف</th>
+                    {auditOrder.isProduction && <th className="p-4 text-slate-700 font-black text-sm text-center">المتوقع</th>}
                     <th className="p-4 text-slate-700 font-black text-sm" style={{ width: '200px' }}>نوع التغليف</th>
+                    {auditOrder.isProduction && <th className="p-4 text-slate-700 font-black text-sm text-center">الفرق / ملاحظة</th>}
                     <th className="p-4 text-slate-700 font-black text-sm" style={{ width: '250px' }}>المستودع</th>
-                    <th className="p-4 text-slate-700 font-black text-sm w-36 text-center">الكمية</th>
+                    <th className="p-4 text-slate-700 font-black text-sm w-36 text-center">المصروف فعليًا</th>
                     <th className="p-4 w-16 text-center"></th>
                   </tr>
                 </thead>
@@ -4933,6 +5311,9 @@ const AdminStock = ({ user, notificationTarget }) => {
                           <div className="font-bold text-slate-800 text-base">{item.name}</div>
                         )}
                       </td>
+                      {auditOrder.isProduction && (
+                        <td className="p-4 text-center font-black text-slate-600">{Number(item.expectedQuantity || 0)} {item.unit || ''}</td>
+                      )}
                       <td className="p-4">
                         {item.isExtra ? (
                           <div className="h-10 flex items-center justify-center px-3 bg-slate-50 rounded-lg text-sm font-bold text-slate-400 border border-slate-200 border-dashed text-center">
@@ -4944,6 +5325,14 @@ const AdminStock = ({ user, notificationTarget }) => {
                           </div>
                         )}
                       </td>
+                      {auditOrder.isProduction && (
+                        <td className="p-4">
+                          <div className={`text-center font-black mb-2 ${Number(item.quantity) > Number(item.expectedQuantity || 0) ? 'text-amber-600' : Number(item.quantity) < Number(item.expectedQuantity || 0) ? 'text-blue-600' : 'text-emerald-600'}`}>
+                            {Number(item.quantity) - Number(item.expectedQuantity || 0) > 0 ? '+' : ''}{Number((Number(item.quantity) - Number(item.expectedQuantity || 0)).toFixed(3))}
+                          </div>
+                          <input className="input-field m-0 h-9 w-full text-sm" placeholder="سبب الفرق (اختياري)" value={item.notes || ''} onChange={e => updateAuditItem(idx, 'notes', e.target.value)} />
+                        </td>
+                      )}
                       <td className="p-4">
                         {item.isExtra ? (
                           <div className="h-10 flex items-center justify-center px-3 bg-slate-100 rounded-lg text-sm font-bold text-slate-600 border border-slate-200 text-center">
@@ -5009,7 +5398,7 @@ const AdminStock = ({ user, notificationTarget }) => {
 
             <div className="flex gap-4 pt-2">
               <button onClick={handleConfirmAudit} className="btn flex-2 flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:-translate-y-0.5" style={{ background: 'linear-gradient(135deg, var(--primary), #0f766e)', color: 'white', height: '52px', fontSize: '1.05rem', fontWeight: '900', flex: 2, borderRadius: '14px', border: 'none' }}>
-                <Save size={22} /> حفظ المسودة لاعتماد الخصم
+                <Save size={22} /> {auditOrder.isProduction ? 'اعتماد وصرف المواد' : 'حفظ المسودة لاعتماد الخصم'}
               </button>
               <button onClick={() => setShowAuditModal(false)} className="btn btn-outline flex-1 transition-all hover:bg-slate-100" style={{ height: '52px', fontSize: '1rem', fontWeight: 'bold', borderRadius: '14px', color: '#475569', borderColor: '#cbd5e1' }}>
                 إلغاء الأمر
@@ -5214,6 +5603,16 @@ const AdminStock = ({ user, notificationTarget }) => {
           </div>
         </div>
       )}
+
+      <MultiColorSelectionModal
+        isOpen={showVoucherMultiColorModal}
+        onClose={() => setShowVoucherMultiColorModal(false)}
+        onAddItems={handleAddVoucherMultiColors}
+        stockColors={globalSettings.stockColors || []}
+        stock={stock.filter(item => !voucherForm.warehouse || item.warehouse === voucherForm.warehouse)}
+        title={`${voucherType === 'إدخال' ? 'إدخال' : 'إخراج'} ألوان متعددة`}
+        maxQuantity={99999}
+      />
 
     </div>
   );

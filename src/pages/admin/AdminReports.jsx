@@ -26,6 +26,7 @@ import HRDateFilter from '../../components/ui/HRDateFilter';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 import Select from '../../components/SearchSelect';
 const MySwal = withReactContent(Swal);
+const REPORT_WAREHOUSES = ['مصنع المخدة', 'مصنع البياضات'];
 
 const JORDANIAN_CITIES = ['عمان', 'الزرقاء', 'إربد', 'العقبة', 'السلط', 'مادبا', 'الكرك', 'الطفيلة', 'معان', 'جرش', 'عجلون', 'المفرق'];
 
@@ -2786,10 +2787,7 @@ const AdminReports = ({ user, notificationTarget }) => {
                   style={{ margin: 0, height: '42px', borderRadius: '10px', border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', padding: '0 8px', backgroundColor: '#ffffff' }}
                 >
                   <option value="">جميع المستودعات</option>
-                  {[...new Set([
-                    ...(globalSettings.warehouses || []),
-                    ...stockItems.map(item => item.warehouse)
-                  ].filter(Boolean))].map(wh => <option key={wh} value={wh}>{wh}</option>)}
+                  {REPORT_WAREHOUSES.map(wh => <option key={wh} value={wh}>{wh}</option>)}
                 </select>
               </div>
 
@@ -3347,10 +3345,7 @@ const AdminReports = ({ user, notificationTarget }) => {
                       <label>المستودع</label>
                       <select className="input-field" value={selectedWarehouse} onChange={(e) => setSelectedWarehouse(e.target.value)}>
                         <option value="">جميع المستودعات</option>
-                        {[...new Set([
-                          ...(globalSettings.warehouses || []),
-                          ...stockItems.map(item => item.warehouse)
-                        ].filter(Boolean))].map(wh => <option key={wh} value={wh}>{wh}</option>)}
+                        {REPORT_WAREHOUSES.map(wh => <option key={wh} value={wh}>{wh}</option>)}
                       </select>
                     </div>
                     <div className="input-group">
@@ -3671,7 +3666,7 @@ const AdminReports = ({ user, notificationTarget }) => {
           )}
           
           <div className={`table-container ${activeReportTab === 'supervisors' ? 'supervisors-table-view' : ''}`}>
-          <table className="reports-center-table">
+          <table className={`reports-center-table ${activeReportTab === 'employees' ? 'employees-report-table' : ''}`}>
             {activeReportTab === 'employees' && (
               <EmployeesReportTab 
                 employees={employees}

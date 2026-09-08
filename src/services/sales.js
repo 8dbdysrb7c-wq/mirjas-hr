@@ -7,11 +7,13 @@ import {
   setDoc, 
   deleteDoc, 
   query, 
-  where
+  where,
+  runTransaction,
+  onSnapshot
 } from 'firebase/firestore';
-import { syncProductionOrderToWIPStock, syncPreparationOrderToWIPStock } from './stock';
 import { cascadeCustomerNameUpdate } from './cascadeUpdates';
 import { triggerWhatsAppRouting } from './whatsappRouter';
+import { buildReservedQuantityMap, cleanStockProductName, isCancelledOrder, isReservableSalesItem } from '../utils/stockAvailability';
 
 export const getCustomers = async () => {
   try {
@@ -89,7 +91,12 @@ export const deleteCustomer = async (id) => {
 export const getOrders = async () => {
   try {
     const querySnapshot = await getDocs(collection(db, 'orders'));
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    return querySnapshot.docs
+      .map(doc => ({ ...doc.data(), id: doc.id }))
+      // Legacy preparation cards were copied into both collections. Keep them
+      // available in preparation_orders, but never expose them as sewing or
+      // packaging production orders.
+      .filter(order => !String(order.orderNumber || '').trim().toUpperCase().startsWith('PREP-'));
   } catch (error) {
     console.error("Error in getOrders:", error);
     return [];
@@ -122,11 +129,20 @@ export const saveOrder = async (order) => {
       orderToSave.id = docRef.id;
       await setDoc(docRef, orderToSave);
     } else {
+      if (oldStatus !== orderToSave.status) {
+        orderToSave.statusHistory = [
+          ...(Array.isArray(orderToSave.statusHistory) ? orderToSave.statusHistory : []),
+          {
+            from: oldStatus || '',
+            to: orderToSave.status,
+            changedAt: new Date().toISOString(),
+            changedBy: orderToSave.lastActionBy || orderToSave.updatedBy || 'النظام'
+          }
+        ];
+      }
       await setDoc(doc(db, 'orders', orderToSave.id), orderToSave);
     }
     
-    await syncProductionOrderToWIPStock(orderToSave);
-
     // Trigger WhatsApp notification
     if (isNew) {
       triggerWhatsAppRouting('production_sewing', 'create', {
@@ -156,8 +172,6 @@ export const deleteOrder = async (id) => {
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
       const order = docSnap.data();
-      await syncProductionOrderToWIPStock({ ...order, status: 'ملغي' });
-
       // Trigger cancel notification
       triggerWhatsAppRouting('production_sewing', 'delete', {
         orderNumber: order.orderNumber,
@@ -207,8 +221,6 @@ export const savePreparationOrder = async (order) => {
       await setDoc(doc(db, 'preparation_orders', orderToSave.id), orderToSave);
     }
     
-    await syncPreparationOrderToWIPStock(orderToSave);
-
     // Trigger WhatsApp notification for preparation production
     if (isNew) {
       triggerWhatsAppRouting('production_preparation', 'create', {
@@ -238,8 +250,6 @@ export const deletePreparationOrder = async (id) => {
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
       const order = docSnap.data();
-      await syncPreparationOrderToWIPStock({ ...order, status: 'ملغي' });
-
       // Trigger cancel notification for preparation production
       triggerWhatsAppRouting('production_preparation', 'delete', {
         orderNumber: order.orderNumber,
@@ -261,11 +271,18 @@ export const updateOrderStatus = async (orderId, status) => {
       const updatedOrder = { 
         ...oldOrder, 
         status,
-        statusUpdateDate: new Date().toISOString().split('T')[0]
+        statusUpdateDate: new Date().toISOString().split('T')[0],
+        statusHistory: oldOrder.status === status ? (oldOrder.statusHistory || []) : [
+          ...(Array.isArray(oldOrder.statusHistory) ? oldOrder.statusHistory : []),
+          {
+            from: oldOrder.status || '',
+            to: status,
+            changedAt: new Date().toISOString(),
+            changedBy: 'النظام'
+          }
+        ]
       };
       await setDoc(orderRef, updatedOrder, { merge: true });
-      await syncProductionOrderToWIPStock(updatedOrder);
-
       // Trigger status change notification
       if (oldOrder.status !== status) {
         triggerWhatsAppRouting('production_sewing', 'update', {
@@ -290,15 +307,23 @@ export const getSalesOrders = async () => {
   }
 };
 
+export const subscribeToSalesOrders = (onOrders, onError = console.error) => onSnapshot(
+  collection(db, 'sales_orders'),
+  snapshot => onOrders(snapshot.docs.map(orderDoc => ({ ...orderDoc.data(), id: orderDoc.id }))),
+  onError
+);
+
 export const saveSalesOrder = async (order) => {
   try {
     let orderToSave = { ...order };
     let isNew = !orderToSave.id;
     let oldStatus = null;
+    let previousOrder = null;
     if (!isNew) {
       try {
         const oldSnap = await getDoc(doc(db, 'sales_orders', orderToSave.id));
         if (oldSnap.exists()) {
+          previousOrder = { ...oldSnap.data(), id: oldSnap.id };
           oldStatus = oldSnap.data().status;
         }
       } catch (e) {}
@@ -315,12 +340,62 @@ export const saveSalesOrder = async (order) => {
         return max;
       }, 0);
       orderToSave.orderNumber = `ORD-${String(maxNum + 1).padStart(4, '0')}`;
-      const docRef = doc(collection(db, 'sales_orders'));
-      orderToSave.id = docRef.id;
-      await setDoc(docRef, orderToSave);
-    } else {
-      await setDoc(doc(db, 'sales_orders', orderToSave.id), orderToSave);
+      orderToSave.id = doc(collection(db, 'sales_orders')).id;
     }
+
+    // Promote the whole sales order as soon as every line is ready. Never move
+    // delivered or cancelled orders backwards when they are edited later.
+    const items = Array.isArray(orderToSave.items) ? orderToSave.items : [];
+    const allItemsReady = items.length > 0 && items.every(item => String(item.itemStatus || '').trim() === 'جاهز');
+    const terminalOrderStatuses = ['تم التسليم للتوصيل', 'تم تسليمها للتوصيل', 'تم التوصيل', 'ملغي', 'ملغى'];
+    if (allItemsReady && !terminalOrderStatuses.includes(String(orderToSave.status || '').trim())) {
+      orderToSave.status = 'جاهز للتسليم للتوصيل';
+      orderToSave.readyForDeliveryAt = orderToSave.readyForDeliveryAt || new Date().toISOString();
+      orderToSave.readyForDeliveryBy = orderToSave.lastActionBy || orderToSave.updatedBy || orderToSave.createdBy || 'النظام';
+    }
+
+    const allOrders = await getSalesOrders();
+    const existingReservations = buildReservedQuantityMap(allOrders, orderToSave.id);
+    const oldReservations = previousOrder ? buildReservedQuantityMap([previousOrder]) : {};
+    const newReservations = (!orderToSave.stockDeducted && !isCancelledOrder(orderToSave))
+      ? buildReservedQuantityMap([orderToSave])
+      : {};
+    const reservationKeys = [...new Set([...Object.keys(oldReservations), ...Object.keys(newReservations)])];
+    const stockSnapshot = await getDocs(collection(db, 'stock'));
+    const physicalByProduct = {};
+    stockSnapshot.docs.forEach(stockDoc => {
+      const item = stockDoc.data();
+      const key = cleanStockProductName(`${String(item.name || '').trim()}${item.spec ? ` - ${String(item.spec).trim()}` : ''}`);
+      physicalByProduct[key] = (physicalByProduct[key] || 0) + Number(item.quantity || 0);
+    });
+
+    await runTransaction(db, async transaction => {
+      const reservationSnapshots = new Map();
+      for (const key of reservationKeys) {
+        const reservationRef = doc(db, 'stock_reservations', encodeURIComponent(key));
+        reservationSnapshots.set(key, { ref: reservationRef, snap: await transaction.get(reservationRef) });
+      }
+
+      for (const key of reservationKeys) {
+        const entry = reservationSnapshots.get(key);
+        const storedTotal = entry.snap.exists()
+          ? Number(entry.snap.data().quantity || 0)
+          : Number(existingReservations[key] || 0) + Number(oldReservations[key] || 0);
+        const nextTotal = Math.max(0, storedTotal - Number(oldReservations[key] || 0) + Number(newReservations[key] || 0));
+        const hasReservableItem = (orderToSave.items || []).some(item => cleanStockProductName(item.productName || item.name) === key && isReservableSalesItem(item));
+        if (hasReservableItem && nextTotal > Number(physicalByProduct[key] || 0)) {
+          throw new Error(`الكمية المتاحة للصنف ${key} لا تكفي بسبب حجز طلبية أخرى في نفس الوقت`);
+        }
+        transaction.set(entry.ref, {
+          productKey: key,
+          quantity: nextTotal,
+          updatedAt: new Date().toISOString(),
+          lastOrderNumber: orderToSave.orderNumber || ''
+        });
+      }
+
+      transaction.set(doc(db, 'sales_orders', orderToSave.id), orderToSave);
+    });
 
     // Trigger WhatsApp notification
     if (isNew) {

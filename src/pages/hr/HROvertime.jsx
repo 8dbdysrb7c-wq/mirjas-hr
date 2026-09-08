@@ -1,5 +1,7 @@
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle, Clock, XCircle, Calendar, Plus, X, ArrowUpDown, ArrowUp, ArrowDown, Check, Undo2, Trash2, Eye, ChevronDown, ChevronUp, User } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, Calendar, Plus, X, ArrowUpDown, ArrowUp, ArrowDown, Check, Undo2, Trash2, Eye, ChevronDown, ChevronUp, User, Bell } from 'lucide-react';
+import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
@@ -963,6 +965,9 @@ const HROvertime = ({ user, refreshCounts }) => {
                     <button onClick={() => handlePreviewOvertime(leave)} className="icon-btn" style={{ color: '#0ea5e9', background: '#f0f9ff', borderColor: '#bae6fd' }} title="معاينة الطلب">
                       <Eye size={18} strokeWidth={2} />
                     </button>
+                    <button onClick={() => promptEmployeeAlert({ employeeId: leave.employeeId, employeeName: leave.employeeName, source: 'العمل الإضافي', sourceReference: `${leave.date || leave.startDate || ''}`, suggestedMessage: `طلب العمل الإضافي الخاص بك بتاريخ ${leave.date || leave.startDate || 'غير محدد'} حالته: ${leave.status || 'معلق'}.\nالمدة المستحقة: ${getOvertimeDuration(leave)}.${getOvertimeReason(leave) ? `\nالسبب: ${getOvertimeReason(leave)}` : ''}`, user })} className="icon-btn" style={{ color: '#c2410c', background: '#fff7ed', borderColor: '#fdba74' }} title="إرسال تنبيه للموظف">
+                      <Bell size={17} />
+                    </button>
                     {leave.status === 'معلق' ? (
                       <>
                         <button onClick={() => openSmartApproval(leave)} className="icon-btn icon-btn-success" title="موافقة">
@@ -1010,7 +1015,7 @@ const HROvertime = ({ user, refreshCounts }) => {
                   <label>الموظف</label>
                   <select required value={formData.employeeId} onChange={e=>setFormData({...formData, employeeId: e.target.value})} className="input-field">
                     <option value="">-- اختر الموظف --</option>
-                    {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+                    {employees.filter(isActiveEmployee).map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
                   </select>
                 </div>
                 

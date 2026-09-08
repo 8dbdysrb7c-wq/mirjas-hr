@@ -3,8 +3,8 @@ import HRBonuses from './HRBonuses';
 import HRViolations from './HRViolations';
 import { Gift, AlertTriangle } from 'lucide-react';
 
-const HRBonusesAndViolations = ({ user }) => {
-  const [activeSubTab, setActiveSubTab] = useState('bonuses');
+const HRBonusesAndViolations = ({ user, refreshCounts, onFiltersChange }) => {
+  const [activeSubTab, setActiveSubTab] = useState('violations');
 
   return (
     <div className="space-y-6">
@@ -38,8 +38,8 @@ const HRBonusesAndViolations = ({ user }) => {
       </div>
 
       <div className="mt-4">
-        {activeSubTab === 'bonuses' && <HRBonuses user={user} />}
-        {activeSubTab === 'violations' && <HRViolations user={user} />}
+        {activeSubTab === 'bonuses' && <HRBonuses user={user} refreshCounts={refreshCounts} />}
+        {activeSubTab === 'violations' && <HRViolations user={user} refreshCounts={refreshCounts} onFiltersChange={onFiltersChange} />}
       </div>
     </div>
   );

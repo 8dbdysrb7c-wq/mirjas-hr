@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { startVisiblePolling } from '../../utils/visiblePolling';
+import { awaitsPetitionAdmin } from '../../utils/petitionConversation';
 import { getEmployees, getOrders, getSalesOrders, getMissions, getSupervisorReports, getSmokingLogs, isAdmin, getAttendanceLogs, getReports, getHRLeaves, getHRAdvances, getMissingPunches, getRepVisits, getPreparationOrders, saveRepVisit, getHRPetitions } from '../../store';
-import { ChevronLeft, UserCheck, UserX, Clock, ClipboardList, TrendingUp, CheckCircle2, ShieldCheck, Activity, FileText, Users, CalendarPlus, LogOut, DollarSign, Fingerprint, Search, MapPin } from 'lucide-react';
+import { ChevronLeft, UserCheck, UserX, Clock, ClipboardList, TrendingUp, CheckCircle2, ShieldCheck, Activity, FileText, Users, CalendarPlus, LogOut, DollarSign, Fingerprint, Search, MapPin, Package } from 'lucide-react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import OrderTrackerModal from '../../components/OrderTrackerModal';
@@ -70,7 +72,7 @@ const CircularProgress = ({ percentage, color }) => {
 const AdminOverview = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
-    production: { active: 0, delayed: 0, todayCompleted: 0, sewing: 0, preparation: 0 },
+    production: { active: 0, delayed: 0, todayCompleted: 0, sewing: 0, packaging: 0, preparation: 0 },
     delivery: { active: 0, delayed: 0 },
     sales: { active: 0, delayed: 0, todayCompleted: 0 },
     employees: { total: 0, present: 0, absent: 0, late: 0 },
@@ -164,7 +166,8 @@ const AdminOverview = ({ onNavigate }) => {
         return createdAt < threeDaysAgo;
       }).length;
       const prepProdCount = prepOrd.filter(o => o.status !== 'منتهي' && o.status !== 'ملغي').length;
-      const sewingProdCount = activeProd.filter(o => o.status !== 'قيد التحضير' && o.status !== 'إنتاج قيد التحضير').length;
+      const packagingProdCount = activeProd.filter(o => o.status === 'مرحلة التغليف').length;
+      const sewingProdCount = activeProd.filter(o => !['قيد التحضير', 'إنتاج قيد التحضير', 'مرحلة التغليف'].includes(o.status)).length;
       const todayCompletedProd = prodOrd.filter(o => o.status === 'منتهي' && o.statusUpdateDate === todayKey).length;
 
       // --- Delivery ---
@@ -278,7 +281,7 @@ const AdminOverview = ({ onNavigate }) => {
       const pendingOvertime = hrLeaves.filter(l => l.status === 'معلق' && l.type === 'بدل عمل إضافي').length;
       const pendingAdvances = advances ? advances.filter(a => a.status === 'معلق').length : 0;
       const pendingMissingPunches = missingPunches ? missingPunches.filter(p => p.status === 'معلق' || p.status === 'قيد المراجعة').length : 0;
-      const pendingPetitions = petitions ? petitions.filter(p => p.status === 'قيد المراجعة' || p.status === 'معلق').length : 0;
+      const pendingPetitions = (petitions || []).filter(awaitsPetitionAdmin).length;
 
       const todayVisits = repVisits ? repVisits.filter(v => v.date === todayKey).length : 0;
       const totalVisits = repVisits ? repVisits.length : 0;
@@ -286,7 +289,7 @@ const AdminOverview = ({ onNavigate }) => {
       const regularEmpsCount = normalEmps.filter(e => !allSupervisors.some(s => s.id === e.id)).length;
 
       setData({
-        production: { active: activeProd.length, delayed: delayedProd, todayCompleted: todayCompletedProd, sewing: sewingProdCount, preparation: prepProdCount },
+        production: { active: activeProd.length, delayed: delayedProd, todayCompleted: todayCompletedProd, sewing: sewingProdCount, packaging: packagingProdCount, preparation: prepProdCount },
         delivery: { active: activeMissions.length, delayed: delayedMissions },
         sales: { active: activeSales.length, delayed: delayedSales, todayCompleted: todayCompletedSales },
         employees: { 
@@ -314,11 +317,10 @@ const AdminOverview = ({ onNavigate }) => {
       setLoading(false);
     };
 
-    fetchData();
-    const intervalId = window.setInterval(fetchData, 60000);
+    const stopPolling = startVisiblePolling(fetchData, 300000);
     return () => {
       isMounted = false;
-      window.clearInterval(intervalId);
+      stopPolling();
     };
   }, []);
 
@@ -374,6 +376,19 @@ const AdminOverview = ({ onNavigate }) => {
           <h3 className="stat-title">طلبات إنتاج قيد الخياطة</h3>
           <div className="stat-number"><AnimatedNumber value={data.production.sewing} /></div>
           <button className="card-button" onClick={() => onNavigate && onNavigate('production-orders')} style={{ marginTop: 'auto' }}>
+            <span>عرض التفاصيل</span>
+            <ChevronLeft size={16} />
+          </button>
+        </div>
+
+        {/* Packaging */}
+        <div className="stat-card" style={{ background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)', borderColor: '#fdba74' }}>
+          <div className="icon-wrapper" style={{ backgroundColor: '#fed7aa', color: '#c2410c' }}>
+            <Package size={28} />
+          </div>
+          <h3 className="stat-title">طلبات إنتاج قيد التغليف</h3>
+          <div className="stat-number"><AnimatedNumber value={data.production.packaging} /></div>
+          <button className="card-button" onClick={() => onNavigate && onNavigate('production-packaging')} style={{ marginTop: 'auto' }}>
             <span>عرض التفاصيل</span>
             <ChevronLeft size={16} />
           </button>

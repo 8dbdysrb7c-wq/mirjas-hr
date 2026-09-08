@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import {
   getCustomerTransactions, saveCustomerTransaction, deleteCustomerTransaction,
-  getCustomers, saveCustomer, canPerformAction, addLog, getGlobalSettings, getEmployees
+  getCustomers, saveCustomer, canPerformAction, addLog, getGlobalSettings, saveGlobalSettings
 } from '../../store';
 import Swal from 'sweetalert2';
 import Select from '../../components/SearchSelect';
@@ -16,6 +16,20 @@ import flatpickr from 'flatpickr';
 import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 
+const calculateProgressiveCommission = (amount, tiers = []) => {
+  const base = Math.max(0, Number(amount) || 0);
+  let lowerBound = 0;
+  let total = 0;
+  [...tiers].sort((a, b) => (Number(a.upTo) || Infinity) - (Number(b.upTo) || Infinity)).forEach(tier => {
+    if (lowerBound >= base) return;
+    const upperBound = tier.upTo === '' || tier.upTo == null ? Infinity : Math.max(lowerBound, Number(tier.upTo) || 0);
+    const tierAmount = Math.max(0, Math.min(base, upperBound) - lowerBound);
+    total += tierAmount * (Math.max(0, Number(tier.rate) || 0) / 100);
+    lowerBound = upperBound;
+  });
+  return total;
+};
+
 export default function AdminCustomerStatements({ user }) {
   const [customers, setCustomers] = useState([]);
   const [transactions, setTransactions] = useState([]);
@@ -23,6 +37,12 @@ export default function AdminCustomerStatements({ user }) {
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 1024);
   const [salesReps, setSalesReps] = useState(['زبائن الشركة']);
+  const [salesRepAliases, setSalesRepAliases] = useState({});
+  const [commissionBasis, setCommissionBasis] = useState('invoices');
+  const [commissionRep, setCommissionRep] = useState('');
+  const [commissionSettings, setCommissionSettings] = useState({});
+  const [activeSection, setActiveSection] = useState('statements');
+  const [commissionSort, setCommissionSort] = useState({ key: 'date', direction: 'asc' });
 
   // Filters & Sorting
   const [typeFilter, setTypeFilter] = useState('');
@@ -57,11 +77,12 @@ export default function AdminCustomerStatements({ user }) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      let [custs, txs, emps] = await Promise.all([
+      let [custs, txs, settings] = await Promise.all([
         getCustomers(),
         getCustomerTransactions(),
-        getEmployees()
+        getGlobalSettings()
       ]);
+      setCommissionSettings(settings || {});
 
       // Batch seed for 'الزغير هوم سنتر' if requested invoices are not in DB
       let zubeirCust = custs.find(c => c.name && c.name.includes("الزغير"));
@@ -119,8 +140,43 @@ export default function AdminCustomerStatements({ user }) {
       setCustomers(custs.filter(c => c.type === 'عميل' || !c.type));
       setTransactions(txs);
       
-      const reps = emps.filter(e => e.department === 'المبيعات' || e.role === 'مبيعات' || (e.name && e.name.includes('جهاد'))).map(e => e.name);
-      setSalesReps(['زبائن الشركة', ...new Set(reps)]);
+      const normalizeRepName = (value) => String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/أ|إ|آ/g, 'ا')
+        .replace(/ى/g, 'ي')
+        .replace(/ة/g, 'ه')
+        .replace(/\s+/g, ' ');
+      const transactionReps = txs
+        .filter(t => !['ملغى', 'ملغي'].includes(t.status) && ['فاتورة مبيعات', 'مرتجع مبيعات'].includes(t.type))
+        .map(t => t.salesRep)
+        .filter(Boolean);
+      const allStoredReps = [...transactionReps];
+      const aliases = {};
+      allStoredReps.forEach((storedName) => {
+        const normalized = normalizeRepName(storedName);
+        if (['زبائن الشركه', 'زبان الشركه', 'زنان الشركه'].includes(normalized)) {
+          aliases[storedName] = 'زبائن الشركة';
+          return;
+        }
+        const storedTokens = normalized.split(' ').filter(Boolean);
+        const matchingStoredNames = transactionReps.filter((candidateName) => {
+          const candidateTokens = normalizeRepName(candidateName).split(' ').filter(Boolean);
+          return normalized === normalizeRepName(candidateName) || (
+            storedTokens.length >= 2 && candidateTokens.length >= 2 &&
+            storedTokens[0] === candidateTokens[0] &&
+            storedTokens[storedTokens.length - 1] === candidateTokens[candidateTokens.length - 1]
+          );
+        });
+        const canonicalStoredName = matchingStoredNames.sort((a, b) => {
+          const tokenDifference = normalizeRepName(b).split(' ').length - normalizeRepName(a).split(' ').length;
+          return tokenDifference || String(b).length - String(a).length;
+        })[0];
+        aliases[storedName] = canonicalStoredName || storedName.trim();
+      });
+      const canonicalReps = [...new Set(allStoredReps.map(rep => aliases[rep] || rep).filter(Boolean))];
+      setSalesRepAliases(aliases);
+      setSalesReps(canonicalReps);
     } catch (error) {
       console.error(error);
     }
@@ -384,6 +440,173 @@ export default function AdminCustomerStatements({ user }) {
   if (!selectedCustomer) {
     summary.finalBalance = allCustomerBalances.reduce((sum, c) => sum + c.balance, 0);
   }
+
+  const commissionReport = React.useMemo(() => {
+    if (!selectedMonth) return { rows: [], invoices: 0, returns: 0, discounts: 0, collections: 0, collectionBreakdown: { cashAndClick: 0, postdatedCheques: 0, postdatedChequeCount: 0, other: 0 }, outstanding: 0, basisAmount: 0, commission: 0 };
+    const [yearText, monthText] = selectedMonth.split('-');
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const from = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const to = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const salesInvoicesByCustomer = new Map();
+    transactions
+      .filter(transaction => !['ملغى', 'ملغي'].includes(transaction.status) && transaction.type === 'فاتورة مبيعات' && transaction.salesRep)
+      .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
+      .forEach((invoice) => {
+        const current = salesInvoicesByCustomer.get(invoice.customerId) || [];
+        current.push(invoice);
+        salesInvoicesByCustomer.set(invoice.customerId, current);
+      });
+    const resolveRep = (transaction) => {
+      if (transaction.salesRep) return salesRepAliases[transaction.salesRep] || transaction.salesRep;
+      if (transaction.type === 'دفعة') {
+        const previousInvoices = (salesInvoicesByCustomer.get(transaction.customerId) || [])
+          .filter(invoice => !transaction.date || !invoice.date || invoice.date <= transaction.date);
+        const latestInvoice = previousInvoices[previousInvoices.length - 1];
+        if (latestInvoice?.salesRep) return salesRepAliases[latestInvoice.salesRep] || latestInvoice.salesRep;
+      }
+      return 'غير محدد';
+    };
+
+    const rows = transactions
+      .filter(transaction => !['ملغى', 'ملغي'].includes(transaction.status) && transaction.date >= from && transaction.date <= to)
+      .map(transaction => ({ ...transaction, resolvedSalesRep: resolveRep(transaction) }))
+      .filter(transaction => !commissionRep || transaction.resolvedSalesRep === commissionRep)
+      .filter(transaction => ['فاتورة مبيعات', 'مرتجع مبيعات', 'خصم', 'دفعة'].includes(transaction.type))
+      .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+
+    const sumType = (type) => rows.filter(row => row.type === type).reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const invoices = sumType('فاتورة مبيعات');
+    const returns = sumType('مرتجع مبيعات');
+    const discounts = sumType('خصم');
+    const collectionBreakdown = rows.filter(row => row.type === 'دفعة').reduce((breakdown, row) => {
+      const amount = Number(row.amount || 0);
+      const method = String(row.paymentMethod || row.notes || '').trim().toLowerCase();
+      const chequeRows = Array.isArray(row.cheques) ? row.cheques : [];
+      if (chequeRows.length) {
+        const postdatedRows = chequeRows.filter(cheque => String(cheque.type || '').includes('آجل'));
+        const postdatedAmount = postdatedRows.reduce((sum, cheque) => sum + Number(cheque.amount || 0), 0);
+        const detailedTotal = chequeRows.reduce((sum, cheque) => sum + Number(cheque.amount || 0), 0);
+        breakdown.postdatedCheques += postdatedAmount;
+        breakdown.postdatedChequeCount += postdatedRows.length;
+        breakdown.other += Math.max(0, amount - postdatedAmount) || Math.max(0, detailedTotal - postdatedAmount);
+      } else if (method.includes('شيك آجل')) {
+        breakdown.postdatedCheques += amount;
+        breakdown.postdatedChequeCount += 1;
+      } else if (method.includes('كليك') || method.includes('cliq') || method.includes('click')) {
+        breakdown.cashAndClick += amount;
+      } else if (method.includes('نقد') || method.includes('كاش') || method.includes('cash')) {
+        breakdown.cashAndClick += amount;
+      } else {
+        breakdown.other += amount;
+      }
+      return breakdown;
+    }, { cashAndClick: 0, postdatedCheques: 0, postdatedChequeCount: 0, other: 0 });
+    const collections = collectionBreakdown.cashAndClick + collectionBreakdown.other;
+    const netInvoices = Math.max(0, invoices - returns - discounts);
+    const outstanding = Math.max(0, netInvoices - collections);
+    const basisAmount = Math.max(0, commissionBasis === 'invoices'
+      ? netInvoices
+      : collections - returns);
+    const tiers = commissionRep ? (commissionSettings.salesCommissionTiers?.[commissionRep] || []) : [];
+    const commission = calculateProgressiveCommission(basisAmount, tiers);
+    return { rows, invoices, returns, discounts, collections, collectionBreakdown, outstanding, basisAmount, commission, tiers };
+  }, [transactions, customers, selectedMonth, commissionRep, commissionBasis, salesRepAliases, commissionSettings]);
+
+  const sortedCommissionRows = React.useMemo(() => {
+    return [...commissionReport.rows].sort((a, b) => {
+      const key = commissionSort.key;
+      let aValue = key === 'amount' ? Number(a.amount || 0) : String(a[key] || '');
+      let bValue = key === 'amount' ? Number(b.amount || 0) : String(b[key] || '');
+      if (key === 'customerName') {
+        aValue = String(a.customerName || customers.find(c => c.id === a.customerId)?.name || '');
+        bValue = String(b.customerName || customers.find(c => c.id === b.customerId)?.name || '');
+      }
+      const comparison = typeof aValue === 'number'
+        ? aValue - bValue
+        : aValue.localeCompare(bValue, 'ar', { numeric: true, sensitivity: 'base' });
+      return commissionSort.direction === 'asc' ? comparison : -comparison;
+    });
+  }, [commissionReport.rows, commissionSort, customers]);
+
+  const handleCommissionSort = (key) => {
+    setCommissionSort(current => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const handleEditCommissionTiers = async () => {
+    if (!commissionRep) return Swal.fire('اختر المندوب', 'اختر مندوبًا محددًا قبل إعداد شرائح العمولة.', 'info');
+    const currentTiers = commissionSettings.salesCommissionTiers?.[commissionRep] || [{ upTo: 10000, rate: 1 }, { upTo: '', rate: 1.5 }];
+    const rowHtml = (tier = { upTo: '', rate: '' }) => `<div class="commission-tier-row" style="display:grid;grid-template-columns:1fr 1fr 38px;gap:8px;margin-bottom:8px"><input class="tier-limit" type="number" min="0" step="0.001" value="${tier.upTo ?? ''}" placeholder="حتى مبلغ (فارغ للأخيرة)" style="height:40px;border:1px solid #cbd5e1;border-radius:9px;padding:0 9px"><input class="tier-rate" type="number" min="0" step="0.01" value="${tier.rate ?? ''}" placeholder="النسبة %" style="height:40px;border:1px solid #cbd5e1;border-radius:9px;padding:0 9px"><button type="button" class="remove-tier" style="border:1px solid #fecaca;background:#fef2f2;color:#dc2626;border-radius:9px;font-weight:900">×</button></div>`;
+    const result = await Swal.fire({
+      title: `شرائح عمولة ${commissionRep}`,
+      width: 650,
+      html: `<div dir="rtl" style="text-align:right"><p style="color:#64748b;font-size:13px">أدخل الحد الأعلى والنسبة لكل شريحة. اترك حد الشريحة الأخيرة فارغًا لتشمل ما يزيد.</p><div id="commission-tier-rows">${currentTiers.map(rowHtml).join('')}</div><button type="button" id="add-commission-tier" style="margin-top:6px;border:0;border-radius:9px;background:#0f766e;color:#fff;padding:9px 14px;font-weight:800">+ إضافة شريحة</button></div>`,
+      showCancelButton: true, confirmButtonText: 'حفظ الشرائح', cancelButtonText: 'إلغاء',
+      didOpen: () => {
+        const container = document.getElementById('commission-tier-rows');
+        const bindRemove = () => container.querySelectorAll('.remove-tier').forEach(button => { button.onclick = () => { if (container.children.length > 1) button.parentElement.remove(); }; });
+        document.getElementById('add-commission-tier').onclick = () => { container.insertAdjacentHTML('beforeend', rowHtml()); bindRemove(); };
+        bindRemove();
+      },
+      preConfirm: () => {
+        const rows = [...document.querySelectorAll('.commission-tier-row')].map(row => ({ upTo: row.querySelector('.tier-limit').value, rate: row.querySelector('.tier-rate').value }));
+        if (rows.some(row => row.rate === '' || Number(row.rate) < 0)) return Swal.showValidationMessage('أدخل نسبة صحيحة لكل شريحة.');
+        const normalized = rows.map(row => ({ upTo: row.upTo === '' ? '' : Number(row.upTo), rate: Number(row.rate) }));
+        const finiteLimits = normalized.filter(row => row.upTo !== '').map(row => row.upTo);
+        if (finiteLimits.some((limit, index) => index > 0 && limit <= finiteLimits[index - 1])) return Swal.showValidationMessage('يجب أن تكون حدود الشرائح متصاعدة.');
+        if (normalized.slice(0, -1).some(row => row.upTo === '')) return Swal.showValidationMessage('فقط الشريحة الأخيرة يمكن أن تكون بلا حد أعلى.');
+        return normalized;
+      }
+    });
+    if (!result.isConfirmed) return;
+    const updatedSettings = { ...commissionSettings, salesCommissionTiers: { ...(commissionSettings.salesCommissionTiers || {}), [commissionRep]: result.value } };
+    await saveGlobalSettings(updatedSettings);
+    setCommissionSettings(updatedSettings);
+    Swal.fire({ icon: 'success', title: 'تم حفظ الشرائح', timer: 1400, showConfirmButton: false });
+  };
+
+  const handlePrintCommissionReport = () => {
+    const popup = window.open('', '_blank', 'width=1100,height=800');
+    if (!popup) return Swal.fire('تعذر فتح الطباعة', 'يرجى السماح بالنوافذ المنبثقة ثم المحاولة مرة أخرى.', 'warning');
+    const escapeHtml = (value) => String(value ?? '-').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
+    const repLabel = commissionRep || 'جميع المندوبين';
+    const bodyRows = sortedCommissionRows.map(row => `
+      <tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.resolvedSalesRep)}</td><td class="customer">${escapeHtml(row.customerName || customers.find(c => c.id === row.customerId)?.name)}</td><td>${escapeHtml(row.docNumber)}</td><td>${escapeHtml(row.type)}</td><td>${formatCurrency(row.amount)}</td></tr>`).join('');
+    popup.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>كشف مبيعات المندوبين</title><style>
+      body{font-family:Arial,sans-serif;color:#0f172a;padding:24px}h1{text-align:center;font-size:22px;margin:0 0 8px}.meta{text-align:center;color:#475569;margin-bottom:20px}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}.card{border:1px solid #cbd5e1;border-radius:8px;padding:10px;text-align:center}.card b{display:block;margin-top:6px;font-size:16px}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px solid #cbd5e1;padding:8px;text-align:center;font-size:11px}.customer{text-align:right}th{background:#f1f5f9}@media print{body{padding:0}}
+    </style></head><body><h1>كشف مبيعات المندوبين والتحصيل</h1><div class="meta">المندوب: ${escapeHtml(repLabel)} — الشهر: ${escapeHtml(selectedMonth)}</div><div class="summary">
+      <div class="card">الفواتير<b>${formatCurrency(commissionReport.invoices)}</b></div><div class="card">المرتجعات<b>${formatCurrency(commissionReport.returns)}</b></div><div class="card">المبالغ المحصّلة<b>${formatCurrency(commissionReport.collections)}</b></div><div class="card">شيكات آجلة<b>${formatCurrency(commissionReport.collectionBreakdown.postdatedCheques)}</b></div><div class="card">غير المحصّل<b>${formatCurrency(commissionReport.outstanding)}</b></div><div class="card">العمولة المستحقة<b>${formatCurrency(commissionReport.commission)}</b></div>
+    </div><table><thead><tr><th>التاريخ</th><th>المندوب</th><th>اسم الزبون</th><th>رقم المستند</th><th>الحركة</th><th>المبلغ</th></tr></thead><tbody>${bodyRows || '<tr><td colspan="6">لا توجد بيانات</td></tr>'}</tbody></table><script>window.onload=()=>{window.print();}</script></body></html>`);
+    popup.document.close();
+  };
+
+  const handleExportCommissionExcel = async () => {
+    const XLSX = await import('xlsx');
+    const repLabel = commissionRep || 'جميع المندوبين';
+    const rows = sortedCommissionRows.map(row => ({
+      'التاريخ': row.date || '', 'المندوب': row.resolvedSalesRep || '',
+      'اسم الزبون': row.customerName || customers.find(c => c.id === row.customerId)?.name || '',
+      'رقم المستند': row.docNumber || '', 'الحركة': row.type || '', 'المبلغ': Number(row.amount || 0)
+    }));
+    const summaryRows = [
+      ['كشف مبيعات المندوبين والتحصيل'], ['المندوب', repLabel], ['الشهر', selectedMonth],
+      ['الفواتير', commissionReport.invoices], ['المرتجعات', commissionReport.returns],
+      ['نقدي وكليك', commissionReport.collectionBreakdown.cashAndClick],
+      ['شيكات آجلة', commissionReport.collectionBreakdown.postdatedCheques],
+      ['المبالغ المحصّلة', commissionReport.collections], ['غير المحصّل', commissionReport.outstanding],
+      ['العمولة المستحقة', commissionReport.commission], []
+    ];
+    const worksheet = XLSX.utils.aoa_to_sheet(summaryRows);
+    XLSX.utils.sheet_add_json(worksheet, rows, { origin: `A${summaryRows.length + 1}`, skipHeader: false });
+    worksheet['!cols'] = [{ wch: 14 }, { wch: 30 }, { wch: 38 }, { wch: 16 }, { wch: 18 }, { wch: 16 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'مبيعات المندوبين');
+    XLSX.writeFile(workbook, `مبيعات_المندوبين_${repLabel}_${selectedMonth}.xlsx`);
+  };
 
   const handleAddPayment = async () => {
     if (!canPerformAction(user, 'customer_statements', 'add')) {
@@ -658,6 +881,7 @@ export default function AdminCustomerStatements({ user }) {
         amount: Number(formValues.amount),
         notes: formValues.notes,
         paymentMethod: formValues.paymentMethod,
+        salesRep: chosenCustomer.salesRep || 'زبائن الشركة',
         cheques: formValues.cheques || [],
         dueDate: formValues.dueDate,
         originalInvoice: formValues.origInv,
@@ -1937,8 +2161,13 @@ export default function AdminCustomerStatements({ user }) {
         </div>
       )}
 
+      <div className="print:hidden" style={{ display: 'flex', gap: '10px', marginBottom: '18px', padding: '6px', borderRadius: '14px', background: '#e2e8f0', width: isMobile ? '100%' : 'fit-content' }}>
+        <button type="button" onClick={() => setActiveSection('statements')} style={{ flex: isMobile ? 1 : 'none', border: 0, borderRadius: '10px', padding: '11px 18px', cursor: 'pointer', fontWeight: 900, background: activeSection === 'statements' ? '#fff' : 'transparent', color: activeSection === 'statements' ? '#0f766e' : '#64748b', boxShadow: activeSection === 'statements' ? '0 2px 7px rgba(15,23,42,.12)' : 'none' }}>كشوفات حساب الزبائن</button>
+        <button type="button" onClick={() => { setActiveSection('rep_sales'); setSelectedCustomer(null); }} style={{ flex: isMobile ? 1 : 'none', border: 0, borderRadius: '10px', padding: '11px 18px', cursor: 'pointer', fontWeight: 900, background: activeSection === 'rep_sales' ? '#fff' : 'transparent', color: activeSection === 'rep_sales' ? '#2563eb' : '#64748b', boxShadow: activeSection === 'rep_sales' ? '0 2px 7px rgba(15,23,42,.12)' : 'none' }}>مبيعات المندوبين والتحصيل</button>
+      </div>
+
       {/* Top Header & Customer Selection (Only when no customer is selected) */}
-      {!selectedCustomer && (
+      {!selectedCustomer && activeSection === 'statements' && (
         <>
           {/* Header */}
           <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: '1rem', marginBottom: '1.5rem', padding: isMobile ? '0 0.5rem' : '0' }} className="print:hidden">
@@ -2036,6 +2265,120 @@ export default function AdminCustomerStatements({ user }) {
           </div>
         </>
       )}
+
+      {!selectedCustomer && activeSection === 'rep_sales' && (
+        <section className="print:hidden" style={{ marginBottom: '1.5rem', background: '#fff', border: '1px solid #dbe4ee', borderRadius: '18px', overflow: 'hidden', boxShadow: '0 4px 18px rgba(15, 23, 42, 0.05)' }}>
+          <div style={{ padding: isMobile ? '14px' : '18px 20px', borderBottom: '1px solid #e2e8f0', background: 'linear-gradient(135deg, #f8fafc, #f0fdfa)' }}>
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', gap: '12px' }}>
+              <div>
+                <h3 style={{ margin: 0, color: '#0f172a', fontSize: '18px', fontWeight: 900 }}>مبيعات المندوبين والتحصيل</h3>
+                <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: '12px', fontWeight: 600 }}>قسم مستقل للمبيعات والمرتجعات والمبالغ المحصّلة وغير المحصّلة والعمولات</p>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: isMobile ? 'stretch' : 'flex-end' }}>
+                <button type="button" onClick={handlePrintCommissionReport} style={{ border: '1px solid #64748b', borderRadius: '10px', padding: '9px 13px', background: '#fff', color: '#334155', fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}><Printer size={16} /> طباعة</button>
+                <button type="button" onClick={handleExportCommissionExcel} style={{ border: '1px solid #16a34a', borderRadius: '10px', padding: '9px 13px', background: '#fff', color: '#15803d', fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}><FileOutput size={16} /> Excel</button>
+                <button type="button" onClick={() => setCommissionBasis('invoices')} style={{ flex: isMobile ? 1 : 'none', border: '1px solid #0f766e', borderRadius: '10px', padding: '9px 14px', background: commissionBasis === 'invoices' ? '#0f766e' : '#fff', color: commissionBasis === 'invoices' ? '#fff' : '#0f766e', fontWeight: 900, cursor: 'pointer' }}>صافي الفواتير الشهرية</button>
+                <button type="button" onClick={() => setCommissionBasis('collections')} style={{ flex: isMobile ? 1 : 'none', border: '1px solid #2563eb', borderRadius: '10px', padding: '9px 14px', background: commissionBasis === 'collections' ? '#2563eb' : '#fff', color: commissionBasis === 'collections' ? '#fff' : '#2563eb', fontWeight: 900, cursor: 'pointer' }}>المبالغ المحصّلة</button>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(220px, 300px))', justifyContent: 'center', alignItems: 'stretch', gap: '14px', margin: '18px auto 0', maxWidth: '950px' }}>
+              <label style={{ color: '#475569', fontSize: '12px', fontWeight: 800, background: 'rgba(255,255,255,.9)', border: '1px solid #dbe4ee', borderRadius: '14px', padding: '12px', boxShadow: '0 2px 8px rgba(15,23,42,.05)', textAlign: 'center' }}>
+                المندوب
+                <select value={commissionRep} onChange={(e) => setCommissionRep(e.target.value)} style={{ display: 'block', width: '100%', height: '42px', marginTop: '8px', border: '1px solid #cbd5e1', borderRadius: '10px', background: '#fff', padding: '0 10px', fontWeight: 700 }}>
+                  <option value="">جميع المندوبين</option>
+                  {salesReps.map(rep => <option key={rep} value={rep}>{rep}</option>)}
+                </select>
+              </label>
+              <div style={{ color: '#475569', fontSize: '12px', fontWeight: 800, background: 'rgba(255,255,255,.9)', border: '1px solid #dbe4ee', borderRadius: '14px', padding: '12px', boxShadow: '0 2px 8px rgba(15,23,42,.05)', textAlign: 'center' }}>
+                <div style={{ marginBottom: '8px' }}>الشهر</div>
+                <div style={{ display: 'flex', justifyContent: 'stretch' }}>
+                  <HRDateFilter
+                    mode="month"
+                    setMode={() => setDateMode('month')}
+                    month={selectedMonth}
+                    setMonth={(month) => { setSelectedMonth(month); setDateMode('month'); }}
+                    allowedModes={['month']}
+                    monthPickerVariant="field"
+                  />
+                </div>
+              </div>
+              <div style={{ color: '#475569', fontSize: '12px', fontWeight: 800, background: 'rgba(255,255,255,.9)', border: '1px solid #dbe4ee', borderRadius: '14px', padding: '12px', boxShadow: '0 2px 8px rgba(15,23,42,.05)', textAlign: 'center' }}>
+                شرائح العمولة
+                <button type="button" onClick={handleEditCommissionTiers} style={{ width: '100%', minHeight: '42px', marginTop: '8px', border: '1px solid #7c3aed', borderRadius: '10px', background: '#f5f3ff', color: '#6d28d9', padding: '6px 10px', fontWeight: 900, cursor: 'pointer' }}>
+                  {commissionRep ? (commissionReport.tiers?.length ? `${commissionReport.tiers.length} شرائح — تعديل` : 'إعداد الشرائح') : 'اختر مندوبًا أولًا'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ padding: isMobile ? '14px' : '18px 20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)', gap: '10px' }}>
+              {[
+                ['الفواتير', commissionReport.invoices, '#16a34a', '#f0fdf4'],
+                ['المرتجعات', commissionReport.returns, '#dc2626', '#fef2f2'],
+                ['المبالغ المحصّلة', commissionReport.collections, '#2563eb', '#eff6ff'],
+                ['غير المحصّل', commissionReport.outstanding, '#e11d48', '#fff1f2'],
+                [commissionBasis === 'invoices' ? 'صافي الفواتير' : 'صافي التحصيل', commissionReport.basisAmount, '#0f766e', '#f0fdfa'],
+                ['العمولة المستحقة', commissionReport.commission, '#7c3aed', '#f5f3ff']
+              ].map(([label, value, color, background]) => (
+                <div key={label} style={{ border: `1px solid ${color}22`, borderRadius: '12px', padding: '12px 9px', background, textAlign: 'center' }}>
+                  <div style={{ color: '#64748b', fontSize: '11px', fontWeight: 800, minHeight: '30px' }}>{label}</div>
+                  <div dir="ltr" style={{ color, fontSize: '16px', fontWeight: 900 }}>{formatCurrency(value)}</div>
+                  {label === 'المبالغ المحصّلة' && (
+                    <div style={{ marginTop: '9px', paddingTop: '8px', borderTop: '1px solid #bfdbfe', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '5px', color: '#475569', fontSize: '10px', fontWeight: 800 }}>
+                      <span>نقدي وكليك: <b dir="ltr">{formatCurrency(commissionReport.collectionBreakdown.cashAndClick)}</b></span>
+                      <span>شيكات آجلة ({commissionReport.collectionBreakdown.postdatedChequeCount}): <b dir="ltr">{formatCurrency(commissionReport.collectionBreakdown.postdatedCheques)}</b></span>
+                      {commissionReport.collectionBreakdown.other > 0 && <span>أخرى: <b dir="ltr">{formatCurrency(commissionReport.collectionBreakdown.other)}</b></span>}
+                    </div>
+                  )}
+                  {label === 'العمولة المستحقة' && commissionRep && commissionReport.tiers?.length > 0 && (
+                    <div style={{ marginTop: '9px', paddingTop: '8px', borderTop: '1px solid #ddd6fe', color: '#6d28d9', fontSize: '10px', fontWeight: 800 }}>
+                      {commissionReport.tiers.map((tier, index) => <span key={index} style={{ display: 'block' }}>الشريحة {index + 1}: {tier.rate}% {tier.upTo !== '' ? `حتى ${formatCurrency(tier.upTo)}` : 'لما يزيد'}</span>)}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: '16px', overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+              <table style={{ width: '100%', minWidth: '760px', borderCollapse: 'collapse', fontSize: '12px', tableLayout: 'fixed', textAlign: 'center' }}>
+                <thead style={{ background: '#f8fafc', color: '#475569' }}>
+                  <tr>
+                    {[
+                      ['date', 'التاريخ', '13%'], ['resolvedSalesRep', 'المندوب', '20%'], ['customerName', 'اسم الزبون', '27%'],
+                      ['docNumber', 'رقم المستند', '13%'], ['type', 'الحركة', '14%'], ['amount', 'المبلغ', '13%']
+                    ].map(([key, label, width]) => (
+                      <th key={key} onClick={() => handleCommissionSort(key)} style={{ padding: '11px', textAlign: 'center', width, cursor: 'pointer', userSelect: 'none' }} title="اضغط للترتيب">
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>{label}<ChevronsUpDown size={14} color={commissionSort.key === key ? '#0284c7' : '#94a3b8'} /></span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedCommissionRows.length ? sortedCommissionRows.map((row, index) => (
+                    <tr key={row.id || `${row.date}-${row.docNumber}-${index}`} style={{ borderTop: '1px solid #edf2f7' }}>
+                      <td dir="ltr" style={{ padding: '10px', textAlign: 'center' }}>{row.date || '-'}</td>
+                      <td style={{ padding: '10px', textAlign: 'center', fontWeight: 800 }}>{row.resolvedSalesRep}</td>
+                      <td style={{ padding: '10px 18px', textAlign: 'right', fontWeight: 700 }}>{row.customerName || customers.find(c => c.id === row.customerId)?.name || '-'}</td>
+                      <td style={{ padding: '10px', textAlign: 'center' }}>{row.docNumber || '-'}</td>
+                      <td style={{ padding: '10px', textAlign: 'center', color: row.type === 'مرتجع مبيعات' ? '#dc2626' : row.type === 'دفعة' ? '#2563eb' : '#0f766e', fontWeight: 800 }}>{row.type}</td>
+                      <td dir="ltr" style={{ padding: '10px', textAlign: 'center', fontWeight: 900 }}>{formatCurrency(row.amount)}</td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan="6" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8', fontWeight: 700 }}>لا توجد حركات لهذا المندوب في الشهر المحدد</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ marginTop: '10px', color: '#64748b', fontSize: '11px', fontWeight: 700 }}>
+              {commissionBasis === 'invoices' ? 'المعادلة: الفواتير − المرتجعات − الخصومات.' : 'المعادلة: الدفعات المحصّلة − المرتجعات.'}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <div style={{ display: activeSection === 'statements' ? 'contents' : 'none' }}>
 
       {/* Print Header (Only visible on print) */}
       <div className="hidden print:block mb-8 text-center border-b pb-4">
@@ -3110,6 +3453,7 @@ export default function AdminCustomerStatements({ user }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

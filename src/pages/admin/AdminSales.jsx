@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText, Briefcase, Clock, Check, Save, Share2, Layers, Clipboard, CheckCircle, Copy, Archive } from 'lucide-react';
-import { getSalesOrders, saveSalesOrder, deleteSalesOrder, getSalesOrderDrafts, saveSalesOrderDraft, deleteSalesOrderDraft, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getPreparationOrders, savePreparationOrder, getMissions, saveMission, deleteMission } from '../../store';
+import { getSalesOrders, subscribeToSalesOrders, saveSalesOrder, deleteSalesOrder, getSalesOrderDrafts, saveSalesOrderDraft, deleteSalesOrderDraft, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getPreparationOrders, savePreparationOrder, getMissions, saveMission, deleteMission } from '../../store';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 import { hasPermission } from '../../utils/permissions';
 import Swal from 'sweetalert2';
@@ -13,7 +13,24 @@ import SearchableDropdown from '../../components/SearchableDropdown';
 import PreparationVariantsModal from '../../components/PreparationVariantsModal';
 import MultiColorSelectionModal from '../../components/MultiColorSelectionModal';
 import html2pdf from 'html2pdf.js';
+import { buildReservedQuantityMap, cleanStockProductName, getAvailableQuantity, isReservableSalesItem } from '../../utils/stockAvailability';
 const MySwal = withReactContent(Swal);
+
+const SALES_ITEM_STATUS_OPTIONS = [
+  { value: 'جاهز', label: 'جاهز' },
+  { value: 'قيد التجهيز', label: 'قيد التجهيز' },
+  { value: 'قيد الإنتاج', label: 'قيد الخياطة' },
+  { value: 'قيد التحضير', label: 'قيد التحضير' },
+  { value: 'ملغي', label: 'ملغي' }
+];
+
+const normalizeSalesItemStatus = status => {
+  if (['إنتاج قيد الخياطة', 'إنتاج قيد التغليف'].includes(status)) return 'قيد الإنتاج';
+  if (status === 'إنتاج قيد التحضير') return 'قيد التحضير';
+  if (['جاهز للتسليم', 'تم التسليم', 'تم الإنتاج', 'تم التحضير', 'تم التجهيز', 'منتهي'].includes(status)) return 'جاهز';
+  if (status === 'ملغى') return 'ملغي';
+  return status || '';
+};
 
 const getLocalDateStr = (d) => {
   if (!d) return '';
@@ -94,6 +111,7 @@ const AdminSales = ({ user }) => {
     const grouped = {};
     const validMap = {};
     const lookup = {};
+    const reservedMap = buildReservedQuantityMap(orders);
 
     stock.forEach(s => {
       if (!s.name) return;
@@ -142,11 +160,18 @@ const AdminSales = ({ user }) => {
       })
       .map(key => {
         const g = grouped[key];
-        return `${key} (المتوفر: ${g.totalQuantity})`;
+        const reserved = Number(reservedMap[key] || 0);
+        const available = getAvailableQuantity(g.totalQuantity, reserved);
+        return `${key} (الموجود: ${g.totalQuantity} | المحجوز: ${reserved} | المتاح: ${available})`;
       });
 
+    Object.entries(lookup).forEach(([key, value]) => {
+      value.reserved = Number(reservedMap[key] || 0);
+      value.available = getAvailableQuantity(value.total, value.reserved);
+    });
+
     return { stockOptions: options, validStockOptions: validMap, stockLookup: lookup };
-  }, [stock]);
+  }, [stock, orders]);
 
   useEffect(() => {
     fetchData();
@@ -162,6 +187,14 @@ const AdminSales = ({ user }) => {
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToSalesOrders(
+      liveOrders => setOrders(liveOrders),
+      error => console.error('تعذر تحديث حجوزات الطلبيات لحظياً', error)
+    );
+    return unsubscribe;
   }, []);
 
   useEffect(() => () => clearTimeout(draftTimerRef.current), []);
@@ -358,7 +391,7 @@ const AdminSales = ({ user }) => {
         items: (order.items || [{ productName: order.productName, quantity: order.quantity, notes: order.notes || '' }]).map(item => ({
           ...item,
           id: '',
-          itemStatus: item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة' ? 'قيد الإنتاج' : item.itemStatus === 'قيد التحضير' || item.itemStatus === 'إنتاج قيد التحضير' ? 'قيد التحضير' : 'جديد',
+          itemStatus: ['قيد الإنتاج', 'إنتاج قيد الخياطة', 'إنتاج قيد التغليف'].includes(item.itemStatus) ? 'قيد الإنتاج' : item.itemStatus === 'قيد التحضير' || item.itemStatus === 'إنتاج قيد التحضير' ? 'قيد التحضير' : 'جديد',
           hasProductionDetails: !!(linkedProd && linkedProd.items && linkedProd.items.some(pi => pi.productName === item.productName)),
           hasPreparationDetails: !!(linkedPrep && linkedPrep.items && linkedPrep.items.some(pi => pi.productName === item.productName))
         }))
@@ -493,8 +526,8 @@ const AdminSales = ({ user }) => {
         ...order,
         items: (order.items || [{ productName: order.productName, quantity: order.quantity, notes: order.notes || '' }]).map(item => ({
           ...item,
-          hasProductionDetails: item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة',
-          hasPreparationDetails: item.itemStatus === 'قيد التحضير' || item.itemStatus === 'إنتاج قيد التحضير'
+          hasProductionDetails: false,
+          hasPreparationDetails: false
         }))
       });
       // Fetch linked production order if any
@@ -517,7 +550,7 @@ const AdminSales = ({ user }) => {
       setFormData(prev => ({
         ...prev,
         items: prev.items.map(item => {
-          if ((item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة') && linked && linked.items) {
+          if (['قيد الإنتاج', 'إنتاج قيد الخياطة', 'إنتاج قيد التغليف'].includes(item.itemStatus) && linked && linked.items) {
             const linkedItem = linked.items.find(li => li.productName === item.productName);
             if (linkedItem) {
               return {
@@ -540,7 +573,7 @@ const AdminSales = ({ user }) => {
               };
             }
           }
-          return { ...item, hasProductionDetails: item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة', hasPreparationDetails: item.itemStatus === 'قيد التحضير' || item.itemStatus === 'إنتاج قيد التحضير' };
+          return { ...item, hasProductionDetails: false, hasPreparationDetails: false };
         })
       }));
     } else {
@@ -589,7 +622,7 @@ const AdminSales = ({ user }) => {
 
   const handleOpenPreview = async (order) => {
     let orderToPreview = { ...order };
-    if (order.items && order.items.some(i => i.itemStatus === 'قيد الإنتاج' || i.itemStatus === 'إنتاج قيد الخياطة')) {
+    if (order.items && order.items.some(i => ['قيد الإنتاج', 'إنتاج قيد الخياطة', 'إنتاج قيد التغليف'].includes(i.itemStatus))) {
       const prodOrders = await getOrders();
       const linked = prodOrders.find(po =>
         (po.salesOrderId && po.salesOrderId === order.id) ||
@@ -1219,7 +1252,20 @@ const AdminSales = ({ user }) => {
       return wh ? wh.quantity : 0;
     }
     
-    return stockData.total;
+    return stockData.available;
+  };
+
+  const getProductStockSummary = (prodName) => {
+    const key = cleanStockProductName(prodName);
+    const stockData = stockLookup[key] || {};
+    const physical = Number(stockData.total || 0);
+    const reserved = Number(stockData.reserved || 0);
+    return { physical, reserved, available: getAvailableQuantity(physical, reserved) };
+  };
+
+  const formatProductStockSummary = prodName => {
+    const summary = getProductStockSummary(prodName);
+    return `الموجود: ${summary.physical} | المحجوز: ${summary.reserved} | المتاح: ${summary.available}`;
   };
 
   const getProductStockBreakdown = (prodName) => {
@@ -1242,19 +1288,10 @@ const AdminSales = ({ user }) => {
     return stockData.breakdown.map(b => ({ warehouse: b.warehouse || 'مستودع غير محدد', quantity: b.quantity }));
   };
 
-  const isSupervisorOrAdmin = isAdmin(user) ||
-    user?.level === 'مشرف' ||
-    user?.role === 'مشرف' ||
-    user?.level === 'supervisor' ||
-    user?.role === 'supervisor' ||
-    user?.hasProductionAccess ||
-    user?.hasSalesAccess;
-
   const isItemStatusDisabled = (item) => {
     if (!editingOrder) return false;
-    if (!isSupervisorOrAdmin) return true;
 
-    if (item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة' || item.itemStatus === 'جاهز') {
+    if (['قيد الإنتاج', 'إنتاج قيد الخياطة', 'إنتاج قيد التغليف', 'جاهز'].includes(item.itemStatus)) {
       if (linkedProductionOrder) {
         const normalize = (str) => String(str || '').replace(/أ|إ|آ/g, 'ا').replace(/ى/g, 'ي').trim();
         const overallStatus = normalize(linkedProductionOrder.status || 'لم يتم التنفيذ');
@@ -1339,12 +1376,12 @@ const AdminSales = ({ user }) => {
   };
 
   const getDisplayedItemStatus = (salesOrder, item) => {
-    if (item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة') {
+    if (['قيد الإنتاج', 'إنتاج قيد الخياطة', 'إنتاج قيد التغليف'].includes(item.itemStatus)) {
       const prodStatus = getProductionItemStatus(salesOrder, item);
       if (prodStatus && prodStatus !== 'لم يتم التنفيذ') {
         return prodStatus;
       }
-      return 'إنتاج قيد الخياطة';
+      return item.itemStatus === 'إنتاج قيد التغليف' ? 'إنتاج قيد التغليف' : 'إنتاج قيد الخياطة';
     }
     if (item.itemStatus === 'قيد التحضير' || item.itemStatus === 'إنتاج قيد التحضير') {
       const prepStatus = getPreparationItemStatus(salesOrder, item);
@@ -1384,7 +1421,7 @@ const AdminSales = ({ user }) => {
   const handleItemChange = (index, field, value) => {
     const newItems = [...formData.items];
     if (field === 'productName' && typeof value === 'string') {
-      value = value.replace(/\s*\(المتوفر:\s*[-+]?\d+\)/, '').trim();
+      value = cleanStockProductName(value);
     }
     newItems[index][field] = value;
     setFormData({ ...formData, items: newItems });
@@ -1663,19 +1700,41 @@ const AdminSales = ({ user }) => {
       return;
     }
 
+    const normalizeCardProduct = value => String(value || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('ar');
+    const hasLinkedCardItem = (linkedOrder, salesItem) => (linkedOrder?.items || []).some(cardItem =>
+      normalizeCardProduct(cardItem.productName || cardItem.name) === normalizeCardProduct(salesItem.productName || salesItem.name)
+      && Number(cardItem.quantity || 0) > 0
+    );
 
-
-    const unlinkedProductionItem = formData.items.find(item => (item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة') && !item.hasProductionDetails);
-
-    if (unlinkedProductionItem) {
-      Swal.fire('تنبيه', `الصنف "${unlinkedProductionItem.productName}" قيد الإنتاج ولكن لم يتم إضافة تفاصيله لكرت الإنتاج. يرجى الضغط على زر (+) بجانبه لإضافتها.`, 'warning');
+    const missingProductionCard = formData.items.find(item =>
+      normalizeSalesItemStatus(item.itemStatus) === 'قيد الإنتاج' && !hasLinkedCardItem(linkedProductionOrder, item)
+    );
+    if (missingProductionCard) {
+      Swal.fire('كرت الإنتاج مطلوب', `يجب إنشاء وحفظ كرت الخياطة للصنف "${missingProductionCard.productName}" قبل حفظ الطلبية.`, 'warning');
       return;
     }
 
-    const unlinkedPreparationItem = formData.items.find(item => item.itemStatus === 'قيد التحضير' && !item.hasPreparationDetails);
+    const missingPreparationCard = formData.items.find(item =>
+      normalizeSalesItemStatus(item.itemStatus) === 'قيد التحضير' && !hasLinkedCardItem(linkedPreparationOrder, item)
+    );
+    if (missingPreparationCard) {
+      Swal.fire('كرت التحضير مطلوب', `يجب إنشاء وحفظ كرت التحضير للصنف "${missingPreparationCard.productName}" قبل حفظ الطلبية.`, 'warning');
+      return;
+    }
 
-    if (unlinkedPreparationItem) {
-      Swal.fire('تنبيه', `الصنف "${unlinkedPreparationItem.productName}" قيد التحضير ولكن لم يتم إضافة تفاصيله لكرت التحضير. يرجى الضغط على زر (+) بجانبه لإضافتها.`, 'warning');
+    const reservedWithoutCurrentOrder = buildReservedQuantityMap(orders, editingOrder?.id || formData.id || '');
+    const overbookedItem = formData.items.find(item => {
+      if (!isReservableSalesItem(item)) return false;
+      const key = cleanStockProductName(item.productName);
+      const physical = Number(stockLookup[key]?.total || 0);
+      const availableBeforeThisOrder = getAvailableQuantity(physical, reservedWithoutCurrentOrder[key] || 0);
+      return Number(item.quantity || 0) > availableBeforeThisOrder;
+    });
+    if (overbookedItem) {
+      const key = cleanStockProductName(overbookedItem.productName);
+      const physical = Number(stockLookup[key]?.total || 0);
+      const reserved = Number(reservedWithoutCurrentOrder[key] || 0);
+      Swal.fire('الكمية غير متاحة', `الصنف "${key}" — الموجود: ${physical} | المحجوز: ${reserved} | المتاح: ${getAvailableQuantity(physical, reserved)} | المطلوب: ${Number(overbookedItem.quantity || 0)}`, 'error');
       return;
     }
 
@@ -2539,7 +2598,7 @@ const AdminSales = ({ user }) => {
                           (po.salesOrderNumber && po.salesOrderNumber === order.orderNumber) ||
                           (po.orderNotes && po.orderNotes.includes(order.orderNumber))
                         );
-                        const prodCount = order.items ? order.items.filter(i => i.itemStatus === 'قيد الإنتاج' || i.itemStatus === 'إنتاج قيد الخياطة' || i.itemStatus === 'تم الإنتاج').length : 0;
+                        const prodCount = order.items ? order.items.filter(i => ['قيد الإنتاج', 'إنتاج قيد الخياطة', 'إنتاج قيد التغليف', 'تم الإنتاج'].includes(i.itemStatus)).length : 0;
 
                         if (linkedDb) {
                           const finalCount = (linkedDb.items && linkedDb.items.length) || prodCount;
@@ -3360,7 +3419,7 @@ const AdminSales = ({ user }) => {
                                   let val = currentVal !== undefined ? currentVal : item.productName;
                                   if (typeof val !== 'string') val = String(val || '');
                                   if (val) {
-                                    val = val.replace(/\s*\(المتوفر:\s*[-+]?\d+\)/, '').trim();
+                                    val = cleanStockProductName(val);
                                   }
                                   if (val && !validStockOptions[val]) {
                                     handleItemChange(index, 'productName', item.productName || '');
@@ -3385,16 +3444,14 @@ const AdminSales = ({ user }) => {
                                       badges.push(
                                         <span key="stock" style={{ fontSize: '10px', fontWeight: '800' }} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200/60 shadow-sm transition-all duration-300">
                                           <span className="w-1.5 h-1.5 rounded-full bg-red-500" style={{ width: '4px', height: '4px' }}></span>
-                                          المتوفر: 0 (غير متوفر)
+                                          {formatProductStockSummary(item.productName)} (غير متوفر)
                                         </span>
                                       );
                                     } else {
-                                      const breakdown = getProductStockBreakdown(item.productName);
-                                      const breakdownStr = breakdown.map(b => `${b.warehouse} (${b.quantity})`).join(' | ');
                                       badges.push(
                                         <span key="stock" style={{ fontSize: '10px', fontWeight: '800' }} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200/60 shadow-sm transition-all duration-300">
                                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" style={{ width: '4px', height: '4px' }}></span>
-                                          المتوفر: {breakdownStr || `${qty} (مستودع غير محدد)`}
+                                          {formatProductStockSummary(item.productName)}
                                         </span>
                                       );
                                     }
@@ -3437,7 +3494,7 @@ const AdminSales = ({ user }) => {
                                   paddingRight: '4px',
                                   minWidth: '130px'
                                 }}
-                                value={item.itemStatus || ''}
+                                value={normalizeSalesItemStatus(item.itemStatus)}
                                 onChange={(e) => handleItemChange(index, 'itemStatus', e.target.value)}
                                 disabled={isItemStatusDisabled(item)}
                                 title={(() => {
@@ -3467,17 +3524,12 @@ const AdminSales = ({ user }) => {
                                 })()}
                               >
                                 <option value="">-- اختر --</option>
-                                {(() => {
-                                  let statuses = globalSettings.salesItemStatuses || [];
-                                  if (!statuses.includes('قيد التحضير')) statuses = [...statuses, 'قيد التحضير'];
-                                  if (item.itemStatus === 'ملغي' && !statuses.includes('ملغي')) statuses = [...statuses, 'ملغي'];
-                                  return statuses;
-                                })().map(s => <option key={s} value={s}>{s === 'قيد الإنتاج' ? 'إنتاج قيد الخياطة' : s === 'قيد التحضير' ? 'إنتاج قيد التحضير' : s}</option>)}
+                                {SALES_ITEM_STATUS_OPTIONS.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
                               </select>
                             </td>
                             <td className="p-2 text-center align-middle">
                               <div className="flex gap-2 justify-center items-center">
-                                {(item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة') && (isAdmin(user) || user?.level === 'مشرف' || user?.role === 'مشرف' || user?.level === 'supervisor' || user?.role === 'supervisor' || user?.hasProductionAccess || hasPermission(user, 'production', 'add') || hasPermission(user, 'production', 'edit')) && (
+                                {['قيد الإنتاج', 'إنتاج قيد الخياطة', 'إنتاج قيد التغليف'].includes(item.itemStatus) && (isAdmin(user) || user?.level === 'مشرف' || user?.role === 'مشرف' || user?.level === 'supervisor' || user?.role === 'supervisor' || user?.hasProductionAccess || hasPermission(user, 'production', 'add') || hasPermission(user, 'production', 'edit')) && (
                                   <button type="button" className={`${item.hasProductionDetails ? "icon-btn text-primary hover:bg-primary/10" : "icon-btn icon-btn-add"} ${isItemStatusDisabled(item) ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => handleAddProductionItem(index)} title={isItemStatusDisabled(item) ? 'لا يمكن التعديل لأن الصنف قيد التنفيذ' : (item.hasProductionDetails ? 'تعديل تفاصيل الإنتاج' : 'إضافة لكرت الإنتاج')} disabled={isItemStatusDisabled(item)}>
                                     {item.hasProductionDetails ? <Edit2 size={16} strokeWidth={2} /> : <Plus size={16} strokeWidth={2} />}
                                   </button>
@@ -3596,22 +3648,17 @@ const AdminSales = ({ user }) => {
                                   cursor: 'pointer',
                                   outline: 'none'
                                 }}
-                                value={item.itemStatus || ""}
+                                value={normalizeSalesItemStatus(item.itemStatus)}
                                 onChange={(e) => handleItemChange(index, 'itemStatus', e.target.value)}
                                 disabled={isItemStatusDisabled(item)}
                               >
                                 <option value="">-- اختر --</option>
-                                {(() => {
-                                  let statuses = globalSettings.salesItemStatuses || [];
-                                  if (!statuses.includes('قيد التحضير')) statuses = [...statuses, 'قيد التحضير'];
-                                  if (item.itemStatus === 'ملغي' && !statuses.includes('ملغي')) statuses = [...statuses, 'ملغي'];
-                                  return statuses;
-                                })().map(s => (
-                                  <option key={s} value={s} className="bg-white text-slate-800 font-normal">{s === 'قيد الإنتاج' ? 'إنتاج قيد الخياطة' : s === 'قيد التحضير' ? 'إنتاج قيد التحضير' : s}</option>
+                                {SALES_ITEM_STATUS_OPTIONS.map(status => (
+                                  <option key={status.value} value={status.value} className="bg-white text-slate-800 font-normal">{status.label}</option>
                                 ))}
                               </select>
 
-                              {(item.itemStatus === 'قيد الإنتاج' || item.itemStatus === 'إنتاج قيد الخياطة') && (isAdmin(user) || user?.level === 'مشرف' || user?.role === 'مشرف' || user?.level === 'supervisor' || user?.role === 'supervisor' || user?.hasProductionAccess) && (
+                              {['قيد الإنتاج', 'إنتاج قيد الخياطة', 'إنتاج قيد التغليف'].includes(item.itemStatus) && (isAdmin(user) || user?.level === 'مشرف' || user?.role === 'مشرف' || user?.level === 'supervisor' || user?.role === 'supervisor' || user?.hasProductionAccess) && (
                                 <button
                                   type="button"
                                   className="transition-all"
@@ -3734,42 +3781,14 @@ const AdminSales = ({ user }) => {
                           {/* Field 1: اسم الصنف Dropdown & Stock Message */}
                           <div className="space-y-1">
                             <SearchableDropdown
-                              options={(() => {
-                                const grouped = {};
-                                stock.forEach(s => {
-                                  if (!s.name) return;
-                                  const sName = String(s.name || '').trim();
-                                  const specSuffix = s.spec ? ` - ${String(s.spec).trim()}` : '';
-                                  const key = `${sName}${specSuffix}`;
-                                  if (!grouped[key]) {
-                                    grouped[key] = {
-                                      name: sName,
-                                      spec: String(s.spec || '').trim(),
-                                      totalQuantity: 0
-                                    };
-                                  }
-                                  grouped[key].totalQuantity += Number(s.quantity || 0);
-                                });
-                                  return Object.keys(grouped)
-                                    .sort((a, b) => {
-                                      const isModelA = String(a).trim().startsWith('موديل');
-                                      const isModelB = String(b).trim().startsWith('موديل');
-                                      if (isModelA && !isModelB) return -1;
-                                      if (!isModelA && isModelB) return 1;
-                                      return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
-                                    })
-                                    .map(key => {
-                                      const g = grouped[key];
-                                      return `${key} (المتوفر: ${g.totalQuantity})`;
-                                    });
-                              })()}
+                              options={stockOptions}
                               value={item.productName}
                               onChange={(val) => handleItemChange(index, 'productName', val)}
                               onBlur={(currentVal) => {
                                 let val = currentVal !== undefined ? currentVal : item.productName;
                                 if (typeof val !== 'string') val = String(val || '');
                                 if (val) {
-                                  val = val.replace(/\s*\(المتوفر:\s*[-+]?\d+\)/, '').trim();
+                                  val = cleanStockProductName(val);
                                 }
                                 const validOptions = Object.keys(
                                   stock.reduce((acc, s) => {
@@ -3793,15 +3812,13 @@ const AdminSales = ({ user }) => {
                                   if (qty === null || qty <= 0) {
                                     return (
                                       <span style={{ fontSize: '11px', fontWeight: '800', color: theme.border }}>
-                                        المتوفر: 0 (غير متوفر)
+                                        {formatProductStockSummary(item.productName)} (غير متوفر)
                                       </span>
                                     );
                                   }
-                                  const breakdown = getProductStockBreakdown(item.productName);
-                                  const breakdownStr = breakdown.map(b => `${b.warehouse} (${b.quantity})`).join(' | ');
                                   return (
                                     <span style={{ fontSize: '11px', fontWeight: '800', color: theme.text }}>
-                                      المتوفر: {breakdownStr || `${qty} (مستودع غير محدد)`}
+                                      {formatProductStockSummary(item.productName)}
                                     </span>
                                   );
                                 })()}
@@ -4105,7 +4122,7 @@ const AdminSales = ({ user }) => {
                               (po.orderNotes && po.orderNotes.includes(selectedOrder.orderNumber))
                             );
                             const prodNumber = linkedDb ? linkedDb.orderNumber : selectedOrder.productionOrderNumber;
-                            const prodItems = (selectedOrder.items || []).filter(i => i.itemStatus === 'قيد الإنتاج' || i.itemStatus === 'إنتاج قيد الخياطة' || i.itemStatus === 'تم الإنتاج');
+                            const prodItems = (selectedOrder.items || []).filter(i => ['قيد الإنتاج', 'إنتاج قيد الخياطة', 'إنتاج قيد التغليف', 'تم الإنتاج'].includes(i.itemStatus));
                             const count = (linkedDb && linkedDb.items) ? linkedDb.items.length : prodItems.length;
                             const countText = count > 0 ? (count === 1 ? 'صنف واحد' : count === 2 ? 'صنفان' : `${count} أصناف`) : '';
 
@@ -4160,7 +4177,7 @@ const AdminSales = ({ user }) => {
                     {(() => {
                       const items = selectedOrder.items || [];
                       const readyQty = items.filter(i => i.itemStatus === 'جاهز' || i.itemStatus === 'تم الإنتاج' || i.itemStatus === 'تم التسليم' || i.itemStatus === 'منتهي').length;
-                      const inProdQty = items.filter(i => i.itemStatus === 'قيد الإنتاج' || i.itemStatus === 'إنتاج قيد الخياطة').length;
+                      const inProdQty = items.filter(i => ['قيد الإنتاج', 'إنتاج قيد الخياطة', 'إنتاج قيد التغليف'].includes(i.itemStatus)).length;
                       const inPrepQty = items.filter(i => !i.itemStatus || i.itemStatus === 'قيد التجهيز' || i.itemStatus === 'جديد').length;
                       const remainingQty = inProdQty + inPrepQty;
                       return (
@@ -4303,15 +4320,13 @@ const AdminSales = ({ user }) => {
                                 if (qty === null || qty <= 0) {
                                   return (
                                     <span style={{ fontSize: '11px', fontWeight: '800', color: theme.border }}>
-                                      المتوفر: 0 (غير متوفر)
+                                      {formatProductStockSummary(item.productName)} (غير متوفر)
                                     </span>
                                   );
                                 }
-                                const breakdown = getProductStockBreakdown(item.productName);
-                                const breakdownStr = breakdown.map(b => `${b.warehouse} (${b.quantity})`).join(' | ');
                                 return (
                                   <span style={{ fontSize: '11px', fontWeight: '800', color: theme.text }}>
-                                    المتوفر: {breakdownStr || `${qty} (مستودع غير محدد)`}
+                                    {formatProductStockSummary(item.productName)}
                                   </span>
                                 );
                               })()}

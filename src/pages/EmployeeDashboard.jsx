@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { startVisiblePolling } from '../utils/visiblePolling';
 import { motion } from 'framer-motion';
-import { RefreshCw, Settings, LogOut, Plus, Globe, Trash2, Edit2, Save, Phone, Clock, Calendar, FileText, X, Camera, Home, ShoppingCart, ShoppingBag, Menu, MoreHorizontal, Eye, Truck, CheckCircle2, Navigation, MapPin, CheckCircle, Info, SunMoon, Mic, MicOff, ClipboardCheck, Layers, Activity, Fingerprint, DollarSign, Folder, PieChart, Users, Filter, ArrowUpDown } from 'lucide-react';
+import { Bell, RefreshCw, Settings, LogOut, Plus, Globe, Trash2, Edit2, Save, Phone, Clock, Calendar, FileText, X, Camera, Home, ShoppingCart, ShoppingBag, Menu, MoreHorizontal, Eye, Truck, CheckCircle2, Navigation, MapPin, CheckCircle, Info, SunMoon, Mic, MicOff, ClipboardCheck, Layers, Activity, Fingerprint, DollarSign, Folder, PieChart, Users, Filter, ArrowUpDown } from 'lucide-react';
 import { 
   getDepartments, getTasksData, saveReport, getReports, getMissions, getGlobalSettings, saveEmployee,
   getSalesOrders, getOrders, getSupervisorTasks,
@@ -10,12 +11,13 @@ import {
   addLog,
   getRepVisits,
   createNotification,
-  getScoringConfig
+  getScoringConfig, getEmployeeAlerts, acknowledgeEmployeeAlert
 } from '../store';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Circle } from 'react-leaflet';
 import { sendWhatsAppNotification } from '../utils/whatsappService';
 import { triggerWhatsAppRouting } from '../services/whatsappRouter';
 import { hasPermission } from '../utils/permissions';
+import { getAttendanceMotivationalMessage } from '../data/attendanceMotivationalMessages';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import Flatpickr from 'react-flatpickr';
@@ -431,6 +433,34 @@ const DashboardCard = ({ icon: Icon, title, onClick, disabled, iconType = 'solid
 
 const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
   const [employees, setEmployees] = useState([]);
+  const [pendingEmployeeAlerts, setPendingEmployeeAlerts] = useState([]);
+  const [receivingEmployeeAlert, setReceivingEmployeeAlert] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    let mounted = true;
+    const loadAlerts = async () => {
+      try {
+        const rows = await getEmployeeAlerts();
+        if (mounted) setPendingEmployeeAlerts(rows.filter(alert => !alert.archived && alert.status === 'pending' && String(alert.employeeId) === String(user.id)));
+      } catch (error) { console.error('Error loading employee alerts:', error); }
+    };
+    loadAlerts();
+    const interval = setInterval(loadAlerts, 30000);
+    return () => { mounted = false; clearInterval(interval); };
+  }, [user?.id]);
+
+  const receiveEmployeeAlert = async () => {
+    const alert = pendingEmployeeAlerts[0];
+    if (!alert || receivingEmployeeAlert) return;
+    setReceivingEmployeeAlert(true);
+    try {
+      await acknowledgeEmployeeAlert(alert.id, user);
+      setPendingEmployeeAlerts(previous => previous.filter(item => item.id !== alert.id));
+    } catch (error) {
+      Swal.fire('تعذر تسجيل الاستلام', error.message || 'يرجى المحاولة مرة أخرى.', 'error');
+    } finally { setReceivingEmployeeAlert(false); }
+  };
   const ALL_LEAVE_TYPES = [
     'إجازة سنوية',
     'إجازة مرضية',
@@ -453,9 +483,37 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
     sessionStorage.setItem('employeeActiveTab', activeTab);
   }, [activeTab]);
 
+  useEffect(() => {
+    if (!user || getLocalDateStr(new Date()) !== '2026-08-25') return;
+    const isManagementUser = user.id === 'admin' || user.role === 'admin' || user.level === 'admin' || user.level === 'إدارة';
+    if (isManagementUser) return;
+
+    const employeeIdentity = String(user.employeeId || user.id || user.name || 'employee');
+    const acknowledgementKey = `phone-safebox-notice-2026-08-25:${employeeIdentity}`;
+    if (localStorage.getItem(acknowledgementKey)) return;
+
+    Swal.fire({
+      icon: 'info',
+      iconColor: '#0f8b8d',
+      title: 'صباح الخير 🌿',
+      html: `<div dir="rtl" style="text-align:right;line-height:2;color:#475569;font-size:15px">
+        <p style="margin:0 0 12px">حرصًا على بيئة عمل آمنة ومنظمة، نرجو من جميع الزملاء وضع الهاتف في <strong style="color:#0f766e">صندوق الأمانات المخصص</strong> عند بدء الدوام.</p>
+        <p style="margin:0 0 12px">نثق بالتزامكم وتعاونكم، ونود التذكير بأن عدم الالتزام بهذا الإجراء قد يعرّض الموظف لمخالفة وفقًا للنظام الداخلي.</p>
+        <p style="margin:0;color:#0f766e;font-weight:800">شكرًا لتفهمكم وحرصكم الدائم على الالتزام.</p>
+      </div>`,
+      confirmButtonText: 'تم الاطلاع، شكرًا',
+      confirmButtonColor: '#0f8b8d',
+      allowOutsideClick: false,
+      allowEscapeKey: false
+    }).then(result => {
+      if (result.isConfirmed) localStorage.setItem(acknowledgementKey, new Date().toISOString());
+    });
+  }, [user]);
+
   const [pendingTasksCount, setPendingTasksCount] = useState(0);
   const [pendingSalesOrdersCount, setPendingSalesOrdersCount] = useState(0);
   const [pendingProductionCount, setPendingProductionCount] = useState(0);
+  const [pendingPackagingCount, setPendingPackagingCount] = useState(0);
   const [pendingPreparationCount, setPendingPreparationCount] = useState(0);
   const [pendingMissionsCount, setPendingMissionsCount] = useState(0);
   const [pendingDeliveryMissionsCount, setPendingDeliveryMissionsCount] = useState(0);
@@ -528,8 +586,23 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         // 4. Production
         if (prodIdx !== -1) {
           const productionOrders = results[prodIdx] || [];
-          const pendingProd = productionOrders.filter(o => o.status !== 'منتهي' && o.status !== 'منتهية' && o.status !== 'ملغي' && o.status !== 'ملغية' && o.status !== 'ملغاة').length;
-          setPendingProductionCount(pendingProd);
+          const getStageAmounts = (item, orderStatus) => {
+            const total = Math.max(0, Number(item.quantity || 0));
+            if (item.stageQuantities) {
+              const finished = Math.max(0, Number(item.stageQuantities.finished || 0));
+              const packaging = Math.max(0, Number(item.stageQuantities.packaging || 0));
+              const pendingPackaging = Math.max(0, Number(item.stageQuantities.pendingPackaging || 0));
+              return { sewing: Math.max(0, total - finished - packaging - pendingPackaging), pendingPackaging, packaging };
+            }
+            const status = String(item.status || orderStatus || '');
+            if (status === 'مرحلة التغليف') return { sewing: 0, pendingPackaging: 0, packaging: total };
+            if (status === 'بانتظار استلام التغليف' || status === 'تم التحويل إلى قسم التغليف') return { sewing: 0, pendingPackaging: total, packaging: 0 };
+            if (status === 'منتهي' || status === 'جاهز' || status === 'ملغي') return { sewing: 0, pendingPackaging: 0, packaging: 0 };
+            return { sewing: total, pendingPackaging: 0, packaging: 0 };
+          };
+          const activeOrders = productionOrders.filter(o => !['ملغي', 'ملغية', 'ملغاة'].includes(o.status));
+          setPendingProductionCount(activeOrders.filter(order => (order.items || []).some(item => getStageAmounts(item, order.status).sewing > 0)).length);
+          setPendingPackagingCount(activeOrders.filter(order => (order.items || []).some(item => { const q = getStageAmounts(item, order.status); return q.pendingPackaging > 0 || q.packaging > 0; })).length);
         }
 
         if (prepIdx !== -1) {
@@ -561,9 +634,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       }
     };
 
-    fetchCounts();
-    const interval = setInterval(fetchCounts, 15000);
-    return () => clearInterval(interval);
+    return startVisiblePolling(fetchCounts, 120000);
   }, [user, activeTab]);
 
   const [gpsSettings, setGpsSettings] = useState(null);
@@ -811,12 +882,21 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         setIsFlash(true);
         setTimeout(() => setIsFlash(false), 1000);
 
+        const motivationalMessage = getAttendanceMotivationalMessage(actionType, user.employeeId || user.id);
         Swal.fire({
+          toast: true,
+          position: 'top',
           icon: 'success',
-          title: 'تم',
-          text: actionType === 'in' ? 'تم تسجيل الدخول بنجاح' : 'تم تسجيل الخروج بنجاح',
-          timer: 1500,
-          showConfirmButton: false
+          title: actionType === 'in' ? '✓ تم تسجيل الدخول بنجاح' : '✓ تم تسجيل الخروج بنجاح',
+          html: `<div dir="rtl" style="margin-top:6px;color:#475569;font-size:14px;font-weight:700;line-height:1.7">${motivationalMessage}</div>`,
+          timer: 6500,
+          timerProgressBar: true,
+          showConfirmButton: true,
+          confirmButtonText: '× إغلاق',
+          confirmButtonColor: '#0f766e',
+          showCloseButton: true,
+          allowEscapeKey: true,
+          customClass: { popup: 'attendance-motivation-flash' }
         });
       } catch (error) {
         console.error(error);
@@ -1122,7 +1202,13 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
     fetchData();
   }, [user.id, user.name]);
 
-  const canViewMissions = Boolean(user.hasDeliveryAccess || missions.length > 0);
+  const hasAssignedMissionsPermission = user.permissions?.assigned_missions !== undefined;
+  const canViewMissions = hasAssignedMissionsPermission
+    ? hasPermission(user, 'assigned_missions', 'view')
+    : Boolean(user.hasDeliveryAccess || missions.length > 0);
+  const canUpdateMissions = hasAssignedMissionsPermission
+    ? hasPermission(user, 'assigned_missions', 'edit')
+    : canViewMissions;
 
   useEffect(() => {
     if (activeTab === 'missions' && !canViewMissions) {
@@ -1512,6 +1598,10 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
     setter(now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
   };
   const handleUpdateMissionStatus = async (missionId, status) => {
+    if (!canUpdateMissions) {
+      MySwal.fire('غير مسموح', 'لا تملك صلاحية تعديل حالة المهمة.', 'warning');
+      return;
+    }
     await updateMissionStatus(missionId, status, '');
     const mission = missions.find(m => m.id === missionId);
 
@@ -1535,6 +1625,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
   };
 
   const myReports = allReports.filter(r => String(r.userId || '').trim() === String(user.id || '').trim()).reverse();
+  const todayEvaluatedReport = myReports.find(r => r.date === getLocalDateStr(new Date()) && r.supervisorRating);
   const filteredHistory = myReports.filter(r => {
     const matchFrom = dateFrom ? r.date >= dateFrom : true;
     const matchTo = dateTo ? r.date <= dateTo : true;
@@ -1885,10 +1976,13 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
             pendingTasksCount={pendingTasksCount}
             pendingSalesOrdersCount={pendingSalesOrdersCount}
             pendingProductionCount={pendingProductionCount}
+            pendingPackagingCount={pendingPackagingCount}
             pendingPreparationCount={pendingPreparationCount}
             pendingMissionsCount={pendingMissionsCount}
             pendingDeliveryMissionsCount={pendingDeliveryMissionsCount}
             pendingStockAuditsCount={pendingStockAuditsCount}
+            todayEvaluatedReport={todayEvaluatedReport}
+            handleViewReportDetails={handleViewReportDetails}
           />
         );
 
@@ -1941,6 +2035,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
             missions={missions}
             globalSettings={globalSettings}
             handleUpdateMissionStatus={handleUpdateMissionStatus}
+            canUpdateMissions={canUpdateMissions}
           />
         );
 
@@ -1992,7 +2087,8 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       case 'quotes': return <AdminQuotes user={user} />;
       case 'pricelists': return <AdminPriceLists user={user} />;
       case 'sales': return <AdminSales user={user} />;
-      case 'production': return <AdminProduction user={user} notificationTarget={notificationTarget} />;
+      case 'production': return <AdminProduction user={user} notificationTarget={notificationTarget} initialSection="sewing" />;
+      case 'production-packaging': return <AdminProduction user={user} notificationTarget={notificationTarget} initialSection="packaging" />;
       case 'preparation': return <AdminPreparation user={user} />;
       case 'supervisor-tasks': return <AdminSupervisorTasks user={user} />;
       case 'supervisor-reports': return <AdminSupervisorReports user={user} />;
@@ -2011,6 +2107,17 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
 
   return (
     <div className="w-full h-full" style={{ maxWidth: '100%' }}>
+
+      {pendingEmployeeAlerts[0] && <div dir="rtl" style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(15,23,42,.72)', backdropFilter: 'blur(5px)', display: 'grid', placeItems: 'center', padding: 'max(8px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom))' }}>
+        <div style={{ width: 'min(540px,96vw)', maxHeight: 'calc(100dvh - 16px)', background: '#fff', borderRadius: 18, boxShadow: '0 28px 70px rgba(0,0,0,.3)', overflow: 'hidden', border: '1px solid #fed7aa', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: '0 0 auto', background: 'linear-gradient(135deg,#c2410c,#f97316)', color: '#fff', padding: '14px 18px', textAlign: 'center' }}><Bell size={28} style={{ margin: '0 auto 4px' }}/><h2 style={{ margin: 0, fontSize: 20 }}>تنبيه إداري مهم</h2><p style={{ margin: '4px 0 0', opacity: .9, fontSize: 12 }}>{pendingEmployeeAlerts.length > 1 ? `لديك ${pendingEmployeeAlerts.length} تنبيهات بانتظار الاستلام` : 'يرجى قراءة الملاحظة وتأكيد استلامها'}</p></div>
+          <div style={{ minHeight: 0, flex: '1 1 auto', overflowY: 'auto', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch', padding: '14px 16px', touchAction: 'pan-y' }}>
+            <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 12, padding: 15, color: '#431407', fontSize: 16, lineHeight: 1.9, fontWeight: 700, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{pendingEmployeeAlerts[0].message}</div>
+            <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', gap: 8, color: '#64748b', fontSize: 11, flexWrap: 'wrap' }}><span>المصدر: {pendingEmployeeAlerts[0].source}</span><span>تاريخ الإرسال: {new Date(pendingEmployeeAlerts[0].sentAt).toLocaleDateString('en-GB')}</span></div>
+          </div>
+          <div style={{ flex: '0 0 auto', padding: '10px 16px max(10px, env(safe-area-inset-bottom))', borderTop: '1px solid #e2e8f0', background: '#fff', boxShadow: '0 -8px 20px rgba(15,23,42,.06)' }}><button disabled={receivingEmployeeAlert} onClick={receiveEmployeeAlert} style={{ width: '100%', minHeight: 48, border: 0, borderRadius: 12, background: '#0f8b8d', color: '#fff', fontSize: 16, fontWeight: 900, cursor: receivingEmployeeAlert ? 'wait' : 'pointer' }}>{receivingEmployeeAlert ? 'جاري تسجيل الاستلام...' : 'استلام الملاحظة'}</button><p style={{ margin: '6px 0 0', textAlign: 'center', color: '#94a3b8', fontSize: 10 }}>مرّر داخل الرسالة لقراءتها كاملة، ثم أكد الاستلام.</p></div>
+        </div>
+      </div>}
 
       {/* Mobile Bottom Nav via CSS classes */}
       <div className="modern-bottom-nav no-print lg:hidden overflow-x-auto hide-scrollbar" style={{ justifyContent: 'center', gap: '1rem', paddingLeft: '1rem', paddingRight: '1rem' }}>

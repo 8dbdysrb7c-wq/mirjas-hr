@@ -1,5 +1,7 @@
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, User, Check } from 'lucide-react';
+import { AlertTriangle, Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, User, Bell, Check } from 'lucide-react';
+import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
@@ -12,9 +14,10 @@ const getLocalDateStr = (d) => {
   return new Date(d.getTime() - offset * 60000).toISOString().split('T')[0];
 };
 
-const HRViolations = ({ user }) => {
+const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
   const [violations, setViolations] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('pending');
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -49,16 +52,38 @@ const HRViolations = ({ user }) => {
     return sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-primary" /> : <ArrowDown size={14} className="text-primary" />;
   };
 
-  const fetchData = async () => {
-    setLoading(true);
-    await syncEvaluatedDailyReportViolations();
+  const refreshVisibleData = async () => {
     const [violationsData, empsData] = await Promise.all([getHRViolations(), getEmployees()]);
     setViolations(violationsData);
     setEmployees(empsData);
-    setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  const fetchData = async ({ syncReports = false } = {}) => {
+    setLoading(true);
+    try {
+      // Show the existing violations immediately. Report synchronization can scan
+      // a large history and must never block the screen from opening.
+      await refreshVisibleData();
+    } catch (error) {
+      console.error('Error loading HR violations:', error);
+      Swal.fire('تعذر التحميل', 'حدث خطأ أثناء تحميل المخالفات. يرجى المحاولة مرة أخرى.', 'error');
+    } finally {
+      setLoading(false);
+    }
+
+    if (syncReports) {
+      syncEvaluatedDailyReportViolations()
+        .then(async created => {
+          if (created.length > 0) {
+            setViolations(await getHRViolations());
+            refreshCounts?.();
+          }
+        })
+        .catch(error => console.error('Error syncing report violations:', error));
+    }
+  };
+
+  useEffect(() => { fetchData({ syncReports: true }); }, []);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -74,6 +99,7 @@ const HRViolations = ({ user }) => {
     Swal.fire('نجاح', 'تم تسجيل المخالفة بنجاح', 'success');
     setShowModal(false);
     fetchData();
+    refreshCounts?.();
   };
 
   const handleDelete = async (id) => {
@@ -81,6 +107,7 @@ const HRViolations = ({ user }) => {
     if (res.isConfirmed) {
       await deleteHRViolation(id);
       fetchData();
+      refreshCounts?.();
     }
   };
 
@@ -93,7 +120,12 @@ const HRViolations = ({ user }) => {
     }, user);
     Swal.fire('تم', status === 'موافق' ? 'تم اعتماد المخالفة والخصم' : 'تم رفض المخالفة', 'success');
     fetchData();
+    refreshCounts?.();
   };
+
+  useEffect(() => {
+    onFiltersChange?.({ dateMode, selectedMonth, selectedDate, startDate, endDate, searchTerm });
+  }, [dateMode, selectedMonth, selectedDate, startDate, endDate, searchTerm, onFiltersChange]);
 
   if (loading) return <div className="text-center p-8">جاري التحميل...</div>;
 
@@ -161,7 +193,7 @@ const HRViolations = ({ user }) => {
     .sort((a, b) => (parseInt(a.id) || 0) - (parseInt(b.id) || 0))
     .map(emp => ({ value: emp.id, label: String(emp.id) }));
 
-  const sortedViolations = [...violations].filter(v => v.status !== 'محذوف').filter(v => {
+  const filteredViolations = [...violations].filter(v => v.status !== 'محذوف').filter(v => {
     if (searchTerm && String(v.employeeId) !== String(searchTerm)) return false;
     if (!v.date) return false;
     const reqDate = new Date(v.date).toISOString().split('T')[0];
@@ -172,7 +204,9 @@ const HRViolations = ({ user }) => {
     if (dateMode === 'range' && (reqDate < startDate || reqDate > endDate)) return false;
     
     return true;
-  }).sort((a, b) => {
+  });
+  const pendingViolationCount = filteredViolations.filter(v => v.status === 'معلق').length;
+  const sortedViolations = filteredViolations.filter(v => (v.status === 'معلق') === (statusFilter === 'pending')).sort((a, b) => {
     if (!sortConfig.key) return 0;
     let valA = a[sortConfig.key];
     let valB = b[sortConfig.key];
@@ -216,7 +250,7 @@ const HRViolations = ({ user }) => {
                 إجمالي الخصومات المعروضة: {totalDeductions.toFixed(2)} د.أ
               </span>
               <span style={{ background: '#f8fafc', color: '#475569', padding: '6px 16px', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 'bold', border: '1px solid #e2e8f0' }}>
-                عدد المخالفات: {sortedViolations.length}
+                عدد المخالفات المعلقة: {pendingViolationCount}
               </span>
             </div>
           </div>
@@ -234,6 +268,16 @@ const HRViolations = ({ user }) => {
           `}
         </style>
         <div className="flex flex-wrap gap-3 items-center">
+          <select
+            aria-label="حالة المخالفات"
+            value={statusFilter}
+            onChange={event => setStatusFilter(event.target.value)}
+            className="input-field"
+            style={{ width: '150px', height: '42px' }}
+          >
+            <option value="pending">معلقة</option>
+            <option value="resolved">غير معلقة</option>
+          </select>
           <HRDateFilter 
             mode={dateMode}
             setMode={setDateMode}
@@ -326,6 +370,7 @@ const HRViolations = ({ user }) => {
                 <td className="text-muted text-sm">{v.notes}</td>
                 <td>
                   <div className="flex gap-2 justify-center">
+                    <button onClick={() => promptEmployeeAlert({ employeeId: v.employeeId, employeeName: v.employeeName, source: 'المخالفات والخصومات', sourceReference: `${v.type || 'مخالفة'} ${v.date || ''}`, suggestedMessage: `تم تسجيل مخالفة (${v.type || 'غير محددة'}) بتاريخ ${v.date || 'غير محدد'}.${v.action ? `\nالإجراء المتخذ: ${v.action}.` : ''}${v.deductionAmount ? `\nقيمة الخصم: ${v.deductionAmount} د.أ.` : ''}${v.notes ? `\nالملاحظات: ${v.notes}` : ''}`, user })} className="icon-btn" style={{ color: '#c2410c', background: '#fff7ed', borderColor: '#fdba74' }} title="إرسال تنبيه للموظف"><Bell size={17}/></button>
                     {v.status === 'معلق' && (
                       <>
                         <button onClick={() => handleApproval(v, 'موافق')} className="icon-btn icon-btn-success" title="اعتماد المخالفة"><Check size={18}/></button>
@@ -339,7 +384,7 @@ const HRViolations = ({ user }) => {
                 </td>
               </tr>
             ))}
-            {violations.filter(v => v.status !== 'محذوف').length === 0 && (
+            {sortedViolations.length === 0 && (
               <tr><td colSpan="9" className="py-10 text-center text-muted">لا توجد مخالفات مسجلة</td></tr>
             )}
           </tbody>
@@ -363,7 +408,7 @@ const HRViolations = ({ user }) => {
                   <label>الموظف</label>
                   <select required value={formData.employeeId} onChange={e=>setFormData({...formData, employeeId: e.target.value})} className="input-field">
                     <option value="">-- اختر الموظف --</option>
-                    {employees.filter(emp => emp.isActive !== false && emp.status !== 'مستقيل').map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+                    {employees.filter(isActiveEmployee).map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
                   </select>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>

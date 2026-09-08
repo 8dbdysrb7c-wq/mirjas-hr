@@ -1,3 +1,4 @@
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, Clock, XCircle, FileText, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Undo2, Trash2, Eye, ChevronDown, ChevronUp, User } from 'lucide-react';
 import Select from '../../components/SearchSelect';
@@ -923,7 +924,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
                       });
                     }} className="input-field">
                       <option value="">-- اختر الموظف --</option>
-                      {employees.filter(emp => emp.isActive !== false && emp.status !== 'مستقيل').map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+                      {employees.filter(isActiveEmployee).map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
                     </select>
                   </div>
                   <div className="input-group">

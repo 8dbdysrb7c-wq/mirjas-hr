@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import SewingMachineIcon from '../../components/SewingMachineIcon';
 import html2pdf from 'html2pdf.js';
-import { getPreparationOrders, savePreparationOrder, deletePreparationOrder, updateOrderStatus, getCustomers, saveCustomer, getGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getSalesOrders, saveSalesOrder } from '../../store';
+import { getPreparationOrders, savePreparationOrder, deletePreparationOrder, updateOrderStatus, getCustomers, saveCustomer, getGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getSalesOrders, saveSalesOrder, revertAuditVouchers, revertReceiptVouchers, deleteDraftVouchers } from '../../store';
 import { advancedSearch, useDebounce } from '../../utils/searchEngine';
 import { hasPermission } from '../../utils/permissions';
 import Swal from 'sweetalert2';
@@ -826,8 +826,10 @@ const AdminPreparation = ({ user, notificationTarget }) => {
 
 
 
+    const allItemsFinished = (formData.items || []).length > 0 &&
+      formData.items.every(item => item.status === 'منتهي');
+
     if (formData.status === 'منتهي') {
-      const allItemsFinished = (formData.items || []).every(item => item.status === 'منتهي');
       if (!allItemsFinished) {
         Swal.fire('خطأ', 'لا يمكنك جعل حالة الطلب "منتهي" إلا عندما تكون جميع بنود الأصناف منتهية.', 'error');
         return;
@@ -838,6 +840,8 @@ const AdminPreparation = ({ user, notificationTarget }) => {
     const firstItem = formData.items[0];
     const dataToSave = {
       ...formData,
+      // Keep the card status in sync with its rows when items are edited in bulk.
+      status: allItemsFinished ? 'منتهي' : formData.status,
       productName: firstItem.productName,
       quantity: firstItem.quantity,
       createdBy: formData.createdBy || user?.name || 'مدير',
@@ -917,6 +921,10 @@ const AdminPreparation = ({ user, notificationTarget }) => {
   };
 
   const handleDelete = async (id) => {
+    if (!isAdmin(user)) return;
+    const orderToDelete = orders.find(o => o.id === id);
+    if (!orderToDelete) return;
+    const hasStockEffects = Boolean(orderToDelete.stockDeducted || orderToDelete.stockReceived);
     const result = await MySwal.fire({
       customClass: {
         container: 'premium-modal-container',
@@ -927,8 +935,8 @@ const AdminPreparation = ({ user, notificationTarget }) => {
         title: 'premium-modal-title'
       },
       buttonsStyling: false,
-      title: 'هل أنت متأكد؟',
-      text: "لا يمكن التراجع عن هذا الإجراء!",
+      title: 'حذف آمن لكرت التحضير؟',
+      html: `<div style="direction:rtl;text-align:right">سيتم حذف الكرت <b>${orderToDelete.orderNumber || ''}</b>${hasStockEffects ? ' وعكس سندات صرف المواد أو استلام المنتج المرتبطة به' : ''}، ثم فك ارتباطه بطلبية المبيع وإعادة أصنافه إلى «قيد التجهيز».</div>`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'نعم، احذف',
@@ -936,7 +944,33 @@ const AdminPreparation = ({ user, notificationTarget }) => {
     });
 
     if (result.isConfirmed) {
-      const orderToDelete = orders.find(o => o.id === id);
+      const deductionReverted = await revertAuditVouchers(orderToDelete.orderNumber);
+      const receiptReverted = await revertReceiptVouchers(orderToDelete.orderNumber);
+      if (!deductionReverted || !receiptReverted) {
+        Swal.fire('تعذر الحذف الآمن', 'لم يتمكن النظام من عكس جميع حركات المخزون، لذلك لم يُحذف الكرت.', 'error');
+        return;
+      }
+      await deleteDraftVouchers(orderToDelete.orderNumber);
+      const salesOrders = await getSalesOrders();
+      const linkedSalesOrder = salesOrders.find(salesOrder =>
+        (orderToDelete.salesOrderId && salesOrder.id === orderToDelete.salesOrderId)
+        || (orderToDelete.salesOrderNumber && salesOrder.orderNumber === orderToDelete.salesOrderNumber)
+      );
+      if (linkedSalesOrder) {
+        const normalize = value => String(value || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('ar');
+        const cardItems = orderToDelete.items || [];
+        const updatedItems = (linkedSalesOrder.items || []).map(salesItem => {
+          const matchesCard = cardItems.some(cardItem =>
+            (cardItem.itemNumber && salesItem.itemNumber && cardItem.itemNumber === salesItem.itemNumber)
+            || normalize(cardItem.productName || cardItem.name) === normalize(salesItem.productName || salesItem.name)
+          );
+          return matchesCard ? { ...salesItem, itemStatus: 'قيد التجهيز', receivedReservedQuantity: 0 } : salesItem;
+        });
+        const updatedSalesOrder = { ...linkedSalesOrder, items: updatedItems };
+        if (['جاهز للتسليم للتوصيل', 'جاهز للتوصيل'].includes(updatedSalesOrder.status)) updatedSalesOrder.status = 'جديد';
+        if (updatedSalesOrder.preparationOrderNumber === orderToDelete.orderNumber) delete updatedSalesOrder.preparationOrderNumber;
+        await saveSalesOrder(updatedSalesOrder);
+      }
       await deletePreparationOrder(id);
       await addLog({
         userName: user.name,
@@ -2064,8 +2098,7 @@ const AdminPreparation = ({ user, notificationTarget }) => {
                       {/* Button 3: حذف */}
                       {isAdmin(user) && (
                         <button 
-                          onClick={() => order.status === 'لم يتم التنفيذ' && handleDelete(order.id)}
-                          disabled={order.status !== 'لم يتم التنفيذ'}
+                          onClick={() => handleDelete(order.id)}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -2073,17 +2106,16 @@ const AdminPreparation = ({ user, notificationTarget }) => {
                             gap: '6px',
                             padding: '8px 16px',
                             borderRadius: '12px',
-                            border: order.status === 'لم يتم التنفيذ' ? '1px solid #fca5a5' : '1px solid #e2e8f0',
-                            backgroundColor: order.status === 'لم يتم التنفيذ' ? '#fef2f2' : '#f1f5f9',
-                            cursor: order.status === 'لم يتم التنفيذ' ? 'pointer' : 'not-allowed',
+                            border: '1px solid #fca5a5',
+                            backgroundColor: '#fef2f2',
+                            cursor: 'pointer',
                             fontSize: '0.85rem',
                             fontWeight: 'bold',
-                            color: order.status === 'لم يتم التنفيذ' ? '#ef4444' : '#94a3b8',
-                            opacity: order.status === 'لم يتم التنفيذ' ? 1 : 0.5,
+                            color: '#ef4444',
                             flex: 1
                           }}
                         >
-                          <Trash2 size={15} className={order.status === 'لم يتم التنفيذ' ? 'text-red-500' : 'text-slate-400'} />
+                          <Trash2 size={15} className="text-red-500" />
                           <span>حذف</span>
                         </button>
                       )}
@@ -2175,10 +2207,9 @@ const AdminPreparation = ({ user, notificationTarget }) => {
                             )}
                             {isAdmin(user) && (
                               <button 
-                                className={`btn-premium-delete ${order.status !== 'لم يتم التنفيذ' ? 'opacity-50 cursor-not-allowed' : ''}`} 
-                                title={order.status !== 'لم يتم التنفيذ' ? 'لا يمكن حذف الطلبية بعد استلامها والبدء بها' : 'حذف'} 
-                                onClick={() => order.status === 'لم يتم التنفيذ' && handleDelete(order.id)}
-                                disabled={order.status !== 'لم يتم التنفيذ'}
+                                className="btn-premium-delete"
+                                title="حذف آمن للكرت وعكس آثاره"
+                                onClick={() => handleDelete(order.id)}
                               >
                                 <Trash2 size={16} />
                               </button>

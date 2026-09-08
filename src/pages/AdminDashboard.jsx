@@ -198,6 +198,7 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
         case 'live': return hasPermission(user, 'live');
         case 'employees': return hasPermission(user, 'employees');
         case 'production-orders': return hasPermission(user, 'production');
+        case 'production-packaging': return hasPermission(user, 'production');
         case 'production-tasks': return hasPermission(user, 'production_tasks');
         case 'preparation-orders': return hasPermission(user, 'preparation');
         case 'quotes': return hasPermission(user, 'quotes');
@@ -258,6 +259,7 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
       case 'live': return <AdminLive user={user} />;
       case 'employees': return <AdminEmployees user={user} />;
       case 'production-orders': return <AdminProduction user={user} />;
+      case 'production-packaging': return <AdminProduction user={user} initialSection="packaging" />;
       case 'production-tasks': return <AdminTasks user={user} />;
       case 'preparation-orders': return <AdminPreparation user={user} />;
       case 'quotes': return <AdminQuotes user={user} />;

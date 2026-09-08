@@ -57,6 +57,13 @@ export const EmployeesReportTab = ({
       if (numA > numB) return empSortDir === 'asc' ? 1 : -1;
       return 0;
     }
+
+    if (empSortKey === 'phoneSafe') {
+      const rank = value => value === true ? 2 : value === false ? 1 : 0;
+      const numA = rank(aVal);
+      const numB = rank(bVal);
+      return empSortDir === 'asc' ? numA - numB : numB - numA;
+    }
     
     // Overall average handling
     if (empSortKey === 'overallAverage') {
@@ -91,37 +98,40 @@ export const EmployeesReportTab = ({
       <thead>
         <tr>
           {!selectedEmployee && (
-            <th onClick={() => handleEmpSort('userId')} className="cursor-pointer hover:text-primary transition-colors p-4 text-right">
+            <th onClick={() => handleEmpSort('userId')} className="cursor-pointer hover:text-primary transition-colors p-2 text-right whitespace-nowrap" style={{ width: 105 }}>
               <div className="flex items-center justify-start gap-1">الرقم الوظيفي {getEmpSortIcon('userId')}</div>
             </th>
           )}
           {!selectedEmployee && (
-            <th onClick={() => handleEmpSort('userName')} className="cursor-pointer hover:text-primary transition-colors p-4 text-right">
+            <th onClick={() => handleEmpSort('userName')} className="cursor-pointer hover:text-primary transition-colors p-2 text-right whitespace-nowrap" style={{ minWidth: 190 }}>
               <div className="flex items-center justify-start gap-1">اسم الموظف {getEmpSortIcon('userName')}</div>
             </th>
           )}
-          <th onClick={() => handleEmpSort('date')} className="cursor-pointer hover:text-primary transition-colors p-4">
+          <th onClick={() => handleEmpSort('date')} className="cursor-pointer hover:text-primary transition-colors p-2 whitespace-nowrap" style={{ width: 100 }}>
             <div className="flex items-center justify-center gap-1">التاريخ {getEmpSortIcon('date')}</div>
           </th>
-          <th onClick={() => handleEmpSort('timeIn')} className="cursor-pointer hover:text-primary transition-colors p-4">
+          <th onClick={() => handleEmpSort('timeIn')} className="cursor-pointer hover:text-primary transition-colors p-2 whitespace-nowrap" style={{ width: 88 }}>
             <div className="flex items-center justify-center gap-1">الدخول {getEmpSortIcon('timeIn')}</div>
           </th>
-          <th onClick={() => handleEmpSort('timeOut')} className="cursor-pointer hover:text-primary transition-colors p-4">
+          <th onClick={() => handleEmpSort('timeOut')} className="cursor-pointer hover:text-primary transition-colors p-2 whitespace-nowrap" style={{ width: 88 }}>
             <div className="flex items-center justify-center gap-1">الخروج {getEmpSortIcon('timeOut')}</div>
           </th>
-          <th onClick={() => handleEmpSort('phoneUsages')} className="cursor-pointer hover:text-primary transition-colors p-4">
-            <div className="flex items-center justify-center gap-1">استخدام الهاتف {getEmpSortIcon('phoneUsages')}</div>
+          <th onClick={() => handleEmpSort('phoneUsages')} className="cursor-pointer hover:text-primary transition-colors p-2 whitespace-nowrap" style={{ width: 92 }}>
+            <div className="flex items-center justify-center gap-1">مرات الاستخدام {getEmpSortIcon('phoneUsages')}</div>
           </th>
-          <th onClick={() => handleEmpSort('tasksCount')} className="cursor-pointer hover:text-primary transition-colors p-4">
+          <th onClick={() => handleEmpSort('phoneSafe')} className="cursor-pointer hover:text-primary transition-colors p-2 whitespace-nowrap" style={{ width: 105 }}>
+            <div className="flex items-center justify-center gap-1">الهاتف بالأمانات {getEmpSortIcon('phoneSafe')}</div>
+          </th>
+          <th onClick={() => handleEmpSort('tasksCount')} className="cursor-pointer hover:text-primary transition-colors p-2 whitespace-nowrap" style={{ width: 78 }}>
             <div className="flex items-center justify-center gap-1">المهام {getEmpSortIcon('tasksCount')}</div>
           </th>
-          <th onClick={() => handleEmpSort('finalScore')} className="cursor-pointer hover:text-primary transition-colors p-4">
+          <th onClick={() => handleEmpSort('finalScore')} className="cursor-pointer hover:text-primary transition-colors p-2 whitespace-nowrap" style={{ width: 90 }}>
             <div className="flex items-center justify-center gap-1">التقييم اليومي {getEmpSortIcon('finalScore')}</div>
           </th>
-          <th onClick={() => handleEmpSort('overallAverage')} className="cursor-pointer hover:text-primary transition-colors p-4">
-            <div className="flex items-center justify-center gap-1">متوسط التقييم الإجمالي {getEmpSortIcon('overallAverage')}</div>
+          <th onClick={() => handleEmpSort('overallAverage')} className="cursor-pointer hover:text-primary transition-colors p-2 whitespace-nowrap" style={{ width: 105 }}>
+            <div className="flex items-center justify-center gap-1">المتوسط الإجمالي {getEmpSortIcon('overallAverage')}</div>
           </th>
-          <th className="no-print p-4" style={{ textAlign: 'center' }}>إجراءات</th>
+          <th className="no-print p-2 whitespace-nowrap" style={{ textAlign: 'center', width: 112 }}>إجراءات</th>
         </tr>
       </thead>
       <tbody>
@@ -177,7 +187,7 @@ export const EmployeesReportTab = ({
             const att = hrAttMap.get(`${normEmpId}_${repDate}`) || hrAttMap.get(`${normEmpName}_${repDate}`);
 
             return (
-            <tr key={report.id}>
+            <tr key={report.id} style={{ fontSize: 12 }}>
             {!selectedEmployee && (
               <td className="text-right font-mono text-slate-500 font-bold" dir="ltr">
                 {resolvedEmpId}
@@ -193,7 +203,12 @@ export const EmployeesReportTab = ({
               const tOut = String(att?.timeOut || '').trim() || String(report.timeOut || '').trim();
               return formatTimeArabic(tOut);
             })()}</td>
-            <td>{report.phoneUsages || 0}</td>
+            <td style={{ textAlign: 'center' }}><span className="report-inline-badge">{report.phoneUsages || 0}</span></td>
+            <td style={{ textAlign: 'center' }}>
+              <span style={{ display: 'inline-flex', justifyContent: 'center', minWidth: 58, padding: '4px 8px', borderRadius: 999, fontWeight: 900, fontSize: 11, background: report.phoneSafe === true ? '#dcfce7' : report.phoneSafe === false ? '#fee2e2' : '#f1f5f9', color: report.phoneSafe === true ? '#15803d' : report.phoneSafe === false ? '#b91c1c' : '#64748b' }}>
+                {report.phoneSafe === true ? 'نعم' : report.phoneSafe === false ? 'لا' : 'غير محدد'}
+              </span>
+            </td>
             <td>
               <span className="report-inline-badge">{report.tasks?.length || 0} مهام</span>
             </td>
@@ -214,7 +229,7 @@ export const EmployeesReportTab = ({
             </td>
 
             <td className="no-print">
-              <div className="flex gap-2 justify-center">
+              <div className="flex gap-1 justify-center">
                 <button className="btn-premium-view" title="عرض التفاصيل" onClick={() => handleViewReportDetails(report)}>
                   <Eye size={16} />
                 </button>

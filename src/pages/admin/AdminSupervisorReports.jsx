@@ -1,3 +1,4 @@
+import { isActiveEmployee } from '../../utils/employeeStatus';
 /* eslint-disable */
 import React, { useState, useEffect } from 'react';
 import { getEmployees, getSupervisorReports, saveSupervisorReport, deleteSupervisorReport, addLog, isAdmin, getSalesOrders, saveSalesOrder, getGlobalSettings, getMissions, saveMission, getOrders, saveOrder, getTasksData, getProductionLogs, saveProductionLog, deleteProductionLog, getReports, getReportsByDateRange, saveReport, getAttendanceLogs, createNotification, getPreparationOrders } from '../../store';
@@ -300,7 +301,7 @@ const AdminSupervisorReports = ({ user }) => {
         }
       }
 
-      setEmployees(filteredEmps);
+      setEmployees(filteredEmps.filter(isActiveEmployee));
       setReports(reps);
       setAllEmployeeReports(empReports);
       setAttendanceLogs(attLogs || []);
@@ -553,7 +554,10 @@ const AdminSupervisorReports = ({ user }) => {
           const empLog = todayLogs.find(l => String(l.employeeId) === String(emp.id));
           const evalData = employeeEvaluations[emp.id];
 
-          if (!empDailyReport && empLog && empLog.status !== 'غياب') {
+          const attendanceStatus = String(empLog?.status || '');
+          const isAttendanceAbsence = ['غياب', 'غائب', 'إجازة', 'مغادرة'].some(status => attendanceStatus.includes(status));
+          const isSupervisorMarkedAbsent = evalData?.rating === 'غائب';
+          if (!empDailyReport && empLog && !isAttendanceAbsence && !isSupervisorMarkedAbsent) {
             if (evalData && evalData.rating === 'لم يقدم تقرير') {
               // Bypass block if supervisor explicitly marked as "Did not submit report"
             } else {

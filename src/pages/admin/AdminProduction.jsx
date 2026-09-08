@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import SewingMachineIcon from '../../components/SewingMachineIcon';
 import html2pdf from 'html2pdf.js';
-import { getOrders, saveOrder, deleteOrder, updateOrderStatus, getCustomers, saveCustomer, getGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getSalesOrders, saveSalesOrder } from '../../store';
+import { getOrders, saveOrder, deleteOrder, updateOrderStatus, getCustomers, saveCustomer, getGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getSalesOrders, saveSalesOrder, revertAuditVouchers, revertReceiptVouchers, deleteDraftVouchers } from '../../store';
 import { advancedSearch, useDebounce } from '../../utils/searchEngine';
 import { hasPermission } from '../../utils/permissions';
 import Swal from 'sweetalert2';
@@ -17,8 +17,150 @@ import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/light.css';
 import Select from '../../components/SearchSelect';
 import MultiColorSelectionModal from '../../components/MultiColorSelectionModal';
+import ProductionLineBoard from './ProductionLineBoard';
 
 const MySwal = withReactContent(Swal);
+
+const canonicalizeProductionStatus = value => {
+  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+  if (normalized === 'تم استلام كرت الانتاج' || normalized === 'تم استلام كرت الإنتاج') return 'تم استلام كرت الإنتاج';
+  if (['مرحلة المستودع', 'مرحلة مستودع قبل الخياطة', 'مستودع قبل الخياطة'].includes(normalized)) return 'مرحلة المستودع';
+  return normalized;
+};
+
+const getSalesItemStatusForProductionStatus = (status) => {
+  status = canonicalizeProductionStatus(status);
+  if (['مرحلة التغليف', 'بانتظار استلام التغليف', 'تحويل جزئي للتغليف', 'تغليف جزئي', 'تم التحويل إلى قسم التغليف'].includes(status)) return 'إنتاج قيد التغليف';
+  if (status === 'منتهي' || status === 'جاهز') return 'جاهز';
+  if (status === 'ملغي') return 'ملغي';
+  if (['تم استلام كرت الإنتاج', 'مرحلة القص', 'مرحلة المستودع', 'مرحلة الخياطة', 'تحت التنفيذ'].includes(status)) {
+    return 'إنتاج قيد الخياطة';
+  }
+  return null;
+};
+
+const FINISHED_PRODUCTION_STATUSES = ['منتهي', 'جاهز'];
+const NON_SEWING_PRODUCTION_STATUSES = ['مرحلة التغليف', 'منتهي', 'جاهز', 'ملغي'];
+
+const getItemStageQuantities = (item = {}, orderStatus = '') => {
+  const total = Math.max(0, Number(item.quantity || 0));
+  if (item.stageQuantities && typeof item.stageQuantities === 'object') {
+    const finished = Math.min(total, Math.max(0, Number(item.stageQuantities.finished || 0)));
+    const packaging = Math.min(total - finished, Math.max(0, Number(item.stageQuantities.packaging || 0)));
+    const pendingPackaging = Math.min(total - finished - packaging, Math.max(0, Number(item.stageQuantities.pendingPackaging || 0)));
+    const sewing = Math.max(0, total - finished - packaging - pendingPackaging);
+    return { sewing, pendingPackaging, packaging, finished, total };
+  }
+  const status = canonicalizeProductionStatus(item.status || orderStatus || 'لم يتم التنفيذ');
+  if (FINISHED_PRODUCTION_STATUSES.includes(status)) return { sewing: 0, pendingPackaging: 0, packaging: 0, finished: total, total };
+  if (status === 'مرحلة التغليف') return { sewing: 0, pendingPackaging: 0, packaging: total, finished: 0, total };
+  if (status === 'بانتظار استلام التغليف' || status === 'تم التحويل إلى قسم التغليف') return { sewing: 0, pendingPackaging: total, packaging: 0, finished: 0, total };
+  return { sewing: total, pendingPackaging: 0, packaging: 0, finished: 0, total };
+};
+
+const deriveItemStatusFromQuantities = quantities => {
+  const { sewing, pendingPackaging, packaging, finished, total } = quantities;
+  if (total > 0 && finished === total) return 'منتهي';
+  if (total > 0 && packaging === total) return 'مرحلة التغليف';
+  if (total > 0 && pendingPackaging === total) return 'بانتظار استلام التغليف';
+  if (sewing > 0 && (pendingPackaging > 0 || packaging > 0 || finished > 0)) return 'تحويل جزئي للتغليف';
+  if (packaging > 0 || finished > 0) return 'تغليف جزئي';
+  if (pendingPackaging > 0) return 'بانتظار استلام التغليف';
+  return 'مرحلة الخياطة';
+};
+
+const getOrderItemsForStage = order => (
+  Array.isArray(order?.items) && order.items.length
+    ? order.items.map(item => ({
+        ...item,
+        status: canonicalizeProductionStatus((!item.status || (item.status === 'لم يتم التنفيذ' && order.status && order.status !== 'لم يتم التنفيذ' && order.status !== 'إنتاج مختلط'))
+          ? order.status
+          : item.status)
+      }))
+    : (order ? [{ status: order.status || 'لم يتم التنفيذ' }] : [])
+);
+
+const deriveProductionOrderStatus = (items = [], fallback = 'لم يتم التنفيذ') => {
+  if (items.some(item => item.stageQuantities)) {
+    const quantityStages = new Set();
+    items.filter(item => item.status !== 'ملغي').forEach(item => {
+      const quantities = getItemStageQuantities(item, fallback);
+      if (quantities.sewing > 0) quantityStages.add('sewing');
+      if (quantities.pendingPackaging > 0) quantityStages.add('pendingPackaging');
+      if (quantities.packaging > 0) quantityStages.add('packaging');
+      if (quantities.finished > 0) quantityStages.add('finished');
+    });
+    if (quantityStages.size > 1) return 'إنتاج مختلط';
+    if (quantityStages.has('finished')) return 'منتهي';
+    if (quantityStages.has('packaging')) return 'مرحلة التغليف';
+    if (quantityStages.has('pendingPackaging')) return 'بانتظار استلام التغليف';
+  }
+  const statuses = items.map(item => item.status || fallback).filter(status => status !== 'ملغي');
+  if (!statuses.length) return items.length ? 'ملغي' : fallback;
+  if (statuses.every(status => FINISHED_PRODUCTION_STATUSES.includes(status))) return 'منتهي';
+  const uniqueStatuses = [...new Set(statuses.map(status => FINISHED_PRODUCTION_STATUSES.includes(status) ? 'منتهي' : status))];
+  return uniqueStatuses.length === 1 ? uniqueStatuses[0] : 'إنتاج مختلط';
+};
+
+const getPackagingOrderStatus = order => {
+  const items = getOrderItemsForStage(order).filter(item => canonicalizeProductionStatus(item.status) !== 'ملغي');
+  if (!items.length) return '';
+  const quantities = items.map(item => getItemStageQuantities(item, order.status));
+  const hasReachedPackaging = quantities.some(q => q.pendingPackaging > 0 || q.packaging > 0 || q.finished > 0);
+  if (!hasReachedPackaging) return '';
+  if (quantities.every(q => q.total > 0 && q.finished === q.total)) return 'منتهي';
+  if (quantities.some(q => q.packaging > 0 || q.finished > 0)) return 'قيد التغليف';
+  return 'بانتظار استلام التغليف';
+};
+const orderHasPackagingItems = order => ['بانتظار استلام التغليف', 'قيد التغليف'].includes(getPackagingOrderStatus(order));
+const orderHasSewingItems = order => getOrderItemsForStage(order).some(item => getItemStageQuantities(item, order.status).sewing > 0);
+const isSewingOrderComplete = order => {
+  const items = getOrderItemsForStage(order);
+  return items.length > 0 && items.every(item => getItemStageQuantities(item, order.status).sewing === 0);
+};
+
+const getProductionStageCounts = order => getOrderItemsForStage(order).reduce((counts, item) => {
+  const quantities = getItemStageQuantities(item, order.status);
+  counts.total += 1;
+  if (quantities.sewing > 0) counts.sewing += 1;
+  if (quantities.pendingPackaging > 0 || quantities.packaging > 0) counts.packaging += 1;
+  if (quantities.total > 0 && quantities.finished === quantities.total) counts.finished += 1;
+  return counts;
+}, { sewing: 0, packaging: 0, finished: 0, total: 0 });
+
+const getProductionStatusLabel = status => canonicalizeProductionStatus(status) === 'مرحلة المستودع' ? 'مرحلة مستودع قبل الخياطة' : canonicalizeProductionStatus(status);
+
+const SEWING_ITEM_STATUS_OPTIONS = [
+  'لم يتم التنفيذ',
+  'تم استلام كرت الإنتاج',
+  'مرحلة القص',
+  'مرحلة المستودع',
+  'مرحلة الخياطة',
+  'تم التحويل إلى قسم التغليف',
+  'ملغي'
+];
+
+const getSewingItemSelectValue = (item, orderStatus = '') => {
+  const status = canonicalizeProductionStatus(item?.status || orderStatus || 'لم يتم التنفيذ');
+  if (SEWING_ITEM_STATUS_OPTIONS.includes(status)) return status;
+  const quantities = getItemStageQuantities(item, orderStatus);
+  if (quantities.sewing > 0) return 'مرحلة الخياطة';
+  if (quantities.pendingPackaging > 0 || quantities.packaging > 0 || quantities.finished > 0) return 'تم التحويل إلى قسم التغليف';
+  return 'لم يتم التنفيذ';
+};
+
+const getMobileSewingItemSelectValue = (item, orderStatus = '') => {
+  const status = getSewingItemSelectValue(item, orderStatus);
+  return status === 'تم التحويل إلى قسم التغليف' ? 'مرحلة الخياطة' : status;
+};
+
+const PRODUCTION_STAGE_FLOW = ['لم يتم التنفيذ', 'تم استلام كرت الإنتاج', 'مرحلة القص', 'مرحلة المستودع', 'مرحلة الخياطة', 'مرحلة التغليف', 'منتهي'];
+const getAllowedItemTransitions = status => {
+  const current = canonicalizeProductionStatus(status || 'لم يتم التنفيذ');
+  const currentIndex = PRODUCTION_STAGE_FLOW.indexOf(current);
+  if (currentIndex === -1 || current === 'منتهي') return [current];
+  return [current, PRODUCTION_STAGE_FLOW[currentIndex + 1]].filter(Boolean);
+};
 
 const getLocalDateStr = (d) => {
   if (!d) return '';
@@ -44,12 +186,13 @@ const isExcludedCategory = (cat) => {
   return excluded.includes(normalized);
 };
 
-const AdminProduction = ({ user, notificationTarget }) => {
+const AdminProduction = ({ user, notificationTarget, initialSection = 'sewing' }) => {
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const [showModal, setShowModal] = useState(false);
+  const [showOperationsModal, setShowOperationsModal] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -81,11 +224,18 @@ const AdminProduction = ({ user, notificationTarget }) => {
   const [dateTo, setDateTo] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('معلق');
+  const [productionSection, setProductionSection] = useState(initialSection);
+  const [productionView, setProductionView] = useState('cards');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filterCreatedBy, setFilterCreatedBy] = useState('');
   const [filterOrderNumber, setFilterOrderNumber] = useState('');
   
   const [showMultiColorModal, setShowMultiColorModal] = useState(false);
+
+  useEffect(() => {
+    setProductionSection(initialSection);
+    setSelectedStatus(initialSection === 'packaging' ? '' : 'معلق');
+  }, [initialSection]);
 
   const [formData, setFormData] = useState({
     customerId: '',
@@ -123,6 +273,10 @@ const AdminProduction = ({ user, notificationTarget }) => {
   }, []);
 
   useEffect(() => {
+    if (isMobile) setProductionView('cards');
+  }, [isMobile]);
+
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -135,7 +289,11 @@ const AdminProduction = ({ user, notificationTarget }) => {
         getGlobalSettings(),
         getStock()
       ]);
-      setOrders(ordersData);
+      setOrders(ordersData.map(order => ({
+        ...order,
+        status: canonicalizeProductionStatus(order.status),
+        items: (order.items || []).map(item => ({ ...item, status: canonicalizeProductionStatus(item.status) }))
+      })));
       setCustomers(customersData.filter(c => (c.type || 'عميل') === 'عميل'));
       setGlobalSettings(settings);
       setStockItems(stockData);
@@ -850,6 +1008,7 @@ const AdminProduction = ({ user, notificationTarget }) => {
     const firstItem = formData.items[0];
     const dataToSave = {
       ...formData,
+      status: deriveProductionOrderStatus(formData.items || [], formData.status),
       productName: firstItem.productName,
       quantity: firstItem.quantity,
       createdBy: formData.createdBy || user?.name || 'مدير',
@@ -873,10 +1032,14 @@ const AdminProduction = ({ user, notificationTarget }) => {
                 return name1 === name2 || name1.includes(name2) || name2.includes(name1);
               });
               if (prodItem) {
-                if ((prodItem.status === 'منتهي' || dataToSave.status === 'منتهي') && item.itemStatus !== 'جاهز') {
+                const productionStatus = ['مرحلة التغليف', 'منتهي', 'ملغي'].includes(dataToSave.status)
+                  ? dataToSave.status
+                  : (prodItem.status || dataToSave.status);
+                const targetSalesStatus = getSalesItemStatusForProductionStatus(productionStatus);
+                if (targetSalesStatus && targetSalesStatus !== 'ملغي' && item.itemStatus !== targetSalesStatus) {
                   changed = true;
-                  return { ...item, itemStatus: 'جاهز' };
-                } else if (prodItem.status === 'ملغي' || dataToSave.status === 'ملغي') {
+                  return { ...item, itemStatus: targetSalesStatus };
+                } else if (targetSalesStatus === 'ملغي') {
                   let currentItem = item;
                   if (currentItem.itemStatus !== 'ملغي') {
                     changed = true;
@@ -929,6 +1092,10 @@ const AdminProduction = ({ user, notificationTarget }) => {
   };
 
   const handleDelete = async (id) => {
+    if (!isAdmin(user)) return;
+    const orderToDelete = orders.find(o => o.id === id);
+    if (!orderToDelete) return;
+    const hasStockEffects = Boolean(orderToDelete.stockDeducted || orderToDelete.stockReceived);
     const result = await MySwal.fire({
       customClass: {
         container: 'premium-modal-container',
@@ -939,8 +1106,8 @@ const AdminProduction = ({ user, notificationTarget }) => {
         title: 'premium-modal-title'
       },
       buttonsStyling: false,
-      title: 'هل أنت متأكد؟',
-      text: "لا يمكن التراجع عن هذا الإجراء!",
+      title: 'حذف آمن لكرت الإنتاج؟',
+      html: `<div style="direction:rtl;text-align:right">سيتم حذف الكرت <b>${orderToDelete.orderNumber || ''}</b>${hasStockEffects ? ' وعكس سندات صرف المواد أو استلام المنتج المرتبطة به' : ''}، ثم فك ارتباطه بطلبية المبيع وإعادة أصنافه إلى «قيد التجهيز».</div>`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'نعم، احذف',
@@ -948,7 +1115,32 @@ const AdminProduction = ({ user, notificationTarget }) => {
     });
 
     if (result.isConfirmed) {
-      const orderToDelete = orders.find(o => o.id === id);
+      const deductionReverted = await revertAuditVouchers(orderToDelete.orderNumber);
+      const receiptReverted = await revertReceiptVouchers(orderToDelete.orderNumber);
+      if (!deductionReverted || !receiptReverted) {
+        Swal.fire('تعذر الحذف الآمن', 'لم يتمكن النظام من عكس جميع حركات المخزون، لذلك لم يُحذف الكرت.', 'error');
+        return;
+      }
+      await deleteDraftVouchers(orderToDelete.orderNumber);
+      const linkedSalesOrder = salesOrders.find(salesOrder =>
+        (orderToDelete.salesOrderId && salesOrder.id === orderToDelete.salesOrderId)
+        || (orderToDelete.salesOrderNumber && salesOrder.orderNumber === orderToDelete.salesOrderNumber)
+      );
+      if (linkedSalesOrder) {
+        const normalize = value => String(value || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('ar');
+        const cardItems = orderToDelete.items || [];
+        const updatedItems = (linkedSalesOrder.items || []).map(salesItem => {
+          const matchesCard = cardItems.some(cardItem =>
+            (cardItem.itemNumber && salesItem.itemNumber && cardItem.itemNumber === salesItem.itemNumber)
+            || normalize(cardItem.productName || cardItem.name) === normalize(salesItem.productName || salesItem.name)
+          );
+          return matchesCard ? { ...salesItem, itemStatus: 'قيد التجهيز', receivedReservedQuantity: 0 } : salesItem;
+        });
+        const updatedSalesOrder = { ...linkedSalesOrder, items: updatedItems };
+        if (['جاهز للتسليم للتوصيل', 'جاهز للتوصيل'].includes(updatedSalesOrder.status)) updatedSalesOrder.status = 'جديد';
+        if (updatedSalesOrder.productionOrderNumber === orderToDelete.orderNumber) delete updatedSalesOrder.productionOrderNumber;
+        await saveSalesOrder(updatedSalesOrder);
+      }
       await deleteOrder(id);
       await addLog({
         userName: user.name,
@@ -978,6 +1170,11 @@ const AdminProduction = ({ user, notificationTarget }) => {
   const handleUpdateStatus = async (orderId, newStatus) => {
     const orderToUpdate = orders.find(o => o.id === orderId);
     if (!orderToUpdate) return;
+    if (newStatus === orderToUpdate.status) return;
+    if (newStatus === 'إنتاج مختلط') {
+      MySwal.fire('تنبيه', 'حالة "إنتاج مختلط" تُحتسب تلقائياً عند اختلاف مراحل الأصناف ولا يتم اختيارها يدوياً.', 'info');
+      return;
+    }
     
     if (newStatus === 'منتهي') {
       const allItemsFinished = (orderToUpdate.items || []).every(item => item.status === 'منتهي');
@@ -996,10 +1193,39 @@ const AdminProduction = ({ user, notificationTarget }) => {
         return;
       }
     }
+
+    const activeItemsCount = (orderToUpdate.items || []).filter(item => item.status !== 'ملغي').length;
+    if (activeItemsCount > 0) {
+      const confirmation = await MySwal.fire({
+        title: 'نقل جميع الأصناف؟',
+        html: `سيتم نقل <b>${activeItemsCount}</b> صنفًا في الكرت ${orderToUpdate.orderNumber || ''} إلى <b>${getProductionStatusLabel(newStatus)}</b>.<br><small>لن يُنقل صنف واحد فقط؛ هذا إجراء جماعي.</small>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، نقل جميع الأصناف',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#0f766e'
+      });
+      if (!confirmation.isConfirmed) {
+        await fetchData();
+        return;
+      }
+    }
     
+    const bulkUpdatedItems = (orderToUpdate.items || []).map(item => (
+      item.status === 'ملغي' ? item : {
+        ...item,
+        status: newStatus,
+        movementHistory: item.status === newStatus ? (item.movementHistory || []) : [
+          ...(Array.isArray(item.movementHistory) ? item.movementHistory : []),
+          { from: item.status || orderToUpdate.status || '', to: newStatus, quantity: Number(item.quantity || 0), changedAt: new Date().toISOString(), changedBy: user?.name || 'مدير' }
+        ]
+      }
+    ));
+
     await saveOrder({ 
       ...orderToUpdate, 
       status: newStatus,
+      items: bulkUpdatedItems,
       lastActionBy: user?.name || 'مدير',
       statusUpdateDate: getLocalDateStr(new Date())
     });
@@ -1019,12 +1245,13 @@ const AdminProduction = ({ user, notificationTarget }) => {
               return name1 === name2 || name1.includes(name2) || name2.includes(name1);
             });
             if (prodItem) {
-              if (newStatus === 'منتهي') {
-                if (item.itemStatus !== 'جاهز') {
+              const targetSalesStatus = getSalesItemStatusForProductionStatus(newStatus);
+              if (targetSalesStatus && targetSalesStatus !== 'ملغي') {
+                if (item.itemStatus !== targetSalesStatus) {
                   changed = true;
-                  return { ...item, itemStatus: 'جاهز' };
+                  return { ...item, itemStatus: targetSalesStatus };
                 }
-              } else if (newStatus === 'ملغي') {
+              } else if (targetSalesStatus === 'ملغي') {
                 let currentItem = item;
                 if (currentItem.itemStatus !== 'ملغي') {
                   changed = true;
@@ -1202,9 +1429,30 @@ const AdminProduction = ({ user, notificationTarget }) => {
     const matchDateFrom = dateFrom ? o.orderDate >= dateFrom : true;
     const matchDateTo = dateTo ? o.orderDate <= dateTo : true;
     const matchCust = selectedCustomer ? o.customerId === selectedCustomer : true;
-    const matchStatus = selectedStatus === 'معلق' ? (o.status !== 'منتهي' && o.status !== 'ملغي') : (selectedStatus ? o.status === selectedStatus : true);
+    const matchStatus = productionSection === 'packaging'
+      ? (selectedStatus === 'بانتظار استلام التغليف'
+          ? getPackagingOrderStatus(o) === 'بانتظار استلام التغليف'
+          : selectedStatus === 'مرحلة التغليف'
+            ? getPackagingOrderStatus(o) === 'قيد التغليف'
+            : true)
+      : selectedStatus === 'معلق' ? (o.status !== 'منتهي' && o.status !== 'ملغي') : (selectedStatus ? o.status === selectedStatus : true);
+    const matchSection = productionSection === 'packaging'
+      ? orderHasPackagingItems(o)
+      : productionSection === 'sewing'
+        ? (orderHasSewingItems(o) || o.sewingStatus === 'منتهي' || isSewingOrderComplete(o))
+        : true;
     const matchCreatedBy = filterCreatedBy ? (o.createdBy || '').includes(filterCreatedBy) : true;
-    return matchOrderNum && matchDateFrom && matchDateTo && matchCust && matchStatus && matchCreatedBy;
+    return matchOrderNum && matchDateFrom && matchDateTo && matchCust && matchStatus && matchSection && matchCreatedBy;
+  });
+
+  const productionLineOrders = advancedSearch(sortedOrders, debouncedSearchTerm, ['orderNumber', 'customerName', 'items', 'productName']).filter(order => {
+    if (order.status === 'ملغي') return false;
+    if (filterOrderNumber && !String(order.orderNumber || '').includes(filterOrderNumber)) return false;
+    if (dateFrom && order.orderDate < dateFrom) return false;
+    if (dateTo && order.orderDate > dateTo) return false;
+    if (selectedCustomer && order.customerId !== selectedCustomer) return false;
+    if (filterCreatedBy && !String(order.createdBy || '').includes(filterCreatedBy)) return false;
+    return true;
   });
 
   const getUniqueCreators = () => {
@@ -1220,6 +1468,7 @@ const AdminProduction = ({ user, notificationTarget }) => {
       case 'مرحلة القص': return 'badge-cutting';
       case 'مرحلة الخياطة': return 'badge-sewing';
       case 'مرحلة التغليف': return 'badge-packaging';
+      case 'إنتاج مختلط': return 'badge-warning';
       case 'مرحلة المستودع': return 'badge-warehouse';
       default: return 'badge-info';
     }
@@ -1265,7 +1514,18 @@ const AdminProduction = ({ user, notificationTarget }) => {
   const handleUpdateItemStatus = async (order, itemIndex, newItemStatus) => {
     const updatedItems = (order.items || []).map((item, idx) => {
       if (idx === itemIndex) {
-        return { ...item, status: newItemStatus };
+        if (item.status === newItemStatus) return item;
+        return {
+          ...item,
+          status: newItemStatus,
+          stageQuantities: ['لم يتم التنفيذ', 'تم استلام كرت الإنتاج', 'مرحلة القص', 'مرحلة المستودع', 'مرحلة الخياطة'].includes(canonicalizeProductionStatus(newItemStatus))
+            ? { sewing: Number(item.quantity || 0), pendingPackaging: 0, packaging: 0, finished: 0 }
+            : item.stageQuantities,
+          movementHistory: [
+            ...(Array.isArray(item.movementHistory) ? item.movementHistory : []),
+            { from: item.status || order.status || '', to: newItemStatus, quantity: Number(item.quantity || 0), changedAt: new Date().toISOString(), changedBy: user?.name || 'مدير' }
+          ]
+        };
       }
       return item;
     });
@@ -1277,7 +1537,11 @@ const AdminProduction = ({ user, notificationTarget }) => {
     const updatedOrder = {
       ...order,
       items: updatedItems,
-      status: allItemsReady ? 'منتهي' : order.status,
+      status: deriveProductionOrderStatus(updatedItems, order.status),
+      sewingStatus: updatedItems.length > 0 && updatedItems.every(item => getItemStageQuantities(item, order.status).sewing === 0) ? 'منتهي' : 'قيد الخياطة',
+      sewingCompletedAt: updatedItems.length > 0 && updatedItems.every(item => getItemStageQuantities(item, order.status).sewing === 0)
+        ? (order.sewingCompletedAt || new Date().toISOString())
+        : null,
       lastActionBy: user?.name || 'مدير',
       statusUpdateDate: getLocalDateStr(new Date())
     };
@@ -1298,12 +1562,13 @@ const AdminProduction = ({ user, notificationTarget }) => {
             const isMatch = name1 === name2 || name1.includes(name2) || name2.includes(name1);
             
             if (isMatch) {
-              if (newItemStatus === 'منتهي') {
-                if (item.itemStatus !== 'جاهز') {
+              const targetSalesStatus = getSalesItemStatusForProductionStatus(newItemStatus);
+              if (targetSalesStatus && targetSalesStatus !== 'ملغي') {
+                if (item.itemStatus !== targetSalesStatus) {
                   changed = true;
-                  return { ...item, itemStatus: 'جاهز' };
+                  return { ...item, itemStatus: targetSalesStatus };
                 }
-              } else if (newItemStatus === 'ملغي') {
+              } else if (targetSalesStatus === 'ملغي') {
                 let currentItem = item;
                 if (currentItem.itemStatus !== 'ملغي') {
                   changed = true;
@@ -1341,10 +1606,200 @@ const AdminProduction = ({ user, notificationTarget }) => {
     setSelectedOrder(updatedOrder);
     MySwal.fire({
       icon: 'success',
-      title: allItemsReady ? 'تم إنهاء الطلبية تلقائياً' : 'تم تحديث حالة الصنف',
+      title: allItemsReady ? 'تم إنهاء الطلبية تلقائياً' : 'تم تحديث حالة الصنف والكرت',
       timer: 1200,
       showConfirmButton: false
     });
+  };
+
+  const handleOpenOperations = (order) => {
+    setSelectedOrder(order);
+    setShowOperationsModal(true);
+  };
+
+  const handleModalItemStatusChange = async (itemIndex, newItemStatus) => {
+    if (!editingOrder) {
+      handleItemChange(itemIndex, 'status', newItemStatus);
+      return;
+    }
+    const orderSnapshot = { ...editingOrder, items: formData.items };
+    await handleUpdateItemStatus(orderSnapshot, itemIndex, newItemStatus);
+    const nextItems = formData.items.map((item, index) => index === itemIndex ? { ...item, status: newItemStatus } : item);
+    const nextStatus = deriveProductionOrderStatus(nextItems, editingOrder.status);
+    setFormData(previous => ({ ...previous, items: nextItems, status: nextStatus }));
+    setEditingOrder(previous => ({ ...previous, items: nextItems, status: nextStatus }));
+  };
+
+  const persistStageQuantityMovement = async (order, itemIndex, nextQuantities, actionLabel) => {
+    const currentItem = (order.items || [])[itemIndex];
+    if (!currentItem) return;
+    const nextItemStatus = deriveItemStatusFromQuantities(nextQuantities);
+    const movedQuantity = Number(nextQuantities._movedQuantity || 0);
+    const cleanQuantities = {
+      sewing: Number(nextQuantities.sewing || 0),
+      pendingPackaging: Number(nextQuantities.pendingPackaging || 0),
+      packaging: Number(nextQuantities.packaging || 0),
+      finished: Number(nextQuantities.finished || 0)
+    };
+    const updatedItems = (order.items || []).map((item, index) => index === itemIndex ? {
+      ...item,
+      status: nextItemStatus,
+      stageQuantities: cleanQuantities,
+      movementHistory: [
+        ...(Array.isArray(item.movementHistory) ? item.movementHistory : []),
+        { action: actionLabel, from: item.status || order.status || '', to: nextItemStatus, quantity: movedQuantity, changedAt: new Date().toISOString(), changedBy: user?.name || 'مدير' }
+      ]
+    } : item);
+    const updatedOrder = {
+      ...order,
+      items: updatedItems,
+      status: deriveProductionOrderStatus(updatedItems, order.status),
+      lastActionBy: user?.name || 'مدير',
+      statusUpdateDate: getLocalDateStr(new Date())
+    };
+    await saveOrder(updatedOrder);
+
+    if (order.salesOrderId) {
+      const salesOrders = await getSalesOrders();
+      const salesOrder = salesOrders.find(sales => sales.id === order.salesOrderId);
+      if (salesOrder?.items) {
+        const normalize = value => String(value || '').replace(/أ|إ|آ/g, 'ا').replace(/ى/g, 'ي').trim().replace(/\s+/g, ' ');
+        const targetName = normalize(currentItem.productName);
+        const salesStatus = cleanQuantities.sewing > 0
+          ? 'إنتاج قيد الخياطة'
+          : (cleanQuantities.pendingPackaging > 0 || cleanQuantities.packaging > 0)
+            ? 'إنتاج قيد التغليف'
+            : 'جاهز';
+        const salesItems = salesOrder.items.map(item => {
+          const name = normalize(item.productName);
+          return (name === targetName || name.includes(targetName) || targetName.includes(name)) ? { ...item, itemStatus: salesStatus } : item;
+        });
+        await saveSalesOrder({ ...salesOrder, items: salesItems, lastActionBy: 'نظام الإنتاج' });
+      }
+    }
+
+    await addLog({
+      userName: user?.name || 'مدير', userId: user?.id || '', module: 'طلبيات الإنتاج', action: actionLabel,
+      details: `${actionLabel} للصنف (${currentItem.productName}) بكمية ${movedQuantity} من الكرت ${order.orderNumber}`
+    });
+    setOrders(previous => previous.map(item => item.id === order.id ? updatedOrder : item));
+    setSelectedOrder(previous => previous?.id === order.id ? updatedOrder : previous);
+    setEditingOrder(previous => previous?.id === order.id ? updatedOrder : previous);
+    setFormData(previous => previous?.id === order.id || editingOrder?.id === order.id ? { ...previous, items: updatedItems, status: updatedOrder.status } : previous);
+    return updatedOrder;
+  };
+
+  const askStageQuantity = async ({ title, available, confirmButtonText }) => {
+    const result = await MySwal.fire({
+      title,
+      html: `<div dir="rtl">الكمية المتاحة: <b>${available}</b></div>`,
+      input: 'number',
+      inputValue: available,
+      inputAttributes: { min: 1, max: available, step: 1 },
+      showCancelButton: true,
+      confirmButtonText,
+      cancelButtonText: 'إلغاء',
+      inputValidator: value => {
+        const quantity = Number(value);
+        if (!Number.isFinite(quantity) || quantity <= 0 || quantity > available) return `أدخل كمية بين 1 و ${available}`;
+        return null;
+      }
+    });
+    return result.isConfirmed ? Number(result.value) : 0;
+  };
+
+  const handleSendQuantityToPackaging = async (order, itemIndex) => {
+    const item = order.items[itemIndex];
+    const quantities = getItemStageQuantities(item, order.status);
+    if (quantities.sewing <= 0) return;
+    const amount = await askStageQuantity({ title: `إرسال ${item.productName} إلى التغليف`, available: quantities.sewing, confirmButtonText: 'إرسال الكمية' });
+    if (!amount) return;
+    await persistStageQuantityMovement(order, itemIndex, { ...quantities, sewing: quantities.sewing - amount, pendingPackaging: quantities.pendingPackaging + amount, _movedQuantity: amount }, 'إرسال كمية إلى التغليف');
+  };
+
+  const handleSendAllToPackaging = async (order, itemIndex) => {
+    const item = order.items[itemIndex];
+    const quantities = getItemStageQuantities(item, order.status);
+    if (quantities.sewing <= 0) return;
+    const result = await MySwal.fire({
+      icon: 'question', title: 'تسليم كامل الكمية إلى التغليف',
+      html: `<div dir="rtl">سيتم تسليم كامل الكمية المتبقية من <b>${item.productName}</b><br><strong>${quantities.sewing} قطعة</strong></div>`,
+      showCancelButton: true, confirmButtonText: 'نعم، تسليم كامل', cancelButtonText: 'إلغاء'
+    });
+    if (!result.isConfirmed) return;
+    await persistStageQuantityMovement(order, itemIndex, {
+      ...quantities, sewing: 0,
+      pendingPackaging: quantities.pendingPackaging + quantities.sewing,
+      _movedQuantity: quantities.sewing
+    }, 'تسليم كامل الكمية إلى التغليف');
+  };
+
+  const handleAdvanceProductionItem = async (order, itemIndex, nextStatus) => {
+    const item = order.items?.[itemIndex];
+    if (!item) return;
+    const result = await MySwal.fire({
+      icon: 'question', title: 'تأكيد انتقال الصنف',
+      html: `<div dir="rtl"><b>${item.productName || 'الصنف'}</b><br>الانتقال إلى: <strong>${getProductionStatusLabel(nextStatus)}</strong></div>`,
+      showCancelButton: true, confirmButtonText: 'تأكيد الانتقال', cancelButtonText: 'إلغاء'
+    });
+    if (!result.isConfirmed) return;
+    await handleUpdateItemStatus(order, itemIndex, nextStatus);
+  };
+
+  const handleReceivePackagingQuantity = async (order, itemIndex) => {
+    const item = order.items[itemIndex];
+    const quantities = getItemStageQuantities(item, order.status);
+    if (quantities.pendingPackaging <= 0) return;
+    const amount = await askStageQuantity({ title: `تأكيد استلام ${item.productName}`, available: quantities.pendingPackaging, confirmButtonText: 'تأكيد الاستلام' });
+    if (!amount) return;
+    await persistStageQuantityMovement(order, itemIndex, { ...quantities, pendingPackaging: quantities.pendingPackaging - amount, packaging: quantities.packaging + amount, _movedQuantity: amount }, 'استلام كمية في التغليف');
+  };
+
+  const handleFinishPackagingQuantity = async (order, itemIndex) => {
+    const item = order.items[itemIndex];
+    const quantities = getItemStageQuantities(item, order.status);
+    if (quantities.packaging <= 0) return;
+    const amount = await askStageQuantity({ title: `تسجيل الكمية المغلفة من ${item.productName}`, available: quantities.packaging, confirmButtonText: 'تسجيل الكمية المغلفة' });
+    if (!amount) return;
+    await persistStageQuantityMovement(order, itemIndex, { ...quantities, packaging: quantities.packaging - amount, finished: quantities.finished + amount, _movedQuantity: amount }, 'تسجيل كمية مكتملة التغليف');
+  };
+
+  const handleReturnQuantityToSewing = async (order, itemIndex) => {
+    const item = order.items[itemIndex];
+    const quantities = getItemStageQuantities(item, order.status);
+    const available = quantities.pendingPackaging + quantities.packaging + quantities.finished;
+    if (available <= 0) return;
+    const result = await MySwal.fire({
+      title: `إرجاع ${item.productName} إلى الخياطة`,
+      html: `<div dir="rtl">الكمية المتاحة للإرجاع: <b>${available}</b></div>`,
+      input: 'number', inputValue: available,
+      inputAttributes: { min: 1, max: available, step: 1 },
+      showCancelButton: true, confirmButtonText: 'تأكيد الإرجاع', cancelButtonText: 'إلغاء',
+      inputValidator: value => Number(value) > 0 && Number(value) <= available ? null : `أدخل كمية بين 1 و ${available}`
+    });
+    if (!result.isConfirmed) return;
+    let amount = Number(result.value);
+    const fromPackaging = Math.min(amount, quantities.packaging);
+    const afterPackaging = amount - fromPackaging;
+    const fromPending = Math.min(afterPackaging, quantities.pendingPackaging);
+    const fromFinished = afterPackaging - fromPending;
+    await persistStageQuantityMovement(order, itemIndex, {
+      ...quantities,
+      sewing: quantities.sewing + amount,
+      packaging: quantities.packaging - fromPackaging,
+      pendingPackaging: quantities.pendingPackaging - fromPending,
+      finished: quantities.finished - fromFinished,
+      _movedQuantity: amount
+    }, 'إرجاع كمية إلى الخياطة');
+  };
+
+  const handleSectionItemStatusChange = async (itemIndex, newStatus) => {
+    const orderSnapshot = editingOrder ? { ...editingOrder, items: formData.items } : null;
+    if (['تم التحويل إلى قسم التغليف', 'بانتظار استلام التغليف', 'مرحلة التغليف'].includes(newStatus) && orderSnapshot) {
+      await handleSendQuantityToPackaging(orderSnapshot, itemIndex);
+      return;
+    }
+    await handleModalItemStatusChange(itemIndex, newStatus);
   };
 
   const getNormalizedItems = (order) => {
@@ -1382,7 +1837,17 @@ const AdminProduction = ({ user, notificationTarget }) => {
   };
 
   const stats = selectedOrder ? getOrderStats(selectedOrder) : { totalItemsCount: 0, unexecutedQty: 0, completedQty: 0, remainingQty: 0 };
-  const normalizedItems = selectedOrder ? getNormalizedItems(selectedOrder) : [];
+  const selectedOrderStageCounts = selectedOrder ? getProductionStageCounts(selectedOrder) : { sewing: 0, packaging: 0, finished: 0, total: 0 };
+  const normalizedItems = selectedOrder
+    ? getNormalizedItems(selectedOrder)
+        .map((item, originalIndex) => ({ ...item, _originalIndex: originalIndex }))
+        .filter(item => {
+          const status = canonicalizeProductionStatus(item.status || selectedOrder.status);
+          if (productionSection === 'packaging') return status === 'مرحلة التغليف';
+          if (productionSection === 'sewing') return !NON_SEWING_PRODUCTION_STATUSES.includes(status);
+          return true;
+        })
+    : [];
 
   const isProductionEditable = isAdmin(user) || 
     hasPermission(user, 'production', 'edit');
@@ -1390,6 +1855,13 @@ const AdminProduction = ({ user, notificationTarget }) => {
   const isLinkedOrder = !!formData.salesOrderNumber || (formData.orderNotes && formData.orderNotes.includes('مرتبط'));
   const isAuditLockedForSupervisor = !isAdmin(user) && (formData.stockDeducted || formData.stockReceived);
   const isEditLocked = !isProductionEditable || (isLinkedOrder && formData.status !== 'لم يتم التنفيذ') || isAuditLockedForSupervisor;
+  const visibleFormItemEntries = (formData.items || [])
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => {
+      if (productionSection !== 'packaging' || !editingOrder) return true;
+      const quantities = getItemStageQuantities(item, editingOrder.status);
+      return quantities.pendingPackaging + quantities.packaging + quantities.finished > 0;
+    });
 
   return (
     <div className="animate-fade-in">
@@ -1566,10 +2038,15 @@ const AdminProduction = ({ user, notificationTarget }) => {
       )}
       {/* Main Content */}
       <div className="no-print">
-        <div className="flex justify-between items-center" style={{ marginBottom: isMobile ? '8px' : '24px', marginTop: isMobile ? '8px' : '0' }}>
+        <div className="flex justify-between items-center" style={{ marginBottom: isMobile ? '8px' : '18px', marginTop: isMobile ? '8px' : '0', gap: '12px', flexWrap: 'wrap' }}>
           <h2 className="text-2xl font-bold flex items-center gap-2 m-0 text-right">
             <SewingMachineIcon className="text-primary" /> إدارة الإنتاج
           </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="production-view-switch">
+            <button className={productionView === 'line' ? 'active' : ''} onClick={() => setProductionView('line')}><Layers size={16}/> خط الإنتاج</button>
+            <button className={productionView === 'cards' ? 'active' : ''} onClick={() => setProductionView('cards')}><Clipboard size={16}/> كروت الإنتاج</button>
+          </div>
           {isAdmin(user) && (
           <button 
             className="btn btn-primary flex items-center gap-2" 
@@ -1580,6 +2057,70 @@ const AdminProduction = ({ user, notificationTarget }) => {
             <Plus size={18} /> طلبية إنتاج جديدة
           </button>
           )}
+          </div>
+        </div>
+
+        {productionView === 'line' && <>
+        <div className="production-line-toolbar">
+          <div><Search size={18}/><input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="بحث برقم الكرت أو العميل أو الصنف..." /></div>
+          <button onClick={() => { const today = getLocalDateStr(new Date()); setDateFrom(today); setDateTo(today); }}><Calendar size={17}/> اليوم</button>
+          <button onClick={() => setShowFilterModal(true)}><Filter size={17}/> فلترة {(filterOrderNumber || dateFrom || dateTo || selectedCustomer || filterCreatedBy) && <b>نشط</b>}</button>
+          {(filterOrderNumber || dateFrom || dateTo || selectedCustomer || filterCreatedBy) && <button className="clear" onClick={() => { setFilterOrderNumber(''); setDateFrom(''); setDateTo(''); setSelectedCustomer(''); setFilterCreatedBy(''); }}>مسح الفلاتر</button>}
+        </div>
+        {showFilterModal && <div className="production-line-filters">
+          <label>رقم كرت الإنتاج<input value={filterOrderNumber} onChange={event => setFilterOrderNumber(event.target.value)} placeholder="مثال: PRO-0056" /></label>
+          <label>من تاريخ<input type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label>
+          <label>إلى تاريخ<input type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} /></label>
+          <label>العميل<select value={selectedCustomer} onChange={event => setSelectedCustomer(event.target.value)}><option value="">جميع العملاء</option>{customers.map(customer => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>
+          <button onClick={() => setShowFilterModal(false)}><Check size={16}/> تطبيق وإغلاق</button>
+        </div>}
+        <ProductionLineBoard
+          section={productionSection}
+          orders={productionLineOrders}
+          selectedOrder={selectedOrder}
+          onSelectOrder={setSelectedOrder}
+          onOpenPreview={handleOpenPreview}
+          onSend={handleSendQuantityToPackaging}
+          onSendAll={handleSendAllToPackaging}
+          onAdvance={handleAdvanceProductionItem}
+          onReceive={handleReceivePackagingQuantity}
+          onFinish={handleFinishPackagingQuantity}
+          onReturn={handleReturnQuantityToSewing}
+          editable={isProductionEditable}
+        /></>}
+
+        <div style={{ display: productionView === 'cards' ? 'block' : 'none' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, minmax(180px, 1fr))', gap: '10px', marginBottom: '16px' }} className="no-print">
+          {[
+            { key: 'sewing', label: 'قسم الخياطة', count: orders.filter(order => orderHasSewingItems(order) || order.sewingStatus === 'منتهي' || isSewingOrderComplete(order)).length, color: '#0f766e' },
+            { key: 'packaging', label: 'قسم التغليف', count: orders.filter(orderHasPackagingItems).length, color: '#c2410c' },
+            { key: 'all', label: 'جميع أوامر الإنتاج', count: orders.length, color: '#475569' }
+          ].filter(section => !isMobile || section.key !== 'all').map(section => {
+            const active = productionSection === section.key;
+            return (
+              <button
+                key={section.key}
+                type="button"
+                onClick={() => { setProductionSection(section.key); setSelectedStatus(section.key === 'packaging' || section.key === 'all' ? '' : 'معلق'); }}
+                style={{
+                  gridColumn: isMobile && section.key === 'all' ? 'span 2' : 'auto',
+                  minHeight: '64px', borderRadius: '14px', cursor: 'pointer',
+                  border: active ? `2px solid ${section.color}` : '1px solid #e2e8f0',
+                  background: active ? `${section.color}12` : '#fff',
+                  color: active ? section.color : '#475569',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '12px 16px', fontWeight: 900, fontSize: '15px',
+                  boxShadow: active ? `0 4px 12px ${section.color}20` : '0 1px 3px rgba(15,23,42,0.05)'
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {section.key === 'packaging' ? <Package size={20} /> : section.key === 'sewing' ? <SewingMachineIcon size={20} /> : <Layers size={20} />}
+                  {section.label}
+                </span>
+                <span style={{ minWidth: '30px', height: '30px', padding: '0 8px', borderRadius: '15px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: active ? section.color : '#f1f5f9', color: active ? '#fff' : '#64748b' }}>{section.count}</span>
+              </button>
+            );
+          })}
         </div>
 
       {/* Filter Bar */}
@@ -1619,8 +2160,17 @@ const AdminProduction = ({ user, notificationTarget }) => {
           </div>
           
           {/* Row 2: Status Quick Filters */}
-          <div className="flex items-center gap-3 w-full">
+          <div className="flex items-center gap-3 w-full" style={{ display: isMobile ? 'none' : 'flex' }}>
             <div className="flex-1 flex gap-2 overflow-x-auto pb-1 no-scrollbar items-center" style={{ WebkitOverflowScrolling: 'touch' }}>
+              {productionSection === 'packaging' && [
+                { value: '', label: 'الكل', count: orders.filter(orderHasPackagingItems).length },
+                { value: 'بانتظار استلام التغليف', label: 'بانتظار استلام التغليف', count: orders.filter(order => getPackagingOrderStatus(order) === 'بانتظار استلام التغليف').length },
+                { value: 'مرحلة التغليف', label: 'قيد التغليف', count: orders.filter(order => getPackagingOrderStatus(order) === 'قيد التغليف').length }
+              ].map(filter => {
+                const active = selectedStatus === filter.value;
+                return <button key={filter.value || 'packaging-all'} onClick={() => setSelectedStatus(filter.value)} style={{ padding: '8px 16px', borderRadius: '10px', fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap', border: active ? 'none' : '1px solid #e2e8f0', backgroundColor: active ? '#c2410c' : '#fff', color: active ? '#fff' : '#475569', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: active ? '0 4px 6px -1px rgba(194,65,12,.2)' : '0 1px 2px rgba(0,0,0,.05)' }}><span>{filter.label}</span><span style={{ background: active ? 'rgba(255,255,255,.2)' : '#f1f5f9', color: active ? '#fff' : '#64748b', padding: '2px 8px', borderRadius: '12px', fontSize: '12px' }}>{filter.count}</span></button>;
+              })}
+              {productionSection !== 'packaging' && <>
               <button 
                 onClick={() => setSelectedStatus('')}
                 style={{
@@ -1651,7 +2201,7 @@ const AdminProduction = ({ user, notificationTarget }) => {
                 <span style={{ backgroundColor: selectedStatus === 'معلق' ? 'rgba(255,255,255,0.2)' : '#f1f5f9', color: selectedStatus === 'معلق' ? 'white' : '#64748b', padding: '2px 8px', borderRadius: '12px', fontSize: '12px' }}>{orders.filter(o => o.status !== 'منتهي' && o.status !== 'ملغي').length}</span>
               </button>
               
-              {globalSettings.productionStatuses.map(s => {
+              {globalSettings.productionStatuses.filter(s => !['مرحلة التغليف', 'إنتاج مختلط', 'منتهي'].includes(canonicalizeProductionStatus(s))).map(s => {
                 const count = orders.filter(o => o.status === s).length;
                 return (
                   <button 
@@ -1671,6 +2221,7 @@ const AdminProduction = ({ user, notificationTarget }) => {
                   </button>
                 );
               })}
+              </>}
             </div>
           </div>
         </div>
@@ -1710,7 +2261,18 @@ const AdminProduction = ({ user, notificationTarget }) => {
                 <label>الحالة</label>
                 <select className="input-field" value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
                   <option value="">جميع الحالات</option>
-                  {globalSettings.productionStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+                  {(productionSection === 'packaging'
+                    ? [
+                        { value: 'بانتظار استلام التغليف', label: 'بانتظار استلام التغليف' },
+                        { value: 'مرحلة التغليف', label: 'قيد التغليف' }
+                      ]
+                    : [
+                        { value: 'معلق', label: 'معلق' },
+                        ...(globalSettings.productionStatuses || [])
+                          .filter(s => !['مرحلة التغليف', 'إنتاج مختلط', 'منتهي'].includes(canonicalizeProductionStatus(s)))
+                          .map(s => ({ value: s, label: getProductionStatusLabel(s) }))
+                      ]
+                  ).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
               <div className="input-group">
@@ -1792,73 +2354,35 @@ const AdminProduction = ({ user, notificationTarget }) => {
                         }
                         return null;
                       })()}
+                      {(() => {
+                        const stageCounts = getProductionStageCounts(order);
+                        return <span style={{ marginTop: '6px', color: '#64748b', fontSize: '0.72rem', fontWeight: 900 }}>
+                          خياطة {stageCounts.sewing} | تغليف {stageCounts.packaging}
+                        </span>;
+                      })()}
                     </div>
-                    
-                    {/* Status Select with Checkmark Icon */}
-                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                      <select
-                        disabled={!isProductionEditable}
-                        style={{
-                          textAlign: 'center',
-                          textAlignLast: 'center',
-                          height: '34px',
-                          fontSize: '12px',
-                          fontWeight: 'bold',
-                          width: 'auto',
-                          minWidth: '145px',
-                          maxWidth: '175px',
-                          backgroundColor: getStatusStyles(order.status).bg,
-                          color: getStatusStyles(order.status).text,
-                          border: 'none',
-                          borderRadius: '20px',
-                          appearance: 'none',
-                          backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(getStatusStyles(order.status).text)}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                          backgroundRepeat: 'no-repeat',
-                          backgroundPosition: 'left 12px center',
-                          backgroundSize: '12px',
-                          paddingLeft: '28px',
-                          paddingRight: '32px',
-                          cursor: !isProductionEditable ? 'not-allowed' : 'pointer',
-                          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                          margin: 0,
-                          direction: 'rtl'
-                        }}
-                        value={order.status}
-                        onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
-                      >
-                        {(globalSettings.productionStatuses || []).map((status) => (
-                          <option key={status} value={status} className="bg-white text-slate-800 font-normal">
-                            {status}
-                          </option>
-                        ))}
-                      </select>
-                      {/* Checkmark circle icon */}
-                      <div 
-                        style={{ 
-                          position: 'absolute', 
-                          right: '8px', 
-                          pointerEvents: 'none', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          width: '18px', 
-                          height: '18px', 
-                          borderRadius: '50%', 
-                          backgroundColor: getStatusStyles(order.status).text, 
-                          color: '#ffffff', 
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                        }}
-                      >
-                        <Check size={10} strokeWidth={4} />
-                      </div>
-                    </div>
+                     
+                    {(() => {
+                      const displayStatus = productionSection === 'packaging'
+                        ? getPackagingOrderStatus(order)
+                        : productionSection === 'sewing' && (order.sewingStatus === 'منتهي' || isSewingOrderComplete(order))
+                          ? 'منتهي'
+                        : canonicalizeProductionStatus(order.status) === 'إنتاج مختلط'
+                          ? 'مرحلة الخياطة'
+                          : (order.status || 'مرحلة الخياطة');
+                      const styles = getStatusStyles(displayStatus);
+                      return <div style={{ minHeight: '34px', padding: '7px 12px', borderRadius: '18px', background: styles.bg, color: styles.text, fontSize: '0.76rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                        {productionSection === 'packaging' ? <Package size={15} /> : <SewingMachineIcon size={15} />}
+                        <span>{getProductionStatusLabel(displayStatus)}</span>
+                      </div>;
+                    })()}
                   </div>
                   
                   {/* Card Details Grid */}
                   <div 
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
+                      gridTemplateColumns: '1fr',
                       gap: '10px',
                       direction: 'rtl',
                       marginTop: '4px'
@@ -1938,79 +2462,6 @@ const AdminProduction = ({ user, notificationTarget }) => {
                       </div>
                     </div>
 
-                    {/* Item 3: آخر إجراء */}
-                    <div 
-                      style={{ 
-                        backgroundColor: '#f8fafc', 
-                        borderRadius: '12px', 
-                        padding: '10px 12px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'space-between',
-                        direction: 'rtl',
-                        borderLeft: '3px solid #f59e0b',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                        minWidth: 0
-                      }}
-                    >
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'right', minWidth: 0, flex: 1 }}>
-                        <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold', marginBottom: '2px' }}>آخر إجراء</span>
-                        <span style={{ color: '#1e293b', fontSize: '0.85rem', fontWeight: '800', width: '100%' }} className="truncate">{order.lastActionBy || '---'}</span>
-                      </div>
-                      <div 
-                        style={{ 
-                          width: '32px', 
-                          height: '32px', 
-                          borderRadius: '50%', 
-                          backgroundColor: '#fffbeb', 
-                          color: '#f59e0b', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          marginLeft: '8px',
-                          flexShrink: 0
-                        }}
-                      >
-                        <Clock size={16} />
-                      </div>
-                    </div>
-
-                    {/* Item 4: أنشئت بواسطة */}
-                    <div 
-                      style={{ 
-                        backgroundColor: '#f8fafc', 
-                        borderRadius: '12px', 
-                        padding: '10px 12px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'space-between',
-                        direction: 'rtl',
-                        borderLeft: '3px solid #a855f7',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                        minWidth: 0
-                      }}
-                    >
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'right', minWidth: 0, flex: 1 }}>
-                        <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold', marginBottom: '2px' }}>أنشئت بواسطة</span>
-                        <span style={{ color: '#1e293b', fontSize: '0.85rem', fontWeight: '800', width: '100%' }} className="truncate">{order.createdBy || '---'}</span>
-                      </div>
-                      <div 
-                        style={{ 
-                          width: '32px', 
-                          height: '32px', 
-                          borderRadius: '50%', 
-                          backgroundColor: '#faf5ff', 
-                          color: '#a855f7', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          marginLeft: '8px',
-                          flexShrink: 0
-                        }}
-                      >
-                        <Briefcase size={16} />
-                      </div>
-                    </div>
                   </div>
                   
                   {/* Card Actions Footer */}
@@ -2053,7 +2504,7 @@ const AdminProduction = ({ user, notificationTarget }) => {
                       {/* Button 2: تعديل */}
                       {isProductionEditable && (
                         <button 
-                          onClick={() => handleOpenModal(order)}
+                          onClick={() => isMobile ? handleOpenModal(order) : handleOpenOperations(order)}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -2078,8 +2529,7 @@ const AdminProduction = ({ user, notificationTarget }) => {
                       {/* Button 3: حذف */}
                       {isAdmin(user) && (
                         <button 
-                          onClick={() => order.status === 'لم يتم التنفيذ' && handleDelete(order.id)}
-                          disabled={order.status !== 'لم يتم التنفيذ'}
+                          onClick={() => handleDelete(order.id)}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -2087,17 +2537,16 @@ const AdminProduction = ({ user, notificationTarget }) => {
                             gap: '6px',
                             padding: '8px 16px',
                             borderRadius: '12px',
-                            border: order.status === 'لم يتم التنفيذ' ? '1px solid #fca5a5' : '1px solid #e2e8f0',
-                            backgroundColor: order.status === 'لم يتم التنفيذ' ? '#fef2f2' : '#f1f5f9',
-                            cursor: order.status === 'لم يتم التنفيذ' ? 'pointer' : 'not-allowed',
+                            border: '1px solid #fca5a5',
+                            backgroundColor: '#fef2f2',
+                            cursor: 'pointer',
                             fontSize: '0.85rem',
                             fontWeight: 'bold',
-                            color: order.status === 'لم يتم التنفيذ' ? '#ef4444' : '#94a3b8',
-                            opacity: order.status === 'لم يتم التنفيذ' ? 1 : 0.5,
+                            color: '#ef4444',
                             flex: 1
                           }}
                         >
-                          <Trash2 size={15} className={order.status === 'لم يتم التنفيذ' ? 'text-red-500' : 'text-slate-400'} />
+                          <Trash2 size={15} className="text-red-500" />
                           <span>حذف</span>
                         </button>
                       )}
@@ -2128,7 +2577,7 @@ const AdminProduction = ({ user, notificationTarget }) => {
                   <th className="text-center cursor-pointer hover:text-primary transition-colors" onClick={() => handleSort('status')}>
                     <div className="flex items-center justify-center gap-1">الحالة {renderSortIcon('status')}</div>
                   </th>
-                  <th className="text-center" style={{ textAlign: 'center' }}>تغيير الحالة</th>
+                  <th className="text-center" style={{ textAlign: 'center' }}>{productionSection === 'all' ? 'نقل جميع الأصناف' : 'حركة الأصناف'}</th>
                   <th className="text-center" style={{ textAlign: 'center' }}>إجراءات</th>
                 </tr>
               </thead>
@@ -2138,6 +2587,14 @@ const AdminProduction = ({ user, notificationTarget }) => {
                       <tr key={order.id}>
                         <td data-label="رقم الإنتاج" className="font-bold text-primary text-center">
                           <div>{order.orderNumber}</div>
+                          {(() => {
+                            const counts = getProductionStageCounts(order);
+                            return (
+                              <div style={{ marginTop: '5px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                                {(counts.sewing > 0 || counts.packaging > 0) && <span style={{ color: '#64748b', fontSize: '10px', fontWeight: 800 }}>خياطة {counts.sewing} | تغليف {counts.packaging}</span>}
+                              </div>
+                            );
+                          })()}
                           {(() => {
                             const notes = order.orderNotes || order.notes || '';
                             const linkedMatch = notes.match(/ORD-\d+/);
@@ -2156,23 +2613,25 @@ const AdminProduction = ({ user, notificationTarget }) => {
                         <td data-label="آخر إجراء" className="text-xs font-semibold text-center">{order.lastActionBy || '---'}</td>
                         <td data-label="تاريخ التسليم" className="text-center">{order.deliveryDate || '---'}</td>
                         <td data-label="الحالة" className="text-center">
-                          <span 
-                            className={`badge ${getStatusBadgeClass(order.status)}`}
-                            style={{ width: '130px', height: '36px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                          >
-                            {order.status || 'تحت الإنتاج'}
-                          </span>
+                          {(() => {
+                            const displayStatus = productionSection === 'packaging' ? getPackagingOrderStatus(order) : (order.status || 'تحت الإنتاج');
+                            return <span className={`badge ${getStatusBadgeClass(displayStatus === 'قيد التغليف' ? 'مرحلة التغليف' : displayStatus)}`} style={{ width: '150px', height: '36px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayStatus}</span>;
+                          })()}
                         </td>
                         <td data-label="تغيير الحالة" style={{ textAlign: 'center' }}>
-                          <select 
-                            className="input-field" 
-                            disabled={!isProductionEditable}
-                            style={{ padding: '0 0.5rem', width: '130px', height: '36px', fontSize: '13px', borderRadius: '8px', marginBottom: 0, border: '1px solid var(--primary-light)', backgroundColor: !isProductionEditable ? '#f1f5f9' : '#f8fafc', cursor: !isProductionEditable ? 'not-allowed' : 'pointer', margin: '0 auto' }}
-                            value={order.status}
-                            onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
-                          >
-                            {globalSettings.productionStatuses.map(s => <option key={s} value={s}>{s}</option>)}
-                          </select>
+                          {productionSection === 'all' ? (
+                            <select
+                              className="input-field"
+                              disabled={!isProductionEditable}
+                              style={{ padding: '0 0.5rem', width: '130px', height: '36px', fontSize: '13px', borderRadius: '8px', marginBottom: 0, border: '1px solid var(--primary-light)', backgroundColor: !isProductionEditable ? '#f1f5f9' : '#f8fafc', cursor: !isProductionEditable ? 'not-allowed' : 'pointer', margin: '0 auto' }}
+                              value={order.status}
+                              onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
+                            >
+                              {globalSettings.productionStatuses.map(s => <option key={s} value={s} disabled={s === 'إنتاج مختلط'}>{getProductionStatusLabel(s)}</option>)}
+                            </select>
+                          ) : (
+                            <span style={{ color: '#64748b', fontSize: '11px', fontWeight: 800 }}>افتح الكرت لنقل كل صنف</span>
+                          )}
                         </td>
                         <td data-label="إجراءات" style={{ textAlign: 'center' }}>
                           <div className="flex flex-wrap gap-2 justify-center items-center">
@@ -2183,16 +2642,15 @@ const AdminProduction = ({ user, notificationTarget }) => {
                               <Copy size={16} />
                             </button>
                             {isProductionEditable && (
-                              <button className="btn-premium-edit" title="تحديث" onClick={() => handleOpenModal(order)}>
+                              <button className="btn-premium-edit" title="إدارة أصناف الكرت" onClick={() => isMobile ? handleOpenModal(order) : handleOpenOperations(order)}>
                                 <Edit2 size={16} />
                               </button>
                             )}
                             {isAdmin(user) && (
                               <button 
-                                className={`btn-premium-delete ${!(order.status === 'لم يتم التنفيذ' || order.status === 'جديد' || order.status === 'مسودة') ? 'opacity-50 cursor-not-allowed' : ''}`} 
-                                title={!(order.status === 'لم يتم التنفيذ' || order.status === 'جديد' || order.status === 'مسودة') ? 'لا يمكن حذف الطلبية بعد استلامها والبدء بها' : 'حذف'} 
-                                onClick={() => (order.status === 'لم يتم التنفيذ' || order.status === 'جديد' || order.status === 'مسودة') && handleDelete(order.id)}
-                                disabled={!(order.status === 'لم يتم التنفيذ' || order.status === 'جديد' || order.status === 'مسودة')}
+                                className="btn-premium-delete"
+                                title="حذف آمن للكرت وعكس آثاره"
+                                onClick={() => handleDelete(order.id)}
                               >
                                 <Trash2 size={16} />
                               </button>
@@ -2211,6 +2669,33 @@ const AdminProduction = ({ user, notificationTarget }) => {
           </div>
         )}
       </div>
+
+        </div>
+      {showOperationsModal && selectedOrder && (
+        <div className="modal-overlay no-print production-operations-overlay" style={{ zIndex: 10600 }}>
+          <div className="production-operations-modal">
+            <div className="production-operations-modal__head">
+              <div><Layers size={20}/><div><strong>إدارة أصناف كرت الإنتاج</strong><span>{selectedOrder.orderNumber} · {selectedOrder.customerName}</span></div></div>
+              <button type="button" onClick={() => setShowOperationsModal(false)} aria-label="إغلاق"><X size={19}/></button>
+            </div>
+            <ProductionLineBoard
+              detailsOnly
+              section={productionSection}
+              orders={[selectedOrder]}
+              selectedOrder={selectedOrder}
+              onSelectOrder={setSelectedOrder}
+              onOpenPreview={handleOpenPreview}
+              onSend={handleSendQuantityToPackaging}
+              onSendAll={handleSendAllToPackaging}
+              onAdvance={handleAdvanceProductionItem}
+              onReceive={handleReceivePackagingQuantity}
+              onFinish={handleFinishPackagingQuantity}
+              onReturn={handleReturnQuantityToSewing}
+              editable={isProductionEditable}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Order Modal */}
       {showModal && (
@@ -2231,14 +2716,17 @@ const AdminProduction = ({ user, notificationTarget }) => {
             backgroundColor: '#ffffff'
           } : {
             width: '90%',
-            maxWidth: '1400px'
+            width: '97%',
+            maxWidth: '1700px',
+            maxHeight: '92vh',
+            overflowY: 'auto'
           }}
         >
             <div className={`flex justify-between items-center ${!editingOrder ? 'mb-4' : 'mb-0'} border-b`} style={isMobile ? { padding: '12px 8px 8px 8px', backgroundColor: '#ffffff', zIndex: 10 } : { paddingBottom: '8px' }}>
               <div className="flex items-center" style={{ minWidth: 0 }}>
                 <Layers size={isMobile ? 16 : 20} className="text-primary" style={{ flexShrink: 0, marginLeft: isMobile ? '8px' : '10px' }} />
-                <h3 className="font-bold truncate" style={{ fontSize: isMobile ? '0.9rem' : '1.25rem', margin: 0, color: isEditLocked ? '#dc2626' : 'inherit' }}>
-                  {isEditLocked ? `معاينة أصناف طلبية ${editingOrder?.orderNumber || ''} (عرض فقط - مجمد)` : (editingOrder ? `تحديث أصناف طلبية ${editingOrder.orderNumber}` : 'إنشاء طلبية إنتاج جديدة')}
+                <h3 className="font-bold truncate" style={{ fontSize: isMobile ? '0.9rem' : '1.25rem', margin: 0, color: '#0f172a' }}>
+                  {editingOrder ? `إدارة مراحل أصناف طلبية ${editingOrder.orderNumber}` : 'إنشاء طلبية إنتاج جديدة'}
                 </h3>
               </div>
               <div className="flex items-center gap-1.5" style={{ flexShrink: 0 }}>
@@ -2401,8 +2889,13 @@ const AdminProduction = ({ user, notificationTarget }) => {
                   )}
                   {isMobile ? (
                     <div className="flex flex-col gap-3" style={{ padding: '0 4px 4px 4px' }}>
-                      {formData.items.map((item, index) => (
-                        <div key={index} style={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px', position: 'relative', direction: 'rtl' }}>
+                      {visibleFormItemEntries.length === 0 && (
+                        <div style={{ padding: '24px 14px', border: '1px dashed #cbd5e1', borderRadius: '12px', background: '#f8fafc', color: '#64748b', textAlign: 'center', fontWeight: 800 }}>
+                          لا توجد أصناف محوّلة من قسم الخياطة حاليًا.
+                        </div>
+                      )}
+                      {visibleFormItemEntries.map(({ item, index }) => (
+                        <div key={index} style={{ backgroundColor: '#ffffff', borderRadius: '13px', border: '2px solid #94a3b8', padding: '13px', display: 'flex', flexDirection: 'column', gap: '12px', position: 'relative', direction: 'rtl', boxShadow: '0 4px 10px rgba(51,65,85,.10)' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
@@ -2430,10 +2923,14 @@ const AdminProduction = ({ user, notificationTarget }) => {
                                     paddingRight: '12px',
                                     fontSize: '0.75rem'
                                   }} 
-                                  value={item.status || "لم يتم التنفيذ"} 
-                                  onChange={(e) => handleItemChange(index, 'status', e.target.value)}
+                                  value={productionSection === 'packaging' ? canonicalizeProductionStatus(item.status || "لم يتم التنفيذ") : getMobileSewingItemSelectValue(item, editingOrder?.status)}
+                                  disabled={productionSection === 'packaging'}
+                                  onChange={(e) => handleSectionItemStatusChange(index, e.target.value)}
                                 >
-                                  {(globalSettings.productionStatuses || []).map(s => <option key={s} value={s} className="bg-white text-slate-800 font-normal">{s}</option>)}
+                                  {(productionSection === 'packaging'
+                                    ? [canonicalizeProductionStatus(item.status || 'لم يتم التنفيذ')]
+                                    : SEWING_ITEM_STATUS_OPTIONS.filter(status => status !== 'تم التحويل إلى قسم التغليف')
+                                  ).map(s => <option key={s} value={s} className="bg-white text-slate-800 font-normal">{getProductionStatusLabel(s)}</option>)}
                                 </select>
                               </div>
                               {!isEditLocked && formData.items.length > 1 && (
@@ -2566,6 +3063,53 @@ const AdminProduction = ({ user, notificationTarget }) => {
                               </div>
                             </div>
 
+                            {editingOrder && (() => {
+                              const quantities = getItemStageQuantities(item, editingOrder.status);
+                              const delivered = quantities.pendingPackaging + quantities.packaging + quantities.finished;
+                              const deliveryLabel = delivered <= 0 ? 'لم يُسلّم' : delivered >= quantities.total ? 'تسليم كامل' : 'تسليم جزئي';
+                              const percent = quantities.total > 0 ? Math.min(100, Math.round((delivered / quantities.total) * 100)) : 0;
+                              return <div style={{ padding: '8px 10px', borderRadius: '9px', border: '1px solid #dbe7ef', background: '#f8fafc' }}>
+                                <div style={{ marginBottom: '6px', color: delivered > 0 ? '#1d4f91' : '#64748b', fontSize: '0.72rem', fontWeight: 900, textAlign: 'center' }}>تم تسليم {delivered} من {quantities.total} للتغليف · {deliveryLabel}</div>
+                                <div style={{ height: '5px', overflow: 'hidden', borderRadius: '999px', background: '#dfe7ef' }}>
+                                  <div style={{ width: `${percent}%`, height: '100%', borderRadius: '999px', background: '#2878d0', transition: 'width .2s ease' }} />
+                                </div>
+                              </div>;
+                            })()}
+
+                            {editingOrder && productionSection === 'packaging' && (() => {
+                              const quantities = getItemStageQuantities(item, editingOrder.status);
+                              const delivered = quantities.pendingPackaging + quantities.packaging + quantities.finished;
+                              const percent = delivered > 0 ? Math.min(100, Math.round((quantities.finished / delivered) * 100)) : 0;
+                              return <div style={{ padding: '8px 10px', borderRadius: '9px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                <div style={{ marginBottom: '6px', color: '#52677d', fontSize: '0.72rem', fontWeight: 900, textAlign: 'center' }}>تم تغليف {quantities.finished} من {delivered}</div>
+                                <div style={{ height: '5px', overflow: 'hidden', borderRadius: '999px', background: '#dfe7ef' }}>
+                                  <div style={{ width: `${percent}%`, height: '100%', borderRadius: '999px', background: '#148995', transition: 'width .2s ease' }} />
+                                </div>
+                              </div>;
+                            })()}
+
+                            {editingOrder && (() => {
+                              const quantities = getItemStageQuantities(item, editingOrder.status);
+                              const orderSnapshot = { ...editingOrder, items: formData.items };
+
+                              if (productionSection === 'packaging') {
+                                return <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
+                                  {quantities.pendingPackaging > 0 && <button type="button" onClick={() => handleReceivePackagingQuantity(orderSnapshot, index)} style={{ minHeight: '42px', width: '100%', border: '1px solid #fdba74', borderRadius: '10px', background: '#fff7ed', color: '#c2410c', fontWeight: 900, cursor: 'pointer', boxShadow: '0 2px 6px rgba(194,65,12,.10)' }}>استلام ({quantities.pendingPackaging})</button>}
+                                  {quantities.packaging > 0 && <button type="button" onClick={() => handleFinishPackagingQuantity(orderSnapshot, index)} style={{ minHeight: '42px', width: '100%', border: '1px solid #86efac', borderRadius: '10px', background: '#ecfdf5', color: '#047857', fontWeight: 900, cursor: 'pointer', boxShadow: '0 2px 6px rgba(4,120,87,.10)' }}>إنهاء التغليف ({quantities.packaging})</button>}
+                                  {(quantities.pendingPackaging + quantities.packaging + quantities.finished) > 0 && <button type="button" onClick={() => handleReturnQuantityToSewing(orderSnapshot, index)} style={{ minHeight: '42px', width: '100%', border: '1px solid #fca5a5', borderRadius: '10px', background: '#fff', color: '#dc2626', fontWeight: 900, cursor: 'pointer' }}>إرجاع إلى قسم الخياطة</button>}
+                                </div>;
+                              }
+
+                              if (productionSection === 'sewing' && quantities.sewing > 0) {
+                                return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
+                                  <button type="button" onClick={() => handleSendAllToPackaging(orderSnapshot, index)} style={{ minHeight: '40px', border: '1px solid #148995', borderRadius: '9px', background: '#148995', color: '#fff', fontWeight: 900, cursor: 'pointer', boxShadow: '0 3px 8px rgba(20,137,149,.2)' }}>تسليم كامل ({quantities.sewing})</button>
+                                  <button type="button" onClick={() => handleSendQuantityToPackaging(orderSnapshot, index)} style={{ minHeight: '40px', border: '1px solid #5bb7bf', borderRadius: '9px', background: '#eefafb', color: '#0f7781', fontWeight: 900, cursor: 'pointer' }}>تسليم جزئي</button>
+                                </div>;
+                              }
+
+                              return null;
+                            })()}
+
                             <div>
                               <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b', display: 'block', marginBottom: '4px', textAlign: 'right' }}>نوع التغليف</label>
                               <Select
@@ -2628,27 +3172,31 @@ const AdminProduction = ({ user, notificationTarget }) => {
                       ))}
                     </div>
                   ) : (
-                    <div className="modal-table-container glass-panel" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                      <table className="modal-table" style={{ minWidth: '1300px' }}>
+                    <div className="modal-table-container glass-panel" style={{ maxHeight: '62vh', overflow: 'auto' }}>
+                      <table className="modal-table" style={{ minWidth: '1450px', fontSize: '13px' }}>
                       <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc' }}>
                         <tr>
                           <th style={{ width: '90px', minWidth: '90px', textAlign: 'center' }}>#</th>
                           <th style={{ width: '320px', minWidth: '320px', textAlign: 'center' }}>الصنف</th>
                           <th style={{ width: '220px', minWidth: '220px', textAlign: 'center' }}>اللون</th>
-                          <th style={{ width: '90px', minWidth: '90px', textAlign: 'center' }}>الكمية</th>
+                          <th style={{ width: '180px', minWidth: '180px', textAlign: 'center' }}>توزيع الكمية</th>
                           <th style={{ width: '120px', minWidth: '120px', textAlign: 'center' }}>المقاس</th>
                           <th style={{ width: '90px', minWidth: '90px', textAlign: 'center' }}>السماكة</th>
                           <th style={{ width: '220px', minWidth: '220px', textAlign: 'center' }}>نوع التغليف</th>
                           <th style={{ width: '250px', minWidth: '250px', textAlign: 'center' }}>ملاحظات</th>
                           <th style={{ width: '150px', minWidth: '150px', textAlign: 'center' }}>الحالة</th>
-                          <th style={{ width: '50px', minWidth: '50px', textAlign: 'center' }}></th>
+                          <th style={{ width: '180px', minWidth: '180px', textAlign: 'center' }}>{productionSection === 'packaging' ? 'إجراء التغليف' : 'إجراء'}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {formData.items.map((item, index) => (
+                        {visibleFormItemEntries.length === 0 && (
+                          <tr><td colSpan="10" style={{ padding: '28px', textAlign: 'center', color: '#64748b', fontWeight: 800 }}>لا توجد أصناف في هذا القسم حاليًا.</td></tr>
+                        )}
+                        {visibleFormItemEntries.map(({ item, index }) => (
                           <tr
                             key={index}
                             className={`drag-sort-row ${draggedItemIndex === index ? 'dragging' : ''}`}
+                            style={productionSection === 'packaging' && editingOrder && (() => { const q = getItemStageQuantities(item, editingOrder.status); return q.pendingPackaging <= 0 && q.packaging <= 0; })() ? { opacity: 0.55, background: '#f8fafc' } : undefined}
                             onDragOver={handleItemDragOver}
                             onDrop={(e) => handleItemDrop(e, index)}
                             onDragEnd={() => setDraggedItemIndex(null)}
@@ -2720,13 +3268,17 @@ const AdminProduction = ({ user, notificationTarget }) => {
                                 styles={{ menuPortal: base => ({ ...base, zIndex: 10505 }), control: base => ({ ...base, minHeight: '38px', borderRadius: '0.5rem', border: '1px solid #e2e8f0', backgroundColor: isEditLocked ? '#f1f5f9' : 'white' }) }}
                               />
                             </td>
-                            <td className="text-center align-middle" style={{ width: '90px', minWidth: '90px' }}>
+                            <td className="text-center align-middle" style={{ width: '180px', minWidth: '180px' }}>
                               <input type="text" disabled={isEditLocked} className="input-field mb-0 text-center mx-auto" style={{ padding: '0.4rem', height: '38px', borderRadius: '0.5rem', border: '1px solid #e2e8f0', width: '100%', backgroundColor: isEditLocked ? '#f1f5f9' : 'white' }} placeholder="0" value={item.quantity} onChange={(e) => {
                                 const val = e.target.value;
                                 if (val === '' || /^\d{1,4}$/.test(val)) {
                                   handleItemChange(index, 'quantity', val);
                                 }
                               }} required />
+                              {editingOrder && (() => {
+                                const quantities = getItemStageQuantities(item, editingOrder.status);
+                                return <div style={{ marginTop: '4px', fontSize: '9px', lineHeight: 1.5, color: '#475569', fontWeight: 800 }}>خياطة {quantities.sewing} | انتظار {quantities.pendingPackaging}<br/>تغليف {quantities.packaging} | منتهي {quantities.finished}</div>;
+                              })()}
                             </td>
                             <td className="text-center align-middle" style={{ width: '120px', minWidth: '120px' }}>
                               <input type="text" disabled={isEditLocked} className="input-field mb-0 text-center mx-auto" style={{ padding: '0.4rem', height: '38px', borderRadius: '0.5rem', border: '1px solid #e2e8f0', width: '100%', backgroundColor: isEditLocked ? '#f1f5f9' : 'white' }} placeholder="200*180" value={item.sizeCm} onChange={(e) => {
@@ -2784,12 +3336,25 @@ const AdminProduction = ({ user, notificationTarget }) => {
                               <input type="text" disabled={isEditLocked} className="input-field mb-0" style={{ padding: '0.4rem', height: '38px', borderRadius: '0.5rem', border: '1px solid #e2e8f0', width: '100%', backgroundColor: isEditLocked ? '#f1f5f9' : 'white' }} placeholder="ملاحظات..." value={item.notes || item.productionNotes || ''} onChange={(e) => handleItemChange(index, 'notes', e.target.value)} />
                             </td>
                             <td>
-                              <select className="input-field mb-0" style={{ padding: '0.4rem', fontSize: '0.8rem', height: '38px', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }} value={item.status || 'لم يتم التنفيذ'} onChange={(e) => handleItemChange(index, 'status', e.target.value)}>
-                                {(globalSettings.productionStatuses || []).map(s => <option key={s} value={s}>{s}</option>)}
+                              <select disabled={productionSection === 'packaging'} className="input-field mb-0" style={{ padding: '0.4rem', fontSize: '0.8rem', height: '38px', borderRadius: '0.5rem', border: '1px solid #e2e8f0', background: productionSection === 'packaging' ? '#f1f5f9' : '#fff' }} value={productionSection === 'packaging' ? canonicalizeProductionStatus(item.status || 'لم يتم التنفيذ') : getSewingItemSelectValue(item, editingOrder?.status)} onChange={(e) => handleSectionItemStatusChange(index, e.target.value)}>
+                                {(productionSection === 'packaging'
+                                  ? [canonicalizeProductionStatus(item.status || 'لم يتم التنفيذ')]
+                                  : SEWING_ITEM_STATUS_OPTIONS
+                                ).map(s => <option key={s} value={s}>{getProductionStatusLabel(s)}</option>)}
                               </select>
                             </td>
                             <td className="text-center">
-                              {!isEditLocked && formData.items.length > 1 && (
+                              {productionSection === 'packaging' && editingOrder ? (() => {
+                                const quantities = getItemStageQuantities(item, editingOrder.status);
+                                const orderSnapshot = { ...editingOrder, items: formData.items };
+                                if (quantities.pendingPackaging <= 0 && quantities.packaging <= 0) {
+                                  return <span style={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800 }}>بانتظار التحويل من الخياطة</span>;
+                                }
+                                return <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                  {quantities.pendingPackaging > 0 && <button type="button" onClick={() => handleReceivePackagingQuantity(orderSnapshot, index)} style={{ border: 0, borderRadius: '7px', padding: '6px', background: '#fff7ed', color: '#c2410c', fontWeight: 900, cursor: 'pointer', fontSize: '10px' }}>استلام ({quantities.pendingPackaging})</button>}
+                                  {quantities.packaging > 0 && <button type="button" onClick={() => handleFinishPackagingQuantity(orderSnapshot, index)} style={{ border: 0, borderRadius: '7px', padding: '6px', background: '#ecfdf5', color: '#047857', fontWeight: 900, cursor: 'pointer', fontSize: '10px' }}>إنهاء ({quantities.packaging})</button>}
+                                </div>;
+                              })() : !isEditLocked && formData.items.length > 1 && (
                                 <button type="button" className="text-danger hover:scale-110 transition-transform" onClick={() => handleRemoveItem(index)}>
                                   <Trash2 size={18} />
                                 </button>
@@ -2838,8 +3403,9 @@ const AdminProduction = ({ user, notificationTarget }) => {
                       {editingOrder ? 'تحديث الطلبية' : 'حفظ الطلبية'}
                     </button>
                   ) : (
-                    <button type="button" className="btn-premium-cancel" onClick={() => setShowModal(false)} style={{ width: '200px' }}>
-                      إغلاق المعاينة
+                    <button type="button" className={isMobile ? '' : 'btn-premium-cancel'} onClick={() => setShowModal(false)} style={isMobile ? { width: '100%', maxWidth: '320px', minHeight: '46px', border: '1px solid #148995', borderRadius: '12px', background: '#148995', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: 900, fontSize: '0.95rem', boxShadow: '0 4px 10px rgba(20,137,149,.22)', cursor: 'pointer' } : { width: '200px' }}>
+                      {isMobile && <X size={17} strokeWidth={2.5} />}
+                      <span>إغلاق المعاينة</span>
                     </button>
                   )}
                   {!editingOrder && !isEditLocked && (
@@ -3051,6 +3617,9 @@ const AdminProduction = ({ user, notificationTarget }) => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' }}>
                     <Package size={18} className="text-primary" />
                     <span style={{ fontSize: '0.95rem', fontWeight: '800', color: '#1e293b' }}>تفاصيل الأصناف</span>
+                    <span style={{ marginRight: 'auto', borderRadius: '10px', padding: '4px 8px', background: '#f1f5f9', color: '#475569', fontSize: '0.72rem', fontWeight: 900 }}>
+                      خياطة {selectedOrderStageCounts.sewing} | تغليف {selectedOrderStageCounts.packaging} | منتهي {selectedOrderStageCounts.finished}
+                    </span>
                   </div>
 
                    {/* Items Cards Layout */}
@@ -3107,9 +3676,18 @@ const AdminProduction = ({ user, notificationTarget }) => {
                                backgroundImage: 'none'
                              }}
                            >
-                             {item.status || 'لم يتم التنفيذ'}
+                             {getProductionStatusLabel(item.status || 'لم يتم التنفيذ')}
                            </span>
                          </div>
+
+                         {productionSection !== 'all' && (
+                           (productionSection === 'packaging' && item.status === 'مرحلة التغليف') ||
+                           (productionSection === 'sewing' && !NON_SEWING_PRODUCTION_STATUSES.includes(item.status || selectedOrder.status))
+                         ) && (
+                           <div style={{ alignSelf: 'flex-start', borderRadius: '999px', padding: '3px 9px', background: productionSection === 'packaging' ? '#fff7ed' : '#ecfdf5', color: productionSection === 'packaging' ? '#c2410c' : '#047857', fontSize: '0.7rem', fontWeight: 900 }}>
+                             هذا الصنف موجود في {productionSection === 'packaging' ? 'قسم التغليف' : 'قسم الخياطة'}
+                           </div>
+                         )}
 
                          {/* Item details */}
                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
@@ -3124,6 +3702,25 @@ const AdminProduction = ({ user, notificationTarget }) => {
                              <span style={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 'bold', display: 'block' }}>الكمية</span>
                              <span style={{ color: '#0891b2', fontSize: '1.15rem', fontWeight: '900' }}>{item.quantity}</span>
                            </div>
+                         </div>
+                         {isProductionEditable && (
+                           <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '10px', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
+                             <span style={{ color: '#475569', fontSize: '0.76rem', fontWeight: '800' }}>نقل الصنف إلى</span>
+                             <select
+                               value={canonicalizeProductionStatus(item.status || selectedOrder.status || 'لم يتم التنفيذ')}
+                               onChange={(event) => handleUpdateItemStatus(selectedOrder, item._originalIndex ?? idx, event.target.value)}
+                               style={{ height: '38px', border: '1px solid #cbd5e1', borderRadius: '9px', background: '#fff', padding: '0 10px', fontWeight: '800', color: '#334155' }}
+                             >
+                               {getAllowedItemTransitions(item.status).map(status => (
+                                 <option key={status} value={status}>{getProductionStatusLabel(status)}</option>
+                               ))}
+                             </select>
+                           </div>
+                         )}
+                         <div style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: '700', textAlign: 'right' }}>
+                           {(item.movementHistory || []).length > 0
+                             ? <>آخر انتقال: {getProductionStatusLabel(item.movementHistory[item.movementHistory.length - 1]?.from || '—')} ← {getProductionStatusLabel(item.movementHistory[item.movementHistory.length - 1]?.to || '—')} بواسطة {(item.movementHistory[item.movementHistory.length - 1]?.changedBy || 'النظام')} · {item.movementHistory[item.movementHistory.length - 1]?.changedAt ? new Date(item.movementHistory[item.movementHistory.length - 1].changedAt).toLocaleString('ar-JO') : ''}</>
+                             : <>آخر تحديث: {selectedOrder.statusUpdateDate || selectedOrder.orderDate || '—'}</>}
                          </div>
                        </div>
                      ))}

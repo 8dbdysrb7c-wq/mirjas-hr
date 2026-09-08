@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import PetitionConversation from '../../../components/PetitionConversation';
+import { petitionStatus } from '../../../utils/petitionConversation';
+import { watchPetitions } from '../../../services/petitionConversation';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FileText, RefreshCw, Eye, Edit2, Trash2, X } from 'lucide-react';
 import { TableContainer, TableHead, TableRow, TableHeader, TableBody, TableCell, Badge } from '../../../components/ui';
@@ -15,6 +18,9 @@ export const HRRequestsTab = ({
   handleEditRequest, 
   handleDeleteRequest 
 }) => {
+  const [conversationId, setConversationId] = useState(null);
+  const [livePetitions, setLivePetitions] = useState(null);
+  useEffect(() => watchPetitions(user, false, setLivePetitions, console.error), [user.id]);
   const [dateMode, setDateMode] = useState('month');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().substring(0, 7));
@@ -54,7 +60,7 @@ export const HRRequestsTab = ({
     ...missingPunches.filter(p => String(p.employeeId) === String(user.id) && p.status !== 'محذوف' && p.status !== 'deleted').map(p => ({ id: p.id, type: `ختمة ناقصة (${p.type})`, date: p.date || p.createdAt?.split('T')[0], status: normalizeReqStatus(p.status), details: p.reason || p.time || '', adminNote: p.adminNote || '', originalReq: p, modelType: 'punch' })),
     ...myReports.filter(r => r.status !== 'محذوف' && r.status !== 'deleted').map(r => ({ id: r.id, type: 'تقرير عمل يومي', date: r.date || r.createdAt?.split('T')[0], status: r.supervisorRating ? 'تم التقييم' : 'معلق', details: r.supervisorRating ? `تقييم المشرف: ${r.supervisorRating} (${Math.round(r.finalScore || 0)}%)` : 'معلق (بانتظار المشرف)', adminNote: r.supervisorNotes || '', originalReq: r, modelType: 'report' })),
     ...myAdvances.filter(a => a.status !== 'محذوف' && a.status !== 'deleted').map(a => ({ id: a.id, type: a.type, date: a.date || a.createdAt?.split('T')[0], status: normalizeReqStatus(a.status), details: a.reason ? `${a.amount} د.أ - ${a.reason}` : `${a.amount} د.أ`, adminNote: a.status === 'مرفوض' ? (a.rejectionReason || '') : (a.approvalReason || ''), originalReq: a, modelType: 'advance' })),
-    ...(myPetitions || []).filter(p => p.status !== 'محذوف' && p.status !== 'deleted').map(p => ({ id: p.id, type: 'طلب استدعاء', date: p.date || p.createdAt?.split('T')[0], status: normalizeReqStatus(p.status), details: p.title ? `${p.title}` : '', adminNote: p.status === 'مرفوض' ? (p.rejectionReason || '') : (p.approvalReason || ''), originalReq: p, modelType: 'petition' }))
+    ...(livePetitions || myPetitions || []).filter(p => p.status !== 'محذوف' && p.status !== 'deleted').map(p => ({ id: p.id, type: 'طلب استدعاء', date: p.date || p.createdAt?.split('T')[0], status: petitionStatus(p), details: p.title ? `${p.title}` : '', adminNote: p.status === 'مرفوض' ? (p.rejectionReason || '') : (p.approvalReason || ''), originalReq: p, modelType: 'petition' }))
   ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
   const filteredRequests = allRequests.filter(req => {
@@ -121,7 +127,7 @@ export const HRRequestsTab = ({
             <option value="">جميع الحالات</option>
             <option value="تمت الموافقة">تمت الموافقة</option>
             <option value="مرفوض">مرفوض</option>
-            <option value="معلق">معلق</option>
+            <option value="جديد">استدعاء جديد</option><option value="بانتظار الإدارة">بانتظار الإدارة</option><option value="بانتظار الموظف">بانتظار الموظف</option><option value="مغلق">مغلق</option><option value="معلق">معلق</option>
           </select>
 
           {(reqFilterType || reqFilterStatus || dateMode !== 'month' || selectedMonth !== new Date().toISOString().substring(0, 7)) && (
@@ -191,6 +197,7 @@ export const HRRequestsTab = ({
                     </TableCell>
                     <TableCell className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-2">
+                        {req.modelType === 'petition' && <button className="btn btn-primary" onClick={() => setConversationId(req.id)}>المحادثة{req.originalReq.lastMessageRole === 'admin' && req.originalReq.messages?.at(-1)?.id !== req.originalReq.readBy?.[String(user.id)] ? ' · رد جديد' : ''}</button>}
                         {req.modelType === 'report' && (
                           <button 
                             onClick={() => handleViewReportDetails(req.originalReq)} 
@@ -201,7 +208,7 @@ export const HRRequestsTab = ({
                             <Eye size={18} />
                           </button>
                         )}
-                        {req.status === 'معلق' ? (
+                        {req.status === 'معلق' && req.modelType !== 'petition' ? (
                           <>
                             <button 
                               onClick={() => handleEditRequest(req)} 
@@ -232,6 +239,7 @@ export const HRRequestsTab = ({
           </table>
         </div>
       </TableContainer>
+      {conversationId && <PetitionConversation petitionId={conversationId} user={user} onClose={() => setConversationId(null)} />}
     </motion.div>
   );
 };

@@ -4,7 +4,7 @@ import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/light.css';
 import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 
-const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
+const MonthPicker = ({ selectedMonth, setSelectedMonth, fieldStyle = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
   
@@ -29,7 +29,7 @@ const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
   };
 
   return (
-    <div className="shrink-0 month-picker-container" style={{ position: 'relative' }}>
+    <div className="shrink-0 month-picker-container" style={{ position: 'relative', width: fieldStyle ? '100%' : 'auto' }}>
       <div 
         onClick={() => {
           if (selectedMonth) {
@@ -38,7 +38,8 @@ const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
           }
           setIsOpen(!isOpen);
         }}
-        className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-full px-5 py-2 shadow-sm hover:border-sky-300 hover:shadow-md transition-all cursor-pointer min-w-[160px] h-[44px]"
+        className={`flex items-center justify-between gap-3 bg-white border border-slate-200 ${fieldStyle ? 'rounded-[10px] px-3' : 'rounded-full px-5 py-2 shadow-sm min-w-[160px]'} hover:border-sky-300 hover:shadow-md transition-all cursor-pointer`}
+        style={{ height: fieldStyle ? '42px' : '44px', width: fieldStyle ? '100%' : 'auto', boxSizing: 'border-box' }}
       >
         <div className="flex items-center gap-3">
           <Calendar size={18} className="text-sky-500" />
@@ -161,7 +162,8 @@ const HRDateFilter = ({
   setStartDate,
   endDate,
   setEndDate,
-  allowedModes = ['day', 'month', 'range']
+  allowedModes = ['day', 'month', 'range'],
+  monthPickerVariant = 'default'
 }) => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
@@ -180,7 +182,7 @@ const HRDateFilter = ({
       gap: '10px',
       flexShrink: 0,
       flexWrap: isMobile ? 'wrap' : 'nowrap',
-      width: isMobile ? '100%' : 'auto'
+      width: isMobile || monthPickerVariant === 'field' ? '100%' : 'auto'
     }}>
       {/* 1. Date Mode Switcher */}
       {allowedModes.length > 1 && (
@@ -247,7 +249,7 @@ const HRDateFilter = ({
 
       {/* 2. Month/Date Picker */}
       {mode === 'month' && (
-        <MonthPicker selectedMonth={month} setSelectedMonth={setMonth} />
+        <MonthPicker selectedMonth={month} setSelectedMonth={setMonth} fieldStyle={monthPickerVariant === 'field'} />
       )}
       {mode === 'day' && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0 14px', height: '42px', boxShadow: '0 1px 3px rgba(0,0,0,0.03)', transition: 'all 0.2s', cursor: 'pointer' }} className="hover:border-sky-300 hover:shadow-md">

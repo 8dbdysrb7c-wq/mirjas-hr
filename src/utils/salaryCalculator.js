@@ -1,9 +1,11 @@
+import { isActiveEmployee } from './employeeStatus.js';
 import {
   getOfficialAbsenceMinutes,
   getTimedLeaveMinutes,
   isLongApprovedDeparture,
   isPolicyEffective,
-  MAX_PARTIAL_ABSENCE_MINUTES
+  MAX_PARTIAL_ABSENCE_MINUTES,
+  timeToMinutes
 } from './attendancePolicy.js';
 
 export const roundMinutes = (minutes, roundingMethod) => {
@@ -56,11 +58,20 @@ export const calculateSalaries = ({
   }
   const cycle = getCycleDates(selectedMonth, hrSettings.salaryCycleStartDay || 1);
 
-  return employees.map(emp => {
+  return employees.filter(isActiveEmployee).map(emp => {
     const basic = Number(emp.basicSalary) || 0;
 
     const [yStr, mStr] = selectedMonth.split('-');
     const daysInMonth = new Date(parseInt(yStr, 10), parseInt(mStr, 10), 0).getDate();
+    const serviceStart = cycle.start;
+    const storedServiceEnd = emp.terminationDate || emp.serviceEndDate || '';
+    const serviceEnd = storedServiceEnd && storedServiceEnd < cycle.end ? storedServiceEnd : cycle.end;
+    const isHourlyFinalSettlement = Boolean(storedServiceEnd && storedServiceEnd >= cycle.start && storedServiceEnd <= cycle.end);
+    const hasServiceInCycle = serviceStart <= serviceEnd;
+    const serviceCalendarDays = hasServiceInCycle
+      ? Math.floor((new Date(`${serviceEnd}T12:00:00`) - new Date(`${serviceStart}T12:00:00`)) / 86400000) + 1
+      : 0;
+    let basicSalaryEntitlement = basic * (serviceCalendarDays / daysInMonth);
     
     let workDays = hrSettings.workDaysPerMonth || daysInMonth;
     if (hrSettings.workDaysStrategy === 'actual' || !hrSettings.workDaysStrategy) {
@@ -108,7 +119,11 @@ export const calculateSalaries = ({
       if (!v.processedInPeriod) return v.date >= cycle.start && v.date <= cycle.end;
       return true;
     });
-    const manualDeductions = empViolations.reduce((sum, v) => sum + (Number(v.deductionAmount) || 0), 0);
+    const attendanceViolationTypes = ['تأخير', 'مغادرة مبكرة'];
+    const manualDeductions = empViolations.reduce((sum, v) => {
+      if (isHourlyFinalSettlement && attendanceViolationTypes.includes(String(v.type || '').trim())) return sum;
+      return sum + (Number(v.deductionAmount) || 0);
+    }, 0);
 
     // 1.5 Bonuses
     const empBonuses = bonuses.filter(b => {
@@ -124,9 +139,22 @@ export const calculateSalaries = ({
     // 2. Attendance (Lateness & Absences)
     const empAttendance = attendance.filter(a => {
       const isEmpMatch = String(a.employeeId || '').trim() === String(emp.id || '').trim() || String(a.employeeName || '').trim() === String(emp.name || '').trim();
-      return isEmpMatch && a.date >= cycle.start && a.date <= cycle.end;
+      return isEmpMatch && hasServiceInCycle && a.date >= serviceStart && a.date <= serviceEnd;
     });
     const rawLateMinutes = empAttendance.reduce((sum, a) => sum + (Number(a.lateMinutes) || 0), 0);
+
+    if (isHourlyFinalSettlement) {
+      const actualWorkedMinutes = empAttendance.reduce((sum, row) => {
+        const start = timeToMinutes(row.timeIn);
+        let end = timeToMinutes(row.timeOut);
+        if (start == null || end == null) return sum;
+        if (end < start) end += 1440;
+        return sum + Math.max(0, end - start);
+      }, 0);
+      const settlementDailyHours = Number(hrSettings.standardWorkHours) || 8;
+      const settlementHourlyRate = (basic / daysInMonth) / settlementDailyHours;
+      basicSalaryEntitlement = (actualWorkedMinutes / 60) * settlementHourlyRate;
+    }
     
     const unpaidLeaveDates = new Set();
     empAttendance.forEach(a => {
@@ -194,8 +222,9 @@ export const calculateSalaries = ({
     const arabicDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
     const weekends = hrSettings.weekendDays || ['الجمعة'];
     
-    let currentDay = new Date(cycle.start);
-    const lastDay = new Date(endProcessDate);
+    let currentDay = new Date(serviceStart);
+    const attendanceProcessEnd = serviceEnd < endProcessDate ? serviceEnd : endProcessDate;
+    const lastDay = new Date(attendanceProcessEnd);
     const nonWorkStatuses = ['غائب', 'غياب غير مبرر', 'إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة', 'لم يسجل دخول', 'محذوف'];
     let elapsedWorkDays = 0;
 
@@ -305,6 +334,8 @@ export const calculateSalaries = ({
     } else if (hrSettings.latenessHandling === 'financial_deduction') {
       lateDeduction = ((roundedLateMinutes + roundedMissionMinutes) / 60) * hourlyRate;
     } // If warning_only, deduction is 0
+
+    if (isHourlyFinalSettlement) lateDeduction = 0;
     
     let unexcusedAbsenceDeduction = 0;
     
@@ -324,6 +355,11 @@ export const calculateSalaries = ({
     } else {
       unexcusedAbsenceDeduction = 0; // needs_approval means 0 automatic deduction for unexcused absence
     }
+
+    if (isHourlyFinalSettlement) {
+      unpaidLeaveDeduction = 0;
+      unexcusedAbsenceDeduction = 0;
+    }
     
     // 2.5 Approved Overtime Requests
     const overtimeReqs = leaves.filter(l => {
@@ -333,8 +369,8 @@ export const calculateSalaries = ({
       // An unpaid day has zero payable attendance value. Any punches or
       // overtime requests on that same day remain only as an audit trail.
       if (overtimeDate && unpaidLeaveDates.has(overtimeDate)) return false;
-      if (l.date) return l.date >= cycle.start && l.date <= cycle.end;
-      if (l.startDate && l.endDate) return l.startDate <= cycle.end && l.endDate >= cycle.start;
+      if (l.date) return hasServiceInCycle && l.date >= serviceStart && l.date <= serviceEnd;
+      if (l.startDate && l.endDate) return hasServiceInCycle && l.startDate <= serviceEnd && l.endDate >= serviceStart;
       return false;
     });
     let rawNormalOvertimeMins = 0;
@@ -490,18 +526,21 @@ export const calculateSalaries = ({
     
     const totalDeductions = manualDeductions + lateDeduction + unpaidLeaveDeduction + unexcusedAbsenceDeduction + socialSecurityEmployeeDeduction + advanceDeduction;
 
-    const transportAllowanceFull = Number(emp.transportationAllowance) || 0;
+    const transportAllowanceFull = (Number(emp.transportationAllowance) || 0) * (serviceCalendarDays / daysInMonth);
     const transportDailyRate = transportAllowanceFull / daysInMonth;
     const transportAllowanceAddition = Math.max(0, transportAllowanceFull - (unpaidLeaveDays * transportDailyRate));
 
     const totalBonusAmount = bonusAddition;
-    const netSalary = basic + transportAllowanceAddition + overtimePay + holidayPay + advanceAddition + totalBonusAmount - totalDeductions;
+    const netSalary = basicSalaryEntitlement + transportAllowanceAddition + overtimePay + holidayPay + advanceAddition + totalBonusAmount - totalDeductions;
     const actualAttendedDays = Math.max(0, elapsedWorkDays - unpaidLeaveDays - unexcusedAbsenceDays);
     const actualWorkHours = Math.max(0, actualAttendedDays * empStandardWorkHours - ((roundedLateMinutes + roundedMissionMinutes) / 60));
 
     return {
       ...emp,
       basic,
+      basicSalaryEntitlement: basicSalaryEntitlement || 0,
+      serviceStart,
+      serviceEnd,
       transportAllowanceAddition: transportAllowanceAddition || 0,
       actualWorkHours: actualWorkHours || 0,
       empStandardWorkHours,

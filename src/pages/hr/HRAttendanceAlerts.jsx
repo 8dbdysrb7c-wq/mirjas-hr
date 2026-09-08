@@ -1,3 +1,4 @@
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Calendar, Search, LogOut, AlertTriangle, ChevronDown, Upload, FileMinus, X, User, Trash2, Clock, Check } from 'lucide-react';
 import Select from '../../components/SearchSelect';
@@ -6,6 +7,7 @@ import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
 import { getEmployees, getHRAttendance, getGlobalSettings, saveHRViolation, getHRViolations, getHRLeaves, getAttendanceLogs, getReports, getSupervisorReports } from '../../store';
 import Swal from 'sweetalert2';
+import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 
 const getLocalDateStr = (d) => {
   const offset = d.getTimezoneOffset();
@@ -87,7 +89,7 @@ const HRAttendanceAlerts = ({ user }) => {
         getReports(),
         getSupervisorReports()
       ]);
-      setEmployees(emps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && !['غير فعال', 'مستقيل', 'منتهي خدمات'].includes(e.employmentStatus || e.status)));
+      setEmployees(emps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && isActiveEmployee(e)));
       setAttendanceRecords(records);
       setSettings(globSet);
       setViolations(viols);
@@ -952,6 +954,7 @@ const HRAttendanceAlerts = ({ user }) => {
                     </td>
                     <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#1e293b', textAlign: 'center' }} dir="ltr">{emp.shiftEnd}</td>
                     <td style={{ padding: '16px 24px', textAlign: 'center', position: 'relative', zIndex: openDropdownId === `early-${emp.id}-${emp.date}` ? 30 : 1 }}>
+                      <button onClick={() => promptEmployeeAlert({ employeeId: emp.id, employeeName: emp.name, source: 'تنبيهات الحضور والانصراف', sourceReference: `مغادرة مبكرة ${emp.date}`, suggestedMessage: `لوحظ تسجيل مغادرة مبكرة بتاريخ ${emp.date} بمقدار ${emp.earlyMins} دقيقة. يرجى مراجعة الالتزام بموعد انتهاء الدوام.`, user })} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fff7ed', border: '1px solid #fdba74', color: '#c2410c', padding: '7px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 800, fontSize: 12, marginBottom: 7 }}><Bell size={15}/> إرسال تنبيه</button>
                       {emp.status !== 'معلق' ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                           <span style={{ 
@@ -1046,6 +1049,7 @@ const HRAttendanceAlerts = ({ user }) => {
                       </span>
                     </td>
                     <td style={{ padding: '16px 24px', textAlign: 'center', position: 'relative', zIndex: openDropdownId === `late-${emp.id}-${emp.date}` ? 30 : 1 }}>
+                      <button onClick={() => promptEmployeeAlert({ employeeId: emp.id, employeeName: emp.name, source: 'تنبيهات الحضور والانصراف', sourceReference: `تأخير ${emp.date}`, suggestedMessage: `لوحظ التأخر عن موعد بدء الدوام بتاريخ ${emp.date} بمقدار ${emp.lateMins} دقيقة. يرجى الالتزام بموعد الحضور المعتمد.`, user })} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fff7ed', border: '1px solid #fdba74', color: '#c2410c', padding: '7px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 800, fontSize: 12, marginBottom: 7 }}><Bell size={15}/> إرسال تنبيه</button>
                       {emp.status !== 'معلق' ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                           <span style={{ 

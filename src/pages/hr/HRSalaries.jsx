@@ -1,3 +1,4 @@
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import { DollarSign, Printer, Search, ArrowUpDown, ArrowUp, ArrowDown, Calendar, ChevronDown, ChevronUp, User } from 'lucide-react';
 import Select from '../../components/SearchSelect';
@@ -105,7 +106,7 @@ const HRSalaries = ({ user }) => {
       getHRAdvances(),
       getHRBonuses()
     ]);
-    setEmployees(emps);
+    setEmployees(emps.filter(isActiveEmployee));
     setViolations(viols);
     setAttendance(atts);
     setLeaves(lvs);

@@ -1352,8 +1352,8 @@ const HRSalaryReports = ({ user, isNested }) => {
                   الاستحقاقات
                 </h3>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                  <span style={{ color: '#475569', fontSize: '0.875rem' }}>الراتب الأساسي</span>
-                  <span style={{ fontWeight: 'bold', color: '#0f172a' }}>{formatVal(selectedEmployeeData.basic, false)} د.أ</span>
+                  <span style={{ color: '#475569', fontSize: '0.875rem' }}>الراتب الأساسي المستحق</span>
+                  <span style={{ fontWeight: 'bold', color: '#0f172a' }}>{formatVal(selectedEmployeeData.basicSalaryEntitlement ?? selectedEmployeeData.basic, false)} د.أ</span>
                 </div>
                 {selectedEmployeeData.transportAllowanceAddition > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
@@ -1391,7 +1391,7 @@ const HRSalaryReports = ({ user, isNested }) => {
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', marginTop: '8px' }}>
                   <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '0.875rem' }}>إجمالي الاستحقاقات</span>
-                  <span style={{ fontWeight: 'bold', color: '#0f172a' }}>{formatVal(selectedEmployeeData.basic + selectedEmployeeData.overtimePay + (selectedEmployeeData.holidayPay || 0) + (selectedEmployeeData.totalBonusAmount || 0) + (selectedEmployeeData.transportAllowanceAddition || 0), false)} د.أ</span>
+                  <span style={{ fontWeight: 'bold', color: '#0f172a' }}>{formatVal((selectedEmployeeData.basicSalaryEntitlement ?? selectedEmployeeData.basic) + selectedEmployeeData.overtimePay + (selectedEmployeeData.holidayPay || 0) + (selectedEmployeeData.totalBonusAmount || 0) + (selectedEmployeeData.transportAllowanceAddition || 0), false)} د.أ</span>
                 </div>
               </div>
 
@@ -1536,7 +1536,7 @@ const HRSalaryReports = ({ user, isNested }) => {
                 {sortData(filteredSheetSalaryData, {
                   employeeId: (e) => e.employeeId || e.id,
                   employeeName: (e) => e.name,
-                  basic: (e) => e.basic,
+                  basic: (e) => e.basicSalaryEntitlement ?? e.basic,
                   transport: (e) => e.transportAllowanceAddition || 0,
                   bonuses: (e) => e.totalBonusAmount || 0,
                   overtime: (e) => e.overtimePay || 0,
@@ -1550,7 +1550,7 @@ const HRSalaryReports = ({ user, isNested }) => {
                       <td style={{ padding: '12px', color: '#64748b', textAlign: 'center' }}>{index + 1}</td>
                       <td style={{ padding: '12px', color: '#64748b', textAlign: 'center', direction: 'ltr' }}>{emp.employeeId || emp.id}</td>
                       <td style={{ padding: '12px', fontWeight: 'bold', color: '#0f172a', textAlign: 'right' }}>{emp.name}</td>
-                      <td style={{ padding: '12px', color: '#475569', textAlign: 'center' }}>{formatVal(emp.basic, false)}</td>
+                      <td style={{ padding: '12px', color: '#475569', textAlign: 'center' }}>{formatVal(emp.basicSalaryEntitlement ?? emp.basic, false)}</td>
                       <td style={{ padding: '12px', color: '#475569', textAlign: 'center' }}>{formatVal(emp.transportAllowanceAddition || 0)}</td>
                       <td style={{ padding: '12px', color: '#10b981', textAlign: 'center' }}>{formatVal(emp.totalBonusAmount)}</td>
                       <td style={{ padding: '12px', color: '#059669', textAlign: 'center' }}>{formatVal(emp.overtimePay)}</td>
@@ -1568,7 +1568,7 @@ const HRSalaryReports = ({ user, isNested }) => {
                 <tr style={{ background: '#f8fafc', borderTop: '1px solid #cbd5e1', borderBottom: '1px solid #cbd5e1' }}>
                   <td colSpan="3" style={{ padding: '16px 12px', fontWeight: 'bold', color: '#0f172a', textAlign: 'center' }}>المجموع الكلي:</td>
                   <td style={{ padding: '16px 12px', fontWeight: 'bold', color: '#0f172a', textAlign: 'center' }}>
-                    {formatVal(filteredSheetSalaryData.reduce((sum, e) => sum + e.basic, 0), false)}
+                    {formatVal(filteredSheetSalaryData.reduce((sum, e) => sum + (e.basicSalaryEntitlement ?? e.basic), 0), false)}
                   </td>
                   <td style={{ padding: '16px 12px', fontWeight: 'bold', color: '#0f172a', textAlign: 'center' }}>
                     {formatVal(filteredSheetSalaryData.reduce((sum, e) => sum + (e.transportAllowanceAddition || 0), 0), false)}

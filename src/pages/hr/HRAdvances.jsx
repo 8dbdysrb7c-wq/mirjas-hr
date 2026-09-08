@@ -1,7 +1,9 @@
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, Clock, XCircle, FileText, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Undo2, Trash2, DollarSign, Eye, ChevronDown, ChevronUp, User, Pencil } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, FileText, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Undo2, Trash2, DollarSign, Eye, ChevronDown, ChevronUp, User, Pencil, Bell } from 'lucide-react';
+import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import Select from '../../components/SearchSelect';
-import { getEmployees, getHRAdvances, saveHRAdvance, deleteHRAdvance, createNotification, getGlobalSettings } from '../../store';
+import { getEmployees, getHRAdvances, saveHRAdvance, deleteHRAdvance, createNotification, getGlobalSettings, isDateLocked } from '../../store';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
 import Flatpickr from 'react-flatpickr';
@@ -14,6 +16,7 @@ const getLocalDateStr = (d) => {
 };
 
 const HRAdvances = ({ user, refreshCounts }) => {
+  const isSiteOwner = String(user?.id || '').trim().toLowerCase() === 'admin';
   const [advances, setAdvances] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [employees, setEmployees] = useState([]);
@@ -304,8 +307,18 @@ const HRAdvances = ({ user, refreshCounts }) => {
       Swal.fire('تنبيه', 'الرجاء إدخال السبب', 'warning');
       return;
     }
-    
-    // Allowing HR to submit/edit advance requests for past dates if payroll isn't processed yet.
+
+    const today = getLocalDateStr(new Date());
+    if (!formData.id && formData.date < today) {
+      if (!isSiteOwner) {
+        Swal.fire('غير مسموح', 'إدخال سلفة بتاريخ سابق متاح لمالك الموقع فقط.', 'error');
+        return;
+      }
+      if (await isDateLocked(formData.date)) {
+        Swal.fire('الفترة مُرحّلة', 'لا يمكن إضافة السلفة لأن رواتب الفترة المختارة مُرحّلة أو مقفلة.', 'error');
+        return;
+      }
+    }
     
     const emp = employees.find(e => String(e.id) === String(formData.employeeId));
     if (!emp) {
@@ -675,6 +688,9 @@ const HRAdvances = ({ user, refreshCounts }) => {
                       <button onClick={() => handlePreviewAdvance(advance)} className="icon-btn" style={{ color: '#0ea5e9', background: '#f0f9ff', borderColor: '#bae6fd' }} title="معاينة الطلب">
                         <Eye size={18} strokeWidth={2} />
                       </button>
+                      <button onClick={() => promptEmployeeAlert({ employeeId: advance.employeeId, employeeName: advance.employeeName, source: 'السلف', sourceReference: `${advance.type || 'سلفة'} ${advance.createdAt ? new Date(advance.createdAt).toLocaleDateString('en-GB') : ''}`, suggestedMessage: `طلب السلفة الخاص بك بقيمة ${advance.approvedAmount || advance.amount || 0} د.أ حالته: ${advance.status || 'معلق'}.${advance.reason ? `\nالسبب: ${advance.reason}` : ''}`, user })} className="icon-btn" style={{ color: '#c2410c', background: '#fff7ed', borderColor: '#fdba74' }} title="إرسال تنبيه للموظف">
+                        <Bell size={17} />
+                      </button>
                       {advance.status === 'معلق' ? (
                         <>
                           <button onClick={() => {
@@ -745,7 +761,7 @@ const HRAdvances = ({ user, refreshCounts }) => {
                     <label>الموظف *</label>
                     <select required value={formData.employeeId} onChange={e=>setFormData({...formData, employeeId: e.target.value})} className="input-field">
                       <option value="">-- اختر الموظف --</option>
-                      {employees.filter(emp => emp.isActive !== false && emp.status !== 'مستقيل').map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+                      {employees.filter(isActiveEmployee).map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
                     </select>
                   </div>
                   
@@ -775,10 +791,11 @@ const HRAdvances = ({ user, refreshCounts }) => {
                       value={formData.date} 
                       onChange={(dates, dateStr) => setFormData({...formData, date: dateStr})} 
                       className="input-field w-full bg-white" 
-                      options={{ dateFormat: 'Y-m-d', disableMobile: true, minDate: 'today' }}
+                      options={{ dateFormat: 'Y-m-d', disableMobile: true, ...(isSiteOwner ? {} : { minDate: 'today' }) }}
                       placeholder="اختر التاريخ"
                       required
                     />
+                    {isSiteOwner && <small className="text-muted">يمكن لمالك الموقع اختيار تاريخ سابق إذا لم تكن فترة الرواتب مُرحّلة.</small>}
                   </div>
                   
                   <div className="input-group">

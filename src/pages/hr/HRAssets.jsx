@@ -1,3 +1,4 @@
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import { getHRAssets, saveHRAsset, deleteHRAsset, getEmployees, getGlobalSettings, saveGlobalSettings, getStock, saveStockItem } from '../../store';
 import { Package, Plus, Search, Filter, AlertTriangle, CheckCircle, XCircle, ArrowRightLeft, Edit2, Trash2, Calendar, FileText, User, RefreshCw, BarChart2, Eye, X, Activity, ArrowUp, ArrowDown, Printer, FileDown, Layers, ArrowUpDown, ChevronDown } from 'lucide-react';
@@ -68,7 +69,7 @@ const HRAssets = ({ user }) => {
       getGlobalSettings()
     ]);
     setAssets(assetsData);
-    setEmployees(empsData.filter(e => e.status !== 'مفصول' && e.status !== 'مستقيل'));
+    setEmployees(empsData);
     setStockItems(stockData || []);
     setGlobalSettings(settingsData || {});
     setLoading(false);
@@ -1698,7 +1699,7 @@ const HRAssets = ({ user }) => {
                 onChange={e => setFilterEmployee(e.target.value)}
               >
                 <option value="">الموظف: الكل</option>
-                {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+                {employees.filter(isActiveEmployee).map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
               </select>
 
               <select 
@@ -2027,7 +2028,7 @@ const HRAssets = ({ user }) => {
                         <label className="flex items-center gap-2 mb-2 font-bold text-slate-700"><User size={16} className="text-primary"/> الموظف المستلم <span className="text-rose-500">*</span></label>
                         <select className="input-field" style={{ height: '42px', backgroundColor: 'white' }} required value={formData.employeeId} onChange={handleEmployeeChange}>
                           <option value="">-- اختر الموظف --</option>
-                          {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+                          {employees.filter(isActiveEmployee).map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
                         </select>
                       </div>
                       <div>

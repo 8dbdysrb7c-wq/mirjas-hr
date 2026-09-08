@@ -10,7 +10,8 @@ const MultiColorSelectionModal = ({
   onAddItems, 
   stockColors = [], 
   stock = [],
-  title = "اختيار الألوان والكمية"
+  title = "اختيار الألوان والكمية",
+  maxQuantity = null
 }) => {
   const [selectedProduct, setSelectedProduct] = useState('');
   const [quantities, setQuantities] = useState({});
@@ -115,7 +116,7 @@ const MultiColorSelectionModal = ({
   const handleQuantityChange = (color, delta) => {
     setQuantities(prev => {
       const current = prev[color] || 0;
-      const next = Math.max(0, current + delta);
+      const next = Math.min(maxQuantity || Number.MAX_SAFE_INTEGER, Math.max(0, current + delta));
       const newQuantities = { ...prev };
       if (next === 0) {
         delete newQuantities[color];
@@ -133,7 +134,7 @@ const MultiColorSelectionModal = ({
       if (isNaN(val) || val <= 0) {
         delete newQuantities[color];
       } else {
-        newQuantities[color] = val;
+        newQuantities[color] = Math.min(maxQuantity || Number.MAX_SAFE_INTEGER, val);
       }
       return newQuantities;
     });
@@ -307,11 +308,12 @@ const MultiColorSelectionModal = ({
                           </button>
                           <input 
                             type="number"
-                            style={{ width: '50px', textAlign: 'center', fontSize: '0.875rem', fontWeight: 'bold', border: 'none', borderLeft: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0', height: '100%', outline: 'none', appearance: 'textfield', backgroundColor: 'transparent' }}
+                            style={{ width: '88px', textAlign: 'center', fontSize: '0.875rem', fontWeight: 'bold', border: 'none', borderLeft: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0', height: '100%', outline: 'none', appearance: 'textfield', backgroundColor: 'transparent' }}
                             value={qty === 0 ? '' : qty}
                             onChange={(e) => { e.stopPropagation(); handleDirectQuantityChange(color, e.target.value); }}
                             onClick={(e) => e.stopPropagation()}
                             min="0"
+                            max={maxQuantity || undefined}
                           />
                           <button 
                             type="button"

@@ -1,3 +1,4 @@
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import {
   Clock, Save, Search, ArrowUpDown, ArrowUp, ArrowDown,
@@ -190,7 +191,7 @@ const HRAttendance = ({ user }) => {
 
         const [records, updatedEmps] = await Promise.all([getHRAttendance(), getEmployees()]);
         setAttendanceRecords(records);
-        setEmployees(updatedEmps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && !['غير فعال', 'مستقيل', 'منتهي خدمات'].includes(e.employmentStatus || e.status)));
+        setEmployees(updatedEmps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && isActiveEmployee(e)));
 
         Swal.fire('تم بنجاح', 'تم تسجيل الغياب بنجاح وتم تحديث الأرصدة إذا لزم الأمر', 'success');
       } catch (e) {
@@ -318,7 +319,7 @@ const HRAttendance = ({ user }) => {
       const [emps, records, empReps, supReps, lvs, aLogs] = await Promise.all([
         getEmployees(), getHRAttendance(), getReports(), getSupervisorReports(), getHRLeaves(), getAttendanceLogs()
       ]);
-      setEmployees(emps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && !['غير فعال', 'مستقيل', 'منتهي خدمات'].includes(e.employmentStatus || e.status)));
+      setEmployees(emps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && isActiveEmployee(e)));
       setAttendanceRecords(records);
       setEmployeeReports(empReps || []);
       setSupervisorReports(supReps || []);
