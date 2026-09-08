@@ -4,14 +4,23 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './pages/Login';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import ErrorBoundary from './components/ErrorBoundary';
 import Swal from 'sweetalert2';
+import { FREE_AUTH_ENABLED, observeEmployeeSession, logoutEmployee } from './services/freeAuth';
 import { getGlobalSettings, isAdmin, getEmployees, getAttendanceLogs, saveAttendanceLog, getHRAttendance, saveHRAttendance, getMissingPunches, updateMissingPunchStatus } from './store';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(() => {
+    if (FREE_AUTH_ENABLED) return null;
     const saved = localStorage.getItem('currentUser');
     return saved ? JSON.parse(saved) : null;
   });
+  const [authReady, setAuthReady] = useState(!FREE_AUTH_ENABLED);
+  useEffect(() => {
+    if (!FREE_AUTH_ENABLED) return;
+    localStorage.removeItem('currentUser');
+    return observeEmployeeSession(profile => { setCurrentUser(profile); setAuthReady(true); });
+  }, []);
   const [theme, setTheme] = useState({ primaryColor: '#1a8d9b' });
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [previewDevice, setPreviewDevice] = useState(() => localStorage.getItem('previewDevice') || 'phone');
@@ -52,6 +61,7 @@ function App() {
   };
 
   useEffect(() => {
+    if (FREE_AUTH_ENABLED) return;
     if (currentUser) {
       getEmployees().then(emps => {
         let updatedUser = emps.find(e => e.id === currentUser.id);
@@ -129,24 +139,26 @@ function App() {
 
   const handleLogin = (user) => {
     setCurrentUser(user);
-    localStorage.setItem('currentUser', JSON.stringify(user));
+    if (!FREE_AUTH_ENABLED) localStorage.setItem('currentUser', JSON.stringify(user));
   };
 
   const handleLogout = () => {
+    if (FREE_AUTH_ENABLED) logoutEmployee();
+    setCurrentUser(null);
     setCurrentUser(null);
     localStorage.removeItem('currentUser');
   };
 
   const handleUpdateUser = (updatedUser) => {
     setCurrentUser(updatedUser);
-    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+    if (!FREE_AUTH_ENABLED) localStorage.setItem('currentUser', JSON.stringify(updatedUser));
   };
 
   const togglePreviewMode = () => setIsPreviewMode(!isPreviewMode);
 
   const renderAppContent = () => (
     <div className={`app-content-wrapper ${isPreviewMode ? 'preview-active preview-' + previewDevice + ' preview-' + previewOrientation : ''}`}>
-      <Router>
+      {!authReady ? <div role="status" className="p-8 text-center">جاري التحقق من تسجيل الدخول…</div> : <Router>
         <Routes>
           <Route path="/" element={
             !currentUser ? <Login onLogin={handleLogin} /> :
@@ -165,12 +177,12 @@ function App() {
               <Navigate to="/" />
           } />
         </Routes>
-      </Router>
+      </Router>}
     </div>
   );
 
   return (
-    <>
+    <ErrorBoundary>
       {isPreviewMode ? (
         <div className="preview-mode-overlay">
           <div className="preview-controls-bar">
@@ -199,7 +211,7 @@ function App() {
       ) : (
         renderAppContent()
       )}
-    </>
+    </ErrorBoundary>
   );
 }
 

@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { startVisiblePolling } from '../utils/visiblePolling';
 import { motion } from 'framer-motion';
-import { Bell, RefreshCw, Settings, LogOut, Plus, Globe, Trash2, Edit2, Save, Phone, Clock, Calendar, FileText, X, Camera, Home, ShoppingCart, ShoppingBag, Menu, MoreHorizontal, Eye, Truck, CheckCircle2, Navigation, MapPin, CheckCircle, Info, SunMoon, Mic, MicOff, ClipboardCheck, Layers, Activity, Fingerprint, DollarSign, Folder, PieChart, Users, Filter, ArrowUpDown } from 'lucide-react';
+import { Bell, RefreshCw, Settings, LogOut, Plus, Globe, Trash2, Edit2, Save, Phone, Clock, Calendar, FileText, X, Camera, Home, ShoppingCart, ShoppingBag, Menu, MoreHorizontal, Eye, Truck, CheckCircle2, Navigation, MapPin, CheckCircle, Info, SunMoon, Mic, MicOff, ClipboardCheck, Layers, Activity, Fingerprint, DollarSign, Folder, PieChart, Users, Filter, ArrowUpDown, ArrowRight } from 'lucide-react';
 import { 
   getDepartments, getTasksData, saveReport, getReports, getMissions, getGlobalSettings, saveEmployee,
-  getSalesOrders, getOrders, getSupervisorTasks,
+  getSalesOrders, getOrders, getSupervisorTasks, getEmployees, getPreparationOrders,
   getEmployeeAttendanceByDate, saveHRAttendance,
   getHRLeaves, saveHRLeave, deleteHRLeave, getMissingPunches, saveMissingPunch, getHRAdvances, saveHRAdvance,
   getHRPetitions, saveHRPetition,
