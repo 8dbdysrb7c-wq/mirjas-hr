@@ -496,8 +496,16 @@ export const HomeTab = ({
           <DashboardCard isMobile={isMobile} icon={Layers} title="المهام" badgeCount={pendingTasksCount} onClick={() => handleTabChange('supervisor-tasks')} />
         )}
         
+        {hasPermission(user, 'hr') && (
+          <DashboardCard isMobile={isMobile} icon={Users} title="الموارد البشرية" onClick={() => handleTabChange('hr')} />
+        )}
+
         {hasPermission(user, 'stock') && (
           <DashboardCard isMobile={isMobile} icon={Layers} title="المخزون" onClick={() => handleTabChange('stock')} />
+        )}
+
+        {hasPermission(user, 'product_costing') && (
+          <DashboardCard isMobile={isMobile} icon={DollarSign} title="تسعير المنتج" onClick={() => handleTabChange('product-costing')} />
         )}
         {hasPermission(user, 'delivery') && (
           <DashboardCard isMobile={isMobile} icon={Truck} title="التوصيل" badgeCount={pendingDeliveryMissionsCount} onClick={() => handleTabChange('delivery')} />

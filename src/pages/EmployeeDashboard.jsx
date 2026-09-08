@@ -47,6 +47,8 @@ import AdminCustomers from './admin/AdminCustomers';
 import AdminReports from './admin/AdminReports';
 import AdminTasks from './admin/AdminTasks';
 import AdminSettings from './admin/AdminSettings';
+import AdminHR from './hr/AdminHR';
+import AdminProductCosting from './admin/AdminProductCosting';
 
 import NotificationCenter from '../components/NotificationCenter';
 import HeaderUserMenu from '../components/HeaderUserMenu';
@@ -2095,9 +2097,12 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       case 'live': return <AdminLive user={user} />;
 
       case 'stock': return <AdminStock user={user} notificationTarget={notificationTarget} />;
+      case 'hr': return <AdminHR user={user} notificationTarget={notificationTarget} />;
       case 'delivery': return <AdminDelivery user={user} notificationTarget={notificationTarget} />;
       case 'customers': return <AdminCustomers user={user} />;
       case 'reports': return <AdminReports notificationTarget={notificationTarget} />;
+      case 'costing':
+      case 'product-costing': return <AdminProductCosting user={user} />;
       case 'production-tasks': return <AdminTasks user={user} />;
       case 'site-settings': return <AdminSettings user={user} />;
 
@@ -2124,6 +2129,21 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         <div className={`modern-nav-item shrink-0 ${activeTab === 'home' ? 'active' : ''}`} onClick={() => handleTabChange('home')}>
           <Home size={22} /> <span>الرئيسية</span>
         </div>
+        {hasPermission(user, 'hr') && (
+          <div className={`modern-nav-item shrink-0 ${activeTab === 'hr' ? 'active' : ''}`} onClick={() => handleTabChange('hr')}>
+            <Users size={22} /> <span>الموارد البشرية</span>
+          </div>
+        )}
+        {hasPermission(user, 'stock') && (
+          <div className={`modern-nav-item shrink-0 ${activeTab === 'stock' ? 'active' : ''}`} onClick={() => handleTabChange('stock')}>
+            <Layers size={22} /> <span>المخزون</span>
+          </div>
+        )}
+        {hasPermission(user, 'orders') && (
+          <div className={`modern-nav-item shrink-0 ${activeTab === 'sales' ? 'active' : ''}`} onClick={() => handleTabChange('sales')}>
+            <ShoppingCart size={22} /> <span>الطلبيات</span>
+          </div>
+        )}
       </div>
 
       {/* Sidebar Overlay */}
@@ -2169,6 +2189,36 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
             <div className={`admin-sidebar-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => handleTabChange('home')}>
               <Home size={22} /> <span>الرئيسية</span>
             </div>
+            {hasPermission(user, 'hr') && (
+              <div className={`admin-sidebar-item ${activeTab === 'hr' ? 'active' : ''}`} onClick={() => handleTabChange('hr')}>
+                <Users size={22} /> <span>الموارد البشرية</span>
+              </div>
+            )}
+            {hasPermission(user, 'stock') && (
+              <div className={`admin-sidebar-item ${activeTab === 'stock' ? 'active' : ''}`} onClick={() => handleTabChange('stock')}>
+                <Layers size={22} /> <span>المخزون</span>
+              </div>
+            )}
+            {hasPermission(user, 'orders') && (
+              <div className={`admin-sidebar-item ${activeTab === 'sales' ? 'active' : ''}`} onClick={() => handleTabChange('sales')}>
+                <ShoppingCart size={22} /> <span>الطلبيات</span>
+              </div>
+            )}
+            {hasPermission(user, 'delivery') && (
+              <div className={`admin-sidebar-item ${activeTab === 'delivery' ? 'active' : ''}`} onClick={() => handleTabChange('delivery')}>
+                <Truck size={22} /> <span>التوصيل</span>
+              </div>
+            )}
+            {hasPermission(user, 'reports') && (
+              <div className={`admin-sidebar-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => handleTabChange('reports')}>
+                <FileText size={22} /> <span>التقارير</span>
+              </div>
+            )}
+            {hasPermission(user, 'product_costing') && (
+              <div className={`admin-sidebar-item ${activeTab === 'product-costing' ? 'active' : ''}`} onClick={() => handleTabChange('product-costing')}>
+                <DollarSign size={22} /> <span>تسعير المنتج</span>
+              </div>
+            )}
           </div>
           <button onClick={onLogout} className="admin-logout-btn mt-6" style={{ fontFamily: 'Rubik, sans-serif' }}>
             <LogOut size={18} /> تسجيل الخروج
@@ -2177,6 +2227,21 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
 
         {/* Content Area */}
         <div className="admin-content">
+          {activeTab !== 'home' && (
+            <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '12px 18px', borderRadius: 16, border: '1px solid #e2e8f0', marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <button 
+                type="button" 
+                className="btn btn-outline" 
+                onClick={() => handleTabChange('home')}
+                style={{ fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+              >
+                <ArrowRight size={18} /> العودة للشاشة الرئيسية
+              </button>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>
+                {user.name} ({user.id})
+              </span>
+            </div>
+          )}
           {/* Beautiful Header Card */}
           {activeTab === 'home' && (
             <div className="relative mb-8 rounded-[24px] shadow-sm border border-sky-100 flex flex-col justify-between no-print" style={{ background: 'linear-gradient(to left, #e0f2fe, #f0fdfa)', padding: isMobile ? '1.25rem' : '1.5rem', marginTop: isMobile ? '1rem' : '0' }}>
