@@ -941,7 +941,18 @@ const AdminEmployees = ({ user }) => {
 
   return (
     <div className="space-y-4" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {accessEmployee && isAdmin(user) && <UserAccessDesigner employee={accessEmployee} employees={employees} actor={user} onClose={() => setAccessEmployee(null)} />}
+      {accessEmployee && isAdmin(user) && (
+        <UserAccessDesigner 
+          employee={accessEmployee} 
+          employees={employees} 
+          actor={user} 
+          onClose={() => setAccessEmployee(null)} 
+          onSaved={(updatedEmp) => {
+            setEmployees(prev => prev.map(e => e.id === updatedEmp.id ? updatedEmp : e));
+            setAccessEmployee(updatedEmp);
+          }}
+        />
+      )}
       <div className="glass-card flex justify-between items-center">
         <div>
           <h3>إدارة الموظفين والصلاحيات</h3>

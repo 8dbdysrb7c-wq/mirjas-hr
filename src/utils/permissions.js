@@ -4,6 +4,8 @@
  * Centralized utility for checking Role-Based Access Control (RBAC) permissions.
  */
 
+import { evaluateAccessPolicy } from './accessPolicy.js';
+
 // A map from module keys used in the RBAC system to legacy user property keys
 // for backward compatibility with users who haven't been assigned a role yet.
 const LEGACY_ACCESS_KEYS = {
@@ -65,9 +67,17 @@ export const hasPermission = (user, module, action = 'view') => {
     : module;
 
   // Admins always have full access
-  const isUserAdmin = user.role === 'admin' || user.level === 'admin' || user.level === 'إدارة' || user.id === 'admin' || user.type === 'super_admin' || user.isAdmin;
+  const isUserAdmin = user.role === 'admin' || user.level === 'admin' || user.level === 'إدارة' || user.id === 'admin' || user.type === 'super_admin' || user.isAdmin || user.accessAdmin === true;
   if (isUserAdmin) {
     return true;
+  }
+
+  // 1. Direct accessPolicy check (High-fidelity source of truth if configured)
+  if (user.accessPolicy && user.accessPolicy.sections) {
+    const policyResult = evaluateAccessPolicy(user.accessPolicy, targetModule, action);
+    if (typeof policyResult === 'boolean') {
+      return policyResult;
+    }
   }
 
   // Handle grouped modules (stock, hr) logic BEFORE legacy fallback

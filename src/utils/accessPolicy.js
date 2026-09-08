@@ -72,3 +72,131 @@ export function draftPermissionKeys(policy) {
     .filter(action => evaluateDraft(policy, section.id, screen.id, action))
     .map(action => `${screenKey(section.id, screen.id)}.${action}`)));
 }
+
+const SECTION_ALIASES = {
+  stock: 'inventory',
+  inventory: 'inventory',
+  sales: 'sales',
+  hr: 'hr',
+  costing: 'costing',
+  delivery: 'delivery',
+  production: 'production',
+  reports: 'reports',
+  settings: 'settings',
+  tasks: 'tasks',
+  home: 'home'
+};
+
+export function evaluateAccessPolicy(policy, targetModule, action = 'view', now = Date.now()) {
+  if (!policy || !policy.sections) return undefined;
+
+  const normAction = action === 'add' ? 'create' : action;
+
+  // 1. Check if checking a whole section or section alias
+  const secId = SECTION_ALIASES[targetModule];
+  if (secId) {
+    const section = policy.sections[secId];
+    if (!section) return false;
+    if (section.expiresAt && (!Number.isFinite(Date.parse(section.expiresAt)) || Date.parse(section.expiresAt) <= now)) {
+      return false;
+    }
+    if (section.mode === 'hidden') return false;
+    if (normAction === 'view') {
+      if (section.mode === 'view' || section.mode === 'use') return true;
+      if (section.mode === 'custom') {
+        return Object.values(section.screens || {}).some(sc => sc.view === true);
+      }
+    }
+    if (section.mode === 'view') return false;
+    if (section.mode === 'use') return ['view', 'create', 'edit', 'print'].includes(normAction);
+    if (section.mode === 'custom') {
+      return Object.values(section.screens || {}).some(sc => sc[normAction] === true);
+    }
+    return false;
+  }
+
+  // 2. Check if checking a specific screen
+  const foundSection = ACCESS_SECTIONS.find(s => s.screens.some(sc => sc.id === targetModule));
+  if (foundSection) {
+    return evaluateDraft(policy, foundSection.id, targetModule, normAction, now);
+  }
+
+  return undefined;
+}
+
+export function syncLegacyPermissionsFromPolicy(policy) {
+  const permissions = {};
+  for (const section of ACCESS_SECTIONS) {
+    for (const screen of section.screens) {
+      permissions[screen.id] = {};
+      for (const action of Object.keys(ACCESS_ACTIONS)) {
+        const allowed = evaluateDraft(policy, section.id, screen.id, action);
+        permissions[screen.id][action] = allowed;
+        if (action === 'create') {
+          permissions[screen.id]['add'] = allowed;
+        }
+      }
+    }
+  }
+
+  const canViewSection = (secId) => {
+    const sec = policy?.sections?.[secId];
+    if (!sec || sec.mode === 'hidden') return false;
+    if (sec.expiresAt && (!Number.isFinite(Date.parse(sec.expiresAt)) || Date.parse(sec.expiresAt) <= Date.now())) return false;
+    if (sec.mode === 'view' || sec.mode === 'use') return true;
+    return Object.values(sec.screens || {}).some(sc => sc.view === true);
+  };
+
+  return {
+    permissions,
+    hasStockAccess: canViewSection('inventory'),
+    hasSalesAccess: canViewSection('sales'),
+    hasProductionAccess: canViewSection('production'),
+    hasDeliveryAccess: canViewSection('delivery'),
+    hasHRAccess: canViewSection('hr'),
+    hasEmployeesAccess: evaluateDraft(policy, 'settings', 'employees', 'view') || evaluateDraft(policy, 'hr', 'hr_employees', 'view'),
+    hasReportsAccess: canViewSection('reports'),
+    hasSettingsAccess: canViewSection('settings'),
+    hasSupervisorTasksAccess: evaluateDraft(policy, 'tasks', 'supervisor_tasks', 'view'),
+    hasSupervisorReportsAccess: evaluateDraft(policy, 'tasks', 'supervisor_reports', 'view'),
+    hasPreparationAccess: evaluateDraft(policy, 'production', 'preparation', 'view'),
+    hasCustomersAccess: evaluateDraft(policy, 'sales', 'customers', 'view'),
+    hasSiteSettingsAccess: evaluateDraft(policy, 'settings', 'site_settings', 'view'),
+    hasLogsAccess: evaluateDraft(policy, 'settings', 'logs', 'view'),
+    hasOverviewAccess: evaluateDraft(policy, 'home', 'overview', 'view'),
+    hasLiveAccess: evaluateDraft(policy, 'home', 'live', 'view'),
+    hasScoringAccess: evaluateDraft(policy, 'reports', 'scoring', 'view'),
+  };
+}
+
+export function canViewStockField(user, fieldKey) {
+  if (!user) return false;
+  const isUserAdmin = user.role === 'admin' || user.level === 'admin' || user.level === 'إدارة' || user.id === 'admin' || user.type === 'super_admin' || user.isAdmin;
+  if (isUserAdmin) return true;
+  const policy = user.accessPolicy;
+  if (!policy || !policy.sections?.inventory) return true;
+  const inv = policy.sections.inventory;
+  if (inv.mode === 'hidden') return false;
+  if (inv.fields && typeof inv.fields[fieldKey] === 'boolean') {
+    return inv.fields[fieldKey];
+  }
+  return true;
+}
+
+export function getAllowedWarehouses(user) {
+  if (!user) return ACCESS_WAREHOUSES;
+  const isUserAdmin = user.role === 'admin' || user.level === 'admin' || user.level === 'إدارة' || user.id === 'admin' || user.type === 'super_admin' || user.isAdmin;
+  if (isUserAdmin) return ACCESS_WAREHOUSES;
+  const policy = user.accessPolicy;
+  if (!policy || !policy.sections?.inventory) return ACCESS_WAREHOUSES;
+  const inv = policy.sections.inventory;
+  if (inv.mode === 'hidden') return [];
+  return Array.isArray(inv.warehouses) && inv.warehouses.length > 0 ? inv.warehouses : ACCESS_WAREHOUSES;
+}
+
+export function getDataScope(user, sectionId) {
+  if (!user) return 'all';
+  const isUserAdmin = user.role === 'admin' || user.level === 'admin' || user.level === 'إدارة' || user.id === 'admin' || user.type === 'super_admin' || user.isAdmin;
+  if (isUserAdmin) return 'all';
+  return user.accessPolicy?.sections?.[sectionId]?.scope || 'all';
+}

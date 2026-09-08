@@ -45,3 +45,39 @@ test('change history records additions, removals and before/after values', () =>
     { key: 'a', before: true, after: false }, { key: 'b', before: 1, after: null }, { key: 'c', before: null, after: 2 },
   ]);
 });
+
+test('evaluateAccessPolicy correctly evaluates section and screen level permissions', async () => {
+  const { evaluateAccessPolicy, syncLegacyPermissionsFromPolicy } = await import('./accessPolicy.js');
+  const { hasPermission } = await import('./permissions.js');
+
+  let policy = createAccessDraft({ id: 'emp1' }, false);
+  policy = setAccessMode(policy, 'inventory', 'hidden');
+  policy = setAccessMode(policy, 'sales', 'use');
+
+  // Hidden section
+  assert.equal(evaluateAccessPolicy(policy, 'stock', 'view'), false);
+  assert.equal(evaluateAccessPolicy(policy, 'inventory', 'view'), false);
+  assert.equal(evaluateAccessPolicy(policy, 'stock_view', 'view'), false);
+
+  // 'use' section
+  assert.equal(evaluateAccessPolicy(policy, 'sales', 'view'), true);
+  assert.equal(evaluateAccessPolicy(policy, 'orders', 'view'), true);
+  assert.equal(evaluateAccessPolicy(policy, 'orders', 'create'), true);
+  assert.equal(evaluateAccessPolicy(policy, 'orders', 'add'), true);
+  assert.equal(evaluateAccessPolicy(policy, 'orders', 'delete'), false);
+
+  // Integration via hasPermission
+  const employee = { id: 'emp1', role: 'employee', accessPolicy: policy };
+  assert.equal(hasPermission(employee, 'stock'), false);
+  assert.equal(hasPermission(employee, 'stock_view'), false);
+  assert.equal(hasPermission(employee, 'orders', 'view'), true);
+  assert.equal(hasPermission(employee, 'orders', 'delete'), false);
+
+  // Synchronization to legacy flags
+  const synced = syncLegacyPermissionsFromPolicy(policy);
+  assert.equal(synced.hasStockAccess, false);
+  assert.equal(synced.hasSalesAccess, true);
+  assert.equal(synced.permissions.orders.view, true);
+  assert.equal(synced.permissions.orders.add, true);
+  assert.equal(synced.permissions.orders.delete, false);
+});

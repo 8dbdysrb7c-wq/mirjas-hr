@@ -1,4 +1,6 @@
 import { db } from '../firebase';
+import { FREE_AUTH_ENABLED, getTrustedProfile, provisionEmployeeAccount } from './freeAuth';
+import { directoryProfile, removePasswordFields } from '../utils/freeAuthIdentity';
 import { 
   collection, 
   getDocs, 
@@ -231,6 +233,7 @@ export const getNotificationRule = (settings, moduleKey) => {
 
 export const isAdmin = (user) => {
   if (!user) return false;
+  if (FREE_AUTH_ENABLED) return user.accessAdmin === true;
   return (
     user.role === 'admin' || 
     user.level === 'admin' || 
@@ -507,6 +510,13 @@ export const setDocData = async (collectionName, docId, value) => {
 
 export const getEmployees = async () => {
   try {
+    if (FREE_AUTH_ENABLED) {
+      const actor = getTrustedProfile();
+      if (!actor) return [];
+      const source = actor.accessAdmin ? 'employees' : 'employee_directory';
+      const snapshot = await getDocs(collection(db, source));
+      return snapshot.docs.map(entry => entry.id === actor.id ? actor : { ...removePasswordFields(entry.data()), id: entry.id });
+    }
     const querySnapshot = await getDocs(collection(db, 'employees'));
     const employees = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
     if (employees.length === 0) {
@@ -518,6 +528,7 @@ export const getEmployees = async () => {
     return employees;
   } catch (error) {
     console.error("Error in getEmployees:", error);
+    if (FREE_AUTH_ENABLED) return [];
     return defaultEmployees;
   }
 };
@@ -525,6 +536,11 @@ export const getEmployees = async () => {
 export const saveEmployees = async (employees) => {
   try {
     for (const emp of employees) {
+      if (FREE_AUTH_ENABLED) {
+        const error = await saveEmployee(emp);
+        if (error) throw error;
+        continue;
+      }
       await setDoc(doc(db, 'employees', emp.id), emp);
     }
   } catch (error) {
@@ -534,7 +550,19 @@ export const saveEmployees = async (employees) => {
 
 export const saveEmployee = async (employee) => {
   try {
-    await setDoc(doc(db, 'employees', employee.id), employee);
+    if (FREE_AUTH_ENABLED) {
+      const existing = await getDoc(doc(db, 'employees', employee.id));
+      let safe = removePasswordFields({ ...(existing.data() || {}), ...employee });
+      if (employee.password) {
+        const identity = await provisionEmployeeAccount(safe, employee.password);
+        safe = { ...safe, ...identity };
+      }
+      if (!safe.authUid) throw new Error('يلزم تجهيز حساب تسجيل الدخول لهذا الموظف قبل الحفظ');
+      await setDoc(doc(db, 'employees', employee.id), safe);
+      await setDoc(doc(db, 'employee_directory', employee.id), directoryProfile(safe));
+      return null;
+    }
+    await setDoc(doc(db, 'employees', employee.id), employee, { merge: true });
     return null;
   } catch (error) {
     console.error("Error in saveEmployee:", error);
