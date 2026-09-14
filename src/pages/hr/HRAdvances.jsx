@@ -9,6 +9,7 @@ import { sendWhatsAppNotification } from '../../utils/whatsappService';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/light.css';
 import HRDateFilter from '../../components/ui/HRDateFilter';
+import { hasPermission } from '../../utils/permissions';
 
 const getLocalDateStr = (d) => {
   const offset = d.getTimezoneOffset();
@@ -16,6 +17,11 @@ const getLocalDateStr = (d) => {
 };
 
 const HRAdvances = ({ user, refreshCounts }) => {
+  const canAdd = hasPermission(user, 'hr_advances', 'add') || hasPermission(user, 'hr_advances', 'create');
+  const canEdit = hasPermission(user, 'hr_advances', 'edit');
+  const canApprove = hasPermission(user, 'hr_advances', 'approve');
+  const canDelete = hasPermission(user, 'hr_advances', 'delete');
+
   const isSiteOwner = String(user?.id || '').trim().toLowerCase() === 'admin';
   const [advances, setAdvances] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -97,6 +103,10 @@ const HRAdvances = ({ user, refreshCounts }) => {
   useEffect(() => { fetchData(); }, []);
 
   const handleStatusChange = async (advance, newStatus) => {
+    if (!canApprove) {
+      Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لاعتماد أو رفض السلف.', 'warning');
+      return;
+    }
     let rejectionReason = '';
     if (newStatus === 'مرفوض') {
       const { value, isDismissed } = await Swal.fire({
@@ -141,6 +151,10 @@ const HRAdvances = ({ user, refreshCounts }) => {
   };
 
   const handleApproveRequest = async (advance) => {
+    if (!canApprove) {
+      Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لاعتماد السلف.', 'warning');
+      return;
+    }
     const { value: result } = await Swal.fire({
       title: 'موافقة على طلب السلفة',
       html: `
@@ -205,6 +219,10 @@ const HRAdvances = ({ user, refreshCounts }) => {
   };
 
   const handleDelete = async (id) => {
+    if (!canDelete) {
+      Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لحذف السلف.', 'warning');
+      return;
+    }
     const res = await Swal.fire({
       title: 'هل أنت متأكد؟',
       html: '<p style="margin-bottom: 15px;">لن تتمكن من التراجع عن الحذف</p><textarea id="swal-delete-notes" class="swal2-textarea" placeholder="سبب الحذف (اختياري)..." style="margin: 0; width: 100%; box-sizing: border-box;"></textarea>',
@@ -299,6 +317,10 @@ const HRAdvances = ({ user, refreshCounts }) => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (!canAdd && !canEdit) {
+      Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لإضافة أو تعديل السلف.', 'warning');
+      return;
+    }
     if (!formData.amount || formData.amount <= 0) {
       Swal.fire('تنبيه', 'الرجاء إدخال مبلغ صحيح', 'warning');
       return;
@@ -543,20 +565,22 @@ const HRAdvances = ({ user, refreshCounts }) => {
               <option value="مرفوض">الطلبات المرفوضة</option>
               <option value="الكل">سجل جميع الطلبات</option>
             </select>
-            <button 
-              onClick={() => {
-                setFormData({ 
-                  employeeId: '', type: 'سلفة شخصية', date: new Date().toISOString().split('T')[0], 
-                  amount: '', reason: '', paymentMethod: 'تخصم من الراتب القادم', status: 'معلق',
-                  isInstallment: false, installmentMonths: 1, installmentStartMonth: new Date().toISOString().substring(0, 7), installments: [] 
-                });
-                setShowModal(true);
-              }}
-              className="premium-add-btn flex items-center gap-2 whitespace-nowrap h-[42px]"
-            >
-              <Plus size={20} strokeWidth={2.5} />
-              تقديم طلب جديد
-            </button>
+            {canAdd && (
+              <button 
+                onClick={() => {
+                  setFormData({ 
+                    employeeId: '', type: 'سلفة شخصية', date: new Date().toISOString().split('T')[0], 
+                    amount: '', reason: '', paymentMethod: 'تخصم من الراتب القادم', status: 'معلق',
+                    isInstallment: false, installmentMonths: 1, installmentStartMonth: new Date().toISOString().substring(0, 7), installments: [] 
+                  });
+                  setShowModal(true);
+                }}
+                className="premium-add-btn flex items-center gap-2 whitespace-nowrap h-[42px]"
+              >
+                <Plus size={20} strokeWidth={2.5} />
+                تقديم طلب جديد
+              </button>
+            )}
           </div>
         </div>
 
@@ -693,40 +717,46 @@ const HRAdvances = ({ user, refreshCounts }) => {
                       </button>
                       {advance.status === 'معلق' ? (
                         <>
-                          <button onClick={() => {
-                            setFormData({
-                              id: advance.id,
-                              employeeId: employees.find(e => e.name === advance.employeeName)?.id || advance.employeeId || '',
-                              amount: advance.amount || '',
-                              reason: advance.reason || '',
-                              paymentMethod: advance.paymentMethod || 'تخصم من الراتب القادم',
-                              status: advance.status || 'معلق',
-                              date: advance.date || (advance.createdAt ? advance.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
-                              isInstallment: advance.isInstallment || false,
-                              installmentMonths: advance.installmentMonths || 1,
-                              installmentStartMonth: advance.installmentStartMonth || new Date().toISOString().substring(0, 7),
-                              installments: advance.installments || [],
-                              createdAt: advance.createdAt
-                            });
-                            setShowModal(true);
-                          }} className="icon-btn" style={{ color: '#8b5cf6', background: '#f5f3ff', borderColor: '#ddd6fe' }} title="تعديل الطلب">
-                            <Pencil size={18} strokeWidth={2} />
-                          </button>
-                          <button onClick={() => handleApproveRequest(advance)} className="icon-btn icon-btn-success" title="موافقة">
-                            <Check size={18} strokeWidth={2.5} />
-                          </button>
-                          <button onClick={() => handleStatusChange(advance, 'مرفوض')} className="icon-btn icon-btn-delete" title="رفض">
-                            <X size={18} strokeWidth={2.5} />
-                          </button>
+                          {canEdit && (
+                            <button onClick={() => {
+                              setFormData({
+                                id: advance.id,
+                                employeeId: employees.find(e => e.name === advance.employeeName)?.id || advance.employeeId || '',
+                                amount: advance.amount || '',
+                                reason: advance.reason || '',
+                                paymentMethod: advance.paymentMethod || 'تخصم من الراتب القادم',
+                                status: advance.status || 'معلق',
+                                date: advance.date || (advance.createdAt ? advance.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
+                                isInstallment: advance.isInstallment || false,
+                                installmentMonths: advance.installmentMonths || 1,
+                                installmentStartMonth: advance.installmentStartMonth || new Date().toISOString().substring(0, 7),
+                                installments: advance.installments || [],
+                                createdAt: advance.createdAt
+                              });
+                              setShowModal(true);
+                            }} className="icon-btn" style={{ color: '#8b5cf6', background: '#f5f3ff', borderColor: '#ddd6fe' }} title="تعديل الطلب">
+                              <Pencil size={18} strokeWidth={2} />
+                            </button>
+                          )}
+                          {canApprove && (
+                            <>
+                              <button onClick={() => handleApproveRequest(advance)} className="icon-btn icon-btn-success" title="موافقة">
+                                <Check size={18} strokeWidth={2.5} />
+                              </button>
+                              <button onClick={() => handleStatusChange(advance, 'مرفوض')} className="icon-btn icon-btn-delete" title="رفض">
+                                <X size={18} strokeWidth={2.5} />
+                              </button>
+                            </>
+                          )}
                         </>
                       ) : (
-                        !(advance.processedInPeriod || (advance.processedPeriods && advance.processedPeriods.length > 0)) && (
+                        canApprove && !(advance.processedInPeriod || (advance.processedPeriods && advance.processedPeriods.length > 0)) && (
                           <button onClick={() => handleStatusChange(advance, 'معلق')} className="icon-btn icon-btn-warning" title="تراجع عن القرار">
                             <Undo2 size={16} strokeWidth={2.5} />
                           </button>
                         )
                       )}
-                      {!(advance.processedInPeriod || (advance.processedPeriods && advance.processedPeriods.length > 0)) && (
+                      {canDelete && !(advance.processedInPeriod || (advance.processedPeriods && advance.processedPeriods.length > 0)) && (
                         <button onClick={() => handleDelete(advance.id)} className="icon-btn icon-btn-delete" title="حذف">
                           <Trash2 size={16} strokeWidth={2} />
                         </button>

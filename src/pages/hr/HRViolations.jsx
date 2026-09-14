@@ -8,6 +8,7 @@ import 'flatpickr/dist/themes/airbnb.css';
 import { getEmployees, getHRViolations, saveHRViolation, deleteHRViolation, syncEvaluatedDailyReportViolations } from '../../store';
 import Swal from 'sweetalert2';
 import HRDateFilter from '../../components/ui/HRDateFilter';
+import { hasPermission } from '../../utils/permissions';
 
 const getLocalDateStr = (d) => {
   const offset = d.getTimezoneOffset();
@@ -15,6 +16,11 @@ const getLocalDateStr = (d) => {
 };
 
 const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
+  const canAdd = hasPermission(user, 'hr_bonuses_violations', 'add') || hasPermission(user, 'hr_bonuses_violations', 'create');
+  const canEdit = hasPermission(user, 'hr_bonuses_violations', 'edit');
+  const canApprove = hasPermission(user, 'hr_bonuses_violations', 'approve');
+  const canDelete = hasPermission(user, 'hr_bonuses_violations', 'delete');
+
   const [violations, setViolations] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('pending');
@@ -87,6 +93,9 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (!canAdd) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية تسجيل مخالفات جديدة.', 'warning');
+    }
     const emp = employees.find(e => String(e.id || '').trim() === String(formData.employeeId || '').trim());
     if (!emp) return Swal.fire('خطأ', 'الرجاء اختيار الموظف', 'error');
 
@@ -103,6 +112,9 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
   };
 
   const handleDelete = async (id) => {
+    if (!canDelete) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية حذف المخالفات.', 'warning');
+    }
     const res = await Swal.fire({ title: 'تأكيد الحذف', icon: 'warning', showCancelButton: true });
     if (res.isConfirmed) {
       await deleteHRViolation(id);
@@ -112,6 +124,9 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
   };
 
   const handleApproval = async (violation, status) => {
+    if (!canApprove) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية اعتماد أو رفض المخالفات.', 'warning');
+    }
     await saveHRViolation({
       ...violation,
       status,
@@ -304,6 +319,7 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
               />
           </div>
 
+
           {/* Employee Name */}
           <div style={{ width: '250px', position: 'relative' }}>
               <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, color: '#94a3b8', pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>
@@ -319,15 +335,17 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
                 isClearable={true}
               />
           </div>
-          <button 
-          onClick={() => {
-            setFormData({ employeeId: '', type: 'تأخير', date: new Date().toISOString().split('T')[0], action: 'تنبيه', deductionAmount: '', notes: '' });
-            setShowModal(true);
-          }}
-          className="premium-add-btn blood-red-btn whitespace-nowrap"
-        >
-          <Plus size={20} /> تسجيل مخالفة
-        </button>
+          {canAdd && (
+            <button 
+              onClick={() => {
+                setFormData({ employeeId: '', type: 'تأخير', date: new Date().toISOString().split('T')[0], action: 'تنبيه', deductionAmount: '', notes: '' });
+                setShowModal(true);
+              }}
+              className="premium-add-btn blood-red-btn whitespace-nowrap"
+            >
+              <Plus size={20} /> تسجيل مخالفة
+            </button>
+          )}
         </div>
       </div>
 
@@ -370,15 +388,20 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
                 <td className="text-muted text-sm">{v.notes}</td>
                 <td>
                   <div className="flex gap-2 justify-center">
-                    <button onClick={() => promptEmployeeAlert({ employeeId: v.employeeId, employeeName: v.employeeName, source: 'المخالفات والخصومات', sourceReference: `${v.type || 'مخالفة'} ${v.date || ''}`, suggestedMessage: `تم تسجيل مخالفة (${v.type || 'غير محددة'}) بتاريخ ${v.date || 'غير محدد'}.${v.action ? `\nالإجراء المتخذ: ${v.action}.` : ''}${v.deductionAmount ? `\nقيمة الخصم: ${v.deductionAmount} د.أ.` : ''}${v.notes ? `\nالملاحظات: ${v.notes}` : ''}`, user })} className="icon-btn" style={{ color: '#c2410c', background: '#fff7ed', borderColor: '#fdba74' }} title="إرسال تنبيه للموظف"><Bell size={17}/></button>
-                    {v.status === 'معلق' && (
+                    {(canEdit || canApprove) && (
+                      <button onClick={() => promptEmployeeAlert({ employeeId: v.employeeId, employeeName: v.employeeName, source: 'المخالفات والخصومات', sourceReference: `${v.type || 'مخالفة'} ${v.date || ''}`, suggestedMessage: `تم تسجيل مخالفة (${v.type || 'غير محددة'}) بتاريخ ${v.date || 'غير محدد'}.${v.action ? `\nالإجراء المتخذ: ${v.action}.` : ''}${v.deductionAmount ? `\nقيمة الخصم: ${v.deductionAmount} د.أ.` : ''}${v.notes ? `\nالملاحظات: ${v.notes}` : ''}`, user })} className="icon-btn" style={{ color: '#c2410c', background: '#fff7ed', borderColor: '#fdba74' }} title="إرسال تنبيه للموظف"><Bell size={17}/></button>
+                    )}
+                    {canApprove && v.status === 'معلق' && (
                       <>
                         <button onClick={() => handleApproval(v, 'موافق')} className="icon-btn icon-btn-success" title="اعتماد المخالفة"><Check size={18}/></button>
                         <button onClick={() => handleApproval(v, 'مرفوض')} className="icon-btn icon-btn-delete" title="رفض المخالفة"><X size={18}/></button>
                       </>
                     )}
-                    {!v.processedInPeriod && (
+                    {canDelete && !v.processedInPeriod && (
                       <button onClick={() => handleDelete(v.id)} className="icon-btn icon-btn-delete"><Trash2 size={18}/></button>
+                    )}
+                    {!canApprove && !canDelete && (
+                      <span className="text-xs text-slate-400 font-bold whitespace-nowrap">معاينة فقط</span>
                     )}
                   </div>
                 </td>

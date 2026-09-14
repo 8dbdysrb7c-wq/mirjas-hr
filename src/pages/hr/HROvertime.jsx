@@ -9,6 +9,7 @@ import { getEmployees, getHRLeaves, saveHRLeave, deleteHRLeave, getGlobalSetting
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
 import HRDateFilter from '../../components/ui/HRDateFilter';
+import { hasPermission } from '../../utils/permissions';
 
 const getLocalDateStr = (d) => {
   const offset = d.getTimezoneOffset();
@@ -16,6 +17,10 @@ const getLocalDateStr = (d) => {
 };
 
 const HROvertime = ({ user, refreshCounts }) => {
+  const canAdd = hasPermission(user, 'hr_overtime', 'add') || hasPermission(user, 'hr_overtime', 'create');
+  const canApprove = hasPermission(user, 'hr_overtime', 'approve');
+  const canDelete = hasPermission(user, 'hr_overtime', 'delete');
+
   const [leaves, setLeaves] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [employees, setEmployees] = useState([]);
@@ -46,6 +51,10 @@ const HROvertime = ({ user, refreshCounts }) => {
   const isSavingRef = useRef(false);
 
   const openSmartApproval = async (leave) => {
+    if (!canApprove) {
+      Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لاعتماد العمل الإضافي.', 'warning');
+      return;
+    }
     setSmartModal({ show: true, leave, attendance: null, deficitMins: 0, requestedMins: 0, loading: true });
     
     // Calculate requested minutes
@@ -460,6 +469,10 @@ const HROvertime = ({ user, refreshCounts }) => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (!canAdd) {
+      Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لإضافة طلبات عمل إضافي.', 'warning');
+      return;
+    }
     if (isSavingRef.current) return;
 
     if (!formData.notes || formData.notes.trim() === '') {
@@ -551,6 +564,10 @@ const HROvertime = ({ user, refreshCounts }) => {
   };
 
   const handleStatusChange = async (leave, newStatus) => {
+    if (!canApprove) {
+      Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لاعتماد أو رفض العمل الإضافي.', 'warning');
+      return;
+    }
     let actionReason = '';
     if (newStatus === 'موافق' || newStatus === 'مرفوض') {
       const { value, isDismissed } = await Swal.fire({
@@ -597,6 +614,10 @@ const HROvertime = ({ user, refreshCounts }) => {
   };
 
   const handleDelete = async (id) => {
+    if (!canDelete) {
+      Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لحذف طلبات العمل الإضافي.', 'warning');
+      return;
+    }
     const res = await Swal.fire({
       title: 'هل أنت متأكد؟',
       html: '<p style="margin-bottom: 15px;">لن تتمكن من التراجع عن الحذف</p><textarea id="swal-delete-notes" class="swal2-textarea" placeholder="سبب الحذف (اختياري)..." style="margin: 0; width: 100%; box-sizing: border-box;"></textarea>',
@@ -806,15 +827,17 @@ const HROvertime = ({ user, refreshCounts }) => {
             <option value="مرفوض">الطلبات المرفوضة</option>
             <option value="الكل">سجل جميع الطلبات</option>
           </select>
-          <button 
-            onClick={() => {
-              setFormData({ employeeId: '', type: 'بدل عمل إضافي', date: '', startTime: '', endTime: '', rate: '1:1', notes: '', status: 'معلق' });
-              setShowModal(true);
-            }}
-            className="premium-add-btn flex items-center gap-2 whitespace-nowrap"
-          >
-            <Plus size={18} /> تقديم طلب جديد
-          </button>
+          {canAdd && (
+            <button 
+              onClick={() => {
+                setFormData({ employeeId: '', type: 'بدل عمل إضافي', date: '', startTime: '', endTime: '', rate: '1:1', notes: '', status: 'معلق' });
+                setShowModal(true);
+              }}
+              className="premium-add-btn flex items-center gap-2 whitespace-nowrap"
+            >
+              <Plus size={18} /> تقديم طلب جديد
+            </button>
+          )}
         </div>
       </div>
 
@@ -968,23 +991,27 @@ const HROvertime = ({ user, refreshCounts }) => {
                     <button onClick={() => promptEmployeeAlert({ employeeId: leave.employeeId, employeeName: leave.employeeName, source: 'العمل الإضافي', sourceReference: `${leave.date || leave.startDate || ''}`, suggestedMessage: `طلب العمل الإضافي الخاص بك بتاريخ ${leave.date || leave.startDate || 'غير محدد'} حالته: ${leave.status || 'معلق'}.\nالمدة المستحقة: ${getOvertimeDuration(leave)}.${getOvertimeReason(leave) ? `\nالسبب: ${getOvertimeReason(leave)}` : ''}`, user })} className="icon-btn" style={{ color: '#c2410c', background: '#fff7ed', borderColor: '#fdba74' }} title="إرسال تنبيه للموظف">
                       <Bell size={17} />
                     </button>
-                    {leave.status === 'معلق' ? (
-                      <>
-                        <button onClick={() => openSmartApproval(leave)} className="icon-btn icon-btn-success" title="موافقة">
-                          <Check size={18} strokeWidth={2.5} />
+                    {canApprove && (
+                      leave.status === 'معلق' ? (
+                        <>
+                          <button onClick={() => openSmartApproval(leave)} className="icon-btn icon-btn-success" title="موافقة">
+                            <Check size={18} strokeWidth={2.5} />
+                          </button>
+                          <button onClick={() => handleStatusChange(leave, 'مرفوض')} className="icon-btn icon-btn-delete" title="رفض">
+                            <X size={18} strokeWidth={2.5} />
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={() => handleStatusChange(leave, 'معلق')} className="icon-btn icon-btn-warning" title="تراجع عن القرار">
+                          <Undo2 size={16} strokeWidth={2.5} />
                         </button>
-                        <button onClick={() => handleStatusChange(leave, 'مرفوض')} className="icon-btn icon-btn-delete" title="رفض">
-                          <X size={18} strokeWidth={2.5} />
-                        </button>
-                      </>
-                    ) : (
-                      <button onClick={() => handleStatusChange(leave, 'معلق')} className="icon-btn icon-btn-warning" title="تراجع عن القرار">
-                        <Undo2 size={16} strokeWidth={2.5} />
+                      )
+                    )}
+                    {canDelete && (
+                      <button onClick={() => handleDelete(leave.id)} className="icon-btn icon-btn-delete" title="حذف">
+                        <Trash2 size={16} strokeWidth={2} />
                       </button>
                     )}
-                    <button onClick={() => handleDelete(leave.id)} className="icon-btn icon-btn-delete" title="حذف">
-                      <Trash2 size={16} strokeWidth={2} />
-                    </button>
                   </div>
                 </td>
               </tr>

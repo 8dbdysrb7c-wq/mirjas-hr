@@ -12,6 +12,7 @@ import { hasPermission } from '../../utils/permissions';
 import MultiColorSelectionModal from '../../components/MultiColorSelectionModal';
 import { buildReservedQuantityMap, getAvailableQuantity } from '../../utils/stockAvailability';
 import './stock-desktop.css';
+import { isStockVoucherInHistory } from '../../utils/stockVoucherHistory';
 
 const MySwal = withReactContent(Swal);
 const escapeMarkup = value => String(value ?? '')
@@ -2855,7 +2856,7 @@ const AdminStock = ({ user, notificationTarget }) => {
 
   const filteredVouchers = (vouchers || [])
     .filter(v => {
-      if (!v) return false;
+      if (!v || !isStockVoucherInHistory(v)) return false;
       const matchSearch = matchesSearch(
         [v.voucherNumber, v.warehouse, v.recipient, v.createdBy, v.notes, v.items],
         voucherFilters.search
@@ -3013,7 +3014,7 @@ const AdminStock = ({ user, notificationTarget }) => {
       icon: <Download />,
       color: '#16a34a',
       bgLight: '#dcfce7',
-      customBadge: `${vouchers.filter(v => v.type === 'إدخال').length} سند`,
+      customBadge: `${vouchers.filter(v => v.type === 'إدخال' && isStockVoucherInHistory(v)).length} سند`,
       onClick: () => { setActiveStockTab('vouchers'); setVoucherFilters(prev => ({ ...prev, type: 'إدخال' })); setVoucherFilterStatus('all'); },
       isActive: activeStockTab === 'vouchers' && voucherFilters.type === 'إدخال'
     },
@@ -3023,7 +3024,7 @@ const AdminStock = ({ user, notificationTarget }) => {
       icon: <Upload />,
       color: '#dc2626',
       bgLight: '#fee2e2',
-      customBadge: `${vouchers.filter(v => v.type === 'إخراج').length} سند`,
+      customBadge: `${vouchers.filter(v => v.type === 'إخراج' && isStockVoucherInHistory(v)).length} سند`,
       onClick: () => { setActiveStockTab('vouchers'); setVoucherFilters(prev => ({ ...prev, type: 'إخراج' })); setVoucherFilterStatus('all'); },
       isActive: activeStockTab === 'vouchers' && voucherFilters.type === 'إخراج'
     },
@@ -3033,7 +3034,7 @@ const AdminStock = ({ user, notificationTarget }) => {
       icon: <ArrowUpDown />,
       color: '#0284c7',
       bgLight: '#e0f2fe',
-      customBadge: `${vouchers.filter(v => v.type === 'تحويل').length} سند`,
+      customBadge: `${vouchers.filter(v => v.type === 'تحويل' && isStockVoucherInHistory(v)).length} سند`,
       onClick: () => { setActiveStockTab('vouchers'); setVoucherFilters(prev => ({ ...prev, type: 'تحويل' })); setVoucherFilterStatus('all'); },
       isActive: activeStockTab === 'vouchers' && voucherFilters.type === 'تحويل'
     },

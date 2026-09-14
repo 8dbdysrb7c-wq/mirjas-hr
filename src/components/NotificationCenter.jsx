@@ -180,10 +180,92 @@ const NotificationCenter = ({ user, onNavigate }) => {
   const hideReadNotifications = settings?.notificationSettings?.hideReadNotifications ?? true;
 
   const requestPermission = () => {
-    if (!("Notification" in window)) return;
+    if (!("Notification" in window)) {
+      Swal.fire('غير مدعوم', 'هذا المتصفح لا يدعم إشعارات النظام.', 'info');
+      return;
+    }
     Notification.requestPermission().then(permission => {
       setPermissionStatus(permission);
+      if (permission === 'granted') {
+        Swal.fire('تم التفعيل', 'تم السماح بإشعارات النظام بنجاح! يمكنك الآن تجربة الإشعار الخارجي.', 'success');
+      }
     });
+  };
+
+  const triggerTestNotification = async () => {
+    if (!("Notification" in window)) {
+      return Swal.fire('غير مدعوم', 'هذا المتصفح لا يدعم إشعارات النظام المباشرة.', 'info');
+    }
+
+    let currentPerm = Notification.permission;
+    if (currentPerm !== 'granted') {
+      currentPerm = await Notification.requestPermission();
+      setPermissionStatus(currentPerm);
+    }
+
+    if (currentPerm !== 'granted') {
+      return Swal.fire('الإذن غير مفعّل', 'يرجى السماح بالإشعارات من إعدادات المتصفح على هاتفك لتلقي الإشعارات.', 'warning');
+    }
+
+    const result = await Swal.fire({
+      title: 'تجربة إشعار الهاتف الخارجي 🔔',
+      html: `
+        <div style="direction: rtl; text-align: right; line-height: 1.8; font-size: 14px;">
+          <p>سيتم إرسال إشعار تجريبي بعد <strong>5 ثوانٍ</strong>.</p>
+          <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px; margin-top: 10px; color: #1e40af; font-weight: bold;">
+            📱 الخطوة الآن: بعد الضغط على زر البدء، قم فوراً بـ <u>تصغير المتصفح</u> أو <u>الخروج للشاشة الرئيسية</u> أو <u>قفل شاشة هاتفك</u> لتشاهد الإشعار يظهر كنافذة خارجية في شريط الإشعارات!
+          </div>
+        </div>
+      `,
+      icon: 'info',
+      showCancelButton: true,
+      confirmButtonText: 'ابدأ العد (5 ثوانٍ)',
+      cancelButtonText: 'إلغاء'
+    });
+
+    if (!result.isConfirmed) return;
+
+    Swal.fire({
+      title: 'بدأ العد التنازلي...',
+      html: '<p style="font-size: 15px; color: #e11d48; font-weight: bold;">اخرج من المتصفح أو أقفل شاشة الهاتف الآن!</p>',
+      timer: 5000,
+      timerProgressBar: true,
+      showConfirmButton: false,
+      allowOutsideClick: true
+    });
+
+    setTimeout(async () => {
+      try {
+        playNotificationSound();
+      } catch (e) {}
+
+      const title = 'نظام ميرجاس للموارد البشرية 🔔';
+      const options = {
+        body: 'تجربة ناجحة! هذا إشعار خارجي يظهر على شاشة هاتفك دون الحاجة لفتح التطبيق.',
+        icon: '/icon-mrsleep.png',
+        badge: '/icon-mrsleep.png',
+        vibrate: [300, 100, 300, 100, 300],
+        tag: 'mirjas-test-alert',
+        renotify: true,
+        data: '/'
+      };
+
+      try {
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.ready;
+          if (reg && reg.showNotification) {
+            await reg.showNotification(title, options);
+            return;
+          }
+        }
+        new Notification(title, options);
+      } catch (e) {
+        console.warn('Notification trigger fallback', e);
+        try {
+          new Notification(title, options);
+        } catch (err) {}
+      }
+    }, 5000);
   };
 
   const loadNotifications = async () => {
@@ -461,14 +543,40 @@ const NotificationCenter = ({ user, onNavigate }) => {
             <div>
               <h3>الإشعارات</h3>
               <p>تابع آخر الإضافات والرسائل التي وصلتك حسب الصلاحية.</p>
-              {permissionStatus === 'default' && (
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                {permissionStatus !== 'granted' ? (
+                  <button 
+                    type="button"
+                    onClick={requestPermission}
+                    className="text-xs font-bold text-primary flex items-center gap-1 bg-primary-light px-2.5 py-1.5 rounded-lg border border-primary/20 hover:bg-primary/10 transition"
+                  >
+                     <BellRing size={14} /> تفعيل إشعارات الهاتف
+                  </button>
+                ) : null}
+
                 <button 
-                  onClick={requestPermission}
-                  className="text-xs font-bold text-primary mt-2 flex items-center gap-1 bg-primary-light px-2 py-1 rounded"
+                  type="button"
+                  onClick={triggerTestNotification}
+                  style={{
+                    backgroundColor: '#f0fdf4',
+                    color: '#15803d',
+                    border: '1px solid #bbf7d0',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                  }}
+                  title="تجربة إشعار خارجي يظهر على شاشة هاتفك بعد 5 ثوانٍ"
                 >
-                   تفعيل إشعارات النظام على الهاتف
+                  <BellRing size={14} style={{ color: '#16a34a' }} />
+                  تجربة إشعار الهاتف الخارجي (بعد 5 ثوانٍ)
                 </button>
-              )}
+              </div>
             </div>
             <button
               type="button"

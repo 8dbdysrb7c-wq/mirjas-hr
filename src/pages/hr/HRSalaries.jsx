@@ -6,6 +6,7 @@ import { getEmployees, getHRViolations, getHRAttendance, getHRLeaves, getGlobalS
 import { calculateSalaries as calculateSalariesLogic, getCycleDates } from '../../utils/salaryCalculator';
 import Swal from 'sweetalert2';
 import { updateDoc, doc } from 'firebase/firestore';
+import { hasPermission } from '../../utils/permissions';
 import { db } from '../../firebase';
 
 const formatVal = (val, showZeroAsDash = true) => {
@@ -17,6 +18,8 @@ const formatVal = (val, showZeroAsDash = true) => {
 };
 
 const HRSalaries = ({ user }) => {
+  const canApprove = hasPermission(user, 'hr_salaries', 'approve');
+  const canEdit = hasPermission(user, 'hr_salaries', 'edit');
   const [employees, setEmployees] = useState([]);
   const [violations, setViolations] = useState([]);
   const [attendance, setAttendance] = useState([]);
@@ -275,6 +278,9 @@ const HRSalaries = ({ user }) => {
   const periodStatus = currentPeriod ? currentPeriod.status : 'open';
 
   const handleStatusChange = async (newStatus) => {
+    if (!canApprove) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية ترحيل أو تعديل حالة مسير الرواتب.', 'warning');
+    }
     try {
       if (newStatus === 'archived') {
         const negativeBalances = salaryData.filter(emp => Number(emp.netSalary) < 0);
@@ -386,7 +392,7 @@ const HRSalaries = ({ user }) => {
         
         <div className="flex gap-3 w-full md:w-auto flex-wrap md:flex-nowrap items-center">
           
-          {(user?.level === 'إدارة' || user?.role === 'admin' || user?.level === 'admin') && (
+          {canApprove && (
             <div className="flex gap-2">
               {(periodStatus === 'open' || periodStatus === 'review') && (
                 <button 

@@ -10,6 +10,8 @@ import { evaluateAccessPolicy } from './accessPolicy.js';
 // for backward compatibility with users who haven't been assigned a role yet.
 const LEGACY_ACCESS_KEYS = {
   'production': 'hasProductionAccess',
+  'production_sewing': 'hasProductionAccess',
+  'production_packaging': 'hasProductionAccess',
   'orders': 'hasSalesAccess', // Historically 'sales'
   'delivery': 'hasDeliveryAccess',
   'stock': 'hasStockAccess',
@@ -36,7 +38,18 @@ const LEGACY_ACCESS_KEYS = {
   'employees': 'hasEmployeesAccess',
   'customers': 'hasCustomersAccess',
   'reports': 'hasReportsAccess',
+  'reports_employees': 'hasReportsAccess',
+  'reports_sales': 'hasReportsAccess',
+  'reports_quotes': 'hasReportsAccess',
+  'reports_production': 'hasReportsAccess',
+  'reports_delivery': 'hasReportsAccess',
+  'reports_stock': 'hasReportsAccess',
+  'reports_hr': 'hasReportsAccess',
+  'reports_tasks': 'hasReportsAccess',
+  'reports_supervisors': 'hasReportsAccess',
+  'reports_customers': 'hasReportsAccess',
   'settings': 'hasSettingsAccess',
+  'data_management': 'hasSettingsAccess',
   'supervisor_tasks': 'hasSupervisorTasksAccess',
   'supervisor_reports': 'hasSupervisorReportsAccess',
   'production_tasks': 'hasProductionTasksAccess',
@@ -48,6 +61,7 @@ const LEGACY_ACCESS_KEYS = {
   'assigned_missions': 'hasDeliveryAccess',
   'site_settings': 'hasSiteSettingsAccess',
   'preparation': 'hasPreparationAccess',
+  'production_preparation': 'hasPreparationAccess',
   'preparation_tasks': 'hasPreparationTasksAccess'
 };
 
@@ -62,9 +76,10 @@ const LEGACY_ACCESS_KEYS = {
 export const hasPermission = (user, module, action = 'view') => {
   if (!user) return false;
 
-  const targetModule = (module === 'production_sewing' || module === 'production_preparation') 
-    ? 'production' 
-    : module;
+  let targetModule = module;
+  if (module === 'production_sewing') targetModule = 'production';
+  else if (module === 'production_preparation') targetModule = 'preparation';
+  else if (module === 'production_packaging' || module === 'production-packaging') targetModule = 'production_packaging';
 
   // Admins always have full access
   const isUserAdmin = user.role === 'admin' || user.level === 'admin' || user.level === 'إدارة' || user.id === 'admin' || user.type === 'super_admin' || user.isAdmin || user.accessAdmin === true;
@@ -111,6 +126,31 @@ export const hasPermission = (user, module, action = 'view') => {
     }
     
     return Boolean(user.hasHRAccess || user.hasEmployeesAccess);
+  }
+
+  if (targetModule === 'reports') {
+    const reportSubmods = [
+      'reports_employees', 'reports_sales', 'reports_quotes', 'reports_production',
+      'reports_delivery', 'reports_stock', 'reports_hr', 'reports_tasks',
+      'reports_supervisors', 'reports_customers', 'scoring'
+    ];
+    const hasAnyGranularSetting = reportSubmods.some(sm => user.permissions?.[sm] !== undefined);
+    if (hasAnyGranularSetting) {
+      return reportSubmods.some(sm => user.permissions[sm]?.[action] === true);
+    }
+    return Boolean(user.hasReportsAccess);
+  }
+
+  if (targetModule.startsWith('reports_')) {
+    if (user.permissions?.[targetModule]) {
+      const directVal = user.permissions[targetModule][action];
+      if (directVal !== undefined) return Boolean(directVal);
+    }
+    if (user.permissions?.['reports']) {
+      const parentVal = user.permissions['reports'][action];
+      if (parentVal !== undefined) return Boolean(parentVal);
+    }
+    return Boolean(user.hasReportsAccess);
   }
 
   // 1. Check direct employee permissions matrix (edited via RolesSettingsTab.jsx)

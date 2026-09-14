@@ -5,6 +5,7 @@ import 'flatpickr/dist/themes/airbnb.css';
 import { getEmployees, saveEmployee, deleteEmployee, getDepartments, getGlobalSettings, getHRAssets } from '../../store';
 import Swal from 'sweetalert2';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
+import { hasPermission } from '../../utils/permissions';
 
 const deptMap = {
   sewing: 'الخياطة',

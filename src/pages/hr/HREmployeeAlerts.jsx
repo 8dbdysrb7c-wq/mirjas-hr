@@ -5,6 +5,7 @@ import Swal from 'sweetalert2';
 import { archiveEmployeeAlert, createEmployeeAlerts, deleteEmployeeAlert, getEmployeeAlerts, getEmployees } from '../../store';
 import Select from '../../components/SearchSelect';
 import HRDateFilter from '../../components/ui/HRDateFilter';
+import { hasPermission } from '../../utils/permissions';
 
 const localDate = date => {
   const value = new Date(date);
@@ -25,6 +26,10 @@ const formatDateTime = value => {
 };
 
 export default function HREmployeeAlerts({ user }) {
+  const canAdd = hasPermission(user, 'hr_employee_alerts', 'add') || hasPermission(user, 'hr_employee_alerts', 'create');
+  const canEdit = hasPermission(user, 'hr_employee_alerts', 'edit');
+  const canDelete = hasPermission(user, 'hr_employee_alerts', 'delete');
+
   const [alerts, setAlerts] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +68,9 @@ export default function HREmployeeAlerts({ user }) {
   }), [alerts, showArchived, employeeId, status, dateMode, selectedDate, selectedMonth, dateFrom, dateTo]);
 
   const archive = async alert => {
+    if (!canEdit) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية أرشفة التنبيهات.', 'warning');
+    }
     const result = await Swal.fire({ icon: 'question', title: 'أرشفة التنبيه؟', text: 'سيبقى محفوظًا ويمكن عرضه من خيار إظهار المؤرشف.', showCancelButton: true, confirmButtonText: 'أرشفة', cancelButtonText: 'إلغاء', confirmButtonColor: '#64748b' });
     if (!result.isConfirmed) return;
     try { await archiveEmployeeAlert(alert.id, user); await load(); }
@@ -70,6 +78,9 @@ export default function HREmployeeAlerts({ user }) {
   };
 
   const removePendingAlert = async alert => {
+    if (!canDelete) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية حذف أو سحب التنبيهات.', 'warning');
+    }
     const result = await Swal.fire({
       icon: 'warning',
       title: 'سحب وحذف التنبيه؟',
@@ -90,6 +101,9 @@ export default function HREmployeeAlerts({ user }) {
   };
 
   const sendNewAlert = async () => {
+    if (!canAdd) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية إرسال تنبيهات جديدة.', 'warning');
+    }
     const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
     const sortedEmployees = [...employees].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
     const employeeOptions = sortedEmployees.map(employee => `<label class="direct-alert-person" data-search="${escapeHtml(`${employee.name || ''} ${employee.id}`.toLowerCase())}" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-bottom:1px solid #f1f5f9;cursor:pointer"><input class="direct-alert-employee" type="checkbox" value="${escapeHtml(employee.id)}"><span><strong>${escapeHtml(employee.name)}</strong> <small style="color:#64748b">— ${escapeHtml(employee.id)}</small></span></label>`).join('');
@@ -166,7 +180,7 @@ export default function HREmployeeAlerts({ user }) {
   return <div dir="rtl" style={{ display: 'grid', gap: 16 }}>
     <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
       <div><h2 style={{ margin: 0, color: '#0f172a' }}>تنبيهات الموظفين</h2><p style={{ margin: '5px 0 0', color: '#64748b', fontSize: 13 }}>سجل موثق لإرسال الملاحظات وتأكيد استلامها.</p></div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button onClick={sendNewAlert} style={{ border: '1px solid #ea580c', background: '#ea580c', color: '#fff', borderRadius: 9, padding: '9px 14px', cursor: 'pointer', display: 'flex', gap: 7, alignItems: 'center', fontWeight: 900 }}><Send size={16}/> إرسال تنبيه جديد</button><button onClick={load} style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: 9, padding: '8px 12px', cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center', fontWeight: 800 }}><RefreshCw size={15}/> تحديث</button></div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{canAdd && <button onClick={sendNewAlert} style={{ border: '1px solid #ea580c', background: '#ea580c', color: '#fff', borderRadius: 9, padding: '9px 14px', cursor: 'pointer', display: 'flex', gap: 7, alignItems: 'center', fontWeight: 900 }}><Send size={16}/> إرسال تنبيه جديد</button>}<button onClick={load} style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: 9, padding: '8px 12px', cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center', fontWeight: 800 }}><RefreshCw size={15}/> تحديث</button></div>
     </div>
 
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }}>
@@ -189,7 +203,7 @@ export default function HREmployeeAlerts({ user }) {
         <tbody>{loading ? <tr><td colSpan="7" style={{ padding: 30, textAlign: 'center' }}>جاري التحميل...</td></tr> : filtered.length === 0 ? <tr><td colSpan="7" style={{ padding: 30, textAlign: 'center', color: '#94a3b8' }}>لا توجد تنبيهات مطابقة.</td></tr> : filtered.map(alert => <tr key={alert.id} style={{ background: alert.status === 'pending' ? '#fffaf0' : '#fff', opacity: alert.archived ? .65 : 1 }}>
           <td style={{ padding: 13, borderBottom: '1px solid #f1f5f9', fontWeight: 800 }}>{alert.employeeName}</td><td style={{ padding: 13, borderBottom: '1px solid #f1f5f9', maxWidth: 320 }}>{alert.message}</td><td style={{ padding: 13, borderBottom: '1px solid #f1f5f9' }}>{formatDateTime(alert.sentAt)}</td><td style={{ padding: 13, borderBottom: '1px solid #f1f5f9' }}>{formatDateTime(alert.receivedAt)}</td>
           <td style={{ padding: 13, borderBottom: '1px solid #f1f5f9' }}><span style={{ padding: '5px 9px', borderRadius: 999, fontWeight: 900, fontSize: 11, background: alert.status === 'received' ? '#dcfce7' : '#ffedd5', color: alert.status === 'received' ? '#15803d' : '#c2410c' }}>{alert.status === 'received' ? 'تم الاستلام' : 'بانتظار الاستلام'}</span></td><td style={{ padding: 13, borderBottom: '1px solid #f1f5f9' }}>{alert.source}</td>
-          <td style={{ padding: 13, borderBottom: '1px solid #f1f5f9' }}>{alert.status === 'received' && !alert.archived ? <button onClick={() => archive(alert)} title="أرشفة" style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: 8, padding: 7, cursor: 'pointer' }}><Archive size={16}/></button> : alert.archived ? 'مؤرشف' : <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><BellRing size={17} color="#f97316"/><button onClick={() => removePendingAlert(alert)} title="سحب وحذف التنبيه" style={{ border: '1px solid #fecaca', background: '#fff1f2', color: '#dc2626', borderRadius: 8, padding: 7, cursor: 'pointer', display: 'flex' }}><Trash2 size={16}/></button></div>}</td>
+          <td style={{ padding: 13, borderBottom: '1px solid #f1f5f9' }}>{alert.status === 'received' && !alert.archived ? (canEdit ? <button onClick={() => archive(alert)} title="أرشفة" style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: 8, padding: 7, cursor: 'pointer' }}><Archive size={16}/></button> : 'تم الاستلام') : alert.archived ? 'مؤرشف' : <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><BellRing size={17} color="#f97316"/>{canDelete && <button onClick={() => removePendingAlert(alert)} title="سحب وحذف التنبيه" style={{ border: '1px solid #fecaca', background: '#fff1f2', color: '#dc2626', borderRadius: 8, padding: 7, cursor: 'pointer', display: 'flex' }}><Trash2 size={16}/></button>}{!canDelete && <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>معاينة</span>}</div>}</td>
         </tr>)}</tbody></table>
     </div>
   </div>;

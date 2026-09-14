@@ -8,6 +8,7 @@ import { getEmployees, getHRLeaves, saveHRLeave, deleteHRLeave, getMissingPunche
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
 import HRDateFilter from '../../components/ui/HRDateFilter';
+import { hasPermission } from '../../utils/permissions';
 
 const getLocalDateStr = (d) => {
   const offset = d.getTimezoneOffset();
@@ -15,6 +16,11 @@ const getLocalDateStr = (d) => {
 };
 
 const HRLeaves = ({ user, refreshCounts }) => {
+  const canAdd = hasPermission(user, 'hr_leaves', 'add') || hasPermission(user, 'hr_leaves', 'create');
+  const canEdit = hasPermission(user, 'hr_leaves', 'edit');
+  const canApprove = hasPermission(user, 'hr_leaves', 'approve');
+  const canDelete = hasPermission(user, 'hr_leaves', 'delete');
+
   const [leaves, setLeaves] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [missingPunches, setMissingPunches] = useState([]);
@@ -71,6 +77,10 @@ const HRLeaves = ({ user, refreshCounts }) => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (!canAdd && !canEdit) {
+      Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لإضافة أو تعديل الطلبات.', 'warning');
+      return;
+    }
     if (!formData.notes || formData.notes.trim() === '') {
       Swal.fire('تنبيه', 'الرجاء إدخال السبب / الملاحظات', 'warning');
       return;
@@ -122,6 +132,10 @@ const HRLeaves = ({ user, refreshCounts }) => {
   };
 
   const handleStatusChange = async (leave, newStatus) => {
+    if (!canApprove) {
+      Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لاعتماد أو رفض الطلبات.', 'warning');
+      return;
+    }
     let actionReason = '';
     if (newStatus === 'موافق' || newStatus === 'مرفوض') {
       let extraHtml = '';
@@ -282,6 +296,10 @@ const HRLeaves = ({ user, refreshCounts }) => {
   };
 
   const handleDelete = async (id) => {
+    if (!canDelete) {
+      Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لحذف الطلبات.', 'warning');
+      return;
+    }
     const res = await Swal.fire({
       title: 'هل أنت متأكد؟',
       html: '<p style="margin-bottom: 15px;">لن تتمكن من التراجع عن الحذف</p><textarea id="swal-delete-notes" class="swal2-textarea" placeholder="سبب الحذف (اختياري)..." style="margin: 0; width: 100%; box-sizing: border-box;"></textarea>',
@@ -690,15 +708,17 @@ const HRLeaves = ({ user, refreshCounts }) => {
               <option value="مرفوض">الطلبات المرفوضة</option>
               <option value="الكل">سجل جميع الطلبات</option>
             </select>
-            <button
-              onClick={() => {
-                setFormData({ employeeId: '', type: 'إجازة سنوية', startDate: '', endDate: '', notes: '', status: 'معلق' });
-                setShowModal(true);
-              }}
-              className="premium-add-btn flex items-center gap-2 whitespace-nowrap h-[42px]"
-            >
-              <Plus size={18} /> تقديم طلب جديد
-            </button>
+            {canAdd && (
+              <button
+                onClick={() => {
+                  setFormData({ employeeId: '', type: 'إجازة سنوية', startDate: '', endDate: '', notes: '', status: 'معلق' });
+                  setShowModal(true);
+                }}
+                className="premium-add-btn flex items-center gap-2 whitespace-nowrap h-[42px]"
+              >
+                <Plus size={18} /> تقديم طلب جديد
+              </button>
+            )}
           </div>
         </div>
 
@@ -860,23 +880,27 @@ const HRLeaves = ({ user, refreshCounts }) => {
                         <button onClick={() => handlePreviewLeave(leave)} className="flex items-center justify-center transition-all hover:scale-105" style={{ color: '#0ea5e9', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '14px', width: '36px', height: '36px' }} title="معاينة الطلب">
                           <Eye size={18} strokeWidth={2} />
                         </button>
-                        {leave.status === 'معلق' ? (
-                          <>
-                            <button onClick={() => handleStatusChange(leave, 'موافق')} className="flex items-center justify-center transition-all hover:scale-105" style={{ color: '#10b981', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '14px', width: '36px', height: '36px' }} title="موافقة">
-                              <Check size={18} strokeWidth={2.5} />
+                        {canApprove && (
+                          leave.status === 'معلق' ? (
+                            <>
+                              <button onClick={() => handleStatusChange(leave, 'موافق')} className="flex items-center justify-center transition-all hover:scale-105" style={{ color: '#10b981', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '14px', width: '36px', height: '36px' }} title="موافقة">
+                                <Check size={18} strokeWidth={2.5} />
+                              </button>
+                              <button onClick={() => handleStatusChange(leave, 'مرفوض')} className="flex items-center justify-center transition-all hover:scale-105" style={{ color: '#ef4444', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '14px', width: '36px', height: '36px' }} title="رفض">
+                                <X size={18} strokeWidth={2.5} />
+                              </button>
+                            </>
+                          ) : (
+                            <button onClick={() => handleStatusChange(leave, 'معلق')} className="flex items-center justify-center transition-all hover:scale-105" style={{ color: '#f59e0b', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '14px', width: '36px', height: '36px' }} title="تراجع عن القرار">
+                              <Undo2 size={18} strokeWidth={2} />
                             </button>
-                            <button onClick={() => handleStatusChange(leave, 'مرفوض')} className="flex items-center justify-center transition-all hover:scale-105" style={{ color: '#ef4444', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '14px', width: '36px', height: '36px' }} title="رفض">
-                              <X size={18} strokeWidth={2.5} />
-                            </button>
-                          </>
-                        ) : (
-                          <button onClick={() => handleStatusChange(leave, 'معلق')} className="flex items-center justify-center transition-all hover:scale-105" style={{ color: '#f59e0b', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '14px', width: '36px', height: '36px' }} title="تراجع عن القرار">
-                            <Undo2 size={18} strokeWidth={2} />
+                          )
+                        )}
+                        {canDelete && (
+                          <button onClick={() => handleDelete(leave.id)} className="flex items-center justify-center transition-all hover:scale-105" style={{ color: '#ef4444', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '14px', width: '36px', height: '36px' }} title="حذف">
+                            <Trash2 size={18} strokeWidth={2} />
                           </button>
                         )}
-                        <button onClick={() => handleDelete(leave.id)} className="flex items-center justify-center transition-all hover:scale-105" style={{ color: '#ef4444', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '14px', width: '36px', height: '36px' }} title="حذف">
-                          <Trash2 size={18} strokeWidth={2} />
-                        </button>
                       </div>
                     </td>
                   </tr>

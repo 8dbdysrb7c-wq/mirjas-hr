@@ -4,6 +4,7 @@ import { getEmployees } from '../store';
 import { motion } from 'framer-motion';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
+import { FREE_AUTH_ENABLED, loginEmployee } from '../services/freeAuth';
 
 const MySwal = withReactContent(Swal);
 
@@ -16,6 +17,7 @@ const Login = ({ onLogin }) => {
 
   useEffect(() => {
     const fetchEmployees = async () => {
+      if (FREE_AUTH_ENABLED) return;
       const list = await getEmployees();
       setEmployeesList(list);
     };
@@ -56,8 +58,14 @@ const Login = ({ onLogin }) => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (FREE_AUTH_ENABLED) {
+      setError('');
+      try { onLogin(await loginEmployee(employeeId, password)); }
+      catch (error) { setError(error.message); }
+      return;
+    }
     
     const user = employeesList.find(u => 
       u.id.toLowerCase().trim() === employeeId.toLowerCase().trim() && 

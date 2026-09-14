@@ -8,6 +8,7 @@ import 'flatpickr/dist/themes/airbnb.css';
 import { getEmployees, getHRAttendance, getGlobalSettings, saveHRViolation, getHRViolations, getHRLeaves, getAttendanceLogs, getReports, getSupervisorReports } from '../../store';
 import Swal from 'sweetalert2';
 import { promptEmployeeAlert } from '../../utils/employeeAlerts';
+import { hasPermission } from '../../utils/permissions';
 
 const getLocalDateStr = (d) => {
   const offset = d.getTimezoneOffset();
@@ -31,6 +32,7 @@ const formatTime12h = (timeStr) => {
 };
 
 const HRAttendanceAlerts = ({ user }) => {
+  const canApprove = hasPermission(user, 'hr_attendance_alerts', 'approve');
   const [employees, setEmployees] = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [rawLogs, setRawLogs] = useState([]);
@@ -425,6 +427,9 @@ const HRAttendanceAlerts = ({ user }) => {
 
   const handleIgnoreAlert = async (empData, type) => {
       setOpenDropdownId(null);
+      if (!canApprove) {
+          return Swal.fire('غير مصرح', 'ليس لديك صلاحية اتخاذ إجراءات على تنبيهات الحضور.', 'warning');
+      }
       const result = await Swal.fire({
           title: 'هل أنت متأكد من التجاهل؟',
           text: 'سيتم حذف هذا التنبيه ولن يظهر مجدداً. هذا الإجراء لن يؤثر على الرواتب إطلاقاً.',
@@ -460,6 +465,9 @@ const HRAttendanceAlerts = ({ user }) => {
 
   const handleApplyDeduction = async (empData, type) => {
     setOpenDropdownId(null);
+    if (!canApprove) {
+        return Swal.fire('غير مصرح', 'ليس لديك صلاحية تطبيق خصومات من تنبيهات الحضور.', 'warning');
+    }
     
     let tableHtml = '';
     let totalMins = 0;
@@ -580,6 +588,9 @@ const HRAttendanceAlerts = ({ user }) => {
 
   const handleRegisterPenalty = (empName, defaultType, defaultNotes) => {
     setOpenDropdownId(null);
+    if (!canApprove) {
+        return Swal.fire('غير مصرح', 'ليس لديك صلاحية تسجيل مخالفات من تنبيهات الحضور.', 'warning');
+    }
     setPenaltyModal({
       isOpen: true,
       employeeName: empName,
@@ -974,7 +985,7 @@ const HRAttendanceAlerts = ({ user }) => {
                             </span>
                           )}
                         </div>
-                      ) : (
+                      ) : canApprove ? (
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
                           <button onClick={() => handleIgnoreAlert(emp, 'early')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fef2f2', border: '1px solid #fecaca', color: '#ef4444', padding: '8px', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }} onMouseOver={(e) => e.currentTarget.style.background = '#fee2e2'} onMouseOut={(e) => e.currentTarget.style.background = '#fef2f2'} title="تجاهل الحالة">
                             <Trash2 size={18} />
@@ -999,6 +1010,8 @@ const HRAttendanceAlerts = ({ user }) => {
                             )}
                           </div>
                         </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 font-bold whitespace-nowrap">معاينة فقط</span>
                       )}
                     </td>
                   </tr>
@@ -1069,7 +1082,7 @@ const HRAttendanceAlerts = ({ user }) => {
                             </span>
                           )}
                         </div>
-                      ) : (
+                      ) : canApprove ? (
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
                           <button onClick={() => handleIgnoreAlert(emp, 'late')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fef2f2', border: '1px solid #fecaca', color: '#ef4444', padding: '8px', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }} onMouseOver={(e) => e.currentTarget.style.background = '#fee2e2'} onMouseOut={(e) => e.currentTarget.style.background = '#fef2f2'} title="تجاهل الحالة">
                             <Trash2 size={18} />
@@ -1094,6 +1107,8 @@ const HRAttendanceAlerts = ({ user }) => {
                             )}
                           </div>
                         </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 font-bold whitespace-nowrap">معاينة فقط</span>
                       )}
                     </td>
                   </tr>

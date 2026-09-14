@@ -319,6 +319,11 @@ export const saveSalesOrder = async (order) => {
     let isNew = !orderToSave.id;
     let oldStatus = null;
     let previousOrder = null;
+    // Share one fresh read between numbering and reservation validation.
+    const [allOrders, stockSnapshot] = await Promise.all([
+      getSalesOrders(),
+      getDocs(collection(db, 'stock'))
+    ]);
     if (!isNew) {
       try {
         const oldSnap = await getDoc(doc(db, 'sales_orders', orderToSave.id));
@@ -330,8 +335,7 @@ export const saveSalesOrder = async (order) => {
     }
 
     if (!orderToSave.id) {
-      const orders = await getSalesOrders();
-      const maxNum = orders.reduce((max, o) => {
+      const maxNum = allOrders.reduce((max, o) => {
         const str = String(o.orderNumber || '');
         if (str.startsWith('ORD-')) {
           const match = str.match(/ORD-(\d+)/);
@@ -354,14 +358,12 @@ export const saveSalesOrder = async (order) => {
       orderToSave.readyForDeliveryBy = orderToSave.lastActionBy || orderToSave.updatedBy || orderToSave.createdBy || 'النظام';
     }
 
-    const allOrders = await getSalesOrders();
     const existingReservations = buildReservedQuantityMap(allOrders, orderToSave.id);
     const oldReservations = previousOrder ? buildReservedQuantityMap([previousOrder]) : {};
     const newReservations = (!orderToSave.stockDeducted && !isCancelledOrder(orderToSave))
       ? buildReservedQuantityMap([orderToSave])
       : {};
     const reservationKeys = [...new Set([...Object.keys(oldReservations), ...Object.keys(newReservations)])];
-    const stockSnapshot = await getDocs(collection(db, 'stock'));
     const physicalByProduct = {};
     stockSnapshot.docs.forEach(stockDoc => {
       const item = stockDoc.data();
@@ -371,10 +373,10 @@ export const saveSalesOrder = async (order) => {
 
     await runTransaction(db, async transaction => {
       const reservationSnapshots = new Map();
-      for (const key of reservationKeys) {
+      await Promise.all(reservationKeys.map(async key => {
         const reservationRef = doc(db, 'stock_reservations', encodeURIComponent(key));
         reservationSnapshots.set(key, { ref: reservationRef, snap: await transaction.get(reservationRef) });
-      }
+      }));
 
       for (const key of reservationKeys) {
         const entry = reservationSnapshots.get(key);

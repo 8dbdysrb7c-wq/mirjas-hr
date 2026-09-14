@@ -3,6 +3,7 @@ import { Database, Download, Upload } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { exportDatabase, importDatabase, resetCollection } from '../../services/data_management';
 import { Trash2, ShoppingCart, Package, Truck, ArrowUpDown, Users, CheckSquare, ClipboardList, Users2, Clock, Wallet, CalendarOff, Award, ShieldAlert, FileKey, Calendar, Activity, MessageCircle } from 'lucide-react';
+import './data-management.css';
 
 const DataManagementTab = () => {
   const [isExporting, setIsExporting] = useState(false);
@@ -107,10 +108,10 @@ const DataManagementTab = () => {
     }
   };
 
-  const handleSafeReset = async (label, collections) => {
+  const handleSafeReset = async (label, collections, description) => {
     Swal.fire({
       title: `تأكيد تصفير ${label}`,
-      text: `هل أنت متأكد من مسح جميع بيانات ${label}؟ هذا الإجراء لا يمكن التراجع عنه!`,
+      text: description || `هل أنت متأكد من مسح جميع بيانات ${label}؟ هذا الإجراء لا يمكن التراجع عنه!`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
@@ -205,7 +206,7 @@ const DataManagementTab = () => {
           يمكنك تصفير ومسح بيانات كل قسم على حدة. سيتم مسح السجلات وإعادة الترقيم من البداية. يرجى أخذ نسخة احتياطية قبل القيام بهذه الخطوة!
         </p>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="data-reset-grid">
           <button 
             onClick={() => handleSafeReset('الطلبيات', ['sales_orders'])}
             className="btn flex items-center justify-center gap-2 text-xs py-2 px-3 flex-grow md:flex-grow-0"
@@ -220,6 +221,14 @@ const DataManagementTab = () => {
             style={{ backgroundColor: '#10b981', color: 'white', border: '1px solid #047857' }}
           >
             <Package size={14} /> تصفير الإنتاج
+          </button>
+
+          <button
+            onClick={() => handleSafeReset('إنتاج قيد التحضير', ['preparation_orders'], 'سيتم حذف جميع أوامر إنتاج قيد التحضير وإعادة ترقيم الأوامر الجديدة من البداية. ستبقى أرصدة المخزون وسنداته وأوامر الخياطة كما هي. خذ نسخة احتياطية قبل المتابعة؛ لا يمكن التراجع عن الحذف.')}
+            className="btn flex items-center justify-center gap-2 text-xs py-2 px-3"
+            style={{ backgroundColor: '#0d9488', color: 'white', border: '1px solid #0f766e' }}
+          >
+            <Package size={14} /> تصفير إنتاج قيد التحضير
           </button>
 
           <button 
@@ -292,7 +301,7 @@ const DataManagementTab = () => {
           </strong>
         </p>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="data-reset-grid">
           <button 
             onClick={() => handleSafeReset('الحضور والانصراف', ['hr_attendance', 'missing_punches'])}
             className="btn flex items-center justify-center gap-2 text-xs py-2 px-3 flex-grow md:flex-grow-0"

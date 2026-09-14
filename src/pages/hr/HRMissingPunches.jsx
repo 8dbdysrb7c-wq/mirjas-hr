@@ -9,6 +9,7 @@ import Flatpickr from 'react-flatpickr';
 import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import 'flatpickr/dist/themes/light.css';
 import { promptEmployeeAlert } from '../../utils/employeeAlerts';
+import { hasPermission } from '../../utils/permissions';
 const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [year, setYear] = useState(() => parseInt(selectedMonth.split('-')[0]) || new Date().getFullYear());
@@ -179,6 +180,11 @@ const formatTime12h = (timeStr) => {
 };
 
 const HRMissingPunches = ({ user, refreshCounts }) => {
+  const canAdd = hasPermission(user, 'hr_missing_punches', 'add') || hasPermission(user, 'hr_missing_punches', 'create');
+  const canEdit = hasPermission(user, 'hr_missing_punches', 'edit');
+  const canApprove = hasPermission(user, 'hr_missing_punches', 'approve');
+  const canDelete = hasPermission(user, 'hr_missing_punches', 'delete');
+
   const [punches, setPunches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -286,6 +292,9 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
       if (isWeekend) continue;
 
       emps.forEach(emp => {
+        if (emp.joinDate && dateStr < emp.joinDate) return;
+        if (emp.terminationDate && dateStr > emp.terminationDate) return;
+
         const hasManual = data.some(p => String(p.employeeId) === String(emp.id) && p.date === dateStr);
         if (hasManual) return;
 
@@ -321,6 +330,10 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
     // 2. Detect Missing Check-out
     attendance.forEach(rec => {
       if (rec.isLeave) return;
+      const emp = emps.find(e => String(e.id) === String(rec.employeeId));
+      if (emp?.joinDate && rec.date < emp.joinDate) return;
+      if (emp?.terminationDate && rec.date > emp.terminationDate) return;
+
       const hasManual = data.some(p => String(p.employeeId) === String(rec.employeeId) && p.date === rec.date && p.type === 'خروج');
       if (hasManual) return;
 
@@ -338,7 +351,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
             isVirtual: true,
             attendanceId: rec.id,
             employeeId: rec.employeeId,
-            employeeName: rec.employeeName || (emps.find(e => String(e.id) === String(rec.employeeId))?.name || 'مجهول'),
+            employeeName: rec.employeeName || (emp?.name || 'مجهول'),
             date: rec.date,
             type: 'خروج',
             time: '--:--',
@@ -351,13 +364,23 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
       }
     });
 
-    const combined = [...data, ...virtualPunches].filter(p => p.employeeName !== 'المدير العام' && p.employeeId !== 'admin');
+    const combined = [...data, ...virtualPunches]
+      .filter(p => p.employeeName !== 'المدير العام' && p.employeeId !== 'admin')
+      .filter(p => {
+        const emp = allEmps.find(e => String(e.id) === String(p.employeeId));
+        if (emp?.joinDate && p.date < emp.joinDate) return false;
+        if (emp?.terminationDate && p.date > emp.terminationDate) return false;
+        return true;
+      });
     setPunches(combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
     setEmployees(emps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && isActiveEmployee(e)));
     setLoading(false);
   };
 
   const handleUpdateStatus = async (punch, newStatus) => {
+    if (!canApprove) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية اعتماد أو رفض طلبات الختمات الناقصة.', 'warning');
+    }
     try {
       let adminNote = '';
       let isConfirmed = false;
@@ -470,6 +493,9 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
 
   const handleDropdownAction = async (punch, action) => {
     if (!action) return;
+    if (!canApprove && !canEdit) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية تعديل أو اعتماد إجراءات الختمات الناقصة.', 'warning');
+    }
 
     const emp = employees.find(e => String(e.id) === String(punch.employeeId));
     if (!emp) {
@@ -777,6 +803,9 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
   };
 
   const handleDelete = async (punchId) => {
+    if (!canDelete) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية حذف طلبات الختمات الناقصة.', 'warning');
+    }
     try {
       const result = await Swal.fire({
         title: 'تأكيد الحذف',
@@ -850,6 +879,9 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
 
   const handleAddPunch = async (e) => {
     e.preventDefault();
+    if (!canAdd) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية إضافة أو تقديم طلبات ختمات ناقصة.', 'warning');
+    }
     if (!newPunch.employeeId || !newPunch.date || !newPunch.time || !newPunch.reason) {
       return Swal.fire('تنبيه', 'يرجى تعبئة جميع الحقول', 'warning');
     }
@@ -1175,28 +1207,30 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
         </div>
 
         {/* Left Side: Submit Button */}
-        <button
-          onClick={() => setShowAddModal(true)}
-          style={{
-            backgroundColor: '#0f766e',
-            height: '44px',
-            padding: '0 20px',
-            color: '#ffffff',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            borderRadius: '10px',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            boxShadow: '0 4px 12px rgba(15, 118, 110, 0.2)',
-            transition: 'opacity 0.2s'
-          }}
-        >
-          <span>تقديم طلب جديد</span>
-          <Plus size={18} strokeWidth={2.5} />
-        </button>
+        {canAdd && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            style={{
+              backgroundColor: '#0f766e',
+              height: '44px',
+              padding: '0 20px',
+              color: '#ffffff',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              borderRadius: '10px',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(15, 118, 110, 0.2)',
+              transition: 'opacity 0.2s'
+            }}
+          >
+            <span>تقديم طلب جديد</span>
+            <Plus size={18} strokeWidth={2.5} />
+          </button>
+        )}
 
       </div>
 
@@ -1335,10 +1369,14 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
                     <td className="p-5 font-bold whitespace-nowrap text-center text-sm">
                       <div className="flex items-center justify-center gap-2">
                         {(p.type === 'دخول' || p.reason === 'بصمة دخول وخروج') && p.isVirtual && (p.status === 'معلق' || p.status === 'قيد المراجعة') ? (
-                          <>
-                            <input type="time" className="premium-time-input" style={{ width: 75, height: 28, fontSize: 13 }} value={inlineTimes[`${p.id}_in`] || ''} onChange={(e) => handleInlineTimeChange(`${p.id}_in`, e.target.value)} />
-                            <Clock size={14} className="text-slate-400" />
-                          </>
+                          (canEdit || canApprove) ? (
+                            <>
+                              <input type="time" className="premium-time-input" style={{ width: 75, height: 28, fontSize: 13 }} value={inlineTimes[`${p.id}_in`] || ''} onChange={(e) => handleInlineTimeChange(`${p.id}_in`, e.target.value)} />
+                              <Clock size={14} className="text-slate-400" />
+                            </>
+                          ) : (
+                            <span className="text-slate-400 text-xs">غير مسجل</span>
+                          )
                         ) : (p.type === 'دخول' && !p.isVirtual) ? (
                           <>
                             <span className="text-slate-800">{formatTime12h(p.time)}</span>
@@ -1355,10 +1393,14 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
                     <td className="p-5 font-bold whitespace-nowrap text-center text-sm">
                       <div className="flex items-center justify-center gap-2">
                         {(p.type === 'خروج' || p.reason === 'بصمة دخول وخروج') && p.isVirtual && (p.status === 'معلق' || p.status === 'قيد المراجعة') ? (
-                          <>
-                            <input type="time" className="premium-time-input" style={{ width: 75, height: 28, fontSize: 13 }} value={inlineTimes[`${p.id}_out`] || ''} onChange={(e) => handleInlineTimeChange(`${p.id}_out`, e.target.value)} />
-                            <Clock size={14} className="text-slate-400" />
-                          </>
+                          (canEdit || canApprove) ? (
+                            <>
+                              <input type="time" className="premium-time-input" style={{ width: 75, height: 28, fontSize: 13 }} value={inlineTimes[`${p.id}_out`] || ''} onChange={(e) => handleInlineTimeChange(`${p.id}_out`, e.target.value)} />
+                              <Clock size={14} className="text-slate-400" />
+                            </>
+                          ) : (
+                            <span className="text-slate-400 text-xs">غير مسجل</span>
+                          )
                         ) : (p.type === 'خروج' && !p.isVirtual) ? (
                           <>
                             <span className="text-slate-800">{formatTime12h(p.time)}</span>
@@ -1381,53 +1423,60 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
                     </td>
                     <td className="p-5">
                       <div className="flex justify-center items-center gap-3">
-                        <button onClick={() => promptEmployeeAlert({ employeeId: p.employeeId, employeeName: emp?.name || p.employeeName, source: 'الختمات الناقصة', sourceReference: `${p.type || 'ختمة'} ${p.date || ''}`, suggestedMessage: `يوجد لديك سجل ختمة ناقصة (${p.type || 'دخول/خروج'}) بتاريخ ${p.date || 'غير محدد'}. يرجى مراجعة الختمات والالتزام بتسجيل الدوام.`, user })} className="shrink-0" style={{ background: '#fff7ed', border: '1px solid #fdba74', color: '#c2410c', padding: '7px 10px', borderRadius: 8, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}><Bell size={15}/> إرسال تنبيه</button>
+                        {(canEdit || canApprove) && (
+                          <button onClick={() => promptEmployeeAlert({ employeeId: p.employeeId, employeeName: emp?.name || p.employeeName, source: 'الختمات الناقصة', sourceReference: `${p.type || 'ختمة'} ${p.date || ''}`, suggestedMessage: `يوجد لديك سجل ختمة ناقصة (${p.type || 'دخول/خروج'}) بتاريخ ${p.date || 'غير محدد'}. يرجى مراجعة الختمات والالتزام بتسجيل الدوام.`, user })} className="shrink-0" style={{ background: '#fff7ed', border: '1px solid #fdba74', color: '#c2410c', padding: '7px 10px', borderRadius: 8, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}><Bell size={15}/> إرسال تنبيه</button>
+                        )}
                         {p.status === 'معلق' || p.status === 'قيد المراجعة' ? (
                           p.isVirtual ? (
-                            <>
-                              {/* Save Button */}
-                              <button
-                                onClick={() => handleDropdownAction(p, 'time')}
-                                className="flex items-center justify-center text-white text-xs font-bold shadow-sm hover:opacity-90 transition-opacity"
-                                style={{ backgroundColor: '#0f766e', height: '36px', borderRadius: '8px', width: '130px', flexShrink: 0, color: '#ffffff' }}
-                              >
-                                <span>حفظ الدوام</span>
-                              </button>
-
-                              {/* Dropdown */}
-                              <div style={{ position: 'relative', width: '130px', flexShrink: 0 }}>
-                                <select
-                                  className="text-xs font-bold bg-white text-slate-700 focus:outline-none cursor-pointer shadow-sm transition-all"
-                                  style={{ height: '36px', padding: '0 12px 0 28px', borderRadius: '8px', border: '1px solid #e2e8f0', width: '100%', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none' }}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    e.target.value = "";
-                                    handleDropdownAction(p, val);
-                                  }}
-                                  defaultValue=""
+                            (canEdit || canApprove) ? (
+                              <>
+                                {/* Save Button */}
+                                <button
+                                  onClick={() => handleDropdownAction(p, 'time')}
+                                  className="flex items-center justify-center text-white text-xs font-bold shadow-sm hover:opacity-90 transition-opacity"
+                                  style={{ backgroundColor: '#0f766e', height: '36px', borderRadius: '8px', width: '130px', flexShrink: 0, color: '#ffffff' }}
                                 >
-                                  <option value="" disabled>إجراءات أخرى</option>
-                                  {p.type === 'خروج' && <option value="early">تسجيل كمغادرة مبكرة</option>}
-                                  {(emp?.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي']).includes('إجازة سنوية') && <option value="vacation">خصم إجازة سنوية</option>}
-                                  {(emp?.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي']).includes('إجازة مرضية') && <option value="sick">خصم إجازة مرضية</option>}
-                                  {(emp?.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي']).includes('إجازة غير مدفوعة') && <option value="unpaid">إجازة غير مدفوعة</option>}
-                                  <option value="violation">تسجيل مخالفة مالية</option>
-                                </select>
-                                <ChevronDown size={14} className="pointer-events-none" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#000000', zIndex: 10 }} />
-                              </div>
-                            </>
+                                  <span>حفظ الدوام</span>
+                                </button>
+
+                                {/* Dropdown */}
+                                <div style={{ position: 'relative', width: '130px', flexShrink: 0 }}>
+                                  <select
+                                    className="text-xs font-bold bg-white text-slate-700 focus:outline-none cursor-pointer shadow-sm transition-all"
+                                    style={{ height: '36px', padding: '0 12px 0 28px', borderRadius: '8px', border: '1px solid #e2e8f0', width: '100%', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none' }}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      e.target.value = "";
+                                      handleDropdownAction(p, val);
+                                    }}
+                                    defaultValue=""
+                                  >
+                                    <option value="" disabled>إجراءات أخرى</option>
+                                    {p.type === 'خروج' && <option value="early">تسجيل كمغادرة مبكرة</option>}
+                                    {(emp?.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي']).includes('إجازة سنوية') && <option value="vacation">خصم إجازة سنوية</option>}
+                                    {(emp?.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي']).includes('إجازة مرضية') && <option value="sick">خصم إجازة مرضية</option>}
+                                    {(emp?.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'مغادرة خاصة', 'مغادرة عمل', 'إجازة غير مدفوعة', 'بدل عمل إضافي']).includes('إجازة غير مدفوعة') && <option value="unpaid">إجازة غير مدفوعة</option>}
+                                    <option value="violation">تسجيل مخالفة مالية</option>
+                                  </select>
+                                  <ChevronDown size={14} className="pointer-events-none" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#000000', zIndex: 10 }} />
+                                </div>
+                              </>
+                            ) : (
+                              <span className="text-xs text-slate-400 font-bold whitespace-nowrap">معاينة فقط</span>
+                            )
                           ) : (
                             <>
-                              <button onClick={() => handleUpdateStatus(p, 'موافق عليه')} className="icon-btn icon-btn-success shrink-0" title="موافقة"><Check size={18} strokeWidth={2.5} /></button>
-                              <button onClick={() => handleUpdateStatus(p, 'مرفوض')} className="icon-btn icon-btn-delete shrink-0" title="رفض"><X size={18} strokeWidth={2.5} /></button>
-                              <button onClick={() => handleDelete(p.id)} className="icon-btn icon-btn-delete shrink-0" title="حذف الطلب"><Trash2 size={18} strokeWidth={2.5} /></button>
-                              {isExhausted && <button onClick={() => handleRegisterViolation(p)} className="shrink-0" style={{ background: '#0f766e', color: 'white', padding: '6px 16px', borderRadius: '6px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px' }}>تسجيل مخالفة</button>}
+                              {canApprove && <button onClick={() => handleUpdateStatus(p, 'موافق عليه')} className="icon-btn icon-btn-success shrink-0" title="موافقة"><Check size={18} strokeWidth={2.5} /></button>}
+                              {canApprove && <button onClick={() => handleUpdateStatus(p, 'مرفوض')} className="icon-btn icon-btn-delete shrink-0" title="رفض"><X size={18} strokeWidth={2.5} /></button>}
+                              {canDelete && <button onClick={() => handleDelete(p.id)} className="icon-btn icon-btn-delete shrink-0" title="حذف الطلب"><Trash2 size={18} strokeWidth={2.5} /></button>}
+                              {canApprove && isExhausted && <button onClick={() => handleRegisterViolation(p)} className="shrink-0" style={{ background: '#0f766e', color: 'white', padding: '6px 16px', borderRadius: '6px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px' }}>تسجيل مخالفة</button>}
+                              {!canApprove && !canDelete && <span className="text-xs text-slate-400 font-bold whitespace-nowrap">معاينة فقط</span>}
                             </>
                           )
                         ) : (
                           <>
                             <span className="text-xs text-slate-400 font-bold whitespace-nowrap">({p.approvedBy || '-'})</span>
-                            {!p.isVirtual && <button onClick={() => handleUpdateStatus(p, 'معلق')} className="icon-btn icon-btn-warning shrink-0" title="تراجع عن القرار"><Undo2 size={16} strokeWidth={2.5} /></button>}
+                            {canApprove && !p.isVirtual && <button onClick={() => handleUpdateStatus(p, 'معلق')} className="icon-btn icon-btn-warning shrink-0" title="تراجع عن القرار"><Undo2 size={16} strokeWidth={2.5} /></button>}
                           </>
                         )}
                       </div>

@@ -5,6 +5,7 @@ import { matchesSearch, useDebounce } from '../utils/searchEngine';
 
 const SearchableDropdown = ({ options, value, onChange, placeholder, onBlur, disabled }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(50);
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm);
   const [dropdownCoords, setDropdownCoords] = useState({ top: 0, left: 0, width: 0 });
@@ -83,7 +84,11 @@ const SearchableDropdown = ({ options, value, onChange, placeholder, onBlur, dis
     setSearchTerm(value || '');
   }, [value]);
 
-  const filteredOptions = options.filter(option => matchesSearch(option, debouncedSearchTerm));
+  const filteredOptions = React.useMemo(
+    () => isOpen ? options.filter(option => matchesSearch(option, debouncedSearchTerm)) : [],
+    [options, debouncedSearchTerm, isOpen]
+  );
+  useEffect(() => setVisibleCount(50), [debouncedSearchTerm, isOpen]);
 
   const handleInputChange = (e) => {
     const newVal = e.target.value;
@@ -123,7 +128,7 @@ const SearchableDropdown = ({ options, value, onChange, placeholder, onBlur, dis
     >
       {filteredOptions.length > 0 ? (
         <ul style={{ listStyle: 'none', margin: 0, padding: '2px 0' }}>
-          {filteredOptions.map((option, idx) => (
+          {filteredOptions.slice(0, visibleCount).map((option, idx) => (
             <li
               key={idx}
               style={{
@@ -147,6 +152,13 @@ const SearchableDropdown = ({ options, value, onChange, placeholder, onBlur, dis
               {option}
             </li>
           ))}
+          {filteredOptions.length > visibleCount && (
+            <li style={{ padding: '8px', textAlign: 'center' }}>
+              <button type="button" className="btn btn-outline" onClick={() => setVisibleCount(count => count + 50)}>
+                عرض المزيد ({filteredOptions.length - visibleCount})
+              </button>
+            </li>
+          )}
         </ul>
       ) : (
         <div style={{ padding: '12px 16px', fontSize: '14px', color: '#64748b', textAlign: 'center' }}>

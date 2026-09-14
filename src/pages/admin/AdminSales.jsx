@@ -50,6 +50,7 @@ const AdminSales = ({ user }) => {
   const [editingOrder, setEditingOrder] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [ordersLoading, setOrdersLoading] = useState(true);
   const [sortConfig, setSortConfig] = useState({ key: 'orderNumber', direction: 'desc' });
   const [draggedItemIndex, setDraggedItemIndex] = useState(null);
   const [linkedProductionOrder, setLinkedProductionOrder] = useState(null);
@@ -191,8 +192,8 @@ const AdminSales = ({ user }) => {
 
   useEffect(() => {
     const unsubscribe = subscribeToSalesOrders(
-      liveOrders => setOrders(liveOrders),
-      error => console.error('تعذر تحديث حجوزات الطلبيات لحظياً', error)
+      liveOrders => { setOrders(liveOrders); setOrdersLoading(false); },
+      error => { setOrdersLoading(false); console.error('تعذر تحديث حجوزات الطلبيات لحظياً', error); }
     );
     return unsubscribe;
   }, []);
@@ -218,13 +219,12 @@ const AdminSales = ({ user }) => {
       const saved = await saveSalesOrderDraft(draft);
       setDraftSaveState(saved ? 'تم حفظ المسودة تلقائيًا' : 'محفوظة على هذا الجهاز');
       if (saved) setDrafts(prev => [saved, ...prev.filter(d => d.id !== saved.id)]);
-    }, 700);
+    }, 1500);
   }, [formData, linkedProductionOrder, linkedPreparationOrder, showModal, editingOrder, activeDraftId]);
 
   const fetchData = async () => {
     setLoading(true);
-    const [ordersData, customersData, settingsData, stockData, missionsData, prodOrdersData, prepOrdersData] = await Promise.all([
-      getSalesOrders(),
+    const [customersData, settingsData, stockData, missionsData, prodOrdersData, prepOrdersData] = await Promise.all([
       getCustomers(),
       getGlobalSettings(),
       getStock(),
@@ -232,7 +232,6 @@ const AdminSales = ({ user }) => {
       getOrders(),
       getPreparationOrders()
     ]);
-    setOrders(ordersData);
     setCustomers(customersData.filter(c => (c.type || 'عميل') === 'عميل'));
     setGlobalSettings(settingsData);
     setStock(stockData);
@@ -1769,6 +1768,7 @@ const AdminSales = ({ user }) => {
         };
         try {
           const savedProd = await saveOrder(prodData);
+          if (savedProd) setProductionOrders(prev => [savedProd, ...prev.filter(item => item.id !== savedProd.id)]);
           if (!savedProd) {
             Swal.fire('خطأ في الإنتاج', 'تم حفظ الطلبية بنجاح، ولكن تعذر إنشاء كرت الإنتاج. يرجى مراجعة الإدارة.', 'error');
             console.error("Failed to save production order with data:", prodData);
@@ -1792,6 +1792,7 @@ const AdminSales = ({ user }) => {
         };
         try {
           const savedPrep = await savePreparationOrder(prepData);
+          if (savedPrep) setPreparationOrders(prev => [savedPrep, ...prev.filter(item => item.id !== savedPrep.id)]);
           if (!savedPrep) {
             Swal.fire('خطأ في التحضير', 'تم حفظ الطلبية بنجاح، ولكن تعذر إنشاء كرت التحضير. يرجى مراجعة الإدارة.', 'error');
             console.error("Failed to save preparation order with data:", prepData);
@@ -1824,7 +1825,7 @@ const AdminSales = ({ user }) => {
         setActiveDraftId(null);
       }
       setShowModal(false);
-      fetchData();
+      // Orders and reservation totals are refreshed by the live subscription.
     }
   };
 
@@ -1859,6 +1860,7 @@ const AdminSales = ({ user }) => {
             status: 'بانتظار الاستلام',
             salesOrderNumber: order.orderNumber
           });
+          setMissions(await getMissions());
         }
       } catch (err) {
         console.error("Error creating mission for sales order:", err);
@@ -2095,7 +2097,7 @@ const AdminSales = ({ user }) => {
     }
   };
 
-  const sortedOrders = [...orders].sort((a, b) => {
+  const sortedOrders = React.useMemo(() => [...orders].sort((a, b) => {
     if (!sortConfig.key) return 0;
     let aVal = a[sortConfig.key];
     let bVal = b[sortConfig.key];
@@ -2121,9 +2123,9 @@ const AdminSales = ({ user }) => {
     return sortConfig.direction === 'asc'
       ? strA.localeCompare(strB, undefined, { numeric: true, sensitivity: 'base' })
       : strB.localeCompare(strA, undefined, { numeric: true, sensitivity: 'base' });
-  });
+  }), [orders, sortConfig]);
 
-  const filteredOrders = sortedOrders.filter(o => {
+  const filteredOrders = React.useMemo(() => sortedOrders.filter(o => {
     // Exclude Preparation and Production orders that might have been mistakenly saved in sales_orders
     const orderNumStr = String(o.orderNumber || '').toUpperCase();
     if (orderNumStr.startsWith('PREP-') || orderNumStr.startsWith('PRO-')) {
@@ -2143,7 +2145,7 @@ const AdminSales = ({ user }) => {
       : (selectedStatus ? o.status === selectedStatus : true);
     const matchCreatedBy = filterCreatedBy ? (o.createdBy || '').includes(filterCreatedBy) : true;
     return matchOrderNum && matchSearch && matchDateFrom && matchDateTo && matchCust && matchStatus && matchCreatedBy;
-  });
+  }), [sortedOrders, filterOrderNumber, debouncedSearchTerm, dateFrom, dateTo, selectedCustomer, selectedStatus, filterCreatedBy]);
 
   const getUniqueCreators = () => {
     const creators = orders.map(o => o.createdBy).filter(Boolean);
@@ -2416,15 +2418,15 @@ const AdminSales = ({ user }) => {
             <button
               className="btn btn-primary flex items-center gap-2"
               onClick={() => handleOpenModal()}
-              disabled={loading}
+              disabled={loading || ordersLoading}
               style={{
                 height: '38px',
                 borderRadius: '10px',
                 fontSize: isMobile ? '12px' : '14px',
                 padding: isMobile ? '0 12px' : '0 16px',
                 whiteSpace: 'nowrap',
-                opacity: loading ? 0.6 : 1,
-                cursor: loading ? 'not-allowed' : 'pointer'
+                opacity: (loading || ordersLoading) ? 0.6 : 1,
+                cursor: (loading || ordersLoading) ? 'not-allowed' : 'pointer'
               }}
             >
               <Plus size={18} /> طلبية جديدة
@@ -2544,7 +2546,7 @@ const AdminSales = ({ user }) => {
           </div>
         )}
 
-        {loading ? (
+        {showModal ? null : (loading || ordersLoading) ? (
           <div className="text-center py-10">جاري التحميل...</div>
         ) : isMobile ? (
           <div className="flex flex-col gap-4 no-print" style={{ padding: '0 8px 120px 8px' }}>

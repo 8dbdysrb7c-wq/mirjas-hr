@@ -8,8 +8,9 @@ const GENERAL_MODULES = {
   overview: 'الرئيسية',
   live: 'التحكم المباشر',
   production: 'إنتاج قيد الخياطة',
-  production_tasks: 'مهام الإنتاج',
   preparation: 'إنتاج قيد التحضير',
+  production_packaging: 'قسم التغليف (إنتاج قيد التغليف)',
+  production_tasks: 'مهام الإنتاج',
   orders: 'الطلبيات',
   delivery: 'التوصيل',
   customers: 'الزبائن',
@@ -55,10 +56,25 @@ const HR_MODULES = {
   hr_employee_alerts: 'تنبيهات الموظفين',
 };
 
+const REPORTS_MODULES = {
+  reports_employees: 'تقرير الموظفين وساعات العمل',
+  reports_sales: 'تقرير المبيعات والطلبيات',
+  reports_quotes: 'تقرير عروض الأسعار',
+  reports_production: 'تقرير مراحل الإنتاج',
+  reports_delivery: 'تقرير التوصيل والمندوبين',
+  reports_stock: 'تقرير حركة وأرصدة المخزون',
+  reports_hr: 'تقرير الموارد البشرية والرواتب',
+  reports_tasks: 'تقرير إنجاز المهام',
+  reports_supervisors: 'تقرير أداء المشرفين',
+  reports_customers: 'تقرير حسابات ومبيعات الزبائن',
+  scoring: 'التقييمات والنقاط الإدارية',
+};
+
 const MODULES = {
   ...GENERAL_MODULES,
   ...STOCK_MODULES,
-  ...HR_MODULES
+  ...HR_MODULES,
+  ...REPORTS_MODULES
 };
 
 const ACTIONS = {
@@ -275,6 +291,7 @@ export default function RolesSettingsTab() {
   const getActiveModules = () => {
     if (activePermTab === 'stock') return STOCK_MODULES;
     if (activePermTab === 'hr') return HR_MODULES;
+    if (activePermTab === 'reports') return REPORTS_MODULES;
     return GENERAL_MODULES;
   };
 
@@ -729,6 +746,12 @@ export default function RolesSettingsTab() {
               className={`perm-tab-button ${activePermTab === 'hr' ? 'active' : ''}`}
             >
               <span>👥</span> صلاحيات الموارد البشرية التفصيلية
+            </button>
+            <button
+              onClick={() => setActivePermTab('reports')}
+              className={`perm-tab-button ${activePermTab === 'reports' ? 'active' : ''}`}
+            >
+              <span>📊</span> صلاحيات أقسام التقارير التفصيلية
             </button>
           </div>
 

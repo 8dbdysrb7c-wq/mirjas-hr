@@ -484,7 +484,7 @@ export const HomeTab = ({
         {hasPermission(user, 'production') && (
           <DashboardCard isMobile={isMobile} icon={SewingMachineIcon} title="إنتاج قيد الخياطة" badgeCount={pendingProductionCount} onClick={() => handleTabChange('production')} />
         )}
-        {hasPermission(user, 'production') && (
+        {hasPermission(user, 'production_packaging') && (
           <DashboardCard isMobile={isMobile} icon={Package} title="قسم التغليف" badgeCount={pendingPackagingCount} onClick={() => handleTabChange('production-packaging')} />
         )}
         {hasPermission(user, 'preparation') && (

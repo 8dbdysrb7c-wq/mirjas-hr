@@ -16,6 +16,7 @@ const ALL_COLLECTIONS = [
   'customers',
   'sales_orders',
   'orders',
+  'preparation_orders',
   'production_logs',
   'productionBatches',
   'productionTasks',

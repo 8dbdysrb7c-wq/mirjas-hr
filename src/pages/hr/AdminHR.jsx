@@ -252,22 +252,25 @@ const AdminHR = ({ user, notificationTarget }) => {
        const isWeekend = d.getDay() === 5;
        if (isWeekend) continue;
 
-       emps.forEach(emp => {
-          const hasManual = mps.some(p => String(p.employeeId) === String(emp.id) && p.date === dateStr);
-          if (hasManual) return;
-          const rec = attendance.find(a => String(a.employeeId) === String(emp.id) && a.date === dateStr);
-          const hasLeave = leaves.some(l => 
-             String(l.employeeId) === String(emp.id) && 
-             (l.status === 'موافق' || l.status === 'مقبول') && 
-             l.type && l.type.startsWith('إجازة') &&
-             ((l.date === dateStr) || (l.startDate <= dateStr && l.endDate >= dateStr))
-          );
-          if (hasLeave) return;
+        emps.forEach(emp => {
+           if (emp.joinDate && dateStr < emp.joinDate) return;
+           if (emp.terminationDate && dateStr > emp.terminationDate) return;
 
-          if (!rec || rec.status === 'لم يسجل دخول') {
-             pendingMpsCount++;
-          }
-       });
+           const hasManual = mps.some(p => String(p.employeeId) === String(emp.id) && p.date === dateStr);
+           if (hasManual) return;
+           const rec = attendance.find(a => String(a.employeeId) === String(emp.id) && a.date === dateStr);
+           const hasLeave = leaves.some(l => 
+              String(l.employeeId) === String(emp.id) && 
+              (l.status === 'موافق' || l.status === 'مقبول') && 
+              l.type && l.type.startsWith('إجازة') &&
+              ((l.date === dateStr) || (l.startDate <= dateStr && l.endDate >= dateStr))
+           );
+           if (hasLeave) return;
+
+           if (!rec || rec.status === 'لم يسجل دخول') {
+              pendingMpsCount++;
+           }
+        });
     }
 
     const strFrom = getLocalDateStr(dFrom);
@@ -285,8 +288,10 @@ const AdminHR = ({ user, notificationTarget }) => {
            );
            if (rec.timeIn && (!rec.timeOut || rec.timeOut === '--:--')) {
               if (!['غائب', 'غياب غير مبرر', 'مغادرة مبكرة', 'إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'].includes(rec.status) && !hasLeave) {
-                 const emp = emps.find(e => String(e.id) === String(rec.employeeId));
-                 if (emp) pendingMpsCount++;
+                  const emp = emps.find(e => String(e.id) === String(rec.employeeId));
+                  if (emp && (!emp.joinDate || rec.date >= emp.joinDate) && (!emp.terminationDate || rec.date <= emp.terminationDate)) {
+                    pendingMpsCount++;
+                  }
               }
            }
        }

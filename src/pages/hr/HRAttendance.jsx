@@ -403,7 +403,11 @@ const HRAttendance = ({ user }) => {
       }
 
       let status = 'لم يسجل دخول';
-      if (empLeave) {
+      if (emp.joinDate && selectedDate < emp.joinDate) {
+        status = 'غائب';
+      } else if (emp.terminationDate && selectedDate > emp.terminationDate) {
+        status = 'غائب';
+      } else if (empLeave) {
         status = empLeave.type || 'في إجازة';
       } else if (tIn) {
         const [h, m] = (emp.shiftStart || '08:00').split(':').map(Number);
@@ -419,6 +423,8 @@ const HRAttendance = ({ user }) => {
       let generatedNotes = '';
       if (actualNotes) {
         generatedNotes = actualNotes;
+      } else if (emp.joinDate && selectedDate < emp.joinDate) {
+        generatedNotes = 'قبل تاريخ التعيين';
       } else if (tIn || tOut) {
         generatedNotes = 'تم سحب الدوام من التقرير';
       } else if (empLeave) {

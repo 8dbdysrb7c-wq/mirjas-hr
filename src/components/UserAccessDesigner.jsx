@@ -5,8 +5,12 @@ import withReactContent from 'sweetalert2-react-content';
 import { 
   ACCESS_SECTIONS, 
   ACCESS_ACTIONS, 
+  SCREEN_ALLOWED_ACTIONS,
+  getScreenAllowedActions,
   ACCESS_FIELDS, 
   ACCESS_WAREHOUSES, 
+  SCREEN_DESCRIPTIONS,
+  normalizePolicy,
   createAccessDraft, 
   setAccessMode, 
   evaluateDraft, 
@@ -24,12 +28,14 @@ export default function UserAccessDesigner({ employee, employees, actor, onClose
   const [initial] = useState(() => {
     // 1. If the employee already has a saved accessPolicy in Firestore:
     if (employee?.accessPolicy?.version === 1) {
-      return { policy: structuredClone(employee.accessPolicy), history: employee.accessPolicyHistory || [] };
+      return { policy: normalizePolicy(employee.accessPolicy, employee), history: employee.accessPolicyHistory || [] };
     }
     // 2. Check local draft
     try {
       const saved = JSON.parse(localStorage.getItem(storageKey(actor, employee)) || 'null');
-      if (saved?.policy?.version === 1 && saved.policy.userId === employee.id) return saved;
+      if (saved?.policy?.version === 1 && saved.policy.userId === employee.id) {
+        return { policy: normalizePolicy(saved.policy, employee), history: saved.history || [] };
+      }
     } catch { /* An unreadable local draft must not affect existing access. */ }
     // 3. Generate from current permissions
     return { policy: createAccessDraft(employee), history: [] };
@@ -67,6 +73,7 @@ export default function UserAccessDesigner({ employee, employees, actor, onClose
 
       // Save locally immediately
       localStorage.setItem(storageKey(actor, employee), JSON.stringify({ policy: policyToSave, history: nextHistory }));
+      setPolicy(structuredClone(policyToSave));
       setSavedPolicy(structuredClone(policyToSave));
       setHistory(nextHistory);
 
@@ -107,10 +114,10 @@ export default function UserAccessDesigner({ employee, employees, actor, onClose
   const copy = () => {
     const source = employees.find(e => e.id === copyId);
     if (!source || !window.confirm('استبدال الإعدادات الحالية بصلاحيات المستخدم المحدد؟')) return;
-    let next = source.accessPolicy ? structuredClone(source.accessPolicy) : createAccessDraft(source);
+    let next = source.accessPolicy ? normalizePolicy(source.accessPolicy, source) : createAccessDraft(source);
     try {
       const stored = JSON.parse(localStorage.getItem(storageKey(actor, source)) || 'null');
-      if (stored?.policy?.version === 1) next = structuredClone(stored.policy);
+      if (stored?.policy?.version === 1) next = normalizePolicy(stored.policy, source);
     } catch { /* Use current permissions when no valid draft exists. */ }
     next.userId = employee.id;
     setPolicy(next); setMessage('نُسخت الصلاحيات بنجاح؛ راجعها ثم اضغط حفظ وتطبيق.');
@@ -138,7 +145,7 @@ export default function UserAccessDesigner({ employee, employees, actor, onClose
           {employees.filter(e => e.id !== employee.id).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
         </select>
         <button disabled={!copyId} onClick={copy}>نسخ</button>
-        <button onClick={() => { if (window.confirm('إعادة تعيين الصلاحيات للوضع الحالي المخزن في الحساب؟')) setPolicy(employee.accessPolicy ? structuredClone(employee.accessPolicy) : createAccessDraft(employee)); }}>استيراد الصلاحيات الحالية</button>
+        <button onClick={() => { if (window.confirm('إعادة تعيين الصلاحيات للوضع الحالي المخزن في الحساب؟')) setPolicy(employee.accessPolicy ? normalizePolicy(employee.accessPolicy, employee) : createAccessDraft(employee)); }}>استيراد الصلاحيات الحالية</button>
         <button onClick={() => { if (window.confirm('بدء تخصيص جديد بجميع الأقسام مخفية؟')) setPolicy(createAccessDraft(employee, false)); }}>من الصفر (حجب الكل)</button>
       </div>
 
@@ -164,25 +171,193 @@ export default function UserAccessDesigner({ employee, employees, actor, onClose
             </div>
             <p className="access-help">«استخدام» يتيح المشاهدة والإضافة والتعديل والطباعة. العمليات المتقدمة (الحذف والاعتماد وغيرها) تُحدّد من «مخصص».</p>
 
+            {config.mode === 'hidden' && (
+              <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '10px', color: '#991b1b', fontSize: '13px', margin: '14px 0', fontWeight: 'bold' }}>
+                🚫 قسم {section.label} محجوب بالكامل عن الموظف ولا يظهر في واجهته.
+              </div>
+            )}
+
+            {(config.mode === 'view' || config.mode === 'use') && section.screens && section.screens.length > 0 && (
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', margin: '14px 0' }}>
+                <div style={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '8px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                  <span>
+                    {config.mode === 'view' ? `👁️ وضع «مشاهدة فقط» مفعّل لجميع شاشات ${section.label}:` : `⚡ وضع «استخدام» مفعّل لجميع شاشات ${section.label} (مشاهدة، إضافة، تعديل، طباعة):`}
+                  </span>
+                  <button 
+                    type="button" 
+                    onClick={() => setPolicy(setAccessMode(policy, active, 'custom'))} 
+                    style={{ background: '#138b94', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '5px 12px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    تفصيل الصلاحيات من «مخصص» ⚙️
+                  </button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '8px', marginTop: '10px' }}>
+                  {section.screens.map(sc => (
+                    <div key={sc.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '9px 12px', fontSize: '12px', color: '#334155' }}>
+                      <div style={{ fontWeight: '800', color: '#0f766e', marginBottom: '3px' }}>✓ {sc.label}</div>
+                      {SCREEN_DESCRIPTIONS[sc.id] && <div style={{ fontSize: '11px', color: '#64748b', lineHeight: '1.4' }}>{SCREEN_DESCRIPTIONS[sc.id]}</div>}
+                    </div>
+                  ))}
+                </div>
+                <p style={{ margin: '10px 0 0 0', fontSize: '11.5px', color: '#64748b' }}>
+                  💡 هل تريد منح شاشات محددة فقط (مثل إتاحة <strong>إنتاج قيد الخياطة</strong> دون <strong>إنتاج قيد التحضير</strong> أو العكس)؟ اختر <strong>«مخصص»</strong> أعلاه لتحديد الشاشات بدقة.
+                </p>
+              </div>
+            )}
+
             {config.mode !== 'hidden' && <>
-              {config.mode === 'custom' && section.screens.map(screen => (
-                <details key={screen.id} className="access-screen" open={section.screens.length === 1 || undefined}>
-                  <summary>{screen.label}</summary>
-                  <div className="access-options">
-                    {Object.entries(ACCESS_ACTIONS).map(([key, label]) => (
-                      <label key={key}>
-                        <input 
-                          type="checkbox" 
-                          checked={config.screens[screen.id][key] === true} 
-                          disabled={key !== 'view' && !config.screens[screen.id].view} 
-                          onChange={e => update(s => { s.screens[screen.id][key] = e.target.checked; })} 
-                        />
-                        {label}
-                      </label>
-                    ))}
+              {config.mode === 'custom' && (
+                <div style={{ margin: '14px 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#1e293b' }}>
+                      تخصيص شاشات {section.label} بالتفصيل:
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>
+                      يمكنك تفعيل أو حجب كل شاشة على حدة وتحديد العمليات المسموحة بدقة
+                    </span>
                   </div>
-                </details>
-              ))}
+
+                  {section.screens.map(screen => {
+                    const screenConfig = config.screens?.[screen.id] || {};
+                    const isEnabled = screenConfig.view === true;
+                    const desc = SCREEN_DESCRIPTIONS[screen.id];
+
+                    const allowedActions = getScreenAllowedActions(screen.id);
+
+                    const toggleScreen = (enable) => {
+                      update(s => {
+                        if (!s.screens[screen.id]) s.screens[screen.id] = {};
+                        s.screens[screen.id].view = enable;
+                        if (enable) {
+                          if (allowedActions.includes('create')) s.screens[screen.id].create = true;
+                          if (allowedActions.includes('edit')) s.screens[screen.id].edit = true;
+                          if (allowedActions.includes('print')) s.screens[screen.id].print = true;
+                        } else {
+                          Object.keys(ACCESS_ACTIONS).forEach(k => { s.screens[screen.id][k] = false; });
+                        }
+                      });
+                    };
+
+                    const setAllActions = (all) => {
+                      update(s => {
+                        if (!s.screens[screen.id]) s.screens[screen.id] = {};
+                        Object.keys(ACCESS_ACTIONS).forEach(k => { s.screens[screen.id][k] = false; });
+                        if (all) {
+                          allowedActions.forEach(k => { s.screens[screen.id][k] = true; });
+                        }
+                        s.screens[screen.id].view = all;
+                      });
+                    };
+
+                    return (
+                      <details 
+                        key={screen.id} 
+                        className="access-screen" 
+                        open={true}
+                        style={{ 
+                          border: isEnabled ? '1.5px solid #138b94' : '1px solid #e2e8f0', 
+                          borderRadius: '12px', 
+                          margin: '12px 0', 
+                          padding: '0', 
+                          overflow: 'hidden',
+                          background: isEnabled ? '#ffffff' : '#f8fafc',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        <summary 
+                          style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'space-between', 
+                            padding: '12px 16px', 
+                            background: isEnabled ? '#f0fdfa' : '#f1f5f9', 
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            borderBottom: isEnabled ? '1px solid #ccfbf1' : '1px solid #e2e8f0'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={isEnabled} 
+                              onClick={e => e.stopPropagation()} 
+                              onChange={e => toggleScreen(e.target.checked)} 
+                              style={{ width: '18px', height: '18px', accentColor: '#138b94', cursor: 'pointer' }}
+                            />
+                            <span style={{ fontWeight: '800', fontSize: '14px', color: isEnabled ? '#0f766e' : '#64748b' }}>
+                              {screen.label}
+                            </span>
+                            <span style={{ 
+                              fontSize: '11px', 
+                              fontWeight: 'bold', 
+                              padding: '2px 8px', 
+                              borderRadius: '12px', 
+                              background: isEnabled ? '#ccfbf1' : '#e2e8f0', 
+                              color: isEnabled ? '#0f766e' : '#64748b' 
+                            }}>
+                              {isEnabled ? 'مفعّلة' : 'محجوبة'}
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={e => e.stopPropagation()}>
+                            <button 
+                              type="button" 
+                              onClick={() => toggleScreen(true)}
+                              style={{ padding: '4px 10px', fontSize: '11px', fontWeight: 'bold', background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: '6px', cursor: 'pointer' }}
+                            >
+                              تفعيل الاستخدام
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => setAllActions(true)}
+                              style={{ padding: '4px 10px', fontSize: '11px', fontWeight: 'bold', background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0', borderRadius: '6px', cursor: 'pointer' }}
+                            >
+                              صلاحيات كاملة
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => toggleScreen(false)}
+                              style={{ padding: '4px 10px', fontSize: '11px', fontWeight: 'bold', background: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: '6px', cursor: 'pointer' }}
+                            >
+                              حجب الشاشة
+                            </button>
+                          </div>
+                        </summary>
+
+                        <div style={{ padding: '14px 16px' }}>
+                          {desc && (
+                            <p style={{ margin: '0 0 12px 0', fontSize: '11.5px', color: '#64748b', lineHeight: '1.6' }}>
+                              ℹ️ {desc}
+                            </p>
+                          )}
+                          
+                          <div className="access-options">
+                            {allowedActions.map(key => {
+                              const label = ACCESS_ACTIONS[key];
+                              if (!label) return null;
+                              return (
+                                <label key={key} style={{ opacity: (!isEnabled && key !== 'view') ? 0.4 : 1 }}>
+                                  <input 
+                                    type="checkbox" 
+                                    checked={screenConfig[key] === true} 
+                                    disabled={key !== 'view' && !isEnabled} 
+                                    onChange={e => update(s => { 
+                                      if (!s.screens[screen.id]) s.screens[screen.id] = {};
+                                      s.screens[screen.id][key] = e.target.checked; 
+                                      if (key !== 'view' && e.target.checked) s.screens[screen.id].view = true;
+                                    })} 
+                                  />
+                                  {label}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </details>
+                    );
+                  })}
+                </div>
+              )}
 
               <h4>نطاق البيانات</h4>
               <select aria-label="نطاق البيانات" value={config.scope} onChange={e => update(s => { s.scope = e.target.value; })}>

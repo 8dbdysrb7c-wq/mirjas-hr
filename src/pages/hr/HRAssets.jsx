@@ -8,6 +8,7 @@ import SearchableDropdown from '../../components/SearchableDropdown';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/light.css';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
+import { hasPermission } from '../../utils/permissions';
 
 const MySwal = withReactContent(Swal);
 
@@ -28,6 +29,10 @@ const ASSET_STATUS_COLORS = {
 };
 
 const HRAssets = ({ user }) => {
+  const canAdd = hasPermission(user, 'hr_assets', 'add');
+  const canEdit = hasPermission(user, 'hr_assets', 'edit');
+  const canDelete = hasPermission(user, 'hr_assets', 'delete');
+  const canApprove = hasPermission(user, 'hr_assets', 'approve');
   const [assets, setAssets] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [stockItems, setStockItems] = useState([]);
@@ -81,6 +86,9 @@ const HRAssets = ({ user }) => {
 
   const handleOpenModal = (asset = null) => {
     if (asset) {
+      if (!canEdit) {
+        return Swal.fire('غير مصرح', 'ليس لديك صلاحية تعديل العهدة.', 'warning');
+      }
       setEditingAsset(asset);
       setFormData({
         ...asset,
@@ -91,6 +99,9 @@ const HRAssets = ({ user }) => {
       setNewItemName('');
       setNewItemQuantity(1);
     } else {
+      if (!canAdd) {
+        return Swal.fire('غير مصرح', 'ليس لديك صلاحية إضافة عهدة جديدة.', 'warning');
+      }
       setEditingAsset(null);
       // Generate automatic asset number
       let maxNum = 0;
@@ -419,6 +430,12 @@ const HRAssets = ({ user }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (editingAsset && !canEdit) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية تعديل العهدة.', 'warning');
+    }
+    if (!editingAsset && !canAdd) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية إضافة عهدة جديدة.', 'warning');
+    }
     if (!formData.name || !formData.employeeId || !formData.handoverDate || !formData.nextInspectionDate) {
       Swal.fire('خطأ', 'يرجى إدخال جميع الحقول الإجبارية (الاسم، الموظف، وتواريخ التسليم والفحص القادم)', 'error');
       return;
@@ -501,6 +518,9 @@ const HRAssets = ({ user }) => {
   };
 
   const handleDelete = async (id) => {
+    if (!canDelete) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية حذف العهدة.', 'warning');
+    }
     const result = await MySwal.fire({
       title: 'هل أنت متأكد؟',
       text: "سيتم حذف هذه العهدة نهائياً من سجلات الشركة!",
@@ -520,6 +540,9 @@ const HRAssets = ({ user }) => {
   };
 
   const handleInspect = async (asset) => {
+    if (!canEdit && !canApprove) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية فحص أو تحديث حالة العهدة.', 'warning');
+    }
     const { value: formValues } = await MySwal.fire({
       title: 'فحص دوري لمحتويات العهدة',
       customClass: {
@@ -1772,28 +1795,30 @@ const HRAssets = ({ user }) => {
                 <span style={{ fontSize: '14px' }}>جرد مستهلكات الخياطة</span>
               </button>
 
-              <button 
-                style={{ 
-                  backgroundColor: '#0ea5e9', 
-                  color: '#ffffff', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  gap: '8px', 
-                  padding: '8px 20px', 
-                  borderRadius: '14px', 
-                  fontWeight: 'bold', 
-                  border: 'none',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(14, 165, 233, 0.3)'
-                }}
-                onClick={() => handleOpenModal()}
-                onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-                onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-              >
-                <Plus size={20} strokeWidth={3} />
-                <span style={{ fontSize: '14px' }}>إضافة عهدة جديدة</span>
-              </button>
+              {canAdd && (
+                <button 
+                  style={{ 
+                    backgroundColor: '#0ea5e9', 
+                    color: '#ffffff', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    gap: '8px', 
+                    padding: '8px 20px', 
+                    borderRadius: '14px', 
+                    fontWeight: 'bold', 
+                    border: 'none',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(14, 165, 233, 0.3)'
+                  }}
+                  onClick={() => handleOpenModal()}
+                  onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                  onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                  <Plus size={20} strokeWidth={3} />
+                  <span style={{ fontSize: '14px' }}>إضافة عهدة جديدة</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1957,18 +1982,27 @@ const HRAssets = ({ user }) => {
                             <button className="icon-btn" style={{ color: '#6366f1', backgroundColor: '#e0e7ff' }} onClick={() => handleExportAsset(asset)} title="طباعة / تصدير التقرير">
                               <Printer size={16} />
                             </button>
-                            <button className="icon-btn icon-btn-edit" onClick={() => handleInspect(asset)} title="فحص دوري وتحديث حالة الأصناف">
-                              <RefreshCw size={16} />
-                            </button>
+                            {(canEdit || canApprove) && (
+                              <button className="icon-btn icon-btn-edit" onClick={() => handleInspect(asset)} title="فحص دوري وتحديث حالة الأصناف">
+                                <RefreshCw size={16} />
+                              </button>
+                            )}
                             <button className="icon-btn icon-btn-edit" onClick={() => handleShowHistory(asset)} title="سجل الحركات">
                               <FileText size={16} />
                             </button>
-                            <button className="icon-btn icon-btn-edit" onClick={() => handleOpenModal(asset)} title="تعديل">
-                              <Edit2 size={16} />
-                            </button>
-                            <button className="icon-btn icon-btn-delete" onClick={() => handleDelete(asset.id)} title="حذف">
-                              <Trash2 size={16} />
-                            </button>
+                            {canEdit && (
+                              <button className="icon-btn icon-btn-edit" onClick={() => handleOpenModal(asset)} title="تعديل">
+                                <Edit2 size={16} />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button className="icon-btn icon-btn-delete" onClick={() => handleDelete(asset.id)} title="حذف">
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                            {!canEdit && !canDelete && !canApprove && (
+                              <span className="text-xs text-slate-400 font-bold whitespace-nowrap">معاينة فقط</span>
+                            )}
                           </div>
                         </td>
                       </tr>

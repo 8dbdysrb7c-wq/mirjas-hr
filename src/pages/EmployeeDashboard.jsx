@@ -2100,7 +2100,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       case 'hr': return <AdminHR user={user} notificationTarget={notificationTarget} />;
       case 'delivery': return <AdminDelivery user={user} notificationTarget={notificationTarget} />;
       case 'customers': return <AdminCustomers user={user} />;
-      case 'reports': return <AdminReports notificationTarget={notificationTarget} />;
+      case 'reports': return <AdminReports user={user} notificationTarget={notificationTarget} />;
       case 'costing':
       case 'product-costing': return <AdminProductCosting user={user} />;
       case 'production-tasks': return <AdminTasks user={user} />;

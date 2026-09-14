@@ -8,6 +8,7 @@ import 'flatpickr/dist/themes/airbnb.css';
 import { getEmployees, getHRBonuses, saveHRBonus, deleteHRBonus } from '../../store';
 import Swal from 'sweetalert2';
 import HRDateFilter from '../../components/ui/HRDateFilter';
+import { hasPermission } from '../../utils/permissions';
 
 const getLocalDateStr = (d) => {
   const offset = d.getTimezoneOffset();
@@ -15,6 +16,10 @@ const getLocalDateStr = (d) => {
 };
 
 const HRBonuses = ({ user, refreshCounts }) => {
+  const canAdd = hasPermission(user, 'hr_bonuses_violations', 'add') || hasPermission(user, 'hr_bonuses_violations', 'create');
+  const canEdit = hasPermission(user, 'hr_bonuses_violations', 'edit');
+  const canDelete = hasPermission(user, 'hr_bonuses_violations', 'delete');
+
   const [bonuses, setBonuses] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [employees, setEmployees] = useState([]);
@@ -62,6 +67,9 @@ const HRBonuses = ({ user, refreshCounts }) => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (!canAdd) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية تسجيل مكافآت جديدة.', 'warning');
+    }
     const emp = employees.find(e => e.id === formData.employeeId);
     if (!emp) return Swal.fire('خطأ', 'الرجاء اختيار الموظف', 'error');
 
@@ -79,6 +87,9 @@ const HRBonuses = ({ user, refreshCounts }) => {
   };
 
   const handleDelete = async (id) => {
+    if (!canDelete) {
+      return Swal.fire('غير مصرح', 'ليس لديك صلاحية حذف المكافآت.', 'warning');
+    }
     const res = await Swal.fire({ title: 'تأكيد الحذف', text: 'هل أنت متأكد من حذف هذه المكافأة؟', icon: 'warning', showCancelButton: true });
     if (res.isConfirmed) {
       await deleteHRBonus(id, user);
@@ -255,15 +266,17 @@ const HRBonuses = ({ user, refreshCounts }) => {
                 isClearable={true}
               />
           </div>
-          <button 
-          onClick={() => {
-            setFormData({ employeeId: '', type: 'مكافأة أداء', date: new Date().toISOString().split('T')[0], amount: '', notes: '' });
-            setShowModal(true);
-          }}
-          className="premium-add-btn emerald-btn whitespace-nowrap"
-        >
-          <Plus size={20} /> تسجيل مكافأة
-        </button>
+          {canAdd && (
+            <button 
+              onClick={() => {
+                setFormData({ employeeId: '', type: 'مكافأة أداء', date: new Date().toISOString().split('T')[0], amount: '', notes: '' });
+                setShowModal(true);
+              }}
+              className="premium-add-btn emerald-btn whitespace-nowrap"
+            >
+              <Plus size={20} /> تسجيل مكافأة
+            </button>
+          )}
         </div>
       </div>
 
@@ -297,9 +310,14 @@ const HRBonuses = ({ user, refreshCounts }) => {
                 <td className="text-muted text-sm">{b.notes}</td>
                 <td>
                   <div className="flex gap-2 justify-center">
-                    <button onClick={() => promptEmployeeAlert({ employeeId: b.employeeId, employeeName: b.employeeName, source: 'المكافآت والبدلات', sourceReference: `${b.type || 'مكافأة'} ${b.date || ''}`, suggestedMessage: `تم تسجيل ${b.type || 'مكافأة'} لك بتاريخ ${b.date || 'غير محدد'}${b.amount ? ` بقيمة ${b.amount} د.أ` : ''}.${b.notes ? `\nالملاحظات: ${b.notes}` : ''}`, user })} className="icon-btn" style={{ color: '#c2410c', background: '#fff7ed', borderColor: '#fdba74' }} title="إرسال تنبيه للموظف"><Bell size={17}/></button>
-                    {!b.processedInPeriod && (
+                    {(canEdit || canAdd) && (
+                      <button onClick={() => promptEmployeeAlert({ employeeId: b.employeeId, employeeName: b.employeeName, source: 'المكافآت والبدلات', sourceReference: `${b.type || 'مكافأة'} ${b.date || ''}`, suggestedMessage: `تم تسجيل ${b.type || 'مكافأة'} لك بتاريخ ${b.date || 'غير محدد'}${b.amount ? ` بقيمة ${b.amount} د.أ` : ''}.${b.notes ? `\nالملاحظات: ${b.notes}` : ''}`, user })} className="icon-btn" style={{ color: '#c2410c', background: '#fff7ed', borderColor: '#fdba74' }} title="إرسال تنبيه للموظف"><Bell size={17}/></button>
+                    )}
+                    {canDelete && !b.processedInPeriod && (
                       <button onClick={() => handleDelete(b.id)} className="icon-btn icon-btn-delete"><Trash2 size={18}/></button>
+                    )}
+                    {!canDelete && (
+                      <span className="text-xs text-slate-400 font-bold whitespace-nowrap">معاينة فقط</span>
                     )}
                   </div>
                 </td>

@@ -25,6 +25,7 @@ import { CustomersReportTab } from './reports/CustomersReportTab';
 import HRDateFilter from '../../components/ui/HRDateFilter';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 import Select from '../../components/SearchSelect';
+import { hasPermission } from '../../utils/permissions';
 const MySwal = withReactContent(Swal);
 const REPORT_WAREHOUSES = ['مصنع المخدة', 'مصنع البياضات'];
 
@@ -155,8 +156,28 @@ const getStockVariantLabel = (item) => {
   return variantParts.length ? variantParts.join(' / ') : 'بدون تفصيل';
 };
 
+const REPORT_TABS_CONFIG = [
+  { id: 'employees', permission: 'reports_employees', label: 'تقارير الموظفين', desc: 'عدد الموظفين، الغياب، التأخير، ساعات العمل', icon: Users },
+  { id: 'sales', permission: 'reports_sales', label: 'طلبيات العملاء', desc: 'طلبيات العملاء، المرتجعات', icon: ShoppingCart },
+  { id: 'quotes', permission: 'reports_quotes', label: 'عروض الأسعار', desc: 'عروض الأسعار، الموافقة، الرفض', icon: FileText },
+  { id: 'production', permission: 'reports_production', label: 'تقارير الإنتاج', desc: 'الإنتاج اليومي، الإنجاز، المتأخرات، جودة الإنتاج', icon: SewingMachineIcon },
+  { id: 'delivery', permission: 'reports_delivery', label: 'تقارير التوصيل', desc: 'قيد التوصيل، المكتمل، المرتجع، مناطق التوصيل', icon: Truck },
+  { id: 'stock', permission: 'reports_stock', label: 'تقارير المخزون', desc: 'الكميات، النواقص، الحركة، التالف، الجرد', icon: Package },
+  { id: 'hr', permission: 'reports_hr', label: 'الموارد البشرية والرواتب', desc: 'الإجازات، السلف، العقود، الحضور والانصراف', icon: UserCheck },
+  { id: 'tasks', permission: 'reports_tasks', label: 'تقارير المهام', desc: 'المهام المفتوحة، المنجزة، المتأخرة، قيد المراجعة', icon: ClipboardList },
+  { id: 'supervisors', permission: 'reports_supervisors', label: 'تقارير المشرفين', desc: 'متابعة الأداء، تقييم الموظفين، الإنجازات', icon: FileText },
+  { id: 'customers', permission: 'reports_customers', label: 'تقرير العملاء والموردين', desc: 'العملاء الجدد، الطلبات، رضا العملاء', icon: Building2 }
+];
+
 const AdminReports = ({ user, notificationTarget }) => {
-  const [activeReportTab, setActiveReportTab] = useState('employees');
+  const visibleReportTabs = REPORT_TABS_CONFIG.filter(tab => hasPermission(user, tab.permission, 'view'));
+  const [activeReportTab, setActiveReportTab] = useState(() => visibleReportTabs[0]?.id || 'employees');
+
+  useEffect(() => {
+    if (visibleReportTabs.length > 0 && !visibleReportTabs.some(t => t.id === activeReportTab)) {
+      setActiveReportTab(visibleReportTabs[0].id);
+    }
+  }, [visibleReportTabs, activeReportTab]);
 
   const [reports, setReports] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -2390,8 +2411,18 @@ const AdminReports = ({ user, notificationTarget }) => {
     })
   };
 
-  return (
-    <div className="space-y-4" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+    if (visibleReportTabs.length === 0) {
+      return (
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#fff', borderRadius: '18px', border: '1px solid #e2e8f0', color: '#64748b', margin: '20px auto', maxWidth: '600px' }} dir="rtl">
+          <FileText size={48} style={{ margin: '0 auto 16px', color: '#94a3b8' }} />
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1e293b', marginBottom: '8px' }}>لا توجد تقارير مصرح لك بعرضها</h3>
+          <p style={{ fontSize: '0.9rem', color: '#64748b' }}>تم حجب صلاحيات الوصول لكافة شاشات التقارير لحسابك، يرجى مراجعة المسؤول.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
         {/* Tabs Grid */}
         <div className="no-print" style={{ 
@@ -2401,18 +2432,7 @@ const AdminReports = ({ user, notificationTarget }) => {
           marginBottom: '2rem',
           direction: 'rtl'
         }}>
-          {[
-            { id: 'employees', label: 'تقارير الموظفين', desc: 'عدد الموظفين، الغياب، التأخير، ساعات العمل', icon: Users },
-            { id: 'sales', label: 'طلبيات العملاء', desc: 'طلبيات العملاء، المرتجعات', icon: ShoppingCart },
-            { id: 'quotes', label: 'عروض الأسعار', desc: 'عروض الأسعار، الموافقة، الرفض', icon: FileText },
-            { id: 'production', label: 'تقارير الإنتاج', desc: 'الإنتاج اليومي، الإنجاز، المتأخرات، جودة الإنتاج', icon: SewingMachineIcon },
-            { id: 'delivery', label: 'تقارير التوصيل', desc: 'قيد التوصيل، المكتمل، المرتجع، مناطق التوصيل', icon: Truck },
-            { id: 'stock', label: 'تقارير المخزون', desc: 'الكميات، النواقص، الحركة، التالف، الجرد', icon: Package },
-            { id: 'hr', label: 'الموارد البشرية', desc: 'الإجازات، السلف، العقود، الحضور والانصراف', icon: UserCheck },
-            { id: 'tasks', label: 'تقارير المهام', desc: 'المهام المفتوحة، المنجزة، المتأخرة، قيد المراجعة', icon: ClipboardList },
-            { id: 'supervisors', label: 'تقارير المشرفين', desc: 'متابعة الأداء، تقييم الموظفين، الإنجازات', icon: FileText },
-            { id: 'customers', label: 'تقرير العملاء والموردين', desc: 'العملاء الجدد، الطلبات، رضا العملاء', icon: Building2 }
-          ].map((tab) => {
+          {visibleReportTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeReportTab === tab.id;
             return (

@@ -63,7 +63,8 @@ export const calculateSalaries = ({
 
     const [yStr, mStr] = selectedMonth.split('-');
     const daysInMonth = new Date(parseInt(yStr, 10), parseInt(mStr, 10), 0).getDate();
-    const serviceStart = cycle.start;
+    const storedServiceStart = emp.joinDate || '';
+    const serviceStart = storedServiceStart && storedServiceStart > cycle.start ? storedServiceStart : cycle.start;
     const storedServiceEnd = emp.terminationDate || emp.serviceEndDate || '';
     const serviceEnd = storedServiceEnd && storedServiceEnd < cycle.end ? storedServiceEnd : cycle.end;
     const isHourlyFinalSettlement = Boolean(storedServiceEnd && storedServiceEnd >= cycle.start && storedServiceEnd <= cycle.end);
