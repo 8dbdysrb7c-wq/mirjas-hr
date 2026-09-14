@@ -1,6 +1,6 @@
 import { isActiveEmployee } from '../../utils/employeeStatus';
 /* eslint-disable */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getEmployees, getSupervisorReports, saveSupervisorReport, deleteSupervisorReport, addLog, isAdmin, getSalesOrders, saveSalesOrder, getGlobalSettings, getMissions, saveMission, getOrders, saveOrder, getTasksData, getProductionLogs, saveProductionLog, deleteProductionLog, getReports, getReportsByDateRange, saveReport, getAttendanceLogs, createNotification, getPreparationOrders } from '../../store';
 import { getHRAttendance, getHRLeaves } from '../../services/hr';
 import { hasPermission } from '../../utils/permissions';
@@ -205,6 +205,7 @@ const AdminSupervisorReports = ({ user }) => {
   const [isEditMode, setIsEditMode] = useState(false);
 
   const [date, setDate] = useState(getLocalDateStr(new Date()));
+  const loadedDateRef = useRef(date);
   const [timeIn, setTimeIn] = useState('');
   const [timeOut, setTimeOut] = useState('');
   const [attendanceNotes, setAttendanceNotes] = useState('');
@@ -368,6 +369,7 @@ const AdminSupervisorReports = ({ user }) => {
 
   useEffect(() => {
     if (activeTab === 'add') {
+      loadedDateRef.current = date;
       const existingReport = reports.find(r => String(r.supervisorId) === String(user.id) && r.date === date);
       if (existingReport) {
         setTimeIn(existingReport.timeIn || '');
@@ -436,9 +438,9 @@ const AdminSupervisorReports = ({ user }) => {
     }
   }, [date, activeTab, user.id, reports]);
 
-  // Auto-save to localStorage
+  // Auto-save to localStorage (only when evaluations actually belong to loaded date)
   useEffect(() => {
-    if (activeTab === 'add' && !reports.some(r => String(r.supervisorId) === String(user.id) && r.date === date)) {
+    if (activeTab === 'add' && loadedDateRef.current === date && !reports.some(r => String(r.supervisorId) === String(user.id) && r.date === date)) {
       const lsKey = `sup_eval_${user.id}_${date}`;
       if (Object.keys(employeeEvaluations).length > 0) {
         const dataToSave = {
@@ -518,11 +520,47 @@ const AdminSupervisorReports = ({ user }) => {
 
     setSavedItems(prev => ({ ...prev, [`emp_${empId}`]: true }));
 
+    try {
+      let empDailyReport = employeeReports.find(r =>
+        (String(r.userId || '').trim() === String(empId).trim()
+          || String(r.employeeId || '').trim() === String(empId).trim()
+          || String(r.userName || '').trim() === String(emp?.name || '').trim())
+        && r.date === date
+      );
+
+      if (empDailyReport) {
+        const mapping = { 'ممتاز': 100, 'جيد': 80, 'مقبول': 60, 'سيئ': 40, 'لم يقدم تقرير': 40, 'غائب': 0 };
+        const supervisorScore = evalData.scorePercentage ? parseFloat(evalData.scorePercentage) : mapping[evalData.rating] || 0;
+        const updatedEmpReport = {
+          ...empDailyReport,
+          supervisorRating: evalData.rating,
+          supervisorReason: finalReason || '',
+          finalScore: supervisorScore,
+          finalRating: evalData.rating,
+          status: 'تم التقييم',
+          evaluatedAt: new Date().toISOString(),
+          evaluatedBy: user.name
+        };
+        await saveReport(updatedEmpReport);
+        setEmployeeReports(prev => prev.map(r => r.id === updatedEmpReport.id ? updatedEmpReport : r));
+
+        triggerWhatsAppRouting('daily_report', 'approve', {
+          employeeId: empId,
+          employeeName: emp?.name || 'موظف غير معروف',
+          date: date,
+          rating: evalData.rating,
+          notes: finalReason || 'لا يوجد'
+        });
+      }
+    } catch (err) {
+      console.error('Error saving single employee evaluation to db:', err);
+    }
+
     MySwal.fire({
-      title: 'تم الحفظ مبدئياً',
-      text: `تم حفظ تقييم ${emp.name} مؤقتاً، يرجى حفظ التقرير بالكامل للاعتماد النهائي.`,
-      icon: 'info',
-      timer: 2000,
+      title: 'تم حفظ التقييم بنجاح',
+      text: `تم حفظ تقييم الموظف ${emp.name} واعتماده في تقريره اليومي بنجاح. يرجى الضغط على "حفظ التقرير واعتماده" بالأسفل لإنهاء تقرير المشرف الشامل.`,
+      icon: 'success',
+      timer: 2500,
       showConfirmButton: false
     });
   };
