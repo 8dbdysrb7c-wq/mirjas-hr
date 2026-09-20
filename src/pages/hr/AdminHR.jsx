@@ -139,6 +139,10 @@ const AdminHR = ({ user, notificationTarget }) => {
     void fetchCounts();
   }, []);
 
+  const handleCountsCalculated = (tabKey, cnt) => {
+    setPendingCounts(prev => ({ ...prev, [tabKey]: cnt }));
+  };
+
   const renderContent = () => {
     if (activeTab === 'employee-profile' && selectedEmployeeId) {
       return <EmployeeProfile user={user} employeeId={selectedEmployeeId} onBack={() => setActiveTab('employees')} />;
@@ -190,13 +194,6 @@ const AdminHR = ({ user, notificationTarget }) => {
 
   return (
     <div className="hr-layout">
-      <div className="no-print" dir="rtl" style={{ marginBottom: 12 }}>
-        <button type="button" onClick={() => fetchCounts()} disabled={countsLoading} className="btn btn-secondary">
-          {countsLoading ? 'جاري تحديث العدادات...' : 'تحديث العدادات'}
-        </button>
-        {countsError && <span role="alert" style={{ color: '#b91c1c', marginInlineStart: 12 }}>{countsError}</span>}
-      </div>
-      
       <div className="hr-modules-nav-wrap no-print mb-3 pb-2" style={{ direction: 'rtl' }}>
         <div className="hr-modules-nav-grid">
           {navItems.map(item => {
