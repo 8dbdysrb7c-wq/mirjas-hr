@@ -389,9 +389,7 @@ const AdminStock = ({ user, notificationTarget }) => {
 
   const JORDANIAN_CITIES = ['عمان', 'الزرقاء', 'إربد', 'العقبة', 'السلط', 'مادبا', 'الكرك', 'الطفيلة', 'معان', 'جرش', 'عجلون', 'المفرق'];
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+
 
 
 
@@ -423,66 +421,115 @@ const AdminStock = ({ user, notificationTarget }) => {
     }
   }, [notificationTarget]);
 
-    const fetchData = async () => {
-    setLoading(true);
-    const [stockData, settingsData, vouchersData, customersData, employeesData, salesData, missionsData, stocktakesData, assetsData, productionData, preparationData, costingData] = await Promise.all([
-      getStock(),
-      getGlobalSettings(),
-      getStockVouchers(),
-      getCustomers(),
-      getEmployees(),
-      getSalesOrders(),
-      getMissions(),
-      getStocktakes(),
-      getHRAssets(),
-      getOrders(),
-      getPreparationOrders(),
-      getProductCostings()
-    ]);
+  const baseLoadedRef = useRef(false);
+  const loadedTabsRef = useRef(new Set());
+  const tabLoadRef = useRef(null);
 
-    // Auto-sync locations
-    const allExistingLocs = [...new Set([
-      ...stockData.flatMap(s => (s.location || '').split(/[,، -]/).filter(Boolean)),
-      ...assetsData.flatMap(a => (a.items || []).flatMap(i => (i.location || '').split(/[,، -]/).filter(Boolean)))
-    ])];
-    
-    let needsUpdate = false;
-    const currentLocs = settingsData.stockLocations || [];
-    allExistingLocs.forEach(l => {
-      if (!currentLocs.includes(l)) {
-        currentLocs.push(l);
-        needsUpdate = true;
-      }
-    });
-    
-    if (needsUpdate) {
-       settingsData.stockLocations = currentLocs;
-       try {
-         await saveGlobalSettings(settingsData);
-       } catch (e) {
-         console.error("Failed to auto-sync locations", e);
-       }
+  useEffect(() => {
+    loadTabData(activeStockTab);
+  }, [activeStockTab]);
+
+  const loadTabData = async (tabToLoad, forceRefresh = false) => {
+    if (tabLoadRef.current) {
+      await tabLoadRef.current;
+      return loadTabData(tabToLoad, forceRefresh);
+    }
+    const task = performTabLoad(tabToLoad, forceRefresh);
+    tabLoadRef.current = task;
+    try { await task; } finally { tabLoadRef.current = null; }
+  };
+
+  const performTabLoad = async (tabToLoad, forceRefresh = false) => {
+    // If base data is loaded and this tab is already loaded, skip unless forceRefresh
+    if (!forceRefresh && baseLoadedRef.current && loadedTabsRef.current.has(tabToLoad)) {
+      return;
     }
 
-    setStock(stockData);
-    setGlobalSettings(settingsData);
-    setVouchers(vouchersData || []);
-    setCustomers(customersData || []);
-    setEmployees(employeesData || []);
-    setSalesOrders(salesData || []);
-    
-    const combinedProductionData = [
-      ...(productionData || []).map(o => ({ ...o, productionType: 'sewing' })),
-      ...(preparationData || []).map(o => ({ ...o, productionType: 'preparation' }))
-    ];
-    setProductionOrders(combinedProductionData);
-    setProductCostings(costingData || []);
-    
-    setMissions(missionsData || []);
-    setStocktakes(stocktakesData || []);
-    setAssets(assetsData || []);
-    setLoading(false);
+    setLoading(true);
+    try {
+      // 1. Core/base data - only fetch once on mount or when force refreshing
+      if (!baseLoadedRef.current || forceRefresh) {
+        const [stockData, settingsData, assetsData, customersData, employeesData] = await Promise.all([
+          getStock(),
+          getGlobalSettings(),
+          getHRAssets(),
+          getCustomers(),
+          getEmployees()
+        ]);
+
+        // Auto-sync locations
+        const allExistingLocs = [...new Set([
+          ...(stockData || []).flatMap(s => (s.location || '').split(/[,، -]/).filter(Boolean)),
+          ...(assetsData || []).flatMap(a => (a.items || []).flatMap(i => (i.location || '').split(/[,، -]/).filter(Boolean)))
+        ])];
+        
+        let needsUpdate = false;
+        const currentLocs = settingsData?.stockLocations || [];
+        allExistingLocs.forEach(l => {
+          if (!currentLocs.includes(l)) {
+            currentLocs.push(l);
+            needsUpdate = true;
+          }
+        });
+        
+        if (needsUpdate && settingsData) {
+          settingsData.stockLocations = currentLocs;
+          try {
+            await saveGlobalSettings(settingsData);
+          } catch (e) {
+            console.error("Failed to auto-sync locations", e);
+          }
+        }
+
+        setStock(stockData || []);
+        if (settingsData) setGlobalSettings(settingsData);
+        setAssets(assetsData || []);
+        setCustomers(customersData || []);
+        setEmployees(employeesData || []);
+        baseLoadedRef.current = true;
+      }
+
+      // 2. Tab-specific data - fetch if not already loaded for this tab
+      if (!loadedTabsRef.current.has(tabToLoad) || forceRefresh) {
+        const extraPromises = [];
+        
+        if (tabToLoad === 'vouchers' || tabToLoad === 'audit' || tabToLoad === 'production') {
+          extraPromises.push(getStockVouchers().then(d => setVouchers(d || [])));
+        }
+        
+        if (tabToLoad === 'production') {
+          extraPromises.push(getSalesOrders().then(d => setSalesOrders(d || [])));
+          extraPromises.push(getMissions().then(d => setMissions(d || [])));
+          extraPromises.push(getProductCostings().then(d => setProductCostings(d || [])));
+          extraPromises.push(
+            Promise.all([getOrders(), getPreparationOrders()]).then(([prod, prep]) => {
+              const combined = [
+                ...(prod || []).map(o => ({ ...o, productionType: 'sewing' })),
+                ...(prep || []).map(o => ({ ...o, productionType: 'preparation' }))
+              ];
+              setProductionOrders(combined);
+            })
+          );
+        }
+        
+        if (tabToLoad === 'stocktake') {
+          extraPromises.push(getStocktakes().then(d => setStocktakes(d || [])));
+        }
+        
+        await Promise.all(extraPromises);
+
+        // ONLY record as successfully loaded after all promises resolve!
+        loadedTabsRef.current.add(tabToLoad);
+      }
+    } catch (error) {
+      console.error(`Error loading stock data for tab ${tabToLoad}:`, error);
+      // On error, tabToLoad is NOT added to loadedTabsRef, allowing auto-retry on subsequent visits
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const fetchData = (force = true) => loadTabData(activeStockTab, force);
 
   const handleSort = (key) => {
     let direction = 'asc';
@@ -2309,6 +2356,12 @@ const AdminStock = ({ user, notificationTarget }) => {
             timer: 1500,
           });
           fetchData();
+        } else {
+          Swal.fire({
+            icon: 'error',
+            title: 'تعذر الحفظ',
+            text: 'حدث خطأ أثناء حفظ الصنف في المخزون. يرجى إعادة المحاولة.',
+          });
         }
       }
     });

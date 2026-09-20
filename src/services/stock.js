@@ -38,6 +38,15 @@ export const saveStockItem = async (item, options = {}) => {
         const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'FG-'), where('itemNumber', '<', 'FG.')));
         initialLast = Math.max(0, ...existing.docs.map(row => finishedGoodsSequence(row.data().itemNumber)));
       }
+      const cleanName = String(item.name || '').replace(/\s+/g, ' ').trim();
+      let existingSameNameNumber = null;
+      if (cleanName && !item.id && !options.sourceItemId) {
+        const existingSameNameSnap = await getDocs(query(collection(db, 'stock'), where('name', '==', cleanName)));
+        const matchingDoc = existingSameNameSnap.docs.find(d => isFinishedGoodsCategory(d.data().category) && d.data().itemNumber);
+        if (matchingDoc) {
+          existingSameNameNumber = matchingDoc.data().itemNumber;
+        }
+      }
       const savedFGItem = await runTransaction(db, async transaction => {
         const counter = await transaction.get(counterRef);
         const existing = item.id ? await transaction.get(docRef) : null;
@@ -52,16 +61,10 @@ export const saveStockItem = async (item, options = {}) => {
         } else if (source?.exists()) {
           if (!isFinishedGoodsCategory(source.data().category)) throw new Error('تصنيف الصنف الأصلي تغيّر؛ حدّث القائمة');
           number = source.data().itemNumber;
+        } else if (existingSameNameNumber) {
+          number = existingSameNameNumber;
         } else {
-          // Check if item with identical clean name already exists
-          const cleanName = String(item.name || '').replace(/\s+/g, ' ').trim();
-          const existingSameNameSnap = await getDocs(query(collection(db, 'stock'), where('name', '==', cleanName)));
-          const matchingDoc = existingSameNameSnap.docs.find(d => isFinishedGoodsCategory(d.data().category) && d.data().itemNumber);
-          if (matchingDoc) {
-            number = matchingDoc.data().itemNumber;
-          } else {
-            number = finishedGoodsNumber(++last);
-          }
+          number = finishedGoodsNumber(++last);
         }
         last = Math.max(last, finishedGoodsSequence(number));
         const saved = { ...item, id: docRef.id, itemNumber: number, updatedAt: new Date().toISOString() };
@@ -81,6 +84,15 @@ export const saveStockItem = async (item, options = {}) => {
         const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'PKG-'), where('itemNumber', '<', 'PKG.')));
         initialLast = Math.max(0, ...existing.docs.map(row => packagingSequence(row.data().itemNumber)));
       }
+      const cleanName = String(item.name || '').replace(/\s+/g, ' ').trim();
+      let existingSameNameNumber = null;
+      if (cleanName && !item.id && !options.sourceItemId) {
+        const existingSameNameSnap = await getDocs(query(collection(db, 'stock'), where('name', '==', cleanName)));
+        const matchingDoc = existingSameNameSnap.docs.find(d => isPackagingCategory(d.data().category) && d.data().itemNumber);
+        if (matchingDoc) {
+          existingSameNameNumber = matchingDoc.data().itemNumber;
+        }
+      }
       const savedPackagingItem = await runTransaction(db, async transaction => {
         const counter = await transaction.get(counterRef);
         const existing = item.id ? await transaction.get(docRef) : null;
@@ -95,16 +107,10 @@ export const saveStockItem = async (item, options = {}) => {
         } else if (source?.exists()) {
           if (!isPackagingCategory(source.data().category)) throw new Error('تصنيف الصنف الأصلي تغيّر؛ حدّث القائمة');
           number = source.data().itemNumber;
+        } else if (existingSameNameNumber) {
+          number = existingSameNameNumber;
         } else {
-          // Check if item with identical clean name already exists
-          const cleanName = String(item.name || '').replace(/\s+/g, ' ').trim();
-          const existingSameNameSnap = await getDocs(query(collection(db, 'stock'), where('name', '==', cleanName)));
-          const matchingDoc = existingSameNameSnap.docs.find(d => isPackagingCategory(d.data().category) && d.data().itemNumber);
-          if (matchingDoc) {
-            number = matchingDoc.data().itemNumber;
-          } else {
-            number = packagingNumber(++last);
-          }
+          number = packagingNumber(++last);
         }
         last = Math.max(last, packagingSequence(number));
         const saved = { ...item, id: docRef.id, itemNumber: number, updatedAt: new Date().toISOString() };
@@ -124,6 +130,15 @@ export const saveStockItem = async (item, options = {}) => {
         const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'CON-'), where('itemNumber', '<', 'CON.')));
         initialLast = Math.max(0, ...existing.docs.map(row => sewingConsumablesSequence(row.data().itemNumber)));
       }
+      const cleanName = String(item.name || '').replace(/\s+/g, ' ').trim();
+      let existingSameNameNumber = null;
+      if (cleanName && !item.id && !options.sourceItemId) {
+        const existingSameNameSnap = await getDocs(query(collection(db, 'stock'), where('name', '==', cleanName)));
+        const matchingDoc = existingSameNameSnap.docs.find(d => isSewingConsumablesCategory(d.data().category) && d.data().itemNumber);
+        if (matchingDoc) {
+          existingSameNameNumber = matchingDoc.data().itemNumber;
+        }
+      }
       const savedCONItem = await runTransaction(db, async transaction => {
         const counter = await transaction.get(counterRef);
         const existing = item.id ? await transaction.get(docRef) : null;
@@ -138,16 +153,10 @@ export const saveStockItem = async (item, options = {}) => {
         } else if (source?.exists()) {
           if (!isSewingConsumablesCategory(source.data().category)) throw new Error('تصنيف الصنف الأصلي تغيّر؛ حدّث القائمة');
           number = source.data().itemNumber;
+        } else if (existingSameNameNumber) {
+          number = existingSameNameNumber;
         } else {
-          // Check if item with identical clean name already exists
-          const cleanName = String(item.name || '').replace(/\s+/g, ' ').trim();
-          const existingSameNameSnap = await getDocs(query(collection(db, 'stock'), where('name', '==', cleanName)));
-          const matchingDoc = existingSameNameSnap.docs.find(d => isSewingConsumablesCategory(d.data().category) && d.data().itemNumber);
-          if (matchingDoc) {
-            number = matchingDoc.data().itemNumber;
-          } else {
-            number = sewingConsumablesNumber(++last);
-          }
+          number = sewingConsumablesNumber(++last);
         }
         last = Math.max(last, sewingConsumablesSequence(number));
         const saved = { ...item, id: docRef.id, itemNumber: number, updatedAt: new Date().toISOString() };
