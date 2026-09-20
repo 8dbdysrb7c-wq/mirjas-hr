@@ -5,7 +5,7 @@ import Select from '../../components/SearchSelect';
 import HRDateFilter from '../../components/ui/HRDateFilter';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
-import { getEmployees, getHRAttendance, getGlobalSettings, saveHRViolation, getHRViolations, getHRLeaves, getAttendanceLogs, getReports, getSupervisorReports } from '../../store';
+import { getEmployees, getGlobalSettings, saveHRViolation, getHRViolationsByDateRange, getHRLeavesByDateRange, getHRAttendanceByDateRange, getAttendanceLogsByDateRange, getReportsByDateRange, getSupervisorReportsByDateRange } from '../../store';
 import Swal from 'sweetalert2';
 import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import { hasPermission } from '../../utils/permissions';
@@ -31,7 +31,7 @@ const formatTime12h = (timeStr) => {
   return `${displayHours}:${minutes} ${suffix}`;
 };
 
-const HRAttendanceAlerts = ({ user }) => {
+const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
   const canApprove = hasPermission(user, 'hr_attendance_alerts', 'approve');
   const [employees, setEmployees] = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
@@ -49,6 +49,17 @@ const HRAttendanceAlerts = ({ user }) => {
   const [violations, setViolations] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [counts, setCounts] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
+  const onCountsCalculatedRef = useRef(onCountsCalculated);
+  onCountsCalculatedRef.current = onCountsCalculated;
+
+  useEffect(() => {
+    if (counts.pending !== undefined) {
+      try {
+        localStorage.setItem('hr_pending_attendance_alerts', String(counts.pending));
+      } catch (_) {}
+      onCountsCalculatedRef.current?.(counts.pending);
+    }
+  }, [counts.pending]);
   const [endDate, setEndDate] = useState(getLocalDateStr(new Date()));
   const [earlyDepartures, setEarlyDepartures] = useState([]);
   const [repeatedLates, setRepeatedLates] = useState([]);
@@ -79,21 +90,39 @@ const HRAttendanceAlerts = ({ user }) => {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchData = async () => {
       setLoading(true);
+
+      let dateFrom = '';
+      let dateTo = '';
+      if (dateMode === 'day') {
+        dateFrom = selectedDate;
+        dateTo = selectedDate;
+      } else if (dateMode === 'month') {
+        dateFrom = `${selectedMonth}-01`;
+        dateTo = `${selectedMonth}-31`;
+      } else if (dateMode === 'range') {
+        dateFrom = startDate;
+        dateTo = endDate;
+      }
+
       const [emps, records, globSet, viols, lvs, raw, empsReps, supsReps] = await Promise.all([
-        getEmployees(), 
-        getHRAttendance(),
-        getGlobalSettings(),
-        getHRViolations(),
-        getHRLeaves(),
-        getAttendanceLogs(),
-        getReports(),
-        getSupervisorReports()
+        employees.length === 0 ? getEmployees() : Promise.resolve(employees), 
+        getHRAttendanceByDateRange(dateFrom, dateTo),
+        settings ? Promise.resolve(settings) : getGlobalSettings(),
+        getHRViolationsByDateRange(dateFrom, dateTo),
+        getHRLeavesByDateRange(dateFrom, dateTo),
+        getAttendanceLogsByDateRange(dateFrom, dateTo),
+        getReportsByDateRange(dateFrom, dateTo),
+        getSupervisorReportsByDateRange(dateFrom, dateTo)
       ]);
-      setEmployees(emps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && isActiveEmployee(e)));
+      if (!isMounted) return;
+      if (employees.length === 0) {
+        setEmployees(emps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && isActiveEmployee(e)));
+      }
       setAttendanceRecords(records);
-      setSettings(globSet);
+      if (!settings) setSettings(globSet);
       setViolations(viols);
       setLeaves(lvs);
       setRawLogs(raw);
@@ -102,7 +131,8 @@ const HRAttendanceAlerts = ({ user }) => {
       setLoading(false);
     };
     fetchData();
-  }, []);
+    return () => { isMounted = false; };
+  }, [dateMode, selectedMonth, selectedDate, startDate, endDate]);
 
   useEffect(() => {
     if (loading) return;
@@ -455,6 +485,7 @@ const HRAttendanceAlerts = ({ user }) => {
               }, { name: user?.name || 'النظام' });
               
               setViolations(prev => [savedViol, ...prev]);
+              refreshCounts?.();
               Swal.fire('تم', 'تم حذف التنبيه بنجاح ولن يؤثر على راتب الموظف.', 'success');
           } catch(e) {
               console.error(e);
@@ -578,6 +609,7 @@ const HRAttendanceAlerts = ({ user }) => {
         }, { name: user?.name || 'النظام' });
         
         setViolations(prev => [savedViol, ...prev]);
+              refreshCounts?.();
         Swal.fire('تم بنجاح!', 'تم إدراج الخصم المالي في السجل وتطبيقه على الراتب.', 'success');
       } catch (e) {
         console.error(e);
@@ -1192,6 +1224,7 @@ const HRAttendanceAlerts = ({ user }) => {
                         action: penaltyModal.action,
                       }, { name: user?.name || 'النظام' });
                       setViolations(prev => [savedViol, ...prev]);
+              refreshCounts?.();
                       Swal.fire('تم بنجاح!', 'تم تسجيل المخالفة وحفظها في السجل.', 'success');
                     } else {
                       Swal.fire('خطأ', 'لم يتم العثور على الموظف', 'error');

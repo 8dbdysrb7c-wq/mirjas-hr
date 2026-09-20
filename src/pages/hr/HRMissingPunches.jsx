@@ -1,4 +1,5 @@
 import { isActiveEmployee } from '../../utils/employeeStatus';
+import { getMissingPunches as detectMissingPunches } from '../../utils/missingPunches';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Bell, Clock, Check, X, Search, Filter, Fingerprint, Undo2, Trash2, User, ArrowUpDown, ArrowUp, ArrowDown, MessageCircle, Plus, Eye, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { getMissingPunches, updateMissingPunchStatus, deleteMissingPunch, saveHRAuditLog, getEmployees, saveHRViolation, saveMissingPunch, getHRAttendance, saveHRAttendance, saveEmployee, getHRLeaves, saveHRLeave } from '../../store';
@@ -179,7 +180,7 @@ const formatTime12h = (timeStr) => {
   return `${displayHours}:${minutes} ${suffix}`;
 };
 
-const HRMissingPunches = ({ user, refreshCounts }) => {
+const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
   const canAdd = hasPermission(user, 'hr_missing_punches', 'add') || hasPermission(user, 'hr_missing_punches', 'create');
   const canEdit = hasPermission(user, 'hr_missing_punches', 'edit');
   const canApprove = hasPermission(user, 'hr_missing_punches', 'approve');
@@ -210,6 +211,8 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
   });
   const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
   const [inlineTimes, setInlineTimes] = useState({});
+  const onCountsCalculatedRef = useRef(onCountsCalculated);
+  onCountsCalculatedRef.current = onCountsCalculated;
 
   // 1. Add dateMode filter states for the redesign
   const [dateMode, setDateMode] = useState('range');
@@ -268,13 +271,30 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
     fetchPunches();
   }, [dateFrom, dateTo]);
 
+  useEffect(() => {
+    const pCount = punches.filter(p => {
+      const matchSearch = searchTerm ? String(p.employeeId) === String(searchTerm) : true;
+      let matchMonth = true;
+      if (p.date && (p.date < dateFrom || p.date > dateTo)) matchMonth = false;
+      return matchSearch && matchMonth && (p.status === 'معلق' || p.status === 'قيد المراجعة');
+    }).length;
+
+    try {
+      localStorage.setItem('hr_pending_missing_punches', String(pCount));
+    } catch (_) {}
+    onCountsCalculatedRef.current?.(pCount);
+  }, [punches, searchTerm, dateFrom, dateTo]);
+
   const fetchPunches = async () => {
     setLoading(true);
-    const data = await getMissingPunches();
+    // Import the required functions lazily or rely on store
+    const { getHRAttendanceByDateRange, getHRLeavesByDateRange, getMissingPunchesByDateRange } = await import('../../store');
+    
+    const data = await getMissingPunchesByDateRange(dateFrom, dateTo);
     const allEmps = await getEmployees();
     const emps = allEmps.filter(e => e.name !== 'المدير العام' && e.id !== 'admin' && e.level !== 'admin' && isActiveEmployee(e));
-    const attendance = await getHRAttendance();
-    const leaves = await getHRLeaves();
+    const attendance = await getHRAttendanceByDateRange(dateFrom, dateTo);
+    const leaves = await getHRLeavesByDateRange(dateFrom, dateTo);
 
     const virtualPunches = [];
     const todayStr = new Date().toLocaleDateString('en-CA');
@@ -302,13 +322,14 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
 
         const hasLeave = leaves.some(l =>
           String(l.employeeId) === String(emp.id) &&
-          (l.status === 'موافق' || l.status === 'مقبول') &&
+          (l.status === 'موافق' || l.status === 'موافق عليه' || l.status === 'مقبول') &&
           l.type && l.type.startsWith('إجازة') &&
           ((l.date === dateStr) || (l.startDate <= dateStr && l.endDate >= dateStr))
         );
         if (hasLeave) return;
 
-        if (!rec || rec.status === 'لم يسجل دخول') {
+        const { missingIn, missingOut } = detectMissingPunches(rec);
+        if (missingIn) {
           virtualPunches.push({
             id: `virtual_in_${emp.id}_${dateStr}`,
             isVirtual: true,
@@ -318,7 +339,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
             date: dateStr,
             type: 'دخول',
             time: '--:--',
-            reason: !rec ? 'بصمة دخول وخروج' : 'بصمة دخول',
+            reason: missingOut ? 'فشل قراءة البصمة (دخول وخروج)' : 'فشل قراءة البصمة (دخول)',
             status: 'معلق',
             createdAt: new Date(`${dateStr}T23:59:59`).toISOString(),
             attendanceRecord: rec || { status: 'لم يسجل دخول', date: dateStr }
@@ -344,22 +365,26 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
         ((l.date === rec.date) || (l.startDate <= rec.date && l.endDate >= rec.date))
       );
 
-      if (rec.timeIn && (!rec.timeOut || rec.timeOut === '--:--') && rec.date >= dateFrom && rec.date <= dateTo) {
+      const { missingIn, missingOut } = detectMissingPunches(rec);
+      if (!missingIn && missingOut && rec.date >= dateFrom && rec.date <= dateTo) {
         if (!['غائب', 'غياب غير مبرر', 'مغادرة مبكرة', 'إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'].includes(rec.status) && !hasLeave) {
-          virtualPunches.push({
-            id: `virtual_out_${rec.id}`,
-            isVirtual: true,
-            attendanceId: rec.id,
-            employeeId: rec.employeeId,
-            employeeName: rec.employeeName || (emp?.name || 'مجهول'),
-            date: rec.date,
-            type: 'خروج',
-            time: '--:--',
-            reason: 'بصمة خروج',
-            status: 'معلق',
-            createdAt: new Date(`${rec.date}T23:59:59`).toISOString(),
-            attendanceRecord: rec
-          });
+          const alreadyHasVirtual = virtualPunches.some(vp => String(vp.employeeId) === String(rec.employeeId) && vp.date === rec.date && vp.type === 'خروج');
+          if (!alreadyHasVirtual) {
+            virtualPunches.push({
+              id: `virtual_out_${rec.id}`,
+              isVirtual: true,
+              attendanceId: rec.id,
+              employeeId: rec.employeeId,
+              employeeName: rec.employeeName || (emp?.name || 'مجهول'),
+              date: rec.date,
+              type: 'خروج',
+              time: '--:--',
+              reason: 'فشل قراءة البصمة (خروج)',
+              status: 'معلق',
+              createdAt: new Date(`${rec.date}T23:59:59`).toISOString(),
+              attendanceRecord: rec
+            });
+          }
         }
       }
     });
@@ -372,7 +397,19 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
         if (emp?.terminationDate && p.date > emp.terminationDate) return false;
         return true;
       });
-    setPunches(combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+
+    // Deduplicate by employeeId + date + type (manual records take priority)
+    const seenMap = new Map();
+    const uniqueCombined = [];
+    for (const p of combined) {
+      const key = `${String(p.employeeId || '').trim()}_${p.date}_${p.type}`;
+      if (!seenMap.has(key)) {
+        seenMap.set(key, true);
+        uniqueCombined.push(p);
+      }
+    }
+
+    setPunches(uniqueCombined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
     setEmployees(emps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && isActiveEmployee(e)));
     setLoading(false);
   };
@@ -505,13 +542,13 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
 
     const vacBal = Number(emp.vacationBalance) || 0;
     const sickBal = Number(emp.sickLeaveBalance) || 0;
-    const isMissingIn = punch.type === 'دخول' || punch.reason === 'بصمة دخول وخروج';
+    const isMissingIn = punch.type === 'دخول' || punch.reason === 'فشل قراءة البصمة (دخول وخروج)';
 
     let violationAmount = 0;
     const outTimeIn = inlineTimes[`${punch.id}_in`];
     const outTimeOut = inlineTimes[`${punch.id}_out`];
     if (action === 'time') {
-      if (punch.reason === 'بصمة دخول وخروج') {
+      if (punch.reason === 'فشل قراءة البصمة (دخول وخروج)') {
         if (!outTimeIn && !outTimeOut) {
           Swal.fire('تنبيه', 'الرجاء إدخال وقت الدخول أو الخروج', 'warning');
           return;
@@ -606,7 +643,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
       let newEmpData = { ...emp };
 
       if (action === 'time') {
-        if (punch.reason === 'بصمة دخول وخروج') {
+        if (punch.reason === 'فشل قراءة البصمة (دخول وخروج)') {
           if (outTimeIn) updateData.timeIn = outTimeIn;
           if (outTimeOut) updateData.timeOut = outTimeOut;
           updateData.status = (outTimeIn && outTimeOut) ? 'مكتمل الدوام' : (!outTimeOut ? 'لم يسجل خروج' : 'لم يسجل دخول');
@@ -1368,7 +1405,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
                     </td>
                     <td className="p-5 font-bold whitespace-nowrap text-center text-sm">
                       <div className="flex items-center justify-center gap-2">
-                        {(p.type === 'دخول' || p.reason === 'بصمة دخول وخروج') && p.isVirtual && (p.status === 'معلق' || p.status === 'قيد المراجعة') ? (
+                        {(p.type === 'دخول' || p.reason === 'فشل قراءة البصمة (دخول وخروج)') && p.isVirtual && (p.status === 'معلق' || p.status === 'قيد المراجعة') ? (
                           (canEdit || canApprove) ? (
                             <>
                               <input type="time" className="premium-time-input" style={{ width: 75, height: 28, fontSize: 13 }} value={inlineTimes[`${p.id}_in`] || ''} onChange={(e) => handleInlineTimeChange(`${p.id}_in`, e.target.value)} />
@@ -1392,7 +1429,7 @@ const HRMissingPunches = ({ user, refreshCounts }) => {
                     </td>
                     <td className="p-5 font-bold whitespace-nowrap text-center text-sm">
                       <div className="flex items-center justify-center gap-2">
-                        {(p.type === 'خروج' || p.reason === 'بصمة دخول وخروج') && p.isVirtual && (p.status === 'معلق' || p.status === 'قيد المراجعة') ? (
+                        {(p.type === 'خروج' || p.reason === 'فشل قراءة البصمة (دخول وخروج)') && p.isVirtual && (p.status === 'معلق' || p.status === 'قيد المراجعة') ? (
                           (canEdit || canApprove) ? (
                             <>
                               <input type="time" className="premium-time-input" style={{ width: 75, height: 28, fontSize: 13 }} value={inlineTimes[`${p.id}_out`] || ''} onChange={(e) => handleInlineTimeChange(`${p.id}_out`, e.target.value)} />

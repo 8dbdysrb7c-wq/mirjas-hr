@@ -2,7 +2,7 @@ import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import { DollarSign, Printer, Search, ArrowUpDown, ArrowUp, ArrowDown, Calendar, ChevronDown, ChevronUp, User } from 'lucide-react';
 import Select from '../../components/SearchSelect';
-import { getEmployees, getHRViolations, getHRAttendance, getHRLeaves, getGlobalSettings, getHRSalaryPeriods, saveHRSalaryPeriod, getHRAdvances, getHRBonuses, archiveHRSalaryPeriod, unarchiveHRSalaryPeriod, getHRSalaryArchive } from '../../store';
+import { getEmployees, getHRViolations, getHRAttendance, getHRLeaves, getGlobalSettings, getHRSalaryPeriods, saveHRSalaryPeriod, getHRAdvances, getHRBonuses, archiveHRSalaryPeriod, unarchiveHRSalaryPeriod, getHRSalaryArchive, getHRAttendanceByDateRange, getHRLeavesByDateRange, getHRViolationsByDateRange } from '../../store';
 import { calculateSalaries as calculateSalariesLogic, getCycleDates } from '../../utils/salaryCalculator';
 import Swal from 'sweetalert2';
 import { updateDoc, doc } from 'firebase/firestore';
@@ -96,40 +96,64 @@ const HRSalaries = ({ user }) => {
     return sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-primary" /> : <ArrowDown size={14} className="text-primary" />;
   };
 
-  const fetchData = async () => {
+  const fetchData = async (monthStr) => {
     setLoading(true);
-    const [emps, viols, atts, lvs, settings, hols, periods, advs, bns] = await Promise.all([
-      getEmployees(), 
-      getHRViolations(), 
-      getHRAttendance(),
-      getHRLeaves(),
-      getGlobalSettings(),
-      import('../../store').then(m => m.getHolidays()),
-      getHRSalaryPeriods(),
+    // Determine the date range based on the salary cycle settings (usually 25th to 24th, etc.)
+    // We can use getCycleDates directly if hrSettings is known. Wait, we need hrSettings first.
+    let currentSettings = hrSettings;
+    let hols = holidays;
+    let periods = salaryPeriods;
+    let empsList = employees;
+
+    if (!currentSettings || !empsList.length) {
+      const [emps, settings, h, p] = await Promise.all([
+        getEmployees(),
+        getGlobalSettings(),
+        import('../../store').then(m => m.getHolidays()),
+        getHRSalaryPeriods()
+      ]);
+      empsList = emps.filter(isActiveEmployee);
+      setEmployees(empsList);
+      currentSettings = settings.hrSettings || {
+        standardWorkHours: 8,
+        gracePeriodMinutes: 15,
+        workDaysPerMonth: 30,
+        overtimeMultiplier: 1.5,
+        fullDayAbsenceDeduction: true
+      };
+      setHrSettings(currentSettings);
+      hols = h;
+      setHolidays(hols);
+      periods = p;
+      setSalaryPeriods(periods);
+    }
+
+    const { start, end } = getCycleDates(monthStr, currentSettings);
+    
+    const [viols, atts, lvs, advs, bns] = await Promise.all([
+      getHRViolationsByDateRange(start, end),
+      getHRAttendanceByDateRange(start, end),
+      getHRLeavesByDateRange(start, end),
       getHRAdvances(),
       getHRBonuses()
     ]);
-    setEmployees(emps.filter(isActiveEmployee));
-    setViolations(viols);
-    setAttendance(atts);
-    setLeaves(lvs);
-    setAdvances(advs);
-    setHolidays(hols);
-    setSalaryPeriods(periods);
-    setBonuses(bns);
-    setHrSettings(settings.hrSettings || {
-      standardWorkHours: 8,
-      gracePeriodMinutes: 15,
-      workDaysPerMonth: 30,
-      overtimeMultiplier: 1.5,
-      fullDayAbsenceDeduction: true
-    });
+    
+    setViolations(viols || []);
+    setAttendance(atts || []);
+    setLeaves(lvs || []);
+    setAdvances(advs || []);
+    setBonuses(bns || []);
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { 
+    if (selectedMonth) {
+      fetchData(selectedMonth); 
+    }
+  }, [selectedMonth]);
 
   useEffect(() => {
+    if (!selectedMonth) return;
     const fetchArchive = async () => {
       const data = await getHRSalaryArchive(selectedMonth);
       setArchivedSalaryData(data);
