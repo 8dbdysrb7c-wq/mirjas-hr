@@ -11,6 +11,7 @@ import {
   watchNotificationsForUser,
   markNotificationAsRead
 } from '../store';
+import { subscribeWhileVisible } from '../utils/visibleSubscription.js';
 
 const formatNotificationDate = (value) => {
   if (!value) return '';
@@ -287,17 +288,23 @@ const NotificationCenter = ({ user, onNavigate }) => {
 
   useEffect(() => {
     let cancelled = false;
-    let unsubscribe;
+    let unsubscribeSettings;
     const connect = async () => {
       const globalSettings = await getGlobalSettings();
       if (cancelled) return;
       setSettings(globalSettings);
-      unsubscribe = watchNotificationsForUser(user, globalSettings, setNotifications, console.error);
+      
+      unsubscribeSettings = subscribeWhileVisible(document,
+        (next, error) => watchNotificationsForUser(user, globalSettings, next, error),
+        setNotifications,
+        console.error
+      );
+      
       const employeeList = canSendSpecialNotification(user, globalSettings) ? await getEmployees() : [];
       if (!cancelled) setEmployees(employeeList);
     };
     connect().catch(console.error);
-    return () => { cancelled = true; unsubscribe?.(); };
+    return () => { cancelled = true; unsubscribeSettings?.(); };
   }, [user.id]);
 
   const unreadNotifications = notifications.filter(

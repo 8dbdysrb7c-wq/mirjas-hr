@@ -1,17 +1,21 @@
+import { subscribeToPendingEmployeeAlerts } from '../services/employeeAlertSubscription';
+import { subscribeWhileVisible } from '../utils/visibleSubscription.js';
+import { escapeReportNote } from '../utils/reportNote.js';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { startVisiblePolling } from '../utils/visiblePolling';
 import { motion } from 'framer-motion';
 import { Bell, RefreshCw, Settings, LogOut, Plus, Globe, Trash2, Edit2, Save, Phone, Clock, Calendar, FileText, X, Camera, Home, ShoppingCart, ShoppingBag, Menu, MoreHorizontal, Eye, Truck, CheckCircle2, Navigation, MapPin, CheckCircle, Info, SunMoon, Mic, MicOff, ClipboardCheck, Layers, Activity, Fingerprint, DollarSign, Folder, PieChart, Users, Filter, ArrowUpDown, ArrowRight } from 'lucide-react';
 import { 
-  getDepartments, getTasksData, saveReport, getReports, getMissions, getGlobalSettings, saveEmployee,
-  getSalesOrders, getOrders, getSupervisorTasks, getEmployees, getPreparationOrders,
+  getDepartments, getTasksData, saveReport, getReports, getReportsForUser, getMissions, getMissionsForUser, getGlobalSettings, saveEmployee,
+  getSalesOrders, getOrders, getSupervisorTasks, getSupervisorTasksForUser, getEmployees, getPreparationOrders,
+  getActiveSalesOrders, getActiveOrders, getActivePreparationOrders, getActiveMissions,
   getEmployeeAttendanceByDate, saveHRAttendance,
-  getHRLeaves, saveHRLeave, deleteHRLeave, getMissingPunches, saveMissingPunch, getHRAdvances, saveHRAdvance,
-  getHRPetitions, saveHRPetition,
+  getHRLeaves, getHRLeavesForUser, saveHRLeave, deleteHRLeave, getMissingPunches, getMissingPunchesForUser, saveMissingPunch, getHRAdvances, getHRAdvancesForUser, saveHRAdvance,
+  getHRPetitions, getHRPetitionsForUser, saveHRPetition,
   addLog,
-  getRepVisits,
+  getRepVisits, getRepVisitsForUser,
   createNotification,
-  getScoringConfig, getEmployeeAlerts, acknowledgeEmployeeAlert
+  getScoringConfig, acknowledgeEmployeeAlert
 } from '../store';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Circle } from 'react-leaflet';
 import { sendWhatsAppNotification } from '../utils/whatsappService';
@@ -439,17 +443,13 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
   const [receivingEmployeeAlert, setReceivingEmployeeAlert] = useState(false);
 
   useEffect(() => {
+    setPendingEmployeeAlerts([]);
     if (!user?.id) return undefined;
-    let mounted = true;
-    const loadAlerts = async () => {
-      try {
-        const rows = await getEmployeeAlerts();
-        if (mounted) setPendingEmployeeAlerts(rows.filter(alert => !alert.archived && alert.status === 'pending' && String(alert.employeeId) === String(user.id)));
-      } catch (error) { console.error('Error loading employee alerts:', error); }
-    };
-    loadAlerts();
-    const interval = setInterval(loadAlerts, 30000);
-    return () => { mounted = false; clearInterval(interval); };
+    return subscribeWhileVisible(document,
+      (next, error) => subscribeToPendingEmployeeAlerts(user.id, next, error),
+      setPendingEmployeeAlerts,
+      error => console.error('Error loading employee alerts:', error)
+    );
   }, [user?.id]);
 
   const receiveEmployeeAlert = async () => {
@@ -528,8 +528,8 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         const isEmployer = user.id === 'admin' || String(user.name).includes('مشهور') || String(user.name).includes('انس') || String(user.name).includes('أنس') || user.name === 'المدير العام';
 
         const promises = [
-          getSupervisorTasks(),
-          getMissions()
+          isEmployer ? getSupervisorTasks() : getSupervisorTasksForUser(user.id),
+          isEmployer ? getActiveMissions() : getMissionsForUser(user.id, user.name)
         ];
 
         let salesIdx = -1;
@@ -537,41 +537,31 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
 
         if (hasPermission(user, 'orders') || hasPermission(user, 'stock') || isEmployer) {
           salesIdx = promises.length;
-          promises.push(getSalesOrders());
+          promises.push(getActiveSalesOrders());
         }
         if (hasPermission(user, 'production') || isEmployer) {
           prodIdx = promises.length;
-          promises.push(getOrders());
+          promises.push(getActiveOrders());
         }
         
         let prepIdx = -1;
         if (hasPermission(user, 'preparation') || isEmployer) {
           prepIdx = promises.length;
-          promises.push(getPreparationOrders());
+          promises.push(getActivePreparationOrders());
         }
 
         const results = await Promise.all(promises);
 
         // 1. Tasks
         const fetchedTasks = results[0] || [];
-        let myTasks = [];
-        if (isEmployer) {
-          myTasks = fetchedTasks;
-        } else {
-          myTasks = fetchedTasks.filter(t => {
-            const isAssignedDirectly = String(t.assigneeId) === String(user.id);
-            const isAssignedInArray = Array.isArray(t.assigneeIds) && t.assigneeIds.map(String).includes(String(user.id));
-            return isAssignedDirectly || isAssignedInArray;
-          });
-        }
+        // Already filtered by getSupervisorTasksForUser if not employer
+        const myTasks = fetchedTasks;
         setPendingTasksCount(myTasks.filter(t => t.status !== 'مكتملة').length);
 
         // 2. Missions
         const fetchedMissions = results[1] || [];
-        const myMissions = fetchedMissions.filter(m =>
-          String(m.assignedEmployeeId || '').trim() === String(user.id || '').trim() ||
-          String(m.assignedEmployeeName || '').trim() === String(user.name || '').trim()
-        );
+        // Already filtered by getMissionsForUser if not employer
+        const myMissions = fetchedMissions;
         setMissions(myMissions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
 
         setPendingMissionsCount(myMissions.filter(m => m.status !== 'تم الانجاز' && m.status !== 'تم الإنجاز' && m.status !== 'ملغية' && m.status !== 'ملغي' && m.status !== 'ملغاة').length);
@@ -581,7 +571,12 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         let salesOrders = [];
         if (salesIdx !== -1) {
           salesOrders = results[salesIdx] || [];
-          const pendingSales = salesOrders.filter(o => o.status !== 'منتهي' && o.status !== 'تم التوصيل' && o.status !== 'ملغي' && o.status !== 'تم التسليم للتوصيل' && o.status !== 'تم تسليمها للتوصيل' && o.status !== 'قيد التوصيل').length;
+          const pendingSales = salesOrders.filter(o => {
+            const numStr = String(o.orderNumber || '').toUpperCase();
+            if (numStr.startsWith('PREP-') || numStr.startsWith('PRO-') || o.isPreparation || o.isProduction) return false;
+            if (o.isDeleted || o.deleted || o.status === 'محذوف' || o.status === 'ملغي' || o.status === 'ملغى') return false;
+            return o.status !== 'منتهي' && o.status !== 'تم التوصيل' && o.status !== 'تم التسليم للتوصيل' && o.status !== 'تم تسليمها للتوصيل' && o.status !== 'قيد التوصيل';
+          }).length;
           setPendingSalesOrdersCount(pendingSales);
         }
 
@@ -636,7 +631,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       }
     };
 
-    return startVisiblePolling(fetchCounts, 120000);
+    return startVisiblePolling(fetchCounts, 300000);
   }, [user, activeTab]);
 
   const [gpsSettings, setGpsSettings] = useState(null);
@@ -1178,28 +1173,31 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
 
   useEffect(() => {
     const fetchData = async () => {
+      // Is employer/admin?
+      const isEmployer = user.id === 'admin' || String(user.name).includes('مشهور') || String(user.name).includes('انس') || String(user.name).includes('أنس') || user.name === 'المدير العام';
+      
       const [depts, tasks, reports, mData, sData, leavesData, punchesData, advancesData, repVisitsData, petitionsData] = await Promise.all([
         getDepartments(),
         getTasksData(),
-        getReports(),
-        getMissions(),
+        getReportsForUser(user.id, user.employeeId || user.id),
+        isEmployer ? getMissions() : getMissionsForUser(user.id, user.name),
         getGlobalSettings(),
-        getHRLeaves(),
-        getMissingPunches(),
-        getHRAdvances(),
-        getRepVisits(),
-        getHRPetitions()
+        getHRLeavesForUser(user.id, user.name),
+        getMissingPunchesForUser(user.id, user.name),
+        getHRAdvancesForUser(user.id, user.name),
+        isEmployer ? getRepVisits() : getRepVisitsForUser(user.id),
+        getHRPetitionsForUser(user.id, user.name)
       ]);
       setDepartments(depts);
       setTasksData(tasks);
       setAllReports(reports);
-      setMissions(mData.filter(m => String(m.assignedEmployeeId || '').trim() === String(user.id || '').trim() || String(m.assignedEmployeeName || '').trim() === String(user.name || '').trim()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+      setMissions(mData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
       setGlobalSettings(sData);
-      setMyLeaves(leavesData.filter(l => String(l.employeeId) === String(user.id) || l.employeeName === user.name));
-      setMissingPunches(punchesData.filter(p => String(p.employeeId) === String(user.id) || p.employeeName === user.name));
-      setMyAdvances(advancesData.filter(a => String(a.employeeId) === String(user.id) || a.employeeName === user.name));
+      setMyLeaves(leavesData);
+      setMissingPunches(punchesData);
+      setMyAdvances(advancesData);
       setRepVisits(repVisitsData.filter(v => String(v.userId) === String(user.id) || v.userName === user.name));
-      setMyPetitions(petitionsData.filter(p => String(p.employeeId) === String(user.id) || p.employeeName === user.name));
+      setMyPetitions(petitionsData);
     };
     fetchData();
   }, [user.id, user.name]);
@@ -1363,6 +1361,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
             </table>
           </div>
 
+          ${(report.supervisorReason || report.supervisorNotes) ? `<div style="white-space:pre-wrap;background:#f0fdfa;padding:16px;border-radius:12px;margin-top:16px;text-align:right"><strong>ملاحظة المشرف:</strong><br>${escapeReportNote(report.supervisorReason || report.supervisorNotes)}</div>` : ''}
           <div style="text-align: center; margin-top: 30px;">
             <h3 style="font-weight: 800; color: #374151; font-size: 1.4rem;">
               التقييم النهائي الشامل: ${Math.round(report.finalScore)}%
@@ -1581,7 +1580,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
 
       MySwal.fire({ title: 'تم الحفظ!', text: 'تم حفظ التقرير بنجاح', icon: 'success', timer: 1500, showConfirmButton: false });
 
-      const updatedReports = await getReports();
+      const updatedReports = await getReportsForUser(user.id, user.employeeId || user.id);
       setAllReports(updatedReports);
       setActiveTab('home');
       window.scrollTo(0, 0);
@@ -1933,8 +1932,8 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       MySwal.fire('نجاح', 'تم إرسال الطلب بنجاح', 'success');
       setShowLeaveModal(false);
       setLeaveFormData({ type: allowedLeaveTypes[0] || 'إجازة سنوية', startDate: '', endDate: '', duration: '', notes: '', status: 'معلق' });
-      const updatedLeaves = await getHRLeaves();
-      setMyLeaves(updatedLeaves.filter(l => String(l.employeeId) === String(user.id) || l.employeeName === user.name));
+      const updatedLeaves = await getHRLeavesForUser(user.id, user.name);
+      setMyLeaves(updatedLeaves);
     } catch (error) {
       console.error(error);
       MySwal.fire('خطأ', 'حدث خطأ أثناء إرسال الطلب', 'error');
@@ -2025,6 +2024,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       case 'history':
         return (
           <ReportHistoryTab
+            user={user}
             myReports={myReports}
             handleViewReportDetails={handleViewReportDetails}
             isMobile={isMobile}

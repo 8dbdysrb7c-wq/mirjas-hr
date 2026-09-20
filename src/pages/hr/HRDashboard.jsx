@@ -1,7 +1,7 @@
 import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
-import { Users, UserCheck, UserX, Clock, Calendar, AlertTriangle, FileText, ChevronLeft, Plus } from 'lucide-react';
-import { getEmployees, getHRLeaves, getHRAttendance, getHRViolations } from '../../store';
+import { Users, UserCheck, UserX, Clock, FileText, AlertTriangle } from 'lucide-react';
+import { getEmployees, getHRLeavesByDateRange, getHRAttendance, getHRViolationsByDateRange } from '../../store';
 import './hr.css';
 
 const HRDashboard = ({ user, onNavigate }) => {
@@ -11,36 +11,38 @@ const HRDashboard = ({ user, onNavigate }) => {
   const [violations, setViolations] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const thisMonthStr = todayStr.substring(0, 7);
+  const monthStart = `${thisMonthStr}-01`;
+  const monthEnd = `${thisMonthStr}-31`;
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       const [empsData, leavesData, attendanceData, violationsData] = await Promise.all([
         getEmployees(),
-        getHRLeaves(),
-        getHRAttendance(),
-        getHRViolations()
+        getHRLeavesByDateRange(monthStart, monthEnd),
+        getHRAttendance(todayStr),
+        getHRViolationsByDateRange(monthStart, monthEnd)
       ]);
       setEmployees(empsData.filter(isActiveEmployee));
-      setLeaves(leavesData);
-      setAttendance(attendanceData);
-      setViolations(violationsData);
+      setLeaves(leavesData || []);
+      setAttendance(attendanceData || []);
+      setViolations(violationsData || []);
       setLoading(false);
     };
     fetchData();
-  }, []);
-
-  const todayStr = new Date().toISOString().split('T')[0];
-  const thisMonthStr = todayStr.substring(0, 7);
+  }, [todayStr, monthStart, monthEnd]);
 
   // Calculate Stats
   const totalEmployees = employees.length;
   const todayAttendance = attendance.filter(a => a.date === todayStr);
   const presentToday = todayAttendance.filter(a => a.status === 'مداوم' || a.status === 'متأخر').length;
   const lateToday = todayAttendance.filter(a => a.status === 'متأخر').length;
-  const absentToday = totalEmployees - presentToday; // Simplified, in reality depends on work schedule
-  const pendingLeaves = leaves.filter(l => l.status === 'معلق').length;
+  const absentToday = totalEmployees - presentToday;
+  const pendingLeaves = (leaves || []).filter(l => l.status === 'معلق').length;
   
-  const thisMonthViolations = violations.filter(v => v.date?.startsWith(thisMonthStr));
+  const thisMonthViolations = (violations || []).filter(v => v.date?.startsWith(thisMonthStr));
   const totalDeductions = thisMonthViolations.reduce((sum, v) => sum + (Number(v.deductionAmount) || 0), 0);
   const totalOvertime = todayAttendance.reduce((sum, a) => sum + (Number(a.overtimeHours) || 0), 0);
 
@@ -81,8 +83,6 @@ const HRDashboard = ({ user, onNavigate }) => {
         <StatCard title="إجمالي الخصومات" value={totalDeductions} icon={<AlertTriangle size={28} />} color="orange" onClick={() => onNavigate('violations')} />
         <StatCard title="ساعات الإضافي" value={totalOvertime} icon={<Clock size={28} />} color="purple" onClick={() => onNavigate('attendance')} />
       </div>
-
-
     </div>
   );
 };

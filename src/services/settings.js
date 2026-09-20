@@ -355,14 +355,51 @@ export const createNotification = async (notification) => {
       createdByRole: notification.createdByRole || '',
       target: notification.target || null,
       createdAt,
-      readBy: notification.createdById ? { [notification.createdById]: createdAt } : {}
+      readBy: notification.createdById ? { [notification.createdById]: createdAt } : {},
+      targetUsers: [] // will be populated
     };
+
+    // Calculate targetUsers to allow Firestore array-contains querying
+    try {
+      const employeesRef = await getDocs(collection(db, 'employees'));
+      const allEmployees = employeesRef.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      const targets = new Set();
+      if (payload.visibleToAll) {
+        targets.add('ALL_USERS');
+      }
+      
+      allEmployees.forEach(emp => {
+        const empRole = getUserNotificationRole(emp, globalSettings);
+        if (payload.visibleToAll) {
+          targets.add(emp.id);
+        } else if (payload.visibleUserIds.includes(emp.id)) {
+          targets.add(emp.id);
+        } else if (payload.visibleRoles.includes(empRole)) {
+          targets.add(emp.id);
+        }
+      });
+      
+      payload.excludedUserIds.forEach(id => targets.delete(id));
+      
+      // Ensure the creator is in the targetUsers so they can see their own notifications if needed, 
+      // or actually creator doesn't need it unless they are a target.
+      
+      payload.targetUsers = Array.from(targets);
+    } catch (err) {
+      console.error("Error calculating targetUsers for notification:", err);
+      // Fallback to minimal targets if employee fetch fails
+      payload.targetUsers = payload.visibleToAll ? ['ALL_USERS'] : payload.visibleUserIds;
+    }
 
     await addDoc(collection(db, 'notifications'), payload);
 
     if (!notification.skipWhatsApp && notification.settingKey && globalSettings?.notifications?.[notification.settingKey]?.whatsapp) {
       try {
         const { sendWhatsAppNotification } = await import('../utils/whatsappService.js');
+        // We already fetched employees, but since this is inside another try block and previously used getDocs, we'll fetch or use a simpler approach.
+        // For safety, we can just fetch again or rely on the previous fetch if we refactor.
+        // Let's just re-fetch to keep logic isolated
         const employeesRef = await getDocs(collection(db, 'employees'));
         const allEmployees = employeesRef.docs.map(d => ({ id: d.id, ...d.data() }));
         
@@ -436,18 +473,29 @@ export const createActivityNotification = async ({
 
 export const watchNotificationsForUser = (user, settings, next, error) => {
   const preferences = normalizeNotificationSettings(settings);
-  const source = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(150));
+  // Fetch where targetUsers contains user.id OR 'ALL_USERS'
+  // Firestore supports array-contains-any for up to 10 items
+  const source = query(
+    collection(db, 'notifications'), 
+    where('targetUsers', 'array-contains-any', [user.id, 'ALL_USERS']),
+    orderBy('createdAt', 'desc'), 
+    limit(50)
+  );
   return onSnapshot(source, snapshot => next(snapshot.docs
     .map(row => ({ ...row.data(), id: row.id }))
-    .filter(notification => notificationMatchesUser(notification, user, settings)
-      && !(preferences.hideReadNotifications && notification.readBy?.[user.id]))), error);
+    .filter(notification => !(preferences.hideReadNotifications && notification.readBy?.[user.id]))), error);
 };
 
 export const getNotificationsForUser = async (user, settings) => {
   try {
     const resolvedSettings = settings || await getGlobalSettings();
     const notificationSettings = normalizeNotificationSettings(resolvedSettings);
-    const q = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(150));
+    const q = query(
+      collection(db, 'notifications'), 
+      where('targetUsers', 'array-contains-any', [user.id, 'ALL_USERS']),
+      orderBy('createdAt', 'desc'), 
+      limit(50)
+    );
     const querySnapshot = await getDocs(q);
     const notificationList = querySnapshot.docs.map((notificationDoc) => ({
       ...notificationDoc.data(),
@@ -455,7 +503,6 @@ export const getNotificationsForUser = async (user, settings) => {
     }));
 
     return notificationList.filter((notification) => {
-      if (!notificationMatchesUser(notification, user, resolvedSettings)) return false;
       if (notificationSettings.hideReadNotifications && notification.readBy?.[user.id]) return false;
       return true;
     });
@@ -621,15 +668,13 @@ export const saveScoringConfig = async (config) => {
 
 export const getGlobalSettings = async () => {
   const data = await getDocData('settings', 'globalSettings', defaultGlobalSettings);
-  const removedVirtualWarehouses = new Set([
-    'مستودع إنتاج قيد الخياطة',
-    'مستودع إنتاج قيد التغليف',
-    'مستودع قبل الخياطة',
-    'بانتظار استلام التغليف',
-    'مستودع إنتاج قيد التحضير'
-  ]);
+  const isVirtualWarehouse = (w) => {
+    const s = String(w || '').trim();
+    return s.includes('قيد الخياطة') || s.includes('قيد التحضير') || s.includes('قيد التغليف') || s.includes('قبل الخياطة') || s.includes('استلام التغليف');
+  };
+
   if (data && Array.isArray(data.warehouses)) {
-    const physicalWarehouses = data.warehouses.filter(warehouse => !removedVirtualWarehouses.has(warehouse));
+    const physicalWarehouses = data.warehouses.filter(warehouse => !isVirtualWarehouse(warehouse));
     if (physicalWarehouses.length !== data.warehouses.length) {
       data.warehouses = physicalWarehouses;
       await setDocData('settings', 'globalSettings', data);
@@ -724,9 +769,19 @@ export const getGlobalSettings = async () => {
 };
 
 export const saveGlobalSettings = async (settings) => {
+  const isVirtualWarehouse = (w) => {
+    const s = String(w || '').trim();
+    return s.includes('قيد الخياطة') || s.includes('قيد التحضير') || s.includes('قيد التغليف') || s.includes('قبل الخياطة') || s.includes('استلام التغليف');
+  };
+
+  let cleanedSettings = { ...settings };
+  if (Array.isArray(cleanedSettings.warehouses)) {
+    cleanedSettings.warehouses = cleanedSettings.warehouses.filter(w => !isVirtualWarehouse(w));
+  }
+
   await setDocData('settings', 'globalSettings', {
-    ...settings,
-    notificationSettings: normalizeNotificationSettings(settings)
+    ...cleanedSettings,
+    notificationSettings: normalizeNotificationSettings(cleanedSettings)
   });
 };
 

@@ -1,3 +1,4 @@
+import { hasDraftItems, readLocalDrafts, mergeDrafts, writeLocalDraft, removeLocalDraft } from '../../utils/salesDrafts';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText, Briefcase, Clock, Check, Save, Share2, Layers, Clipboard, CheckCircle, Copy, Archive } from 'lucide-react';
@@ -11,6 +12,7 @@ import 'flatpickr/dist/themes/light.css';
 import Select from '../../components/SearchSelect';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import PreparationVariantsModal from '../../components/PreparationVariantsModal';
+import PrepAndProdVariantsModal from '../../components/PrepAndProdVariantsModal';
 import MultiColorSelectionModal from '../../components/MultiColorSelectionModal';
 import html2pdf from 'html2pdf.js';
 import { buildReservedQuantityMap, cleanStockProductName, getAvailableQuantity, isReservableSalesItem } from '../../utils/stockAvailability';
@@ -21,12 +23,14 @@ const SALES_ITEM_STATUS_OPTIONS = [
   { value: 'قيد التجهيز', label: 'قيد التجهيز' },
   { value: 'قيد الإنتاج', label: 'قيد الخياطة' },
   { value: 'قيد التحضير', label: 'قيد التحضير' },
+  { value: 'تحضير وإنتاج', label: 'انتاج خياطة وتحضير' },
   { value: 'ملغي', label: 'ملغي' }
 ];
 
 const normalizeSalesItemStatus = status => {
   if (['إنتاج قيد الخياطة', 'إنتاج قيد التغليف'].includes(status)) return 'قيد الإنتاج';
   if (status === 'إنتاج قيد التحضير') return 'قيد التحضير';
+  if (status === 'تحضير وإنتاج' || status === 'إنتاج وتحضير' || status === 'تحضير وانتاج') return 'تحضير وإنتاج';
   if (['جاهز للتسليم', 'تم التسليم', 'تم الإنتاج', 'تم التحضير', 'تم التجهيز', 'منتهي'].includes(status)) return 'جاهز';
   if (status === 'ملغى') return 'ملغي';
   return status || '';
@@ -41,6 +45,7 @@ const getLocalDateStr = (d) => {
 
 const AdminSales = ({ user }) => {
   const [orders, setOrders] = useState([]);
+  const [orderLimit, setOrderLimit] = useState(50);
   const [customers, setCustomers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
@@ -77,12 +82,19 @@ const AdminSales = ({ user }) => {
   const [linkedPreparationOrder, setLinkedPreparationOrder] = useState(null);
   const [preparationOrders, setPreparationOrders] = useState([]);
 
+  // Combined Preparation & Production Variants Modal
+  const [showPrepAndProdModal, setShowPrepAndProdModal] = useState(false);
+  const [prepAndProdModalIndex, setPrepAndProdModalIndex] = useState(null);
+  const [prepAndProdVariants, setPrepAndProdVariants] = useState({ prepVariants: [], prodVariants: [] });
+
   const [showMultiColorModal, setShowMultiColorModal] = useState(false);
   const [drafts, setDrafts] = useState([]);
   const [activeDraftId, setActiveDraftId] = useState(null);
   const [draftSaveState, setDraftSaveState] = useState('');
   const draftReadyRef = useRef(false);
   const draftTimerRef = useRef(null);
+  const draftSaveQueueRef = useRef(Promise.resolve());
+  const draftRevisionRef = useRef(0);
   const draftUserId = String(user?.id || user?.uid || user?.email || user?.name || 'unknown');
   const draftStorageKey = `mirjas_sales_draft_${draftUserId}`;
 
@@ -177,10 +189,7 @@ const AdminSales = ({ user }) => {
   useEffect(() => {
     fetchData();
     getSalesOrderDrafts(draftUserId).then(cloudDrafts => {
-      let localDraft = null;
-      try { localDraft = JSON.parse(localStorage.getItem(draftStorageKey) || 'null'); } catch (_) {}
-      const combined = [...cloudDrafts];
-      if (localDraft?.id && !combined.some(d => d.id === localDraft.id)) combined.unshift(localDraft);
+      const combined = mergeDrafts(cloudDrafts, readLocalDrafts(localStorage, draftStorageKey));
       setDrafts(combined);
     });
     const handleResize = () => {
@@ -191,18 +200,22 @@ const AdminSales = ({ user }) => {
   }, []);
 
   useEffect(() => {
+    setOrdersLoading(true);
     const unsubscribe = subscribeToSalesOrders(
       liveOrders => { setOrders(liveOrders); setOrdersLoading(false); },
-      error => { setOrdersLoading(false); console.error('تعذر تحديث حجوزات الطلبيات لحظياً', error); }
+      error => { setOrdersLoading(false); console.error('تعذر تحديث حجوزات الطلبيات لحظياً', error); },
+      orderLimit
     );
     return unsubscribe;
-  }, []);
+  }, [orderLimit]);
 
   useEffect(() => () => clearTimeout(draftTimerRef.current), []);
 
   // Save locally immediately, then synchronize quietly to Firestore after a short debounce.
   useEffect(() => {
+    const revision = ++draftRevisionRef.current;
     if (!showModal || editingOrder || !activeDraftId || !draftReadyRef.current) return;
+    clearTimeout(draftTimerRef.current);
     const draft = {
       id: activeDraftId,
       userId: draftUserId,
@@ -212,13 +225,29 @@ const AdminSales = ({ user }) => {
       linkedPreparationOrder,
       updatedAt: new Date().toISOString()
     };
-    localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+    if (!hasDraftItems(draft)) {
+      const wasSaved = drafts.some(d => d.id === activeDraftId)
+        || readLocalDrafts(localStorage, draftStorageKey).some(d => d.id === activeDraftId);
+      removeLocalDraft(localStorage, draftStorageKey, activeDraftId);
+      setDrafts(prev => prev.filter(d => d.id !== activeDraftId));
+      setDraftSaveState('أضف صنفًا لحفظ الطلبية كمسودة');
+      if (wasSaved) {
+        draftSaveQueueRef.current = draftSaveQueueRef.current
+          .then(() => deleteSalesOrderDraft(activeDraftId)).catch(() => false);
+      }
+      return;
+    }
+    writeLocalDraft(localStorage, draftStorageKey, draft);
+    setDrafts(prev => mergeDrafts(prev, [draft]));
     setDraftSaveState('جاري حفظ المسودة...');
     clearTimeout(draftTimerRef.current);
     draftTimerRef.current = setTimeout(async () => {
-      const saved = await saveSalesOrderDraft(draft);
+      const pendingSave = draftSaveQueueRef.current.then(() => saveSalesOrderDraft(draft));
+      draftSaveQueueRef.current = pendingSave.catch(() => null);
+      const saved = await pendingSave;
+      if (revision !== draftRevisionRef.current) return;
       setDraftSaveState(saved ? 'تم حفظ المسودة تلقائيًا' : 'محفوظة على هذا الجهاز');
-      if (saved) setDrafts(prev => [saved, ...prev.filter(d => d.id !== saved.id)]);
+      if (saved) setDrafts(prev => mergeDrafts(prev, [saved]));
     }, 1500);
   }, [formData, linkedProductionOrder, linkedPreparationOrder, showModal, editingOrder, activeDraftId]);
 
@@ -443,12 +472,8 @@ const AdminSales = ({ user }) => {
   };
 
   const readAvailableDrafts = async () => {
-    let localDraft = null;
-    try { localDraft = JSON.parse(localStorage.getItem(draftStorageKey) || 'null'); } catch (_) {}
     const cloudDrafts = await getSalesOrderDrafts(draftUserId);
-    const combined = [...cloudDrafts];
-    if (localDraft?.id && !combined.some(d => d.id === localDraft.id)) combined.unshift(localDraft);
-    combined.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+    const combined = mergeDrafts(cloudDrafts, readLocalDrafts(localStorage, draftStorageKey));
     setDrafts(combined);
     return combined;
   };
@@ -463,25 +488,28 @@ const AdminSales = ({ user }) => {
     setLinkedPreparationOrder(draft.linkedPreparationOrder || null);
     setDraftSaveState('تم استعادة المسودة');
     setShowModal(true);
-    setTimeout(() => { draftReadyRef.current = true; }, 0);
+    draftReadyRef.current = true;
   };
 
   const removeDraft = async (draft) => {
     if (!draft?.id) return;
-    await deleteSalesOrderDraft(draft.id);
-    try {
-      const local = JSON.parse(localStorage.getItem(draftStorageKey) || 'null');
-      if (local?.id === draft.id) localStorage.removeItem(draftStorageKey);
-    } catch (_) { localStorage.removeItem(draftStorageKey); }
+    if (draft.id === activeDraftId) clearTimeout(draftTimerRef.current);
+    await draftSaveQueueRef.current;
+    const deleted = await deleteSalesOrderDraft(draft.id);
+    if (!deleted) {
+      await Swal.fire('تعذر حذف المسودة', 'احتفظنا بالنسخة المحفوظة. حاول مرة أخرى عند توفر الاتصال.', 'warning');
+      return false;
+    }
+    removeLocalDraft(localStorage, draftStorageKey, draft.id);
     setDrafts(prev => prev.filter(d => d.id !== draft.id));
   };
 
   const startFreshDraft = () => {
-    const draftId = `draft_${draftUserId.replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}`;
+    const draftId = `draft_${draftUserId.replace(/[^a-zA-Z0-9_-]/g, '_')}_${crypto.randomUUID()}`;
     draftReadyRef.current = false;
     setActiveDraftId(draftId);
     setDraftSaveState('سيتم الحفظ تلقائيًا');
-    setTimeout(() => { draftReadyRef.current = true; }, 0);
+    draftReadyRef.current = true;
   };
 
   const handleShowDrafts = async () => {
@@ -499,12 +527,13 @@ const AdminSales = ({ user }) => {
     const choice = await Swal.fire({
       title: 'مسودات الطلبيات',
       text: 'اختر المسودة التي تريد متابعتها أو حذفها',
-      input: 'select', inputOptions: options,
+      input: 'select', inputOptions: { '__new__': '＋ إنشاء طلبية جديدة مع الاحتفاظ بالمسودات', ...options },
       showDenyButton: true, showCancelButton: true,
       preDeny: () => Swal.getInput()?.value,
       confirmButtonText: 'متابعة المسودة', denyButtonText: 'حذف المسودة', cancelButtonText: 'إلغاء'
     });
     const selected = available.find(d => d.id === choice.value);
+    if (choice.isConfirmed && choice.value === '__new__') { await handleOpenModal(); return; }
     if (choice.isConfirmed && selected) resumeDraft(selected);
     if (choice.isDenied && selected) {
       const confirmDelete = await Swal.fire({ title: 'حذف المسودة؟', text: 'لن يمكن استعادة هذه المسودة.', icon: 'warning', showCancelButton: true, confirmButtonText: 'نعم، حذف', cancelButtonText: 'تراجع' });
@@ -572,26 +601,22 @@ const AdminSales = ({ user }) => {
               };
             }
           }
-          return { ...item, hasProductionDetails: false, hasPreparationDetails: false };
+          if (item.itemStatus === 'تحضير وإنتاج') {
+            const hasProd = linked && linked.items && linked.items.some(li => li.productName === item.productName);
+            const hasPrep = linkedPrep && linkedPrep.items && linkedPrep.items.some(li => li.productName === item.productName);
+            if (hasProd || hasPrep) {
+              return {
+                ...item,
+                hasPrepAndProdDetails: Boolean(hasProd && hasPrep),
+                hasProductionDetails: Boolean(hasProd),
+                hasPreparationDetails: Boolean(hasPrep)
+              };
+            }
+          }
+          return { ...item, hasProductionDetails: false, hasPreparationDetails: false, hasPrepAndProdDetails: false };
         })
       }));
     } else {
-      const available = await readAvailableDrafts();
-      if (available.length) {
-        const answer = await Swal.fire({
-          title: 'توجد طلبية غير مكتملة',
-          text: 'يوجد لديك طلبية غير مكتملة محفوظة كمسودة، هل تريد متابعة العمل عليها؟',
-          icon: 'question',
-          showDenyButton: true,
-          showCancelButton: true,
-          confirmButtonText: 'متابعة المسودة',
-          denyButtonText: 'حذف المسودة والبدء من جديد',
-          cancelButtonText: 'إلغاء'
-        });
-        if (answer.isConfirmed) { resumeDraft(available[0]); return; }
-        if (answer.isDismissed) return;
-        if (answer.isDenied) await removeDraft(available[0]);
-      }
       setEditingOrder(null);
       setLinkedProductionOrder(null);
       setLinkedPreparationOrder(null);
@@ -621,7 +646,7 @@ const AdminSales = ({ user }) => {
 
   const handleOpenPreview = async (order) => {
     let orderToPreview = { ...order };
-    if (order.items && order.items.some(i => ['قيد الإنتاج', 'إنتاج قيد الخياطة', 'إنتاج قيد التغليف'].includes(i.itemStatus))) {
+    if (order.items && order.items.some(i => ['قيد الإنتاج', 'إنتاج قيد الخياطة', 'إنتاج قيد التغليف', 'تحضير وإنتاج'].includes(i.itemStatus))) {
       const prodOrders = await getOrders();
       const linked = prodOrders.find(po =>
         (po.salesOrderId && po.salesOrderId === order.id) ||
@@ -632,7 +657,7 @@ const AdminSales = ({ user }) => {
         orderToPreview.productionOrderNumber = linked.orderNumber;
       }
     }
-    if (order.items && order.items.some(i => i.itemStatus === 'قيد التحضير')) {
+    if (order.items && order.items.some(i => ['قيد التحضير', 'إنتاج قيد التحضير', 'تحضير وإنتاج'].includes(i.itemStatus))) {
       const prepOrders = await getPreparationOrders();
       const linkedPrep = prepOrders.find(po =>
         (po.salesOrderId && po.salesOrderId === order.id) ||
@@ -1220,6 +1245,145 @@ const AdminSales = ({ user }) => {
     setShowPreparationVariantsModal(false);
   };
 
+  const handleOpenPrepAndProdItem = async (index) => {
+    const item = formData.items[index];
+
+    // Find existing variants in linkedPreparationOrder and linkedProductionOrder
+    let existingPrep = [];
+    if (linkedPreparationOrder && linkedPreparationOrder.items) {
+      existingPrep = linkedPreparationOrder.items.filter(i => i.productName === item.productName);
+    }
+    let existingProd = [];
+    if (linkedProductionOrder && linkedProductionOrder.items) {
+      existingProd = linkedProductionOrder.items.filter(i => i.productName === item.productName);
+    }
+
+    const defaultPrep = [{
+      productName: item.productName,
+      quantity: item.quantity || '',
+      colorModel: '',
+      sizeCm: '',
+      thickness: '',
+      notes: item.preparationNotes || '',
+      status: 'لم يتم التنفيذ'
+    }];
+
+    const defaultProd = [{
+      productName: item.productName,
+      quantity: item.quantity || '',
+      colorModel: '',
+      sizeCm: '',
+      thickness: '',
+      notes: item.productionNotes || '',
+      status: 'لم يتم التنفيذ'
+    }];
+
+    setPrepAndProdVariants({
+      prepVariants: existingPrep.length > 0 ? existingPrep : defaultPrep,
+      prodVariants: existingProd.length > 0 ? existingProd : defaultProd
+    });
+
+    setPrepAndProdModalIndex(index);
+    setShowPrepAndProdModal(true);
+  };
+
+  const handleSavePrepAndProdVariants = async ({ prepVariants, prodVariants }) => {
+    const item = formData.items[prepAndProdModalIndex];
+
+    let prodNum = linkedProductionOrder?.orderNumber;
+    if (!prodNum) {
+      try {
+        const allProd = await getOrders();
+        const maxNum = allProd.reduce((max, o) => {
+          const match = String(o.orderNumber || '').match(/\d+/);
+          return match ? Math.max(max, parseInt(match[0], 10)) : max;
+        }, 0);
+        prodNum = `PRO-${String(maxNum + 1).padStart(4, '0')}`;
+      } catch (e) {
+        prodNum = 'سيتم إنشاؤه تلقائياً';
+      }
+    }
+
+    let prepNum = linkedPreparationOrder?.orderNumber;
+    if (!prepNum) {
+      try {
+        const allPrep = await getPreparationOrders();
+        const maxNum = allPrep.reduce((max, o) => {
+          const match = String(o.orderNumber || '').match(/\d+/);
+          return match ? Math.max(max, parseInt(match[0], 10)) : max;
+        }, 0);
+        prepNum = `PREP-${String(maxNum + 1).padStart(4, '0')}`;
+      } catch (e) {
+        prepNum = 'سيتم إنشاؤه تلقائياً';
+      }
+    }
+
+    // Update or create linkedProductionOrder
+    if (linkedProductionOrder) {
+      const filteredItems = (linkedProductionOrder.items || []).filter(i => i.productName !== item.productName);
+      setLinkedProductionOrder({
+        ...linkedProductionOrder,
+        orderNumber: linkedProductionOrder.orderNumber || prodNum,
+        items: [...filteredItems, ...prodVariants]
+      });
+    } else {
+      setLinkedProductionOrder({
+        id: null,
+        orderNumber: prodNum,
+        salesOrderNumber: formData.orderNumber,
+        customerId: formData.customerId,
+        customerName: formData.customerName,
+        orderDate: formData.orderDate,
+        deliveryDate: formData.deliveryDate,
+        status: 'لم يتم التنفيذ',
+        orderNotes: `مرتبط بطلبية رقم ${formData.orderNumber}`,
+        items: [...prodVariants]
+      });
+    }
+
+    // Update or create linkedPreparationOrder
+    if (linkedPreparationOrder) {
+      const filteredItems = (linkedPreparationOrder.items || []).filter(i => i.productName !== item.productName);
+      setLinkedPreparationOrder({
+        ...linkedPreparationOrder,
+        orderNumber: linkedPreparationOrder.orderNumber || prepNum,
+        items: [...filteredItems, ...prepVariants]
+      });
+    } else {
+      setLinkedPreparationOrder({
+        id: null,
+        orderNumber: prepNum,
+        salesOrderNumber: formData.orderNumber,
+        customerId: formData.customerId,
+        customerName: formData.customerName,
+        orderDate: formData.orderDate,
+        deliveryDate: formData.deliveryDate,
+        status: 'لم يتم التنفيذ',
+        orderNotes: `مرتبط بطلبية رقم ${formData.orderNumber}`,
+        items: [...prepVariants]
+      });
+    }
+
+    const updatedItems = [...formData.items];
+    updatedItems[prepAndProdModalIndex] = {
+      ...updatedItems[prepAndProdModalIndex],
+      hasPrepAndProdDetails: true,
+      hasProductionDetails: true,
+      hasPreparationDetails: true
+    };
+    setFormData({ ...formData, items: updatedItems });
+
+    Swal.fire({
+      icon: 'success',
+      title: 'تم الحفظ مؤقتاً',
+      text: 'تمت إضافة تفاصيل التحضير والإنتاج في الذاكرة، سيتم الحفظ النهائي عند الضغط على "حفظ الطلبية".',
+      timer: 3000,
+      showConfirmButton: false
+    });
+
+    setShowPrepAndProdModal(false);
+  };
+
 
 
   const handleRemoveItem = (index) => {
@@ -1312,6 +1476,21 @@ const AdminSales = ({ user }) => {
       }
     }
 
+    if (item.itemStatus === 'تحضير وإنتاج') {
+      const normalize = (str) => String(str || '').replace(/أ|إ|آ/g, 'ا').replace(/ى/g, 'ي').trim();
+      let prodActive = false;
+      let prepActive = false;
+      if (linkedProductionOrder) {
+        const overallStatus = normalize(linkedProductionOrder.status || 'لم يتم التنفيذ');
+        prodActive = !(overallStatus.includes('منتهي') || overallStatus.includes('ملغي') || overallStatus.includes('لم يتم التنفيذ'));
+      }
+      if (linkedPreparationOrder) {
+        const overallStatus = normalize(linkedPreparationOrder.status || 'لم يتم التنفيذ');
+        prepActive = !(overallStatus.includes('منتهي') || overallStatus.includes('ملغي') || overallStatus.includes('لم يتم التنفيذ'));
+      }
+      return prodActive || prepActive;
+    }
+
     if (item.itemStatus === 'قيد التحضير' || item.itemStatus === 'إنتاج قيد التحضير') {
       if (linkedPreparationOrder) {
         const normalize = (str) => String(str || '').replace(/أ|إ|آ/g, 'ا').replace(/ى/g, 'ي').trim();
@@ -1388,6 +1567,14 @@ const AdminSales = ({ user }) => {
         return prepStatus;
       }
       return 'إنتاج قيد التحضير';
+    }
+    if (item.itemStatus === 'تحضير وإنتاج') {
+      const prodStatus = getProductionItemStatus(salesOrder, item);
+      const prepStatus = getPreparationItemStatus(salesOrder, item);
+      if (prodStatus && prodStatus !== 'لم يتم التنفيذ' && prepStatus && prepStatus !== 'لم يتم التنفيذ') {
+        return `خياطة: ${prodStatus} | تحضير: ${prepStatus}`;
+      }
+      return 'تحضير وإنتاج';
     }
     return item.itemStatus || '---';
   };
@@ -1682,7 +1869,8 @@ const AdminSales = ({ user }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.customerName || formData.items.some(item => !item.productName || !item.quantity)) {
+    try {
+      if (!formData.customerName || formData.items.some(item => !item.productName || !item.quantity)) {
       Swal.fire('خطأ', 'يرجى ملء جميع الحقول المطلوبة (العميل والأصناف)', 'error');
       return;
     }
@@ -1721,6 +1909,14 @@ const AdminSales = ({ user }) => {
       return;
     }
 
+    const missingPrepAndProdCard = formData.items.find(item =>
+      normalizeSalesItemStatus(item.itemStatus) === 'تحضير وإنتاج' && (!hasLinkedCardItem(linkedProductionOrder, item) || !hasLinkedCardItem(linkedPreparationOrder, item))
+    );
+    if (missingPrepAndProdCard) {
+      Swal.fire('كرت التحضير والإنتاج مطلوب', `يجب إنشاء وحفظ تفاصيل كرت الخياطة والتحضير للصنف "${missingPrepAndProdCard.productName}" قبل حفظ الطلبية.`, 'warning');
+      return;
+    }
+
     const reservedWithoutCurrentOrder = buildReservedQuantityMap(orders, editingOrder?.id || formData.id || '');
     const overbookedItem = formData.items.find(item => {
       if (!isReservableSalesItem(item)) return false;
@@ -1753,6 +1949,11 @@ const AdminSales = ({ user }) => {
     };
 
     const result = await saveSalesOrder(dataToSave);
+
+    if (!result) {
+      const lastErr = saveSalesOrder.lastError;
+      throw new Error(lastErr?.message || 'تعذر حفظ الطلبية في قاعدة البيانات. يرجى إعادة المحاولة.');
+    }
 
     if (result) {
       if (linkedProductionOrder && linkedProductionOrder.items?.length > 0) {
@@ -1826,6 +2027,18 @@ const AdminSales = ({ user }) => {
       }
       setShowModal(false);
       // Orders and reservation totals are refreshed by the live subscription.
+    }
+  } catch (error) {
+      console.error("Order submission error:", error);
+      let errMsg = error.message || 'يرجى إعادة المحاولة';
+      if (String(errMsg).includes('Quota exceeded') || String(errMsg).includes('RESOURCE_EXHAUSTED')) {
+        errMsg = 'تم استنفاد الحصة اليومية المجانية لقاعدة بيانات Firebase (Quota exceeded). يرجى ترقية باقة Firebase إلى Blaze أو مراجعة إدارة النظام.';
+      }
+      Swal.fire({
+        icon: 'error',
+        title: 'تعذر حفظ الطلبية',
+        text: errMsg
+      });
     }
   };
 
@@ -2548,8 +2761,10 @@ const AdminSales = ({ user }) => {
 
         {showModal ? null : (loading || ordersLoading) ? (
           <div className="text-center py-10">جاري التحميل...</div>
-        ) : isMobile ? (
-          <div className="flex flex-col gap-4 no-print" style={{ padding: '0 8px 120px 8px' }}>
+        ) : (
+          <>
+            {isMobile ? (
+              <div className="flex flex-col gap-4 no-print" style={{ padding: '0 8px 120px 8px' }}>
             {filteredOrders.length > 0 ? (
               filteredOrders.map(order => (
                 <div
@@ -3231,6 +3446,53 @@ const AdminSales = ({ user }) => {
           </div>
         )}
 
+        {/* Load More / Pagination Bar */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 mt-4 bg-white/90 backdrop-blur rounded-2xl border border-slate-200/80 shadow-sm no-print">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>
+              {orderLimit ? (
+                `يتم حالياً عرض أحدث ${orders.length} طلبية (لتقليل استهلاك الحصة وتسريع النظام)`
+              ) : (
+                `يتم عرض كامل أرشيف الطلبيات (${orders.length} طلبية)`
+              )}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {orderLimit ? (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline text-xs flex items-center gap-1.5"
+                  onClick={() => setOrderLimit(prev => (prev || 50) + 50)}
+                  title="جلب 50 طلبية أقدم إضافية"
+                >
+                  <Plus size={14} /> تحميل 50 طلبية أقدم
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline text-xs flex items-center gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50"
+                  onClick={() => setOrderLimit(null)}
+                  title="تحميل كافة الطلبيات السابقة من الأرشيف"
+                >
+                  تحميل كامل الأرشيف
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-sm btn-outline text-xs flex items-center gap-1.5 border-primary/30 text-primary hover:bg-primary/5"
+                onClick={() => setOrderLimit(50)}
+                title="إعادة التقييد بأحدث 50 طلبية لتوفير الحصة"
+              >
+                عرض أحدث 50 طلبية فقط
+              </button>
+            )}
+          </div>
+        </div>
+      </>
+    )}
+
         {showModal && (
           <div className="modal-overlay">
             <div className="modal-content wide animate-fade-in">
@@ -3541,6 +3803,22 @@ const AdminSales = ({ user }) => {
                                     {item.hasPreparationDetails ? <Edit2 size={16} strokeWidth={2} /> : <Plus size={16} strokeWidth={2} />}
                                   </button>
                                 )}
+                                {item.itemStatus === 'تحضير وإنتاج' && (isAdmin(user) || user?.level === 'مشرف' || user?.role === 'مشرف' || user?.level === 'supervisor' || user?.role === 'supervisor' || user?.hasProductionAccess || user?.hasPreparationAccess || hasPermission(user, 'production', 'add') || hasPermission(user, 'production', 'edit')) && (
+                                  <button
+                                    type="button"
+                                    className={`${(item.hasPrepAndProdDetails || (item.hasProductionDetails && item.hasPreparationDetails)) ? "icon-btn text-blue-600 hover:bg-blue-50" : "icon-btn bg-blue-600 hover:bg-blue-700 text-white"} ${isItemStatusDisabled(item) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    style={{
+                                      backgroundColor: (item.hasPrepAndProdDetails || (item.hasProductionDetails && item.hasPreparationDetails)) ? '#eff6ff' : '#2563eb',
+                                      color: (item.hasPrepAndProdDetails || (item.hasProductionDetails && item.hasPreparationDetails)) ? '#2563eb' : '#ffffff',
+                                      border: '1px solid #2563eb'
+                                    }}
+                                    onClick={() => handleOpenPrepAndProdItem(index)}
+                                    title={isItemStatusDisabled(item) ? 'لا يمكن التعديل لأن الصنف قيد التنفيذ' : ((item.hasPrepAndProdDetails || (item.hasProductionDetails && item.hasPreparationDetails)) ? 'تعديل تفاصيل التحضير والإنتاج' : 'إضافة لكرت التحضير والإنتاج')}
+                                    disabled={isItemStatusDisabled(item)}
+                                  >
+                                    {(item.hasPrepAndProdDetails || (item.hasProductionDetails && item.hasPreparationDetails)) ? <Edit2 size={16} strokeWidth={2} /> : <Plus size={16} strokeWidth={2.5} />}
+                                  </button>
+                                )}
                                 {(() => {
                                   const isDisabled = formData.items.length === 1 || isItemStatusDisabled(item);
 
@@ -3703,6 +3981,29 @@ const AdminSales = ({ user }) => {
                                   }}
                                 >
                                   {item.hasPreparationDetails ? <Edit2 size={14} strokeWidth={2.5} /> : <Plus size={14} strokeWidth={2.5} />}
+                                </button>
+                              )}
+
+                              {item.itemStatus === 'تحضير وإنتاج' && (isAdmin(user) || user?.level === 'مشرف' || user?.role === 'مشرف' || user?.level === 'supervisor' || user?.role === 'supervisor' || user?.hasProductionAccess || user?.hasPreparationAccess) && (
+                                <button
+                                  type="button"
+                                  className="transition-all"
+                                  onClick={() => handleOpenPrepAndProdItem(index)}
+                                  title={(item.hasPrepAndProdDetails || (item.hasProductionDetails && item.hasPreparationDetails)) ? 'تعديل تفاصيل التحضير والإنتاج' : 'إضافة لكرت التحضير والإنتاج'}
+                                  style={{
+                                    width: '30px',
+                                    height: '30px',
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    backgroundColor: (item.hasPrepAndProdDetails || (item.hasProductionDetails && item.hasPreparationDetails)) ? '#eff6ff' : '#2563eb',
+                                    color: (item.hasPrepAndProdDetails || (item.hasProductionDetails && item.hasPreparationDetails)) ? '#2563eb' : '#ffffff',
+                                    border: `1px solid ${(item.hasPrepAndProdDetails || (item.hasProductionDetails && item.hasPreparationDetails)) ? '#dbeafe' : '#1d4ed8'}`,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  {(item.hasPrepAndProdDetails || (item.hasProductionDetails && item.hasPreparationDetails)) ? <Edit2 size={14} strokeWidth={2.5} /> : <Plus size={14} strokeWidth={2.5} />}
                                 </button>
                               )}
 
@@ -5003,6 +5304,19 @@ const AdminSales = ({ user }) => {
           handleRemoveVariant={handleRemovePreparationVariant}
           handleAddVariant={handleAddPreparationVariant}
           handleSaveVariants={handleSavePreparationVariants}
+        />
+
+        {/* Combined Preparation & Production Variants Modal */}
+        <PrepAndProdVariantsModal
+          isMobile={isMobile}
+          showModal={showPrepAndProdModal}
+          setShowModal={setShowPrepAndProdModal}
+          variantModalIndex={prepAndProdModalIndex}
+          formData={formData}
+          globalSettings={globalSettings}
+          initialPrepVariants={prepAndProdVariants.prepVariants}
+          initialProdVariants={prepAndProdVariants.prodVariants}
+          onSave={handleSavePrepAndProdVariants}
         />
 
       </div>

@@ -6,7 +6,7 @@ import {
   Settings as SewingMachineIcon, Layers, Users, FileText, Settings, 
   Plus, Clock, DollarSign, Calendar as CustomCalendar, 
   FileText as CustomReport, Folder as CustomFolder, ClipboardList,
-  LogIn, Edit3, Package
+  LogIn, Edit3, Package, AlertTriangle
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { isAdmin } from '../../../store';
@@ -163,6 +163,26 @@ export const HomeTab = ({
             </button>
             
           </div>
+
+          {todayAttendance?.isError && (
+            <div style={{
+              backgroundColor: '#fffbeb',
+              border: '1px solid #fef3c7',
+              color: '#b45309',
+              padding: '0.65rem 0.9rem',
+              borderRadius: '14px',
+              marginBottom: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.6rem',
+              fontSize: '0.8rem',
+              fontWeight: '500',
+              lineHeight: 1.4
+            }}>
+              <AlertTriangle size={18} style={{ color: '#d97706', flexShrink: 0 }} />
+              <span>تعذر التحقق من البصمة حالياً بسبب ضغط الاتصال أو الحصة. لم يتم احتسابك غائباً، يرجى الضغط على زر التحديث بعد قليل.</span>
+            </div>
+          )}
 
           {/* Middle Section (Check-in / Check-out Times) */}
           <div style={{

@@ -1,6 +1,6 @@
 import { isActiveEmployee } from '../../utils/employeeStatus';
 import { getMissingPunches as detectMissingPunches } from '../../utils/missingPunches';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Bell, Clock, Check, X, Search, Filter, Fingerprint, Undo2, Trash2, User, ArrowUpDown, ArrowUp, ArrowDown, MessageCircle, Plus, Eye, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { getMissingPunches, updateMissingPunchStatus, deleteMissingPunch, saveHRAuditLog, getEmployees, saveHRViolation, saveMissingPunch, getHRAttendance, saveHRAttendance, saveEmployee, getHRLeaves, saveHRLeave } from '../../store';
 import Swal from 'sweetalert2';

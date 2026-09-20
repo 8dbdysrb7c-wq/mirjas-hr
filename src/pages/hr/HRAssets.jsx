@@ -28,7 +28,7 @@ const ASSET_STATUS_COLORS = {
   'قيد الصيانة': 'badge-warning'
 };
 
-const HRAssets = ({ user }) => {
+const HRAssets = ({ user, refreshCounts }) => {
   const canAdd = hasPermission(user, 'hr_assets', 'add');
   const canEdit = hasPermission(user, 'hr_assets', 'edit');
   const canDelete = hasPermission(user, 'hr_assets', 'delete');
@@ -514,6 +514,7 @@ const HRAssets = ({ user }) => {
       });
       setView('list');
       fetchData();
+      refreshCounts?.();
     }
   };
 
@@ -536,6 +537,7 @@ const HRAssets = ({ user }) => {
       await deleteHRAsset(id, user);
       Swal.fire('تم الحذف', 'تم حذف العهدة بنجاح', 'success');
       fetchData();
+      refreshCounts?.();
     }
   };
 
@@ -650,6 +652,7 @@ const HRAssets = ({ user }) => {
       await saveHRAsset(updatedAsset, user);
       Swal.fire('تم الحفظ', 'تم تسجيل نتيجة الفحص وتحديث حالات الأصناف بنجاح', 'success');
       fetchData();
+      refreshCounts?.();
     }
   };
 

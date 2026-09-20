@@ -1,7 +1,7 @@
 import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import { startVisiblePolling } from '../../utils/visiblePolling';
-import { getOrders, getSalesOrders, getMissions, getSmokingLogs, getGlobalSettings, saveSmokingLog, saveOrder, saveSalesOrder, saveMission, deleteMission, getEmployees, getAttendanceLogs, saveAttendanceLog, getSupervisorReports } from '../../store';
+import { getActiveOrders, getActiveSalesOrders, getActiveMissions, getSmokingLogs, getGlobalSettings, saveSmokingLog, saveOrder, saveSalesOrder, saveMission, deleteMission, getEmployees, getTodayAttendanceLogs, saveAttendanceLog, getSupervisorReportsByDateRange } from '../../store';
 import { CheckCircle2, AlertTriangle, Truck, Package, MessageSquare, Save, Activity, Clock, PlusCircle, Check, X, ClipboardList, ChefHat, ShieldCheck, Eye, Users, UserMinus, UserCheck, User, Calendar, ArrowUpDown, ArrowRight, ChevronDown } from 'lucide-react';
 import SewingMachineIcon from '../../components/SewingMachineIcon';
 import Swal from 'sweetalert2';
@@ -30,22 +30,21 @@ const AdminLive = ({ user, onBack }) => {
 
   const fetchData = async () => {
     try {
+      const todayKey = toLocalDateKey();
       const [prodOrd, salesOrd, missions, sLogs, sysSettings, emps, aLogs, wReports] = await Promise.all([
-        getOrders(),
-        getSalesOrders(),
-        getMissions(),
+        getActiveOrders(),
+        getActiveSalesOrders(),
+        getActiveMissions(),
         getSmokingLogs(),
         getGlobalSettings(),
         getEmployees(),
-        getAttendanceLogs(),
-        getSupervisorReports()
+        getTodayAttendanceLogs(),
+        getSupervisorReportsByDateRange(todayKey, todayKey)
       ]);
       setSettings(sysSettings);
       setEmployees(emps);
-
-      const todayKey = toLocalDateKey();
       
-      const todayAttendance = aLogs.filter(log => log.date === todayKey);
+      const todayAttendance = aLogs;
       setAttendanceLogs(todayAttendance);
 
       // Combine Active Orders
@@ -96,7 +95,7 @@ const AdminLive = ({ user, onBack }) => {
   };
 
   useEffect(() => {
-    return startVisiblePolling(fetchData, 30000);
+    return startVisiblePolling(fetchData, 90000);
   }, []);
 
   const handleUpdateOrderField = async (orderId, field, value) => {

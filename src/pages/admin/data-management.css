@@ -1,0 +1,36 @@
+.data-reset-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: repeat(2, auto);
+  grid-auto-flow: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.data-reset-grid > .btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  white-space: normal;
+  line-height: 1.6;
+  text-align: center;
+  font-size: 13px;
+}
+
+.data-reset-grid > .btn svg { flex-shrink: 0; }
+
+@media (max-width: 1100px) {
+  .data-reset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-auto-flow: row;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 400px) {
+  .data-reset-grid > .btn { padding: 10px 6px; font-size: 11px; }
+}

@@ -9,13 +9,19 @@ export const useAttendanceReminders = (isAdminOnline) => {
     if (!isAdminOnline) return;
     let cachedEmployees = null;
     let employeesLoadedAt = 0;
+    let cachedSettings = null;
+    let settingsLoadedAt = 0;
     let checking = false;
 
     const checkReminders = async () => {
       if (checking) return;
       checking = true;
       try {
-        const settings = await getGlobalSettings();
+        if (!cachedSettings || Date.now() - settingsLoadedAt >= 300000) {
+          cachedSettings = await getGlobalSettings();
+          settingsLoadedAt = Date.now();
+        }
+        const settings = cachedSettings;
         const remindersConfig = settings?.whatsappConfig?.reminders || {};
         if (remindersConfig.enabled === false) return; // Reminders module is disabled globally
 

@@ -1,7 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { startVisiblePolling } from '../../utils/visiblePolling';
 import { awaitsPetitionAdmin } from '../../utils/petitionConversation';
-import { getEmployees, getOrders, getSalesOrders, getMissions, getSupervisorReports, getSmokingLogs, isAdmin, getAttendanceLogs, getReports, getHRLeaves, getHRAdvances, getMissingPunches, getRepVisits, getPreparationOrders, saveRepVisit, getHRPetitions } from '../../store';
+import { 
+  getEmployees, 
+  getActiveOrders, 
+  getActiveSalesOrders, 
+  getActiveMissions, 
+  getSupervisorReportsByDateRange, 
+  getSmokingLogs, 
+  getReportsByDateRange, 
+  isAdmin, 
+  getTodayAttendanceLogs, 
+  getHRLeavesByDateRange, 
+  getHRAdvances, 
+  getMissingPunchesByDateRange, 
+  getRepVisitsByDateRange, 
+  getActivePreparationOrders, 
+  getHRPetitions 
+} from '../../store';
 import { ChevronLeft, UserCheck, UserX, Clock, ClipboardList, TrendingUp, CheckCircle2, ShieldCheck, Activity, FileText, Users, CalendarPlus, LogOut, DollarSign, Fingerprint, Search, MapPin, Package } from 'lucide-react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
@@ -23,24 +39,23 @@ const AnimatedNumber = ({ value, duration = 900, suffix = '' }) => {
   useEffect(() => {
     let animationFrame;
     const start = performance.now();
-    const initialValue = displayValue;
-    const delta = numericValue - initialValue;
+    const startVal = displayValue;
+    const endVal = numericValue;
 
-    if (delta === 0) return undefined;
-
-    const tick = (now) => {
-      const progress = Math.min((now - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const nextValue = initialValue + delta * eased;
-      setDisplayValue(progress >= 1 ? numericValue : nextValue);
-      if (progress < 1) animationFrame = requestAnimationFrame(tick);
+    const step = (timestamp) => {
+      const progress = Math.min((timestamp - start) / duration, 1);
+      const current = Math.floor(progress * (endVal - startVal) + startVal);
+      setDisplayValue(current);
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(step);
+      }
     };
 
-    animationFrame = requestAnimationFrame(tick);
+    animationFrame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(animationFrame);
-  }, [numericValue]);
+  }, [value]);
 
-  return <span>{Math.round(displayValue).toLocaleString('en-US')}{suffix}</span>;
+  return <>{displayValue}{suffix}</>;
 };
 
 const CircularProgress = ({ percentage, color }) => {
@@ -69,18 +84,32 @@ const CircularProgress = ({ percentage, color }) => {
   );
 };
 
-const AdminOverview = ({ onNavigate }) => {
+const AdminOverview = ({ onNavigate, user }) => {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
   const [data, setData] = useState({
     production: { active: 0, delayed: 0, todayCompleted: 0, sewing: 0, packaging: 0, preparation: 0 },
     delivery: { active: 0, delayed: 0 },
     sales: { active: 0, delayed: 0, todayCompleted: 0 },
-    employees: { total: 0, present: 0, absent: 0, late: 0 },
-    supervisors: { present: 0, total: 0 },
-    reports: { submitted: 0, required: 0 },
+    employees: { 
+      total: 0, 
+      present: 0, 
+      absent: 0, 
+      late: 0,
+      presentList: [],
+      absentList: [],
+      lateList: []
+    },
+    supervisors: { 
+      present: 0, 
+      total: 1,
+      presentList: []
+    },
+    reports: { submitted: 0, required: 1 },
     employeeReports: { submitted: 0, required: 0 },
     smokingArea: { status: 'unknown' },
-    quality: 0,
+    quality: 100,
     hrPending: { leaves: 0, missions: 0, overtime: 0, advances: 0, missingPunches: 0, petitions: 0 },
     repVisits: { today: 0, total: 0 }
   });
@@ -89,72 +118,32 @@ const AdminOverview = ({ onNavigate }) => {
   const [trackerSearchTerm, setTrackerSearchTerm] = useState('');
 
   useEffect(() => {
-    const updateTargetVisits = async () => {
-      try {
-        const visits = await getRepVisits();
-        const targets = [
-          "sleep way",
-          "سويس للمفروشات",
-          "بريق الأواني",
-          "معرض وهبة",
-          "الخطيب مول",
-          "مفروشات جاسر",
-          "الخولي هوم",
-          "سليب كير",
-          "قصر الصنوبر",
-          "معرض النابلسي",
-          "ناردين هوم",
-          "خميس الالفي"
-        ].map(n => n.trim().toLowerCase());
-
-        let count = 0;
-        for (const visit of visits) {
-          const name = (visit.customerName || '').trim().toLowerCase();
-          const match = targets.some(target => name.includes(target) || target.includes(name));
-          if (match && visit.visitType !== 'first_visit') {
-            await saveRepVisit({ ...visit, visitType: 'first_visit' });
-            count++;
-          }
-        }
-        if (count > 0) {
-          Swal.fire({
-            icon: 'success',
-            title: 'تم تحديث الزيارات بنجاح',
-            text: `تم تعديل ${count} زيارات من متابعة إلى أول زيارة بنجاح.`,
-            confirmButtonColor: '#1a8d9b'
-          });
-        }
-      } catch (err) {
-        console.error("Error updating visits:", err);
-      }
-    };
-    updateTargetVisits();
-  }, []);
-
-  useEffect(() => {
     let isMounted = true;
     const fetchData = async () => {
       setLoading(true);
-      const [prodOrd, salesOrd, emps, missions, supReports, sLogs, allAttLogs, empReports, hrLeaves, advances, missingPunches, repVisits, prepOrd, petitions] = await Promise.all([
-        getOrders(),
-        getSalesOrders(),
-        getEmployees(),
-        getMissions(),
-        getSupervisorReports(),
-        getSmokingLogs(),
-        getAttendanceLogs(),
-        getReports(),
-        getHRLeaves(),
-        getHRAdvances(),
-        getMissingPunches(),
-        getRepVisits(),
-        getPreparationOrders(),
-        getHRPetitions()
-      ]);
+      setLoadError('');
+      try {
+        const todayKey = toLocalDateKey();
+        const monthStart = `${todayKey.substring(0, 7)}-01`;
+        const [prodOrd, salesOrd, emps, missions, supReports, sLogs, todayLogs, hrLeaves, advances, missingPunches, repVisits, prepOrd, petitions, empReports] = await Promise.all([
+          getActiveOrders(),
+          getActiveSalesOrders(),
+          getEmployees(),
+          getActiveMissions(),
+          getSupervisorReportsByDateRange(todayKey, todayKey),
+          getSmokingLogs(),
+          getTodayAttendanceLogs(todayKey),
+          getHRLeavesByDateRange(monthStart, todayKey),
+          getHRAdvances(),
+          getMissingPunchesByDateRange(monthStart, todayKey),
+          getRepVisitsByDateRange(todayKey, todayKey),
+          getActivePreparationOrders(),
+          getHRPetitions(monthStart, todayKey),
+          getReportsByDateRange(todayKey, todayKey)
+        ]);
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
-      const todayKey = toLocalDateKey();
       const threeDaysAgo = new Date();
       threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
@@ -190,7 +179,6 @@ const AdminOverview = ({ onNavigate }) => {
       // --- Employees ---
       const normalEmps = emps.filter(e => !isAdmin(e));
       const todayReports = supReports.filter(r => r.date === todayKey);
-      const todayLogs = allAttLogs.filter(log => log.date === todayKey);
       
       let absentCount = 0;
       let lateCount = 0;
@@ -314,7 +302,12 @@ const AdminOverview = ({ onNavigate }) => {
         repVisits: { today: todayVisits, total: totalVisits }
       });
 
-      setLoading(false);
+      } catch (error) {
+        console.error('Error loading overview:', error);
+        if (isMounted) setLoadError('تعذر تحميل ملخص الرئيسية. يرجى إعادة المحاولة، والتحقق من الاتصال وحصة قاعدة البيانات إذا استمرت المشكلة.');
+      } finally {
+        if (isMounted) setLoading(false);
+      }
     };
 
     const stopPolling = startVisiblePolling(fetchData, 300000);
@@ -322,7 +315,7 @@ const AdminOverview = ({ onNavigate }) => {
       isMounted = false;
       stopPolling();
     };
-  }, []);
+  }, [retryCount]);
 
   const handleShowListModal = (title, list) => {
     if (!list || list.length === 0) {
@@ -346,6 +339,15 @@ const AdminOverview = ({ onNavigate }) => {
       width: '400px'
     });
   };
+
+  if (loadError) {
+    return (
+      <div role="alert" style={{ padding: '32px', textAlign: 'center' }}>
+        <p>{loadError}</p>
+        <button className="btn btn-primary" onClick={() => setRetryCount(count => count + 1)}>إعادة المحاولة</button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

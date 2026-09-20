@@ -25,9 +25,12 @@ import { CustomersReportTab } from './reports/CustomersReportTab';
 import HRDateFilter from '../../components/ui/HRDateFilter';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 import Select from '../../components/SearchSelect';
-import { hasPermission } from '../../utils/permissions';
-const MySwal = withReactContent(Swal);
-const REPORT_WAREHOUSES = ['مصنع المخدة', 'مصنع البياضات'];
+const isVirtualWarehouse = (w) => {
+  const s = String(w || '').trim();
+  return !s || s.includes('قيد الخياطة') || s.includes('قيد التحضير') || s.includes('قيد التغليف') || s.includes('قبل الخياطة') || s.includes('استلام التغليف');
+};
+
+const DEFAULT_REPORT_WAREHOUSES = ['مصنع المخدة', 'مصنع البياضات'];
 
 const JORDANIAN_CITIES = ['عمان', 'الزرقاء', 'إربد', 'العقبة', 'السلط', 'مادبا', 'الكرك', 'الطفيلة', 'معان', 'جرش', 'عجلون', 'المفرق'];
 
@@ -234,6 +237,14 @@ const AdminReports = ({ user, notificationTarget }) => {
   const [printFilterDraft, setPrintFilterDraft] = useState(null);
   const [pendingExportAction, setPendingExportAction] = useState(null);
   const [exportActionToRun, setExportActionToRun] = useState(null);
+
+  const availableWarehouses = React.useMemo(() => {
+    const list = globalSettings?.warehouses && Array.isArray(globalSettings.warehouses)
+      ? globalSettings.warehouses
+      : DEFAULT_REPORT_WAREHOUSES;
+    const filtered = list.filter(w => !isVirtualWarehouse(w));
+    return filtered.length > 0 ? filtered : DEFAULT_REPORT_WAREHOUSES;
+  }, [globalSettings]);
 
   const [loading, setLoading] = useState(true);
   const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'descending' });
@@ -2807,7 +2818,7 @@ const AdminReports = ({ user, notificationTarget }) => {
                   style={{ margin: 0, height: '42px', borderRadius: '10px', border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', padding: '0 8px', backgroundColor: '#ffffff' }}
                 >
                   <option value="">جميع المستودعات</option>
-                  {REPORT_WAREHOUSES.map(wh => <option key={wh} value={wh}>{wh}</option>)}
+                  {availableWarehouses.map(wh => <option key={wh} value={wh}>{wh}</option>)}
                 </select>
               </div>
 
@@ -3365,7 +3376,7 @@ const AdminReports = ({ user, notificationTarget }) => {
                       <label>المستودع</label>
                       <select className="input-field" value={selectedWarehouse} onChange={(e) => setSelectedWarehouse(e.target.value)}>
                         <option value="">جميع المستودعات</option>
-                        {REPORT_WAREHOUSES.map(wh => <option key={wh} value={wh}>{wh}</option>)}
+                        {availableWarehouses.map(wh => <option key={wh} value={wh}>{wh}</option>)}
                       </select>
                     </div>
                     <div className="input-group">

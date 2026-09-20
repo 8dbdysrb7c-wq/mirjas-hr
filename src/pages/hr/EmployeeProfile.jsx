@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, User, Phone, Briefcase, Calendar, Clock, MapPin, DollarSign, AlertTriangle, FileText, CheckCircle2, X , ArrowUpDown, Package } from 'lucide-react';
-import { getEmployees, getHRAttendance, getHRLeaves, getHRViolations, saveHRAdvance, getGlobalSettings, getHRAssets } from '../../store';
+import { getEmployees, getHRAttendanceForUser, getHRLeavesForUser, getHRViolationsForUser, saveHRAdvance, getGlobalSettings, getHRAssetsForUser } from '../../store';
 import Flatpickr from 'react-flatpickr';
 import Swal from 'sweetalert2';
 
@@ -26,19 +26,24 @@ const EmployeeProfile = ({ user, employeeId, onBack }) => {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      const [emps, att, lvs, viols, settings, allAssets] = await Promise.all([
-        getEmployees(), getHRAttendance(), getHRLeaves(), getHRViolations(), getGlobalSettings(), getHRAssets()
+      const [emps, settings] = await Promise.all([
+        getEmployees(), getGlobalSettings()
       ]);
       const emp = emps.find(e => e.id === employeeId);
       setEmployee(emp);
       setGlobalSettings(settings || {});
       
       if (emp) {
-        const isMatch = (item) => String(item.employeeId || '').trim() === String(emp.id || '').trim() || String(item.employeeName || '').trim() === String(emp.name || '').trim();
-        setAttendance(att.filter(isMatch).sort((a,b) => new Date(b.date) - new Date(a.date)));
-        setLeaves(lvs.filter(isMatch).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
-        setViolations(viols.filter(isMatch).sort((a,b) => new Date(b.date) - new Date(a.date)));
-        setEmployeeAssets(allAssets.filter(isMatch).sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
+        const [att, lvs, viols, allAssets] = await Promise.all([
+          getHRAttendanceForUser(emp.id, emp.name),
+          getHRLeavesForUser(emp.id),
+          getHRViolationsForUser(emp.id, emp.name),
+          getHRAssetsForUser(emp.id, emp.name)
+        ]);
+        setAttendance(att);
+        setLeaves(lvs);
+        setViolations(viols);
+        setEmployeeAssets(allAssets);
       }
       setLoading(false);
     };

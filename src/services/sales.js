@@ -1,4 +1,5 @@
 import { db } from '../firebase';
+import { hasDraftItems } from '../utils/salesDrafts';
 import { 
   collection, 
   getDocs, 
@@ -9,7 +10,9 @@ import {
   query, 
   where,
   runTransaction,
-  onSnapshot
+  onSnapshot,
+  orderBy,
+  limit
 } from 'firebase/firestore';
 import { cascadeCustomerNameUpdate } from './cascadeUpdates';
 import { triggerWhatsAppRouting } from './whatsappRouter';
@@ -18,15 +21,14 @@ import { buildReservedQuantityMap, cleanStockProductName, isCancelledOrder, isRe
 export const getCustomers = async () => {
   try {
     const querySnapshot = await getDocs(collection(db, 'customers'));
-    const customers = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-    
-    for (let c of customers) {
-      if (!c.city) {
-        c.city = 'عمان';
-        await setDoc(doc(db, 'customers', c.id), c);
-      }
-    }
-    
+    const customers = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        ...data,
+        city: data.city || 'عمان',
+        id: doc.id
+      };
+    });
     return customers;
   } catch (error) {
     console.error("Error in getCustomers:", error);
@@ -166,12 +168,24 @@ export const saveOrder = async (order) => {
   }
 };
 
-export const deleteOrder = async (id) => {
+export const deleteOrder = async (id, actor = null) => {
   try {
     const docRef = doc(db, 'orders', id);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
       const order = docSnap.data();
+      // Safely archive before deleting
+      try {
+        await setDoc(doc(collection(db, 'production_order_archives')), {
+          ...order,
+          originalId: id,
+          deletedBy: actor?.name || actor?.id || 'admin',
+          deletedAt: new Date().toISOString()
+        });
+      } catch (archErr) {
+        console.warn("Archive write error:", archErr);
+      }
+
       // Trigger cancel notification
       triggerWhatsAppRouting('production_sewing', 'delete', {
         orderNumber: order.orderNumber,
@@ -179,8 +193,10 @@ export const deleteOrder = async (id) => {
       });
     }
     await deleteDoc(docRef);
+    return true;
   } catch (error) {
     console.error("Error in deleteOrder:", error);
+    throw error;
   }
 };
 
@@ -190,6 +206,24 @@ export const getPreparationOrders = async () => {
     return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
   } catch (error) {
     console.error("Error in getPreparationOrders:", error);
+    return [];
+  }
+};
+
+export const getPreparationOrdersByDateRange = async (dateFrom, dateTo) => {
+  try {
+    let conditions = [];
+    if (dateFrom) conditions.push(where('createdAt', '>=', dateFrom));
+    if (dateTo) {
+      const nextDay = new Date(dateTo);
+      nextDay.setDate(nextDay.getDate() + 1);
+      conditions.push(where('createdAt', '<', nextDay.toISOString()));
+    }
+    const q = query(collection(db, 'preparation_orders'), ...conditions, orderBy('createdAt', 'desc'));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    console.error("Error in getPreparationOrdersByDateRange:", error);
     return [];
   }
 };
@@ -307,11 +341,88 @@ export const getSalesOrders = async () => {
   }
 };
 
-export const subscribeToSalesOrders = (onOrders, onError = console.error) => onSnapshot(
-  collection(db, 'sales_orders'),
-  snapshot => onOrders(snapshot.docs.map(orderDoc => ({ ...orderDoc.data(), id: orderDoc.id }))),
-  onError
-);
+export const getActiveSalesOrders = async () => {
+  try {
+    const q = query(collection(db, 'sales_orders'), where('status', 'not-in', ['منتهي', 'تم التسليم', 'ملغي']));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    console.error("Error in getActiveSalesOrders:", error);
+    return [];
+  }
+};
+
+export const getActiveOrders = async () => {
+  try {
+    const q = query(collection(db, 'orders'), where('status', 'not-in', ['منتهي', 'تم التسليم', 'تم التوصيل', 'تم التسليم للتوصيل', 'ملغي', 'جاهز']));
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+      .map(doc => ({ ...doc.data(), id: doc.id }))
+      .filter(order => !String(order.orderNumber || '').trim().toUpperCase().startsWith('PREP-'));
+  } catch (error) {
+    console.error("Error in getActiveOrders:", error);
+    return [];
+  }
+};
+
+export const getActivePreparationOrders = async () => {
+  try {
+    const q = query(collection(db, 'preparation_orders'), where('status', 'not-in', ['منتهي', 'تم التسليم', 'تم التوصيل', 'تم التسليم للتوصيل', 'ملغي', 'جاهز']));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    console.error("Error in getActivePreparationOrders:", error);
+    return [];
+  }
+};
+
+export const subscribeToSalesOrders = (onOrders, onError = console.error, orderLimit = 50) => {
+  let activeDocs = new Map();
+  let recentDocs = new Map();
+
+  const emit = () => {
+    const merged = new Map([...recentDocs, ...activeDocs]);
+    const sorted = Array.from(merged.values()).sort((a, b) => {
+      return String(b.orderNumber || '').localeCompare(String(a.orderNumber || ''));
+    });
+    onOrders(sorted);
+  };
+
+  let unsubActive = () => {};
+  let unsubRecent = () => {};
+
+  // If orderLimit is null (fetch all), we only need ONE subscription to fetch everything.
+  // This prevents overlapping reads.
+  if (orderLimit === null) {
+    const qAll = collection(db, 'sales_orders');
+    unsubRecent = onSnapshot(qAll, (snapshot) => {
+      recentDocs.clear();
+      snapshot.docs.forEach(doc => recentDocs.set(doc.id, { ...doc.data(), id: doc.id }));
+      emit();
+    }, onError);
+  } else {
+    // Query 1: All active orders (strictly not in closed statuses)
+    const qActive = query(collection(db, 'sales_orders'), where('status', 'not-in', ['منتهي', 'تم التسليم', 'ملغي']));
+    unsubActive = onSnapshot(qActive, (snapshot) => {
+      activeDocs.clear();
+      snapshot.docs.forEach(doc => activeDocs.set(doc.id, { ...doc.data(), id: doc.id }));
+      emit();
+    }, onError);
+
+    // Query 2: Closed orders limited (strictly in closed statuses - 0% overlap with Query 1)
+    const qClosed = query(collection(db, 'sales_orders'), where('status', 'in', ['منتهي', 'تم التسليم', 'ملغي']), limit(orderLimit));
+    unsubRecent = onSnapshot(qClosed, (snapshot) => {
+      recentDocs.clear();
+      snapshot.docs.forEach(doc => recentDocs.set(doc.id, { ...doc.data(), id: doc.id }));
+      emit();
+    }, onError);
+  }
+
+  return () => {
+    unsubActive();
+    unsubRecent();
+  };
+};
 
 export const saveSalesOrder = async (order) => {
   try {
@@ -319,11 +430,6 @@ export const saveSalesOrder = async (order) => {
     let isNew = !orderToSave.id;
     let oldStatus = null;
     let previousOrder = null;
-    // Share one fresh read between numbering and reservation validation.
-    const [allOrders, stockSnapshot] = await Promise.all([
-      getSalesOrders(),
-      getDocs(collection(db, 'stock'))
-    ]);
     if (!isNew) {
       try {
         const oldSnap = await getDoc(doc(db, 'sales_orders', orderToSave.id));
@@ -334,8 +440,67 @@ export const saveSalesOrder = async (order) => {
       } catch (e) {}
     }
 
+    const oldReservations = previousOrder ? buildReservedQuantityMap([previousOrder]) : {};
+    const newReservations = (!orderToSave.stockDeducted && !isCancelledOrder(orderToSave))
+      ? buildReservedQuantityMap([orderToSave])
+      : {};
+    const reservationKeys = [...new Set([...Object.keys(oldReservations), ...Object.keys(newReservations)])];
+
+    // Collect candidate stock product names to query only what this order needs
+    const candidateNames = [...new Set([
+      ...reservationKeys,
+      ...reservationKeys.map(k => k.split(' - ')[0].trim()),
+      ...(orderToSave.items || []).map(i => cleanStockProductName(i.productName || i.name)),
+      ...(previousOrder?.items || []).map(i => cleanStockProductName(i.productName || i.name))
+    ])].filter(Boolean);
+
+    // Targeted reads: fetch relevant orders and only relevant stock items in parallel
+    const ordersPromise = (async () => {
+      try {
+        if (!orderToSave.id) {
+          const recentSnap = await getDocs(query(collection(db, 'sales_orders'), orderBy('orderNumber', 'desc'), limit(10)));
+          return recentSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+        } else {
+          const activeSnap = await getDocs(query(
+            collection(db, 'sales_orders'),
+            where('status', 'in', ['جديد', 'قيد التجهيز', 'قيد التنفيذ', 'جاهز', 'قيد الإنتاج', 'قيد التحضير', 'جاهز للتسليم', 'جاهز للتسليم للتوصيل'])
+          ));
+          return activeSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+        }
+      } catch (err) {
+        console.error("Error fetching targeted sales orders:", err);
+        throw new Error('تعذر قراءة بيانات الطلبيات للتحقق من الترقيم والحجز. تم إلغاء العملية لمنع استنزاف الحصة.');
+      }
+    })();
+
+    const stockPromise = (async () => {
+      if (candidateNames.length === 0) {
+        return { docs: [] };
+      }
+      try {
+        // Chunk candidate product names in batches of 30 to satisfy Firestore 'in' limit without omitting any items
+        const chunks = [];
+        for (let i = 0; i < candidateNames.length; i += 30) {
+          chunks.push(candidateNames.slice(i, i + 30));
+        }
+        const snapshots = await Promise.all(
+          chunks.map(chunk => getDocs(query(collection(db, 'stock'), where('name', 'in', chunk))))
+        );
+        const docs = [];
+        snapshots.forEach(snap => {
+          (snap?.docs || []).forEach(d => docs.push(d));
+        });
+        return { docs };
+      } catch (err) {
+        console.error("Error fetching targeted stock items:", err);
+        throw new Error('تعذر قراءة بيانات المخزون المحددة للتحقق من الكميات. تم إلغاء العملية لمنع استنزاف الحصة.');
+      }
+    })();
+
+    const [relevantOrders, stockSnapshot] = await Promise.all([ordersPromise, stockPromise]);
+
     if (!orderToSave.id) {
-      const maxNum = allOrders.reduce((max, o) => {
+      const maxNum = relevantOrders.reduce((max, o) => {
         const str = String(o.orderNumber || '');
         if (str.startsWith('ORD-')) {
           const match = str.match(/ORD-(\d+)/);
@@ -358,17 +523,16 @@ export const saveSalesOrder = async (order) => {
       orderToSave.readyForDeliveryBy = orderToSave.lastActionBy || orderToSave.updatedBy || orderToSave.createdBy || 'النظام';
     }
 
-    const existingReservations = buildReservedQuantityMap(allOrders, orderToSave.id);
-    const oldReservations = previousOrder ? buildReservedQuantityMap([previousOrder]) : {};
-    const newReservations = (!orderToSave.stockDeducted && !isCancelledOrder(orderToSave))
-      ? buildReservedQuantityMap([orderToSave])
-      : {};
-    const reservationKeys = [...new Set([...Object.keys(oldReservations), ...Object.keys(newReservations)])];
+    const existingReservations = buildReservedQuantityMap(relevantOrders, orderToSave.id);
     const physicalByProduct = {};
     stockSnapshot.docs.forEach(stockDoc => {
       const item = stockDoc.data();
       const key = cleanStockProductName(`${String(item.name || '').trim()}${item.spec ? ` - ${String(item.spec).trim()}` : ''}`);
       physicalByProduct[key] = (physicalByProduct[key] || 0) + Number(item.quantity || 0);
+      const rawName = cleanStockProductName(item.name);
+      if (rawName && physicalByProduct[rawName] === undefined) {
+        physicalByProduct[rawName] = Number(item.quantity || 0);
+      }
     });
 
     await runTransaction(db, async transaction => {
@@ -416,12 +580,15 @@ export const saveSalesOrder = async (order) => {
       });
     }
 
+    saveSalesOrder.lastError = null;
     return orderToSave;
   } catch (error) {
     console.error("Error in saveSalesOrder:", error);
+    saveSalesOrder.lastError = error;
     return null;
   }
 };
+saveSalesOrder.lastError = null;
 
 export const deleteSalesOrder = async (id) => {
   try {
@@ -457,11 +624,11 @@ export const getSalesOrderDrafts = async (userId) => {
 
 export const saveSalesOrderDraft = async (draft) => {
   try {
-    if (!draft?.id || !draft?.userId) return null;
+    if (!draft?.id || !draft?.userId || !hasDraftItems(draft)) return null;
     const cleanDraft = JSON.parse(JSON.stringify({
       ...draft,
       userId: String(draft.userId),
-      updatedAt: new Date().toISOString()
+      updatedAt: draft.updatedAt || new Date().toISOString()
     }));
     await setDoc(doc(db, 'sales_order_drafts', cleanDraft.id), cleanDraft);
     return cleanDraft;
@@ -565,6 +732,17 @@ export const getRepVisits = async () => {
     return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
   } catch (error) {
     console.error("Error in getRepVisits:", error);
+    return [];
+  }
+};
+
+export const getRepVisitsForUser = async (employeeId) => {
+  try {
+    const q = query(collection(db, 'rep_visits'), where('employeeId', '==', String(employeeId)));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    console.error("Error in getRepVisitsForUser:", error);
     return [];
   }
 };

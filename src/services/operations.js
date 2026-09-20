@@ -46,6 +46,7 @@ export const saveReport = async (report) => {
     }
   } catch (error) {
     console.error("Error in saveReport:", error);
+    throw error;
   }
 };
 
@@ -67,6 +68,24 @@ export const getSupervisorReports = async () => {
   }
 };
 
+export const getSupervisorReportsByDateRange = async (dateFrom, dateTo) => {
+  try {
+    let conditions = [];
+    if (dateFrom) conditions.push(where('date', '>=', dateFrom));
+    if (dateTo) conditions.push(where('date', '<=', dateTo));
+    const q = query(
+      collection(db, 'supervisor_reports'),
+      ...conditions,
+      orderBy('date', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    console.error("Error in getSupervisorReportsByDateRange:", error);
+    return [];
+  }
+};
+
 export const saveSupervisorReport = async (report) => {
   try {
     const docRef = report.id ? doc(db, 'supervisor_reports', report.id) : doc(collection(db, 'supervisor_reports'));
@@ -76,6 +95,7 @@ export const saveSupervisorReport = async (report) => {
     }
   } catch (error) {
     console.error("Error in saveSupervisorReport:", error);
+    throw error;
   }
 };
 
@@ -96,6 +116,39 @@ export const getMissions = async () => {
     return [];
   }
 };
+
+export const getActiveMissions = async () => {
+  try {
+    const q = query(collection(db, 'missions'), where('status', 'not-in', ['تم الإنجاز', 'تم الانجاز', 'ملغي', 'ملغية', 'ملغاة']));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    console.error("Error in getActiveMissions:", error);
+    return [];
+  }
+};
+
+export const getMissionsForUser = async (userId, userName) => {
+  try {
+    // Missions might be assigned by employeeId or employeeName based on the data structure
+    // Since firestore doesn't support complex OR queries without composite indexes perfectly,
+    // we fetch active missions first or use two queries. Let's do two queries to be safe and merge.
+    const q1 = query(collection(db, 'missions'), where('assignedEmployeeId', '==', String(userId)));
+    const q2 = query(collection(db, 'missions'), where('assignedEmployeeName', '==', String(userName)));
+    
+    const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+    
+    const map = new Map();
+    snap1.docs.forEach(doc => map.set(doc.id, { ...doc.data(), id: doc.id }));
+    snap2.docs.forEach(doc => map.set(doc.id, { ...doc.data(), id: doc.id }));
+    
+    return Array.from(map.values());
+  } catch (error) {
+    console.error("Error in getMissionsForUser:", error);
+    return [];
+  }
+};
+
 
 export const saveMission = async (mission) => {
   try {
@@ -253,6 +306,18 @@ export const getAttendanceLogs = async () => {
   }
 };
 
+export const getTodayAttendanceLogs = async (dateStr = null) => {
+  try {
+    const today = dateStr || new Date().toISOString().split('T')[0];
+    const q = query(collection(db, 'attendance_logs'), where('date', '==', today));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    console.error("Error in getTodayAttendanceLogs:", error);
+    return [];
+  }
+};
+
 export const saveAttendanceLog = async (log) => {
   try {
     const docId = `${log.employeeId}_${log.date}`;
@@ -279,6 +344,26 @@ export const getSupervisorTasks = async () => {
     return [];
   }
 };
+
+export const getSupervisorTasksForUser = async (userId) => {
+  try {
+    // We check array-contains for assigneeIds and == for assigneeId
+    const q1 = query(collection(db, 'supervisor_tasks'), where('assigneeId', '==', String(userId)));
+    const q2 = query(collection(db, 'supervisor_tasks'), where('assigneeIds', 'array-contains', String(userId)));
+    
+    const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+    
+    const map = new Map();
+    snap1.docs.forEach(doc => map.set(doc.id, { ...doc.data(), id: doc.id }));
+    snap2.docs.forEach(doc => map.set(doc.id, { ...doc.data(), id: doc.id }));
+    
+    return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  } catch (error) {
+    console.error("Error in getSupervisorTasksForUser:", error);
+    return [];
+  }
+};
+
 
 export const saveSupervisorTask = async (task) => {
   try {
@@ -423,18 +508,51 @@ export const getSupervisorTasksByDateRange = async (dateFrom, dateTo) => {
   }
 };
 
-export const getSupervisorReportsByDateRange = async (dateFrom, dateTo) => {
+export const getReportsForUser = async (userId, employeeId = null) => {
   try {
-    const q = query(
-      collection(db, 'supervisor_reports'),
-      where('date', '>=', dateFrom),
-      where('date', '<=', dateTo),
-      orderBy('date', 'desc')
-    );
+    const ids = [...new Set([userId, employeeId])].filter(Boolean).map(id => String(id).trim());
+    if (ids.length === 0) return [];
+    // Limit to latest 60 reports (approx 2 months) to avoid massive reads over time.
+    const q = query(collection(db, 'reports'), where('userId', 'in', ids.slice(0, 10)), orderBy('date', 'desc'), limit(60));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
   } catch (error) {
-    console.error("Error in getSupervisorReportsByDateRange:", error);
+    console.error("Error in getReportsForUser:", error);
     return [];
   }
 };
+
+export const getReportsForUserByDateRange = async (userId, employeeId, dateFrom, dateTo) => {
+  try {
+    const ids = [...new Set([userId, employeeId])].filter(Boolean).map(id => String(id).trim());
+    if (ids.length === 0) return [];
+    
+    let conditions = [
+      where('userId', 'in', ids.slice(0, 10))
+    ];
+    if (dateFrom) conditions.push(where('date', '>=', dateFrom));
+    if (dateTo) conditions.push(where('date', '<=', dateTo));
+    
+    const q = query(collection(db, 'reports'), ...conditions, orderBy('date', 'desc'));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    console.error("Error in getReportsForUserByDateRange:", error);
+    return [];
+  }
+};
+
+export const getAttendanceLogsByDateRange = async (dateFrom, dateTo) => {
+  try {
+    let conditions = [];
+    if (dateFrom) conditions.push(where('date', '>=', dateFrom));
+    if (dateTo) conditions.push(where('date', '<=', dateTo));
+    const q = query(collection(db, 'attendance_logs'), ...conditions);
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    console.error("Error in getAttendanceLogsByDateRange:", error);
+    return [];
+  }
+};
+

@@ -1187,6 +1187,26 @@ export const getHRLeaves = async () => {
   }
 };
 
+export const getHRLeavesByDateRange = async (dateFrom, dateTo) => {
+  try {
+    const q1 = query(collection(db, 'hr_leaves'), where('date', '>=', dateFrom), where('date', '<=', dateTo));
+    const q2 = query(collection(db, 'hr_leaves'), where('startDate', '>=', dateFrom), where('startDate', '<=', dateTo));
+    const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+    
+    const map = new Map();
+    snap1.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+    snap2.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+
+    const snap3 = await getDocs(query(collection(db, 'hr_leaves'), where('endDate', '>=', dateFrom)));
+    snap3.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+
+    return Array.from(map.values()).sort((a, b) => new Date(b.date || b.startDate || b.createdAt || 0) - new Date(a.date || a.startDate || a.createdAt || 0));
+  } catch (error) {
+    console.error("Error in getHRLeavesByDateRange:", error);
+    return [];
+  }
+};
+
 export const saveHRLeave = async (leave, userContext = null) => {
   try {
     if (leave.date || leave.startDate) {
@@ -1407,6 +1427,22 @@ export const getMissingPunches = async () => {
   }
 };
 
+export const getMissingPunchesByDateRange = async (dateFrom, dateTo) => {
+  try {
+    let conditions = [];
+    if (dateFrom) conditions.push(where('date', '>=', dateFrom));
+    if (dateTo) conditions.push(where('date', '<=', dateTo));
+    const q = conditions.length > 0
+      ? query(collection(db, 'missing_punches'), ...conditions)
+      : collection(db, 'missing_punches');
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error("Error fetching missing punches by date range:", error);
+    return [];
+  }
+};
+
 export const saveMissingPunch = async (request) => {
   try {
     const docRef = request.id ? doc(db, 'missing_punches', request.id) : doc(collection(db, 'missing_punches'));
@@ -1598,6 +1634,146 @@ export const processDailyAbsences = async (dateFrom, dateTo, userContext) => {
   } catch (error) {
     console.error("Error processing daily absences:", error);
     return { success: false, error };
+  }
+};
+
+export const getHRLeavesForUser = async (employeeId, employeeName = '') => {
+  try {
+    const q1 = query(collection(db, 'hr_leaves'), where('employeeId', '==', String(employeeId)));
+    const snap1 = await getDocs(q1);
+    const map = new Map();
+    snap1.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+
+    if (employeeName) {
+      const q2 = query(collection(db, 'hr_leaves'), where('employeeName', '==', String(employeeName)));
+      const snap2 = await getDocs(q2);
+      snap2.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+    }
+
+    return Array.from(map.values()).sort((a, b) => new Date(b.createdAt || b.date || b.startDate || 0) - new Date(a.createdAt || a.date || a.startDate || 0));
+  } catch (error) {
+    console.error("Error in getHRLeavesForUser:", error);
+    return [];
+  }
+};
+
+export const getMissingPunchesForUser = async (employeeId, employeeName = '') => {
+  try {
+    const q1 = query(collection(db, 'missing_punches'), where('employeeId', '==', String(employeeId)));
+    const snap1 = await getDocs(q1);
+    const map = new Map();
+    snap1.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+
+    if (employeeName) {
+      const q2 = query(collection(db, 'missing_punches'), where('employeeName', '==', String(employeeName)));
+      const snap2 = await getDocs(q2);
+      snap2.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+    }
+
+    return Array.from(map.values()).sort((a, b) => new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0));
+  } catch (error) {
+    console.error("Error in getMissingPunchesForUser:", error);
+    return [];
+  }
+};
+
+export const getHRAdvancesForUser = async (employeeId, employeeName = '') => {
+  try {
+    const q1 = query(collection(db, 'hr_advances'), where('employeeId', '==', String(employeeId)));
+    const snap1 = await getDocs(q1);
+    const map = new Map();
+    snap1.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+
+    if (employeeName) {
+      const q2 = query(collection(db, 'hr_advances'), where('employeeName', '==', String(employeeName)));
+      const snap2 = await getDocs(q2);
+      snap2.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+    }
+
+    return Array.from(map.values()).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  } catch (error) {
+    console.error("Error in getHRAdvancesForUser:", error);
+    return [];
+  }
+};
+
+export const getHRPetitionsForUser = async (employeeId, employeeName = '') => {
+  try {
+    const q1 = query(collection(db, 'hr_petitions'), where('employeeId', '==', String(employeeId)));
+    const snap1 = await getDocs(q1);
+    const map = new Map();
+    snap1.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+
+    if (employeeName) {
+      const q2 = query(collection(db, 'hr_petitions'), where('employeeName', '==', String(employeeName)));
+      const snap2 = await getDocs(q2);
+      snap2.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+    }
+
+    return Array.from(map.values()).filter(p => p.status !== 'محذوف').sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  } catch (error) {
+    console.error("Error in getHRPetitionsForUser:", error);
+    return [];
+  }
+};
+
+export const getHRAttendanceForUser = async (employeeId, employeeName = '') => {
+  try {
+    const q1 = query(collection(db, 'hr_attendance'), where('employeeId', '==', String(employeeId)));
+    const snap1 = await getDocs(q1);
+    const map = new Map();
+    snap1.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+
+    if (employeeName) {
+      const q2 = query(collection(db, 'hr_attendance'), where('employeeName', '==', String(employeeName)));
+      const snap2 = await getDocs(q2);
+      snap2.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+    }
+
+    return Array.from(map.values()).sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+  } catch (error) {
+    console.error("Error in getHRAttendanceForUser:", error);
+    return [];
+  }
+};
+
+export const getHRViolationsForUser = async (employeeId, employeeName = '') => {
+  try {
+    const q1 = query(collection(db, 'hr_violations'), where('employeeId', '==', String(employeeId)));
+    const snap1 = await getDocs(q1);
+    const map = new Map();
+    snap1.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+
+    if (employeeName) {
+      const q2 = query(collection(db, 'hr_violations'), where('employeeName', '==', String(employeeName)));
+      const snap2 = await getDocs(q2);
+      snap2.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+    }
+
+    return Array.from(map.values()).sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+  } catch (error) {
+    console.error("Error in getHRViolationsForUser:", error);
+    return [];
+  }
+};
+
+export const getHRAssetsForUser = async (employeeId, employeeName = '') => {
+  try {
+    const q1 = query(collection(db, 'hr_assets'), where('employeeId', '==', String(employeeId)));
+    const snap1 = await getDocs(q1);
+    const map = new Map();
+    snap1.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+
+    if (employeeName) {
+      const q2 = query(collection(db, 'hr_assets'), where('employeeName', '==', String(employeeName)));
+      const snap2 = await getDocs(q2);
+      snap2.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+    }
+
+    return Array.from(map.values()).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  } catch (error) {
+    console.error("Error in getHRAssetsForUser:", error);
+    return [];
   }
 };
 

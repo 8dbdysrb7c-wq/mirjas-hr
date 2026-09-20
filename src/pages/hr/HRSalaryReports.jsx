@@ -4,7 +4,7 @@ import Flatpickr from 'react-flatpickr';
 import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import 'flatpickr/dist/themes/airbnb.css';
 import { FileText, Printer, Calendar, ChevronDown, ChevronUp, CheckCircle, Search, User, Briefcase, Filter, ArrowUpDown, ArrowUp, ArrowDown, DollarSign, Fingerprint, Clock, AlertCircle, ArrowLeft, Package, Users, FileSpreadsheet, FileDown, Settings, Plus, X } from 'lucide-react';
-import { getEmployees, getHRViolations, getHRAttendance, getDepartments, getGlobalSettings, getHRLeaves, getHRAdvances, getMissingPunches, getHRBonuses, getHRSalaryArchive, getHRAssets, getStock } from '../../store';
+import { getEmployees, getHRViolationsByDateRange, getHRAttendanceByDateRange, getDepartments, getGlobalSettings, getHRLeavesByDateRange, getHRAdvances, getMissingPunchesByDateRange, getHRBonuses, getHRSalaryArchive, getHRAssets, getStock } from '../../store';
 import { calculateSalaries as calculateSalariesLogic } from '../../utils/salaryCalculator';
 import html2pdf from 'html2pdf.js';
 import HRDateFilter from '../../components/ui/HRDateFilter';
@@ -14,7 +14,6 @@ import withReactContent from 'sweetalert2-react-content';
 const MySwal = withReactContent(Swal);
 
 const getNextAnnualRaiseDate = (joinDateStr) => {
-  if (!joinDateStr) return '-';
   const joinDate = new Date(joinDateStr);
   if (isNaN(joinDate.getTime())) return '-';
   
@@ -249,19 +248,28 @@ const HRSalaryReports = ({ user, isNested }) => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = async (targetMonth = selectedMonth) => {
     setLoading(true);
+    let start = null;
+    let end = null;
+    if (targetMonth) {
+      const [y, m] = targetMonth.split('-').map(Number);
+      const lastDay = new Date(y, m, 0).getDate();
+      start = `${targetMonth}-01`;
+      end = `${targetMonth}-${String(lastDay).padStart(2, '0')}`;
+    }
+
     const [emps, viols, atts, lvs, depts, glbSettings, hols, advs, periods, mps, bns, hrAssets, stockData, petsData] = await Promise.all([
       getEmployees(),
-      getHRViolations(),
-      getHRAttendance(),
-      getHRLeaves(),
+      start && end ? getHRViolationsByDateRange(start, end) : getHRViolationsByDateRange(),
+      start && end ? getHRAttendanceByDateRange(start, end) : getHRAttendanceByDateRange(),
+      start && end ? getHRLeavesByDateRange(start, end) : getHRLeavesByDateRange(),
       getDepartments(),
       getGlobalSettings(),
       import('../../store').then(m => m.getHolidays()),
       getHRAdvances(),
       import('../../store').then(m => m.getHRSalaryPeriods()),
-      import('../../store').then(m => m.getMissingPunches()),
+      start && end ? getMissingPunchesByDateRange(start, end) : import('../../store').then(m => m.getMissingPunches()),
       import('../../store').then(m => m.getHRBonuses()),
       getHRAssets(),
       getStock(),
@@ -281,11 +289,11 @@ const HRSalaryReports = ({ user, isNested }) => {
     setAssets(hrAssets || []);
     setStockItems(stockData || []);
     setPetitions(petsData || []);
-    if (emps.length > 0) setSelectedEmployeeId(emps[0].id);
+    if (emps.length > 0 && !selectedEmployeeId) setSelectedEmployeeId(emps[0].id);
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(selectedMonth); }, [selectedMonth]);
 
   useEffect(() => {
     const fetchArchive = async () => {

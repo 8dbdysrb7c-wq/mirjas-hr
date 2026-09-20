@@ -8,8 +8,8 @@ import {
 import Select from '../../components/SearchSelect';
 import {
   getEmployees, getHRAttendance, saveHRAttendance,
-  getReports, getSupervisorReports, getHRLeaves,
-  getAttendanceLogs, processDailyAbsences, saveEmployee
+  getReportsByDateRange, getSupervisorReportsByDateRange, getHRLeavesByDateRange,
+  getTodayAttendanceLogs, processDailyAbsences, saveEmployee
 } from '../../store';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
@@ -51,7 +51,7 @@ const formatTime12h = (timeStr) => {
   return `${displayHours}:${minutes} ${suffix}`;
 };
 
-const HRAttendance = ({ user }) => {
+const HRAttendance = ({ user, refreshCounts }) => {
   const [employees, setEmployees] = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [employeeReports, setEmployeeReports] = useState([]);
@@ -114,8 +114,9 @@ const HRAttendance = ({ user }) => {
       const res = await processDailyAbsences(result.value.start, result.value.end, user);
       if (res.success) {
         Swal.fire('تم بنجاح', `تم تسجيل ${res.count} أيام غياب.`, 'success');
-        const records = await getHRAttendance();
+        const records = await getHRAttendance(selectedDate);
         setAttendanceRecords(records);
+        refreshCounts?.();
       } else {
         Swal.fire('خطأ', 'حدث خطأ أثناء معالجة الغيابات', 'error');
       }
@@ -189,8 +190,9 @@ const HRAttendance = ({ user }) => {
           await saveEmployee({ ...emp, sickLeaveBalance: sickBal - 1 });
         }
 
-        const [records, updatedEmps] = await Promise.all([getHRAttendance(), getEmployees()]);
+        const [records, updatedEmps] = await Promise.all([getHRAttendance(selectedDate), getEmployees()]);
         setAttendanceRecords(records);
+        refreshCounts?.();
         setEmployees(updatedEmps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && isActiveEmployee(e)));
 
         Swal.fire('تم بنجاح', 'تم تسجيل الغياب بنجاح وتم تحديث الأرصدة إذا لزم الأمر', 'success');
@@ -280,8 +282,9 @@ const HRAttendance = ({ user }) => {
 
         await saveHRAttendance(updateData);
 
-        const records = await getHRAttendance();
+        const records = await getHRAttendance(selectedDate);
         setAttendanceRecords(records);
+        refreshCounts?.();
 
         Swal.fire('تم بنجاح', 'تم معالجة نسيان الخروج بنجاح', 'success');
       } catch (e) {
@@ -304,8 +307,9 @@ const HRAttendance = ({ user }) => {
           status: 'محذوف',
           notes: ''
         });
-        const records = await getHRAttendance();
+        const records = await getHRAttendance(selectedDate);
         setAttendanceRecords(records);
+        refreshCounts?.();
       }
     } catch (e) {
       console.error(e);
@@ -314,12 +318,21 @@ const HRAttendance = ({ user }) => {
 
   /* ── fetch ── */
   useEffect(() => {
+    let isMounted = true;
     (async () => {
       setLoading(true);
       const [emps, records, empReps, supReps, lvs, aLogs] = await Promise.all([
-        getEmployees(), getHRAttendance(), getReports(), getSupervisorReports(), getHRLeaves(), getAttendanceLogs()
+        employees.length === 0 ? getEmployees() : Promise.resolve(employees),
+        getHRAttendance(selectedDate),
+        getReportsByDateRange(selectedDate, selectedDate),
+        getSupervisorReportsByDateRange(selectedDate, selectedDate),
+        getHRLeavesByDateRange(selectedDate, selectedDate),
+        getTodayAttendanceLogs(selectedDate)
       ]);
-      setEmployees(emps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && isActiveEmployee(e)));
+      if (!isMounted) return;
+      if (employees.length === 0) {
+        setEmployees(emps.filter(e => e.name !== 'المدير العام' && e.jobTitle !== 'المدير العام' && e.role !== 'المدير العام' && isActiveEmployee(e)));
+      }
       setAttendanceRecords(records);
       setEmployeeReports(empReps || []);
       setSupervisorReports(supReps || []);
@@ -327,7 +340,8 @@ const HRAttendance = ({ user }) => {
       setLiveLogs(aLogs || []);
       setLoading(false);
     })();
-  }, []);
+    return () => { isMounted = false; };
+  }, [selectedDate]);
 
   /* ── build daily map ── */
   useEffect(() => {

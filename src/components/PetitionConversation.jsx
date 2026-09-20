@@ -52,16 +52,19 @@ export default function PetitionConversation({ petitionId, user, adminView = fal
               <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{message.text}</p>
             </article>)}
         </div>
-        {closed && <p>المحادثة مغلقة. {petition.reopenRequested ? 'طلب إعادة الفتح بانتظار الإدارة.' : 'يمكن طلب إعادة فتحها مع توضيح السبب.'}</p>}
-        {(!adminView || admin) && <>
+        {closed && (
+          <div style={{ padding: '10px 14px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0', color: '#475569', fontSize: '14px' }}>
+            المحادثة مغلقة ومكتملة من قبل الإدارة.
+          </div>
+        )}
+        {((!closed && (!adminView || admin)) || (closed && admin)) && <>
           <label htmlFor="petition-reply">{closed ? 'سبب إعادة الفتح أو القرار' : 'الرد / نتيجة المعالجة عند الإغلاق'}</label>
-          <textarea id="petition-reply" className="input-field" rows={3} maxLength={5000} value={text} onChange={event => setText(event.target.value)} disabled={busy || (closed && !admin && petition.reopenRequested)} />
+          <textarea id="petition-reply" className="input-field" rows={3} maxLength={5000} value={text} onChange={event => setText(event.target.value)} disabled={busy} />
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {!closed && <button className="btn btn-primary" disabled={busy || !text.trim()} onClick={() => send('reply')}>إرسال الرد</button>}
             {admin && !closed && <button className="btn" disabled={busy || !text.trim()} onClick={() => send('close')}>إنهاء وإغلاق مع حفظ النتيجة</button>}
             {admin && closed && <button className="btn btn-primary" disabled={busy || !text.trim()} onClick={() => send('reopen')}>إعادة فتح المحادثة</button>}
             {admin && closed && petition.reopenRequested && <button className="btn" disabled={busy || !text.trim()} onClick={() => send('decline-reopen')}>رفض إعادة الفتح مع السبب</button>}
-            {!adminView && closed && !petition.reopenRequested && <button className="btn" disabled={busy || !text.trim()} onClick={() => send('request-reopen')}>طلب إعادة فتح</button>}
           </div>
         </>}
       </>}

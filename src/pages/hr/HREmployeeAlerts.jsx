@@ -25,7 +25,7 @@ const formatDateTime = value => {
   return `${day}/${month}/${year} ${time}`;
 };
 
-export default function HREmployeeAlerts({ user }) {
+export default function HREmployeeAlerts({ user, refreshCounts }) {
   const canAdd = hasPermission(user, 'hr_employee_alerts', 'add') || hasPermission(user, 'hr_employee_alerts', 'create');
   const canEdit = hasPermission(user, 'hr_employee_alerts', 'edit');
   const canDelete = hasPermission(user, 'hr_employee_alerts', 'delete');
@@ -73,7 +73,7 @@ export default function HREmployeeAlerts({ user }) {
     }
     const result = await Swal.fire({ icon: 'question', title: 'أرشفة التنبيه؟', text: 'سيبقى محفوظًا ويمكن عرضه من خيار إظهار المؤرشف.', showCancelButton: true, confirmButtonText: 'أرشفة', cancelButtonText: 'إلغاء', confirmButtonColor: '#64748b' });
     if (!result.isConfirmed) return;
-    try { await archiveEmployeeAlert(alert.id, user); await load(); }
+    try { await archiveEmployeeAlert(alert.id, user); await load(); refreshCounts?.(); }
     catch (error) { Swal.fire('تعذر الأرشفة', error.message, 'error'); }
   };
 
@@ -93,7 +93,7 @@ export default function HREmployeeAlerts({ user }) {
     if (!result.isConfirmed) return;
     try {
       await deleteEmployeeAlert(alert.id);
-      await load();
+      await load(); refreshCounts?.();
       await Swal.fire({ icon: 'success', title: 'تم سحب التنبيه', timer: 1300, showConfirmButton: false });
     } catch (error) {
       Swal.fire('تعذر حذف التنبيه', error.message || 'حدث خطأ أثناء الحذف.', 'error');
@@ -160,7 +160,7 @@ export default function HREmployeeAlerts({ user }) {
     if (!recipients.length) return Swal.fire('لا يوجد مستلمون', 'الاختيارات الحالية لا تتضمن أي موظف.', 'warning');
     try {
       await createEmployeeAlerts({ employees: recipients, message: result.value.message, source: 'تنبيه إداري مباشر', sentById: user?.id || '', sentByName: user?.name || 'الإدارة' });
-      await load();
+      await load(); refreshCounts?.();
       await Swal.fire({ icon: 'success', title: 'تم إرسال التنبيه', text: `سيظهر التنبيه لدى ${recipients.length} موظف عند فتح التطبيق.`, confirmButtonColor: '#0f8b8d' });
     } catch (error) { Swal.fire('تعذر الإرسال', error.message || 'حدث خطأ أثناء إرسال التنبيه.', 'error'); }
   };

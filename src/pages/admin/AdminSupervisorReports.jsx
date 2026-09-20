@@ -1,7 +1,9 @@
+import { getDirectReports, canReviewSubordinateReport } from '../../utils/supervisorHierarchy';
+import { escapeReportNote } from '../../utils/reportNote.js';
 import { isActiveEmployee } from '../../utils/employeeStatus';
 /* eslint-disable */
 import React, { useState, useEffect, useRef } from 'react';
-import { getEmployees, getSupervisorReports, saveSupervisorReport, deleteSupervisorReport, addLog, isAdmin, getSalesOrders, saveSalesOrder, getGlobalSettings, getMissions, saveMission, getOrders, saveOrder, getTasksData, getProductionLogs, saveProductionLog, deleteProductionLog, getReports, getReportsByDateRange, saveReport, getAttendanceLogs, createNotification, getPreparationOrders } from '../../store';
+import { getEmployees, getSupervisorReports, saveSupervisorReport, deleteSupervisorReport, addLog, isAdmin, getSalesOrders, saveSalesOrder, getGlobalSettings, getMissions, saveMission, getOrders, saveOrder, getTasksData, getProductionLogs, saveProductionLog, deleteProductionLog, getReportsByDateRange, saveReport, getTodayAttendanceLogs, getAttendanceLogsByDateRange, createNotification, getPreparationOrders, savePreparationOrder } from '../../store';
 import { getHRAttendance, getHRLeaves } from '../../services/hr';
 import { hasPermission } from '../../utils/permissions';
 import { FileText, Check, Calendar, Plus, Trash2, Save, UserCheck, Clock, CheckCircle2, AlertTriangle, Eye, X, Package, MessageSquare, Truck, ChevronDown, ChevronUp, ClipboardList, Building2, Settings, Target, TrendingUp, Edit, CheckCircle, RotateCcw, ArrowUpDown, Filter, Shield, Smartphone, LogIn, LogOut } from 'lucide-react';
@@ -200,6 +202,9 @@ const AdminSupervisorReports = ({ user }) => {
   // An employer is ONLY the system owner (Anas/Mashhour/Admin)
   const isEmployer = user.id === 'admin' || String(user.name).includes('مشهور') || String(user.name).includes('انس') || String(user.name).includes('أنس') || user.name === 'المدير العام';
   const isSuperAdmin = isEmployer;
+  const [subordinateIds, setSubordinateIds] = useState([]);
+  const canReviewReport = report => isSuperAdmin || canReviewSubordinateReport(user, subordinateIds, report);
+  const canReviewTeam = isSuperAdmin || subordinateIds.length > 0;
 
   const [activeTab, setActiveTab] = useState(isSuperAdmin ? 'history' : 'add');
   const [isEditMode, setIsEditMode] = useState(false);
@@ -242,21 +247,32 @@ const AdminSupervisorReports = ({ user }) => {
   }, [reports]);
 
   const fetchOrders = async () => {
-    const salesOrdersData = await getSalesOrders();
-    const productionOrdersData = await getOrders();
-    const preparationOrdersData = await getPreparationOrders();
-    const missionsData = await getMissions();
+    // Fetch active orders across all departments directly by status without date cutoff
+    const { getActiveSalesOrders, getActiveOrders, getActivePreparationOrders, getActiveMissions } = await import('../../store');
+
+    const [salesOrdersData, productionOrdersData, preparationOrdersData, missionsData] = await Promise.all([
+      getActiveSalesOrders(),
+      getActiveOrders(),
+      getActivePreparationOrders(),
+      getActiveMissions()
+    ]);
 
     const excludedOrderStatuses = ['منتهي', 'تم التسليم', 'تم التوصيل', 'تم التسليم للتوصيل', 'ملغي', 'جاهز'];
-    const excludedMissionStatuses = ['تم الإنجاز', 'ملغي'];
+    const excludedMissionStatuses = ['تم الإنجاز', 'تم الانجاز', 'ملغي', 'ملغية', 'ملغاة'];
 
-    const activeSalesOrders = salesOrdersData.filter(o => !excludedOrderStatuses.includes(o.status) && !excludedOrderStatuses.includes(o.executionStatus)).map(o => ({ ...o, isSales: true, currentDepartment: 'الطلبيات' }));
+    const activeSalesOrders = (salesOrdersData || [])
+      .filter(o => !excludedOrderStatuses.includes(o.status) && !excludedOrderStatuses.includes(o.executionStatus))
+      .map(o => ({ ...o, isSales: true, currentDepartment: 'الطلبيات' }));
 
-    const activeProductionOrders = productionOrdersData.filter(o => !excludedOrderStatuses.includes(o.status) && !excludedOrderStatuses.includes(o.executionStatus)).map(o => ({ ...o, isProduction: true, currentDepartment: 'الإنتاج' }));
+    const activeProductionOrders = (productionOrdersData || [])
+      .filter(o => !excludedOrderStatuses.includes(o.status) && !excludedOrderStatuses.includes(o.executionStatus))
+      .map(o => ({ ...o, isProduction: true, currentDepartment: 'الإنتاج' }));
 
-    const activePreparationOrders = preparationOrdersData.filter(o => !excludedOrderStatuses.includes(o.status) && !excludedOrderStatuses.includes(o.executionStatus)).map(o => ({ ...o, isPreparation: true, currentDepartment: 'التحضير' }));
+    const activePreparationOrders = (preparationOrdersData || [])
+      .filter(o => !excludedOrderStatuses.includes(o.status) && !excludedOrderStatuses.includes(o.executionStatus))
+      .map(o => ({ ...o, isPreparation: true, currentDepartment: 'التحضير' }));
 
-    const activeMissions = missionsData.filter(m => !excludedMissionStatuses.includes(m.status));
+    const activeMissions = (missionsData || []).filter(m => !excludedMissionStatuses.includes(m.status));
 
     const normalizedMissions = activeMissions.map(m => ({
       ...m,
@@ -271,88 +287,95 @@ const AdminSupervisorReports = ({ user }) => {
   };
 
   useEffect(() => {
+    let isMounted = true;
     const fetchData = async () => {
-      const [emps, reps, salesOrdersData, settings, missionsData, productionOrdersData, preparationOrdersData, empReports, attLogs] = await Promise.all([
-        getEmployees(),
-        getSupervisorReports(),
-        getSalesOrders(),
-        getGlobalSettings(),
-        getMissions(),
-        getOrders(),
-        getPreparationOrders(),
-        getReports(),
-        getAttendanceLogs()
-      ]);
-      const currentUserId = String(user.id).trim();
-      const cUser = emps.find(e => String(e.id).trim() === currentUserId);
-
-      let filteredEmps = emps;
-
-      if (isSuperAdmin) {
-        // Admin sees everyone except top admins
-        filteredEmps = emps.filter(e => String(e.id).trim() !== 'admin' && e.role !== 'admin' && e.level !== 'admin' && e.level !== 'إدارة');
-      } else {
-        // Supervisor sees only assigned employees
-        if (cUser && cUser.assignedEmployees && cUser.assignedEmployees.length > 0) {
-          const assignedIds = cUser.assignedEmployees.map(id => String(id).trim());
-          filteredEmps = emps.filter(e => assignedIds.includes(String(e.id).trim()));
-        } else {
-          // If no assigned employees, show all normal employees
-          filteredEmps = emps.filter(e => e.role !== 'admin' && e.level !== 'admin' && e.level !== 'إدارة' && e.level !== 'supervisor' && e.level !== 'مشرف' && String(e.id).trim() !== currentUserId);
+      try {
+        const { getSupervisorReportsByDateRange } = await import('../../store');
+        
+        let fetchFrom = date;
+        let fetchTo = date;
+        
+        if (activeTab === 'history') {
+          if (dateMode === 'month') {
+            fetchFrom = `${selectedMonth}-01`;
+            const nextMonth = new Date(`${selectedMonth}-01`);
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+            nextMonth.setDate(0);
+            fetchTo = nextMonth.toISOString().substring(0, 10);
+          } else if (dateMode === 'range') {
+            fetchFrom = dateFrom;
+            fetchTo = dateTo;
+          } else if (dateMode === 'day') {
+            fetchFrom = selectedDate;
+            fetchTo = selectedDate;
+          }
         }
-      }
 
-      setEmployees(filteredEmps.filter(isActiveEmployee));
-      setReports(reps);
-      setAllEmployeeReports(empReports);
-      setAttendanceLogs(attLogs || []);
+        const [emps, reps, settings, empReports, attLogs] = await Promise.all([
+          getEmployees(),
+          getSupervisorReportsByDateRange(fetchFrom, fetchTo),
+          getGlobalSettings(),
+          getReportsByDateRange(fetchFrom, fetchTo),
+          getTodayAttendanceLogs(date)
+        ]);
 
-      // Only show suspended/pending orders in the tracking board (which means active and not finished/canceled)
-      const excludedOrderStatuses = ['منتهي', 'تم التسليم', 'تم التوصيل', 'تم التسليم للتوصيل', 'ملغي', 'جاهز'];
-      const excludedMissionStatuses = ['تم الإنجاز', 'ملغي'];
+        if (!isMounted) return;
 
-      const activeSalesOrders = salesOrdersData.filter(o => !excludedOrderStatuses.includes(o.status) && !excludedOrderStatuses.includes(o.executionStatus)).map(o => ({ ...o, isSales: true, currentDepartment: 'إدارة الطلبات' }));
+        await fetchOrders();
+        const currentUserId = String(user?.id || user?.employeeId || '').trim();
+        const currentUserName = String(user?.name || '').trim();
+        const cUser = emps.find(e => 
+          String(e.id || '').trim() === currentUserId || 
+          String(e.employeeId || '').trim() === currentUserId ||
+          (user?.employeeId && String(e.id || '').trim() === String(user.employeeId).trim()) ||
+          (currentUserName && String(e.name || '').trim() === currentUserName)
+        );
 
-      const activeProductionOrders = productionOrdersData.filter(o => !excludedOrderStatuses.includes(o.status) && !excludedOrderStatuses.includes(o.executionStatus)).map(o => ({ ...o, isProduction: true, currentDepartment: 'إنتاج قيد الخياطة' }));
+        const directReports = getDirectReports(cUser || user, emps).filter(isActiveEmployee);
+        const teamIds = directReports.flatMap(e => [String(e.id || '').trim(), String(e.employeeId || '').trim()]).filter(Boolean);
+        setSubordinateIds(teamIds);
 
-      const activePreparationOrders = preparationOrdersData.filter(o => !excludedOrderStatuses.includes(o.status) && !excludedOrderStatuses.includes(o.executionStatus)).map(o => ({ ...o, isPreparation: true, currentDepartment: 'إنتاج قيد التحضير' }));
+        let filteredEmps = emps;
 
-      const activeMissions = missionsData.filter(m => !excludedMissionStatuses.includes(m.status));
+        if (isSuperAdmin) {
+          // Admin sees everyone except top admins
+          filteredEmps = emps.filter(e => String(e.id).trim() !== 'admin' && e.role !== 'admin' && e.level !== 'admin' && e.level !== 'إدارة' && e.name !== 'المدير العام');
+        } else {
+          // Supervisor sees only assigned employees if specified
+          if (cUser && cUser.assignedEmployees && cUser.assignedEmployees.length > 0) {
+            const assignedIds = cUser.assignedEmployees.map(id => String(id).trim());
+            const matched = emps.filter(e => 
+              assignedIds.includes(String(e.id).trim()) || 
+              (e.employeeId && assignedIds.includes(String(e.employeeId).trim()))
+            );
+            filteredEmps = matched.length > 0 ? matched : emps.filter(e => e.role !== 'admin' && e.level !== 'admin' && e.level !== 'إدارة' && e.name !== 'المدير العام' && String(e.id).trim() !== currentUserId);
+          } else {
+            // If no assigned employees, show all normal employees
+            filteredEmps = emps.filter(e => e.role !== 'admin' && e.level !== 'admin' && e.level !== 'إدارة' && e.level !== 'supervisor' && e.level !== 'مشرف' && e.name !== 'المدير العام' && String(e.id).trim() !== currentUserId);
+          }
+        }
 
-      const normalizedMissions = activeMissions.map(m => ({
-        ...m,
-        isMission: true,
-        orderNumber: 'توصيل',
-        customerName: m.targetEntity || m.type,
-        currentDepartment: 'مهمة توصيل',
-        executionStatus: m.status
-      }));
+        if (!isSuperAdmin && directReports.length) {
+          filteredEmps = directReports;
+        }
+        setEmployees(filteredEmps.filter(isActiveEmployee));
+        setReports((reps || []).filter(report => isSuperAdmin || String(report.supervisorId) === currentUserId || teamIds.includes(String(report.supervisorId).trim())));
+        setAllEmployeeReports(empReports || []);
+        setAttendanceLogs(attLogs || []);
+        setGlobalSettings(settings || {});
 
-      let finalSalesOrders = activeSalesOrders;
-      let finalProductionOrders = activeProductionOrders;
-      let finalPreparationOrders = activePreparationOrders;
-      let finalMissions = normalizedMissions;
-
-      if (!isSuperAdmin) {
-        if (!hasPermission(user, 'orders', 'edit') && !hasPermission(user, 'orders', 'add')) finalSalesOrders = [];
-        if (!hasPermission(user, 'production', 'edit') && !hasPermission(user, 'production', 'add')) finalProductionOrders = [];
-        if (!hasPermission(user, 'preparation', 'edit') && !hasPermission(user, 'preparation', 'add')) finalPreparationOrders = [];
-        if (!hasPermission(user, 'delivery', 'edit') && !hasPermission(user, 'delivery', 'add')) finalMissions = [];
-      }
-
-      const allActiveOrders = [...finalSalesOrders, ...finalProductionOrders, ...finalPreparationOrders, ...finalMissions].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-      setOrders(allActiveOrders);
-      setGlobalSettings(settings || {});
-
-      if (cUser && cUser.supervisorPermissions) {
-        setCurrentUserPerms(cUser.supervisorPermissions);
-      } else if (isSuperAdmin) {
-        setCurrentUserPerms({ attendance: true, smoking: true, absences: true, evaluations: true, orders: true });
+        if (cUser && cUser.supervisorPermissions) {
+          setCurrentUserPerms(cUser.supervisorPermissions);
+        } else if (isSuperAdmin) {
+          setCurrentUserPerms({ attendance: true, smoking: true, absences: true, evaluations: true, orders: true });
+        }
+      } catch (err) {
+        console.error("Error in supervisor reports fetchData:", err);
       }
     };
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+    return () => { isMounted = false; };
+  }, [user, date, activeTab, dateMode, selectedMonth, dateFrom, dateTo, selectedDate]);
 
   useEffect(() => {
     const fetchDailyReports = async () => {
@@ -489,7 +512,7 @@ const AdminSupervisorReports = ({ user }) => {
 
     let finalReason = evalData.reason || '';
 
-    if (evalData.rating === 'مقبول' || evalData.rating === 'سيئ') {
+    if ((evalData.rating === 'مقبول' || evalData.rating === 'سيئ') && !finalReason.trim()) {
       const result = await MySwal.fire({
         title: 'سبب التقييم مطلوب',
         text: `يرجى كتابة سبب التقييم للموظف ${emp.name} (نظراً لأن التقييم مقبول أو سيئ):`,
@@ -517,8 +540,6 @@ const AdminSupervisorReports = ({ user }) => {
         return { ...prev, [empId]: { ...current, reason: finalReason } };
       });
     }
-
-    setSavedItems(prev => ({ ...prev, [`emp_${empId}`]: true }));
 
     try {
       let empDailyReport = employeeReports.find(r =>
@@ -554,7 +575,10 @@ const AdminSupervisorReports = ({ user }) => {
       }
     } catch (err) {
       console.error('Error saving single employee evaluation to db:', err);
+      MySwal.fire('تعذر حفظ التقييم', 'لم يتم تأكيد حفظ التقييم والملاحظة. يرجى إعادة المحاولة بعد عودة الاتصال.', 'error');
+      return;
     }
+    setSavedItems(prev => ({ ...prev, [`emp_${empId}`]: true }));
 
     MySwal.fire({
       title: 'تم حفظ التقييم بنجاح',
@@ -574,7 +598,7 @@ const AdminSupervisorReports = ({ user }) => {
         return;
       }
 
-      const allAttLogs = await getAttendanceLogs();
+      const allAttLogs = await getAttendanceLogsByDateRange(date, date);
       const todayLogs = allAttLogs.filter(log => log.date === date);
 
       let isValid = true;
@@ -764,6 +788,8 @@ const AdminSupervisorReports = ({ user }) => {
             await saveMission({ ...order, lastActionBy: user?.name || 'مشرف' });
           } else if (order.isProduction) {
             await saveOrder({ ...order, lastActionBy: user?.name || 'مشرف' });
+          } else if (order.isPreparation) {
+            await savePreparationOrder({ ...order, lastActionBy: user?.name || 'مشرف' });
           } else {
             await saveSalesOrder({ ...order, lastActionBy: user?.name || 'مشرف' });
           }
@@ -842,7 +868,7 @@ const AdminSupervisorReports = ({ user }) => {
   };
 
   const filteredReports = reports.filter(report => {
-    if (!isSuperAdmin && String(report.supervisorId) !== String(user?.id)) return false;
+    if (!canReviewReport(report) && String(report.supervisorId) !== String(user?.id)) return false;
 
     let matchDate = true;
     if (dateMode === 'day') {
@@ -909,9 +935,18 @@ const AdminSupervisorReports = ({ user }) => {
   }, [filteredReports, supSortKey, supSortDir, isSuperAdmin, dateMode, dateFrom, dateTo]);
 
   const handleViewReport = async (report) => {
+    try {
+      await openReportPreview(report);
+    } catch (error) {
+      console.error('Error opening supervisor report:', error);
+      MySwal.fire('تعذر فتح المعاينة', 'تعذر تحميل بيانات التقرير. تحقق من الاتصال وحصة قاعدة البيانات ثم أعد المحاولة.', 'error');
+    }
+  };
+
+  const openReportPreview = async (report) => {
     // Lookup supervisor live attendance logs freshly
-    const freshAttLogs = await getAttendanceLogs();
-    const hrAttLogs = await getHRAttendance();
+    const freshAttLogs = await getAttendanceLogsByDateRange(report.date, report.date);
+    const hrAttLogs = await getHRAttendance(report.date);
     const hrLeaves = await getHRLeaves();
 
     let supAttLog = hrAttLogs.find(l => (String(l.employeeId || '').trim() === String(report.supervisorId || '').trim() || String(l.employeeName || '').trim() === String(report.supervisorName || '').trim()) && l.date === report.date);
@@ -969,18 +1004,21 @@ const AdminSupervisorReports = ({ user }) => {
       showConfirmButton: false,
       buttonsStyling: false,
       width: '600px',
+      didOpen: popup => {
+        popup.querySelector('[data-close-supervisor-report]')?.addEventListener('click', () => MySwal.close());
+      },
       html: `
         <div style="direction: rtl; text-align: right; font-family: 'Tajawal', sans-serif; color: #1e293b; display: flex; flex-direction: column; height: 80vh; overflow: hidden; margin: -2rem;">
           
           <!-- Header -->
           <div style="display: flex; align-items: center; justify-content: space-between; padding: 1.25rem; border-bottom: 1px solid #e2e8f0; background: #ffffff;">
-            <!-- Close Button (Left) -->
-            <button onclick="Swal.close()" style="width: 2.75rem; height: 2.75rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #475569;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            <!-- Close button stays on the visual left in RTL. -->
+            <button type="button" data-close-supervisor-report aria-label="إغلاق تقرير المشرف" title="إغلاق" style="order: 3; flex-shrink: 0; width: 2.75rem; height: 2.75rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #475569;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
             </button>
             
             <!-- Title (Center) -->
-            <div style="text-align: center; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+            <div style="order: 1; text-align: center; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
               <h3 style="margin: 0; font-size: 1.05rem; font-weight: 800; color: #1e293b;">تقرير المشرف: ${report.supervisorName}</h3>
               <span style="font-size: 0.72rem; color: #64748b; font-weight: bold; background: #f1f5f9; padding: 2px 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-family: monospace;">${report.supervisorId || ''}</span>
             </div>
@@ -1079,7 +1117,7 @@ const AdminSupervisorReports = ({ user }) => {
                           ${ev.scorePercentage ? ev.scorePercentage + '%' : '---'}
                         </td>
                         <td style="padding: 8px; border: 1px solid #cbd5e1; color: #475569; font-weight: 600;">
-                          ${ev.reason || '---'}
+                          ${escapeReportNote(ev.reason || '---')}
                         </td>
                       </tr>
                     </tbody>
@@ -1243,12 +1281,16 @@ const AdminSupervisorReports = ({ user }) => {
   };
 
   const handleEditReport = (report) => {
+    if (String(report.supervisorId) !== String(user.id)) return;
     setDate(report.date);
     setIsEditMode(true);
     setActiveTab('add');
   };
 
   const handleChangeReportStatus = async (report, newStatus) => {
+    if (!canReviewReport(report)) {
+      return Swal.fire('غير مصرح', 'يمكنك اعتماد تقارير المشرفين التابعين لك فقط، ولا يمكنك اعتماد تقريرك الشخصي.', 'warning');
+    }
     const actionText = newStatus === 'معتمد' ? 'اعتماد' : 'إرجاع / رفض';
     const result = await MySwal.fire({
       title: 'تأكيد الإجراء',
@@ -1338,7 +1380,7 @@ const AdminSupervisorReports = ({ user }) => {
             <Plus size={20} /> <span>إضافة/تعديل تقرير</span>
           </button>
           <button className={`premium-tab ${activeTab === 'history' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('history')}>
-            <ClipboardList size={20} /> <span>{isSuperAdmin ? 'سجل تقارير المشرفين' : 'سجل تقاريري'}</span>
+            <ClipboardList size={20} /> <span>{canReviewTeam ? 'سجل تقارير المشرفين' : 'سجل تقاريري'}</span>
           </button>
         </>
       </div>
@@ -1567,6 +1609,20 @@ const AdminSupervisorReports = ({ user }) => {
                             </div>
                           </div>
 
+                          <div style={{ marginTop: '12px' }}>
+                            <label htmlFor={`evaluation-note-${emp.id}`} style={{ display: 'block', fontWeight: 700, marginBottom: '6px' }}>
+                              ملاحظة المشرف للموظف {isReasonRequired ? '(مطلوبة)' : '(اختيارية)'}
+                            </label>
+                            <textarea
+                              id={`evaluation-note-${emp.id}`}
+                              className="input-field"
+                              rows={3}
+                              value={evalData.reason || ''}
+                              placeholder="اكتب المراجعات أو التوجيهات المتعلقة بالتقرير..."
+                              onChange={e => handleEvaluationChange(emp.id, 'reason', e.target.value)}
+                            />
+                            <small style={{ color: '#64748b' }}>تظهر للموظف بعد حفظ التقييم، وتُرفق بتقريرك عند تقديمه للإدارة.</small>
+                          </div>
                           {/* Collapsible Report Summary */}
                           {isExpanded && empDailyReport && (
                             <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1.25rem' }}>
@@ -2016,7 +2072,7 @@ const AdminSupervisorReports = ({ user }) => {
                 </>
               )}
 
-              {isSuperAdmin ? (
+              {canReviewTeam ? (
                 <div className="input-group mb-0 shrink-0 w-[140px]">
                   <label className="text-xs font-bold text-slate-700 mb-1 block text-center">المشرف</label>
                   <select
@@ -2088,17 +2144,17 @@ const AdminSupervisorReports = ({ user }) => {
                           <button className="action-btn info" style={{ backgroundColor: '#f0f9ff' }} onClick={() => handleViewReport(report)} title="عرض التفاصيل">
                             <Eye size={18} />
                           </button>
-                          {!isSuperAdmin && report.status !== 'معتمد' && (
+                          {!isSuperAdmin && String(report.supervisorId) === String(user.id) && report.status !== 'معتمد' && (
                             <button className="action-btn info" onClick={() => handleEditReport(report)} title="تعديل التقرير">
                               <Edit size={18} />
                             </button>
                           )}
-                          {isSuperAdmin && report.status !== 'معتمد' && report.status !== 'مرفوض/مُعاد' && (
+                          {canReviewReport(report) && report.status !== 'معتمد' && report.status !== 'مرفوض/مُعاد' && (
                             <button className="action-btn success" onClick={() => handleChangeReportStatus(report, 'معتمد')} title="اعتماد التقرير ومنع التعديل">
                               <Check size={18} />
                             </button>
                           )}
-                          {isSuperAdmin && report.status !== 'مرفوض/مُعاد' && (
+                          {canReviewReport(report) && report.status !== 'مرفوض/مُعاد' && (
                             <button className="action-btn danger" onClick={() => handleChangeReportStatus(report, 'مرفوض/مُعاد')} title={report.status === 'معتمد' ? "إلغاء الاعتماد وإعادته للمشرف" : "رفض التقرير وإعادته للمشرف"}>
                               <X size={18} />
                             </button>

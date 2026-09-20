@@ -4,7 +4,7 @@ export const petitionStatus = petition => {
 };
 
 export const awaitsPetitionAdmin = petition => !['محذوف', 'deleted'].includes(petition.status) &&
-  (petition.reopenRequested || ['جديد', 'بانتظار الإدارة'].includes(petitionStatus(petition)));
+  ['جديد', 'بانتظار الإدارة'].includes(petitionStatus(petition));
 
 export function petitionTransition(petition, action, isAdmin, text) {
   if (!String(text || '').trim()) throw new Error('اكتب الرسالة أو نتيجة المعالجة أولاً');
@@ -17,7 +17,7 @@ export function petitionTransition(petition, action, isAdmin, text) {
   }
   if (action === 'close' && isAdmin && !closed) return { conversationStatus: 'مغلق', reopenRequested: false, resolution: text.trim() };
   if (action === 'reopen' && isAdmin && closed) return { conversationStatus: 'بانتظار الموظف', reopenRequested: false };
-  if (action === 'request-reopen' && !isAdmin && closed && !petition.reopenRequested) return { reopenRequested: true };
-  if (action === 'decline-reopen' && isAdmin && closed && petition.reopenRequested) return { reopenRequested: false };
+  if (action === 'request-reopen') throw new Error('طلب إعادة الفتح غير متاح للموظف');
+  if (action === 'decline-reopen' && isAdmin && closed) return { reopenRequested: false };
   throw new Error('هذا الإجراء غير متاح لحالة الطلب أو صلاحياتك');
 }

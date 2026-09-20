@@ -4,7 +4,7 @@ import { CheckCircle, Clock, XCircle, FileText, Calendar, Filter, X, ArrowUpDown
 import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
-import { getEmployees, getHRLeaves, saveHRLeave, deleteHRLeave, getMissingPunches, updateMissingPunchStatus, deleteMissingPunch, saveHRAttendance, createNotification, getGlobalSettings, saveEmployee } from '../../store';
+import { getEmployees, getHRLeaves, getHRLeavesByDateRange, saveHRLeave, deleteHRLeave, getMissingPunches, getMissingPunchesByDateRange, updateMissingPunchStatus, deleteMissingPunch, saveHRAttendance, createNotification, getGlobalSettings, saveEmployee } from '../../store';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
 import HRDateFilter from '../../components/ui/HRDateFilter';
@@ -65,15 +65,33 @@ const HRLeaves = ({ user, refreshCounts }) => {
 
   const fetchData = async () => {
     setLoading(true);
-    const [leavesData, empsData, mpData, settingsData] = await Promise.all([getHRLeaves(), getEmployees(), getMissingPunches(), getGlobalSettings()]);
-    setLeaves(leavesData);
-    setEmployees(empsData);
-    setMissingPunches(mpData);
-    setSettings(settingsData);
+    let from = '';
+    let to = '';
+    if (dateMode === 'day') {
+      from = selectedDate;
+      to = selectedDate;
+    } else if (dateMode === 'month') {
+      from = `${selectedMonth}-01`;
+      to = `${selectedMonth}-31`;
+    } else if (dateMode === 'range') {
+      from = startDate;
+      to = endDate;
+    }
+
+    const [leavesData, empsData, mpData, settingsData] = await Promise.all([
+      from && to ? getHRLeavesByDateRange(from, to) : getHRLeaves(),
+      employees.length === 0 ? getEmployees() : Promise.resolve(employees),
+      from && to ? getMissingPunchesByDateRange(from, to) : getMissingPunches(),
+      settings ? Promise.resolve(settings) : getGlobalSettings()
+    ]);
+    setLeaves(leavesData || []);
+    if (employees.length === 0) setEmployees(empsData || []);
+    setMissingPunches(mpData || []);
+    if (!settings) setSettings(settingsData);
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [dateMode, selectedMonth, selectedDate, startDate, endDate]);
 
   const handleSave = async (e) => {
     e.preventDefault();

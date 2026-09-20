@@ -31,12 +31,25 @@ export function watchPetition(id, user, adminView, next, error) {
     next(row && !['محذوف', 'deleted'].includes(row.status) ? row : null);
   }, error);
 }
-export function watchPetitions(user, adminView, next, error) {
+export function watchPetitions(user, adminView, next, error, dateFrom = null, dateTo = null) {
   if (adminView && !hasPermission(user, 'hr_petitions', 'view')) {
     error(new Error('لا تملك صلاحية عرض الاستدعاءات')); return () => {};
   }
-  const source = adminView ? collection(db, 'hr_petitions') : query(collection(db, 'hr_petitions'), where('employeeId', 'in', [...new Set([user.id, String(user.id)])]));
-  return onSnapshot(source, snapshot => next(snapshot.docs.map(row => ({ ...row.data(), id: row.id })).filter(row => !['محذوف', 'deleted'].includes(row.status))), error);
+  
+  let q = collection(db, 'hr_petitions');
+  
+  if (adminView) {
+    // If a date range is provided, use it to limit reads. We filter out 'deleted' locally to avoid index issues.
+    if (dateFrom && dateTo) {
+      q = query(q, where('createdAt', '>=', dateFrom), where('createdAt', '<=', dateTo + 'T23:59:59'));
+    } else {
+      q = query(q, where('status', '!=', 'محذوف'));
+    }
+  } else {
+    q = query(q, where('employeeId', 'in', [...new Set([user.id, String(user.id)])]));
+  }
+    
+  return onSnapshot(q, snapshot => next(snapshot.docs.map(row => ({ ...row.data(), id: row.id })).filter(row => !['محذوف', 'deleted'].includes(row.status))), error);
 }
 
 export async function sendPetitionMessage(id, user, action, text, adminView, requestId) {

@@ -73,8 +73,33 @@ export default function HRPetitions({ user }) {
 
   useEffect(() => {
     loadPetitions();
-    return watchPetitions(user, true, rows => setPetitions(rows.sort((a,b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)))), err => MySwal.fire('تعذر تحديث الاستدعاءات', firestoreErrorMessage(err, 'تحميل الاستدعاءات'), 'error'));
-  }, [user.id]);
+    
+    let fetchFrom = null;
+    let fetchTo = null;
+    
+    if (dateMode === 'day') {
+      fetchFrom = selectedDate;
+      fetchTo = selectedDate;
+    } else if (dateMode === 'month') {
+      fetchFrom = `${selectedMonth}-01`;
+      const nextMonth = new Date(`${selectedMonth}-01`);
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      nextMonth.setDate(0);
+      fetchTo = nextMonth.toISOString().split('T')[0];
+    } else if (dateMode === 'range') {
+      fetchFrom = startDate;
+      fetchTo = endDate;
+    }
+
+    return watchPetitions(
+      user, 
+      true, 
+      rows => setPetitions(rows.sort((a,b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)))), 
+      err => MySwal.fire('تعذر تحديث الاستدعاءات', firestoreErrorMessage(err, 'تحميل الاستدعاءات'), 'error'),
+      fetchFrom,
+      fetchTo
+    );
+  }, [user.id, dateMode, selectedDate, selectedMonth, startDate, endDate]);
 
   const handleView = petition => setConversationId(petition.id);
 

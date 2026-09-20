@@ -21,10 +21,7 @@ test('conversation workflow, closure and reopening permissions', () => {
   row = { ...row, ...petitionTransition(row, 'close', true, 'تم الحل') };
   assert.equal(awaitsPetitionAdmin(row), false);
   for (const admin of [true, false]) assert.throws(() => petitionTransition(row, 'reply', admin, 'رد'));
-  row = { ...row, ...petitionTransition(row, 'request-reopen', false, 'المشكلة مستمرة') };
-  assert.equal(awaitsPetitionAdmin(row), true);
-  assert.equal(petitionStatus(row), 'مغلق');
-  assert.throws(() => petitionTransition(row, 'request-reopen', false, 'تكرار'));
+  assert.throws(() => petitionTransition(row, 'request-reopen', false, 'المشكلة مستمرة'));
   assert.throws(() => petitionTransition(row, 'reopen', false, 'فتح'));
   row = { ...row, ...petitionTransition(row, 'reopen', true, 'يرجى التوضيح') };
   assert.equal(petitionStatus(row), 'بانتظار الموظف');

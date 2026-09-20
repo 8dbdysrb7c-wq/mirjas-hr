@@ -5,7 +5,7 @@ import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
-import { getEmployees, getHRLeaves, saveHRLeave, deleteHRLeave, getGlobalSettings, getHRAttendance } from '../../store';
+import { getEmployees, getHRLeaves, getHRLeavesByDateRange, saveHRLeave, deleteHRLeave, getGlobalSettings, getHRAttendance } from '../../store';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
 import HRDateFilter from '../../components/ui/HRDateFilter';
@@ -73,7 +73,8 @@ const HROvertime = ({ user, refreshCounts }) => {
     let lateMins = 0;
     let earlyMins = 0;
     try {
-      const attList = await getHRAttendance();
+      const targetDate = leave.date || leave.startDate;
+      const attList = await getHRAttendance(targetDate);
       const emp = employees.find(e => String(e.id) === String(leave.employeeId) || String(e.employeeId) === String(leave.employeeId));
       let shiftStart = emp?.shiftStart || '08:00';
       let shiftEnd = emp?.shiftEnd || '16:00';
@@ -451,21 +452,34 @@ const HROvertime = ({ user, refreshCounts }) => {
   const fetchData = async () => {
     setLoading(true);
     try {
+      let from = '';
+      let to = '';
+      if (dateMode === 'day') {
+        from = selectedDate;
+        to = selectedDate;
+      } else if (dateMode === 'month') {
+        from = `${selectedMonth}-01`;
+        to = `${selectedMonth}-31`;
+      } else if (dateMode === 'range') {
+        from = startDate;
+        to = endDate;
+      }
+
       const [leavesData, empsData, settingsData] = await Promise.all([
-        getHRLeaves(),
-        getEmployees(),
-        getGlobalSettings()
+        from && to ? getHRLeavesByDateRange(from, to) : getHRLeaves(),
+        employees.length === 0 ? getEmployees() : Promise.resolve(employees),
+        hrSettings ? Promise.resolve(hrSettings) : getGlobalSettings()
       ]);
-      setLeaves(leavesData);
-      setEmployees(empsData);
-      setHrSettings(settingsData);
+      setLeaves(leavesData || []);
+      if (employees.length === 0) setEmployees(empsData || []);
+      if (!hrSettings) setHrSettings(settingsData);
     } catch (err) {
       console.error("Error fetching data:", err);
     }
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [dateMode, selectedMonth, selectedDate, startDate, endDate]);
 
   const handleSave = async (e) => {
     e.preventDefault();

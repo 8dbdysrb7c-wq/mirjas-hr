@@ -5,7 +5,7 @@ import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
-import { getEmployees, getHRViolations, saveHRViolation, deleteHRViolation, syncEvaluatedDailyReportViolations } from '../../store';
+import { getEmployees, getHRViolations, getHRViolationsByDateRange, saveHRViolation, deleteHRViolation, syncEvaluatedDailyReportViolations } from '../../store';
 import Swal from 'sweetalert2';
 import HRDateFilter from '../../components/ui/HRDateFilter';
 import { hasPermission } from '../../utils/permissions';
@@ -58,17 +58,26 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
     return sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-primary" /> : <ArrowDown size={14} className="text-primary" />;
   };
 
+  const getFilterRange = () => {
+    if (dateMode === 'day') return { from: selectedDate, to: selectedDate };
+    if (dateMode === 'month') return { from: `${selectedMonth}-01`, to: `${selectedMonth}-31` };
+    if (dateMode === 'range') return { from: startDate, to: endDate };
+    return { from: null, to: null };
+  };
+
   const refreshVisibleData = async () => {
-    const [violationsData, empsData] = await Promise.all([getHRViolations(), getEmployees()]);
-    setViolations(violationsData);
-    setEmployees(empsData);
+    const { from, to } = getFilterRange();
+    const [violationsData, empsData] = await Promise.all([
+      getHRViolationsByDateRange(from, to),
+      getEmployees()
+    ]);
+    setViolations(violationsData || []);
+    setEmployees(empsData || []);
   };
 
   const fetchData = async ({ syncReports = false } = {}) => {
     setLoading(true);
     try {
-      // Show the existing violations immediately. Report synchronization can scan
-      // a large history and must never block the screen from opening.
       await refreshVisibleData();
     } catch (error) {
       console.error('Error loading HR violations:', error);
@@ -81,7 +90,8 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
       syncEvaluatedDailyReportViolations()
         .then(async created => {
           if (created.length > 0) {
-            setViolations(await getHRViolations());
+            const { from, to } = getFilterRange();
+            setViolations(await getHRViolationsByDateRange(from, to));
             refreshCounts?.();
           }
         })
@@ -89,7 +99,9 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
     }
   };
 
-  useEffect(() => { fetchData({ syncReports: true }); }, []);
+  useEffect(() => { 
+    fetchData({ syncReports: false }); 
+  }, [dateMode, selectedMonth, selectedDate, startDate, endDate]);
 
   const handleSave = async (e) => {
     e.preventDefault();

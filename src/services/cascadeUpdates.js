@@ -21,41 +21,42 @@ export const cascadeCustomerNameUpdate = async (oldName, newName) => {
 
   try {
     for (const coll of collectionsToUpdate) {
-      const snapshot = await getDocs(collection(db, coll.name));
+      const q = query(collection(db, coll.name), where(coll.field, '==', oldName));
+      const snapshot = await getDocs(q);
       snapshot.forEach((document) => {
-        const data = document.data();
-        if (data[coll.field] === oldName) {
-          updates.push({ ref: document.ref, data: { [coll.field]: newName } });
-        }
+        updates.push({ ref: document.ref, data: { [coll.field]: newName } });
       });
     }
 
     // Missions
-    const missionsSnapshot = await getDocs(collection(db, 'missions'));
-    missionsSnapshot.forEach((document) => {
-      const data = document.data();
-      let modified = false;
-      let newData = {};
-      if (data.customerName === oldName) {
-        newData.customerName = newName;
-        modified = true;
-      }
-      if (data.targetEntity === oldName) {
-        newData.targetEntity = newName;
-        modified = true;
-      }
-      if (modified) {
-        updates.push({ ref: document.ref, data: newData });
+    // Because a mission could have targetEntity OR customerName as oldName, we query both separately
+    const qMission1 = query(collection(db, 'missions'), where('customerName', '==', oldName));
+    const qMission2 = query(collection(db, 'missions'), where('targetEntity', '==', oldName));
+    
+    const [missionsSnap1, missionsSnap2] = await Promise.all([getDocs(qMission1), getDocs(qMission2)]);
+    
+    const missionUpdates = new Map();
+    
+    missionsSnap1.forEach((document) => {
+      missionUpdates.set(document.id, { ref: document.ref, data: { customerName: newName } });
+    });
+    
+    missionsSnap2.forEach((document) => {
+      const existing = missionUpdates.get(document.id);
+      if (existing) {
+        existing.data.targetEntity = newName;
+      } else {
+        missionUpdates.set(document.id, { ref: document.ref, data: { targetEntity: newName } });
       }
     });
+    
+    missionUpdates.forEach(update => updates.push(update));
 
     // Stock Vouchers
-    const vouchersSnapshot = await getDocs(collection(db, 'stock_vouchers'));
+    const qVouchers = query(collection(db, 'stock_vouchers'), where('recipient', '==', oldName));
+    const vouchersSnapshot = await getDocs(qVouchers);
     vouchersSnapshot.forEach((document) => {
-      const data = document.data();
-      if (data.recipient === oldName) {
-        updates.push({ ref: document.ref, data: { recipient: newName } });
-      }
+      updates.push({ ref: document.ref, data: { recipient: newName } });
     });
 
     if (updates.length === 0) {

@@ -1,3 +1,4 @@
+import { canSafelyDeleteProduction } from '../../utils/productionSafety.js';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
@@ -128,7 +129,7 @@ const getProductionStageCounts = order => getOrderItemsForStage(order).reduce((c
   return counts;
 }, { sewing: 0, packaging: 0, finished: 0, total: 0 });
 
-const getProductionStatusLabel = status => canonicalizeProductionStatus(status) === 'مرحلة المستودع' ? 'مرحلة مستودع قبل الخياطة' : canonicalizeProductionStatus(status);
+const getProductionStatusLabel = status => canonicalizeProductionStatus(status);
 
 const SEWING_ITEM_STATUS_OPTIONS = [
   'لم يتم التنفيذ',
@@ -976,7 +977,18 @@ const AdminProduction = ({ user, notificationTarget, initialSection = 'sewing' }
     });
   };
 
+  const productionSaveInFlight = useRef(false);
+  const [savingProduction, setSavingProduction] = useState(false);
   const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (productionSaveInFlight.current) return;
+    productionSaveInFlight.current = true;
+    setSavingProduction(true);
+    try { await submitProduction(e); }
+    catch (error) { Swal.fire('تعذر الحفظ', error.message || 'يرجى إعادة المحاولة', 'error'); }
+    finally { productionSaveInFlight.current = false; setSavingProduction(false); }
+  };
+  const submitProduction = async (e) => {
     e.preventDefault();
 
     const isProductionEditable = isAdmin(user) || hasPermission(user, 'production', 'edit');
@@ -1092,78 +1104,101 @@ const AdminProduction = ({ user, notificationTarget, initialSection = 'sewing' }
   };
 
   const handleDelete = async (id) => {
-    if (!isAdmin(user)) return;
+    if (!isAdmin(user) && !canSafelyDeleteProduction(user)) {
+      Swal.fire('غير مصرح', 'صلاحية الحذف مخصصة لحساب المدير العام فقط.', 'warning');
+      return;
+    }
     const orderToDelete = orders.find(o => o.id === id);
     if (!orderToDelete) return;
     const hasStockEffects = Boolean(orderToDelete.stockDeducted || orderToDelete.stockReceived);
+
     const result = await MySwal.fire({
-      customClass: {
-        container: 'premium-modal-container',
-        popup: 'premium-modal-popup',
-        confirmButton: 'btn-premium-confirm-delete',
-        cancelButton: 'btn-premium-cancel',
-        actions: 'premium-modal-actions',
-        title: 'premium-modal-title'
-      },
-      buttonsStyling: false,
       title: 'حذف آمن لكرت الإنتاج؟',
-      html: `<div style="direction:rtl;text-align:right">سيتم حذف الكرت <b>${orderToDelete.orderNumber || ''}</b>${hasStockEffects ? ' وعكس سندات صرف المواد أو استلام المنتج المرتبطة به' : ''}، ثم فك ارتباطه بطلبية المبيع وإعادة أصنافه إلى «قيد التجهيز».</div>`,
+      html: `
+        <div style="direction:rtl;text-align:right;font-size:14px;line-height:1.7;">
+          <p>سيتم حذف الكرت <b>${orderToDelete.orderNumber || ''}</b>${hasStockEffects ? ' وعكس سندات صرف المواد أو استلام المنتج المرتبطة به' : ''}، ثم فك ارتباطه بطلبية المبيع وإعادة أصنافه إلى «قيد التجهيز» مع الاحتفاظ بنسخة مؤرشفة للرجوع إليها.</p>
+        </div>
+      `,
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: 'نعم، احذف',
-      cancelButtonText: 'إلغاء'
+      confirmButtonText: 'نعم، حذف آمن',
+      cancelButtonText: 'إلغاء',
+      confirmButtonColor: '#e11d48',
+      cancelButtonColor: '#64748b'
     });
 
-    if (result.isConfirmed) {
-      const deductionReverted = await revertAuditVouchers(orderToDelete.orderNumber);
-      const receiptReverted = await revertReceiptVouchers(orderToDelete.orderNumber);
-      if (!deductionReverted || !receiptReverted) {
-        Swal.fire('تعذر الحذف الآمن', 'لم يتمكن النظام من عكس جميع حركات المخزون، لذلك لم يُحذف الكرت.', 'error');
-        return;
+    if (!result.isConfirmed) return;
+
+    Swal.fire({
+      title: 'جاري الحذف الآمن...',
+      text: 'يرجى الانتظار ثوانٍ معدودة...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    try {
+      // 1. Revert stock vouchers if any exist
+      try {
+        await revertAuditVouchers(orderToDelete.orderNumber);
+        await revertReceiptVouchers(orderToDelete.orderNumber);
+        await deleteDraftVouchers(orderToDelete.orderNumber);
+      } catch (stockErr) {
+        console.warn("Could not revert all stock vouchers, continuing safe delete:", stockErr);
       }
-      await deleteDraftVouchers(orderToDelete.orderNumber);
-      const linkedSalesOrder = salesOrders.find(salesOrder =>
-        (orderToDelete.salesOrderId && salesOrder.id === orderToDelete.salesOrderId)
-        || (orderToDelete.salesOrderNumber && salesOrder.orderNumber === orderToDelete.salesOrderNumber)
-      );
-      if (linkedSalesOrder) {
-        const normalize = value => String(value || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('ar');
-        const cardItems = orderToDelete.items || [];
-        const updatedItems = (linkedSalesOrder.items || []).map(salesItem => {
-          const matchesCard = cardItems.some(cardItem =>
-            (cardItem.itemNumber && salesItem.itemNumber && cardItem.itemNumber === salesItem.itemNumber)
-            || normalize(cardItem.productName || cardItem.name) === normalize(salesItem.productName || salesItem.name)
-          );
-          return matchesCard ? { ...salesItem, itemStatus: 'قيد التجهيز', receivedReservedQuantity: 0 } : salesItem;
+
+      // 2. Unlink from Sales Order safely
+      try {
+        const salesOrders = await getSalesOrders();
+        const linkedSalesOrder = salesOrders.find(salesOrder =>
+          (orderToDelete.salesOrderId && salesOrder.id === orderToDelete.salesOrderId)
+          || (orderToDelete.salesOrderNumber && salesOrder.orderNumber === orderToDelete.salesOrderNumber)
+        );
+        if (linkedSalesOrder) {
+          const normalize = value => String(value || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('ar');
+          const cardItems = orderToDelete.items || [];
+          const updatedItems = (linkedSalesOrder.items || []).map(salesItem => {
+            const matchesCard = cardItems.some(cardItem =>
+              (cardItem.itemNumber && salesItem.itemNumber && cardItem.itemNumber === salesItem.itemNumber)
+              || normalize(cardItem.productName || cardItem.name) === normalize(salesItem.productName || salesItem.name)
+            );
+            return matchesCard ? { ...salesItem, itemStatus: 'قيد التجهيز', receivedReservedQuantity: 0 } : salesItem;
+          });
+          const updatedSalesOrder = { ...linkedSalesOrder, items: updatedItems };
+          if (['جاهز للتسليم للتوصيل', 'جاهز للتوصيل'].includes(updatedSalesOrder.status)) updatedSalesOrder.status = 'جديد';
+          if (updatedSalesOrder.productionOrderNumber === orderToDelete.orderNumber) delete updatedSalesOrder.productionOrderNumber;
+          await saveSalesOrder(updatedSalesOrder);
+        }
+      } catch (salesErr) {
+        console.warn("Error unlinking sales order:", salesErr);
+      }
+
+      // 3. Delete the order (with automatic archiving)
+      await deleteOrder(id, user);
+
+      // 4. Add audit log
+      try {
+        await addLog({
+          userName: user?.name || 'المدير العام',
+          userId: user?.id || 'admin',
+          module: 'طلبيات الإنتاج',
+          action: 'حذف آمن',
+          details: `حذف وأرشفة كرت إنتاج رقم: ${orderToDelete.orderNumber || id}`
         });
-        const updatedSalesOrder = { ...linkedSalesOrder, items: updatedItems };
-        if (['جاهز للتسليم للتوصيل', 'جاهز للتوصيل'].includes(updatedSalesOrder.status)) updatedSalesOrder.status = 'جديد';
-        if (updatedSalesOrder.productionOrderNumber === orderToDelete.orderNumber) delete updatedSalesOrder.productionOrderNumber;
-        await saveSalesOrder(updatedSalesOrder);
+      } catch (logErr) {
+        console.warn("Log notice:", logErr);
       }
-      await deleteOrder(id);
-      await addLog({
-        userName: user.name,
-        userId: user.id,
-        module: 'طلبيات الإنتاج',
-        action: 'حذف',
-        details: `حذف طلبية إنتاج رقم: ${orderToDelete?.orderNumber || id}`
-      });
+
+      await fetchData();
       Swal.fire({
-        customClass: {
-          container: 'premium-modal-container',
-          popup: 'premium-modal-popup',
-          confirmButton: 'btn-premium-save',
-          actions: 'premium-modal-actions'
-        },
-        buttonsStyling: false,
-        title: 'تم الحذف',
-        text: 'تم حذف الطلبية بنجاح',
         icon: 'success',
-        timer: 1500,
+        title: 'تم الحذف الآمن',
+        text: `تم حذف كرت الإنتاج ${orderToDelete.orderNumber || ''} بنجاح وأرشفته وفك ارتباطه بالطلبية.`,
+        timer: 2000,
         showConfirmButton: false
       });
-      fetchData();
+    } catch (error) {
+      console.error("Error in safe delete:", error);
+      Swal.fire('تعذر الحذف', error.message || 'حدث خطأ أثناء الحذف، يرجى إعادة المحاولة.', 'error');
     }
   };
 
@@ -2527,7 +2562,7 @@ const AdminProduction = ({ user, notificationTarget, initialSection = 'sewing' }
                       )}
 
                       {/* Button 3: حذف */}
-                      {isAdmin(user) && (
+                      {(isAdmin(user) || canSafelyDeleteProduction(user)) && (
                         <button 
                           onClick={() => handleDelete(order.id)}
                           style={{
@@ -2646,10 +2681,10 @@ const AdminProduction = ({ user, notificationTarget, initialSection = 'sewing' }
                                 <Edit2 size={16} />
                               </button>
                             )}
-                            {isAdmin(user) && (
+                            {(isAdmin(user) || canSafelyDeleteProduction(user)) && (
                               <button 
                                 className="btn-premium-delete"
-                                title="حذف آمن للكرت وعكس آثاره"
+                                title="حذف آمن للكرت مع الأرشفة وعكس الآثار"
                                 onClick={() => handleDelete(order.id)}
                               >
                                 <Trash2 size={16} />
@@ -3399,7 +3434,7 @@ const AdminProduction = ({ user, notificationTarget, initialSection = 'sewing' }
 
                 <div className="premium-modal-actions" style={{ justifyContent: 'center', marginTop: isMobile ? '12px' : '2rem' }}>
                   {!isEditLocked ? (
-                    <button type="submit" className="btn-premium-save">
+                    <button type="submit" disabled={savingProduction} className="btn-premium-save">
                       {editingOrder ? 'تحديث الطلبية' : 'حفظ الطلبية'}
                     </button>
                   ) : (
