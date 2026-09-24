@@ -4181,27 +4181,30 @@ const AdminStock = ({ user, notificationTarget }) => {
             const themeBg = isDisburse ? '#fff7ed' : '#eff6ff';
 
             return (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 mb-5 mt-2 no-print">
+              <div 
+                className="bg-white rounded-xl border border-slate-200 shadow-sm p-3.5 sm:p-4 no-print"
+                style={{ marginBottom: '24px' }}
+              >
                 {/* Title & Status Summary Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
-                  <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2.5">
                     <div style={{
                       backgroundColor: themeBg,
                       color: themeColor,
-                      padding: '12px',
-                      borderRadius: '14px',
+                      padding: '8px',
+                      borderRadius: '10px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      boxShadow: `0 2px 8px ${themeColor}20`
+                      boxShadow: `0 2px 6px ${themeColor}18`
                     }}>
-                      {isDisburse ? <Upload size={26} strokeWidth={2.5} /> : <Download size={26} strokeWidth={2.5} />}
+                      {isDisburse ? <Upload size={20} strokeWidth={2.2} /> : <Download size={20} strokeWidth={2.2} />}
                     </div>
                     <div>
-                      <h2 className="text-xl font-extrabold text-slate-800 m-0">
+                      <h2 className="text-base sm:text-lg font-extrabold text-slate-800 m-0">
                         {isDisburse ? 'صرف المواد الخام للإنتاج' : 'استلام منتجات PRO&PREP'}
                       </h2>
-                      <p className="text-slate-500 text-xs sm:text-sm mt-1 m-0">
+                      <p className="text-slate-400 text-xs mt-0.5 m-0">
                         {isDisburse ? 'تدقيق وصرف المواد الأولية لأوامر الخياطة والتحضير' : 'إدخال وتوريد المنتجات النهائية إلى مستودع البضاعة الجاهزة'}
                       </p>
                     </div>
@@ -4211,25 +4214,25 @@ const AdminStock = ({ user, notificationTarget }) => {
                   <div style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '10px',
-                    padding: '8px 18px',
-                    borderRadius: '14px',
+                    gap: '8px',
+                    padding: '5px 14px',
+                    borderRadius: '10px',
                     backgroundColor: pendingTotal > 0 ? (isDisburse ? '#fff7ed' : '#eff6ff') : '#f8fafc',
-                    border: `2px solid ${isDisburse ? '#fdba74' : '#93c5fd'}`,
+                    border: `1.5px solid ${isDisburse ? '#fdba74' : '#93c5fd'}`,
                     color: isDisburse ? '#c2410c' : '#1e40af',
                     fontWeight: '800',
-                    fontSize: '15px'
+                    fontSize: '13px'
                   }}>
-                    <Clock size={20} strokeWidth={2.5} />
+                    <Clock size={16} strokeWidth={2.2} />
                     <span>{isDisburse ? 'بانتظار الصرف:' : 'بانتظار الاستلام:'}</span>
                     <span style={{
-                      fontSize: '18px',
+                      fontSize: '14px',
                       fontWeight: '900',
                       backgroundColor: isDisburse ? '#ea580c' : '#1e40af',
                       color: '#ffffff',
-                      padding: '2px 14px',
-                      borderRadius: '10px',
-                      minWidth: '36px',
+                      padding: '1px 10px',
+                      borderRadius: '8px',
+                      minWidth: '28px',
                       textAlign: 'center'
                     }}>
                       {pendingTotal}
@@ -4237,38 +4240,38 @@ const AdminStock = ({ user, notificationTarget }) => {
                   </div>
                 </div>
 
-                {/* Filter Controls Row: Side-by-side on a single row */}
-                <div className="pt-4 flex flex-wrap items-center justify-between gap-4">
+                {/* Filter Controls Row: Sleek & Compact Side-by-side */}
+                <div className="pt-3 flex flex-wrap items-center justify-between gap-3">
                   {/* Filter 1: Type Selection (Buttons side-by-side) */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-extrabold text-slate-600 shrink-0 ml-1">نوع الطلبيات:</span>
+                    <span className="text-xs font-bold text-slate-500 shrink-0 ml-1">نوع الطلبيات:</span>
                     <button
                       type="button"
                       onClick={() => setProductionTypeFilter('all')}
                       style={{
-                        height: '42px',
-                        padding: '0 16px',
-                        borderRadius: '12px',
-                        fontSize: '14px',
-                        fontWeight: '800',
+                        height: '34px',
+                        padding: '0 12px',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: '700',
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '8px',
+                        gap: '6px',
                         cursor: 'pointer',
-                        border: productionTypeFilter === 'all' ? `2px solid ${themeColor}` : '1.5px solid #cbd5e1',
+                        border: productionTypeFilter === 'all' ? `1.5px solid ${themeColor}` : '1px solid #cbd5e1',
                         backgroundColor: productionTypeFilter === 'all' ? themeColor : '#ffffff',
                         color: productionTypeFilter === 'all' ? '#ffffff' : '#334155',
-                        boxShadow: productionTypeFilter === 'all' ? `0 4px 10px ${themeColor}30` : '0 1px 2px rgba(0,0,0,0.04)',
+                        boxShadow: productionTypeFilter === 'all' ? `0 2px 6px ${themeColor}25` : '0 1px 2px rgba(0,0,0,0.03)',
                         transition: 'all 0.15s ease'
                       }}
                     >
-                      <Layers size={17} />
+                      <Layers size={14} />
                       <span>جميع الطلبيات</span>
                       <span style={{
-                        fontSize: '12px',
-                        fontWeight: '900',
-                        padding: '2px 7px',
-                        borderRadius: '20px',
+                        fontSize: '11px',
+                        fontWeight: '800',
+                        padding: '1px 6px',
+                        borderRadius: '10px',
                         backgroundColor: productionTypeFilter === 'all' ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
                         color: productionTypeFilter === 'all' ? '#ffffff' : '#334155'
                       }}>
@@ -4280,29 +4283,29 @@ const AdminStock = ({ user, notificationTarget }) => {
                       type="button"
                       onClick={() => setProductionTypeFilter('sewing')}
                       style={{
-                        height: '42px',
-                        padding: '0 16px',
-                        borderRadius: '12px',
-                        fontSize: '14px',
-                        fontWeight: '800',
+                        height: '34px',
+                        padding: '0 12px',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: '700',
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '8px',
+                        gap: '6px',
                         cursor: 'pointer',
-                        border: productionTypeFilter === 'sewing' ? `2px solid ${themeColor}` : '1.5px solid #cbd5e1',
+                        border: productionTypeFilter === 'sewing' ? `1.5px solid ${themeColor}` : '1px solid #cbd5e1',
                         backgroundColor: productionTypeFilter === 'sewing' ? themeColor : '#ffffff',
                         color: productionTypeFilter === 'sewing' ? '#ffffff' : '#334155',
-                        boxShadow: productionTypeFilter === 'sewing' ? `0 4px 10px ${themeColor}30` : '0 1px 2px rgba(0,0,0,0.04)',
+                        boxShadow: productionTypeFilter === 'sewing' ? `0 2px 6px ${themeColor}25` : '0 1px 2px rgba(0,0,0,0.03)',
                         transition: 'all 0.15s ease'
                       }}
                     >
-                      <Scissors size={17} />
+                      <Scissors size={14} />
                       <span>طلبات الخياطة (PRO)</span>
                       <span style={{
-                        fontSize: '12px',
-                        fontWeight: '900',
-                        padding: '2px 7px',
-                        borderRadius: '20px',
+                        fontSize: '11px',
+                        fontWeight: '800',
+                        padding: '1px 6px',
+                        borderRadius: '10px',
                         backgroundColor: productionTypeFilter === 'sewing' ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
                         color: productionTypeFilter === 'sewing' ? '#ffffff' : '#334155'
                       }}>
@@ -4314,29 +4317,29 @@ const AdminStock = ({ user, notificationTarget }) => {
                       type="button"
                       onClick={() => setProductionTypeFilter('preparation')}
                       style={{
-                        height: '42px',
-                        padding: '0 16px',
-                        borderRadius: '12px',
-                        fontSize: '14px',
-                        fontWeight: '800',
+                        height: '34px',
+                        padding: '0 12px',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: '700',
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '8px',
+                        gap: '6px',
                         cursor: 'pointer',
-                        border: productionTypeFilter === 'preparation' ? `2px solid ${themeColor}` : '1.5px solid #cbd5e1',
+                        border: productionTypeFilter === 'preparation' ? `1.5px solid ${themeColor}` : '1px solid #cbd5e1',
                         backgroundColor: productionTypeFilter === 'preparation' ? themeColor : '#ffffff',
                         color: productionTypeFilter === 'preparation' ? '#ffffff' : '#334155',
-                        boxShadow: productionTypeFilter === 'preparation' ? `0 4px 10px ${themeColor}30` : '0 1px 2px rgba(0,0,0,0.04)',
+                        boxShadow: productionTypeFilter === 'preparation' ? `0 2px 6px ${themeColor}25` : '0 1px 2px rgba(0,0,0,0.03)',
                         transition: 'all 0.15s ease'
                       }}
                     >
-                      <Box size={17} />
+                      <Box size={14} />
                       <span>طلبات التحضير (PREP)</span>
                       <span style={{
-                        fontSize: '12px',
-                        fontWeight: '900',
-                        padding: '2px 7px',
-                        borderRadius: '20px',
+                        fontSize: '11px',
+                        fontWeight: '800',
+                        padding: '1px 6px',
+                        borderRadius: '10px',
                         backgroundColor: productionTypeFilter === 'preparation' ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
                         color: productionTypeFilter === 'preparation' ? '#ffffff' : '#334155'
                       }}>
@@ -4346,21 +4349,21 @@ const AdminStock = ({ user, notificationTarget }) => {
                   </div>
 
                   {/* Filter 2: Compact Dropdown for Status */}
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    <span className="text-sm font-extrabold text-slate-600 shrink-0">حالة الإجراء:</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-bold text-slate-500 shrink-0">حالة الإجراء:</span>
                     <select
-                      className="input-field text-sm font-bold cursor-pointer"
+                      className="input-field text-xs font-bold cursor-pointer"
                       style={{
                         width: 'auto',
-                        minWidth: '210px',
-                        height: '42px',
+                        minWidth: '185px',
+                        height: '34px',
                         marginBottom: 0,
-                        borderRadius: '12px',
-                        border: '1.5px solid #cbd5e1',
-                        padding: '0 2.2rem 0 1rem',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        padding: '0 1.8rem 0 0.8rem',
                         backgroundColor: '#ffffff',
                         color: '#1e293b',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
                       }}
                       value={productionAuditFilterStatus}
                       onChange={e => setProductionAuditFilterStatus(e.target.value)}
@@ -4377,7 +4380,7 @@ const AdminStock = ({ user, notificationTarget }) => {
               </div>
             );
           })()}
-          <div className="table-container glass-panel overflow-x-auto mt-4">
+          <div className="table-container glass-panel overflow-x-auto" style={{ marginTop: '22px' }}>
             <table className="min-w-[800px]">
               <thead>
                 <tr>

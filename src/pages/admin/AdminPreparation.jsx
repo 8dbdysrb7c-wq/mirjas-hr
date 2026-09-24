@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { 
   ShoppingBag, Plus, Search, Trash2, Edit2, 
   Printer, X, User, Calendar, Layers, UserPlus, Eye, Phone,
@@ -1082,10 +1082,10 @@ const AdminPreparation = ({ user, notificationTarget }) => {
     fetchData();
   };
 
-  const triggerPrint = () => {
+  const printOrder = (order) => {
     const originalTitle = document.title;
-    if (selectedOrder && selectedOrder.orderNumber) {
-      document.title = selectedOrder.orderNumber;
+    if (order && order.orderNumber) {
+      document.title = order.orderNumber;
     }
     
     // Call print immediately
@@ -1094,6 +1094,14 @@ const AdminPreparation = ({ user, notificationTarget }) => {
     setTimeout(() => {
       document.title = originalTitle;
     }, 100);
+  };
+
+  const triggerPrint = () => printOrder(selectedOrder);
+
+  const handlePrintOrder = (order) => {
+    // Render this order's print portal before opening the browser print dialog.
+    flushSync(() => setSelectedOrder(order));
+    printOrder(order);
   };
 
   const triggerSharePDF = async () => {
@@ -2196,6 +2204,9 @@ const AdminPreparation = ({ user, notificationTarget }) => {
                           <div className="flex flex-wrap gap-2 justify-center items-center">
                             <button className="btn-premium-view" title="معاينة" onClick={() => handleOpenPreview(order)}>
                               <Eye size={16} />
+                            </button>
+                            <button type="button" className="btn-premium-view" title="طباعة / تصدير PDF" aria-label={`طباعة الأمر ${order.orderNumber}`} style={{ color: 'var(--primary)' }} onClick={() => handlePrintOrder(order)}>
+                              <Printer size={16} />
                             </button>
                             <button className="btn-premium-copy" title="نسخ الكرت كمسودة جديدة" onClick={() => handleCopyOrder(order)}>
                               <Copy size={16} />
