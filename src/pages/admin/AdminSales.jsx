@@ -1,6 +1,6 @@
 import { hasDraftItems, readLocalDrafts, mergeDrafts, writeLocalDraft, removeLocalDraft } from '../../utils/salesDrafts';
 import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText, Briefcase, Clock, Check, Save, Share2, Layers, Clipboard, CheckCircle, Copy, Archive } from 'lucide-react';
 import { getSalesOrders, subscribeToSalesOrders, saveSalesOrder, deleteSalesOrder, getSalesOrderDrafts, saveSalesOrderDraft, deleteSalesOrderDraft, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getPreparationOrders, savePreparationOrder, getMissions, saveMission, deleteMission } from '../../store';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
@@ -644,7 +644,7 @@ const AdminSales = ({ user }) => {
     setShowModal(true);
   };
 
-  const handleOpenPreview = async (order) => {
+  const prepareOrderForPrint = async (order) => {
     let orderToPreview = { ...order };
     if (order.items && order.items.some(i => ['قيد الإنتاج', 'إنتاج قيد الخياطة', 'إنتاج قيد التغليف', 'تحضير وإنتاج'].includes(i.itemStatus))) {
       const prodOrders = await getOrders();
@@ -668,6 +668,11 @@ const AdminSales = ({ user }) => {
         orderToPreview.preparationOrderNumber = linkedPrep.orderNumber;
       }
     }
+    return orderToPreview;
+  };
+
+  const handleOpenPreview = async (order) => {
+    const orderToPreview = await prepareOrderForPrint(order);
     setSelectedOrder(orderToPreview);
     setShowPreview(true);
   };
@@ -2191,10 +2196,10 @@ const AdminSales = ({ user }) => {
     fetchData();
   };
 
-  const triggerPrint = () => {
+  const printOrder = (order) => {
     const originalTitle = document.title;
-    if (selectedOrder && selectedOrder.orderNumber) {
-      document.title = selectedOrder.orderNumber;
+    if (order && order.orderNumber) {
+      document.title = order.orderNumber;
     }
 
     // Call print immediately
@@ -2203,6 +2208,20 @@ const AdminSales = ({ user }) => {
     setTimeout(() => {
       document.title = originalTitle;
     }, 100);
+  };
+
+  const triggerPrint = () => printOrder(selectedOrder);
+
+  const handlePrintOrder = async (order) => {
+    try {
+      const orderToPrint = await prepareOrderForPrint(order);
+      // Commit the selected order and its print portal before opening the print dialog.
+      flushSync(() => setSelectedOrder(orderToPrint));
+      printOrder(orderToPrint);
+    } catch (error) {
+      console.error('Error preparing sales order for printing:', error);
+      Swal.fire({ icon: 'error', title: 'تعذر تجهيز الطلبية للطباعة', text: 'يرجى المحاولة مرة أخرى.' });
+    }
   };
 
   const triggerSharePDF = async () => {
@@ -3422,6 +3441,9 @@ const AdminSales = ({ user }) => {
                         <div className="flex flex-wrap gap-2 justify-center items-center">
                           <button className="btn-premium-view" title="معاينة" onClick={() => handleOpenPreview(order)}>
                             <Eye size={16} />
+                          </button>
+                          <button type="button" className="btn-premium-view" title="طباعة / تصدير PDF" aria-label={`طباعة الطلبية ${order.orderNumber}`} style={{ color: 'var(--primary)' }} onClick={() => handlePrintOrder(order)}>
+                            <Printer size={16} />
                           </button>
                           <button className="btn-premium-copy" title="نسخ الطلب كمسودة جديدة" onClick={() => handleCopyOrder(order)}>
                             <Copy size={16} />

@@ -463,6 +463,11 @@ export const HomeTab = ({
             }
           }} 
         />
+        {hasPermission(user, 'hr_petty_cash', 'view') && <DashboardCard isMobile={isMobile} icon={DollarSign}
+          iconType="solid-bg"
+          title="السلفة النثرية"
+          onClick={() => handleTabChange('petty_cash')}
+        />}
         <DashboardCard isMobile={isMobile} icon={Plus} 
           iconType="solid-bg"
           title="عمل إضافي" 

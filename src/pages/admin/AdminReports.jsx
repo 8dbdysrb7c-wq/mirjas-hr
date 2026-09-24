@@ -3,6 +3,7 @@ import HRSalaryReports from '../hr/HRSalaryReports';
 import { createPortal, flushSync } from 'react-dom';
 import { getReports, getEmployees, getDepartments, saveReport, deleteReport, getSalesOrders, getOrders, getCustomers, getMissions, getStock, getReportsByDateRange, getSalesOrdersByDateRange, getQuotesByDateRange, getOrdersByDateRange, getMissionsByDateRange, getHRAttendanceByDateRange, getHRViolationsByDateRange, getSupervisorTasksByDateRange, getSupervisorReportsByDateRange, getMissingPunches, updateMissingPunchStatus, createNotification, getGlobalSettings, canPerformStockAction, getStockVouchers, getStocktakes, saveSupervisorReport, deleteSupervisorReport } from '../../store';
 import { getHRLeaves } from '../../services/hr';
+import { hasPermission } from '../../utils/permissions';
 import { sendWhatsAppNotification, sendTemplatedWhatsAppNotification } from '../../utils/whatsappService';
 import { FileText, Calendar, Search, Printer, List, Trash2, ShoppingCart, ShoppingBag, Users, X, Filter, Eye, Edit2, Plus, Minus, Trash, ArrowUpDown, Truck, Package, Building2, ClipboardList, UserCheck, FileSpreadsheet, FileDown, AlertTriangle, CheckCircle, User, ArrowLeft, Download, Upload, Layers, Clock, RotateCcw } from 'lucide-react';
 import SewingMachineIcon from '../../components/SewingMachineIcon';

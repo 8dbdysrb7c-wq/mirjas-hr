@@ -5,6 +5,11 @@ import sys
 def main():
     print("=== بدء تحديث النظام ===")
     
+    # ضمان توفر Node.js و npm من المسار المحلي إذا لم تكن مضافة للبيئة العامة
+    local_node_path = r"C:\Users\HP\AppData\Local\OpenAI\Codex\runtimes\cua_node\df473e5367fa2b42\bin"
+    if os.path.exists(local_node_path) and local_node_path not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = local_node_path + os.pathsep + os.environ.get("PATH", "")
+
     print("\n[1/2] جاري بناء نسخة الإنتاج (Building production)...")
     build_result = subprocess.run("npm run build", shell=True)
     if build_result.returncode != 0:

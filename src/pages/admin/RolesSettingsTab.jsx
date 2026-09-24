@@ -56,6 +56,8 @@ const HR_MODULES = {
   hr_employee_alerts: 'تنبيهات الموظفين',
 };
 
+const PETTY_CASH_MODULES = { hr_petty_cash: 'السلفة النثرية' };
+
 const REPORTS_MODULES = {
   reports_employees: 'تقرير الموظفين وساعات العمل',
   reports_sales: 'تقرير المبيعات والطلبيات',
@@ -74,6 +76,7 @@ const MODULES = {
   ...GENERAL_MODULES,
   ...STOCK_MODULES,
   ...HR_MODULES,
+  ...PETTY_CASH_MODULES,
   ...REPORTS_MODULES
 };
 
@@ -84,7 +87,10 @@ const ACTIONS = {
   delete: 'حذف',
   approve: 'اعتماد',
   print: 'طباعة',
-  export: 'تصدير'
+  export: 'تصدير',
+  add_expense: 'إضافة صرف',
+  manage_expense: 'تعديل/حذف صرف',
+  view_invoice: 'صور الفواتير'
 };
 
 export default function RolesSettingsTab() {
@@ -291,6 +297,7 @@ export default function RolesSettingsTab() {
   const getActiveModules = () => {
     if (activePermTab === 'stock') return STOCK_MODULES;
     if (activePermTab === 'hr') return HR_MODULES;
+    if (activePermTab === 'petty_cash') return PETTY_CASH_MODULES;
     if (activePermTab === 'reports') return REPORTS_MODULES;
     return GENERAL_MODULES;
   };
@@ -748,6 +755,12 @@ export default function RolesSettingsTab() {
               <span>👥</span> صلاحيات الموارد البشرية التفصيلية
             </button>
             <button
+              onClick={() => setActivePermTab('petty_cash')}
+              className={`perm-tab-button ${activePermTab === 'petty_cash' ? 'active' : ''}`}
+            >
+              <span>💵</span> صلاحيات السلفة النثرية
+            </button>
+            <button
               onClick={() => setActivePermTab('reports')}
               className={`perm-tab-button ${activePermTab === 'reports' ? 'active' : ''}`}
             >
@@ -797,14 +810,14 @@ export default function RolesSettingsTab() {
                       </td>
                       {Object.keys(ACTIONS).map(actKey => (
                         <td key={actKey} className="px-4 py-4 text-center align-middle">
-                          <label className="premium-checkbox-container">
+                          {(['add_expense', 'manage_expense', 'view_invoice'].includes(actKey) && modKey !== 'hr_petty_cash') ? null : <label className="premium-checkbox-container">
                             <input
                               type="checkbox"
                               checked={editingEmp.permissions[modKey]?.[actKey] || false}
                               onChange={() => handleTogglePermission(modKey, actKey)}
                             />
                             <span className="premium-checkbox-checkmark"></span>
-                          </label>
+                          </label>}
                         </td>
                       ))}
                     </tr>

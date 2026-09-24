@@ -168,32 +168,76 @@ export const DailyReportTab = ({
 
       {/* نظام الهاتف الخلوي */}
       <div className="dr-card">
-        <div className="dr-card-header text-teal">
-          <Phone size={18} />
-          <span>نظام الهاتف الخلوي</span>
+        <div className="dr-card-header text-teal" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Phone size={18} />
+            <span>نظام الهاتف الخلوي</span>
+          </div>
+          <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#e11d48', backgroundColor: '#ffe4e6', padding: '2px 8px', borderRadius: '8px' }}>
+            إلزامي *
+          </span>
         </div>
         
-        <label className="dr-phone-toggle">
-          <input 
-            type="checkbox" 
-            checked={phoneSafe} 
-            onChange={(e) => setPhoneSafe(e.target.checked)} 
-          />
-          <span className="dr-phone-checkbox">
-            {phoneSafe && <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>}
-          </span>
-          <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155' }}>
-            هل تم وضع الهاتف بالأمانات ؟
-          </span>
-        </label>
+        <div style={{ marginBottom: '1.25rem' }}>
+          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '800', color: '#1e293b', marginBottom: '0.5rem' }}>
+            هل تم وضع الهاتف بالأمانات؟ <span style={{ color: '#e11d48' }}>*</span>
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <button
+              type="button"
+              onClick={() => setPhoneSafe(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                padding: '0.75rem 1rem',
+                borderRadius: '12px',
+                border: phoneSafe === true ? '2px solid #0f766e' : '1.5px solid #e2e8f0',
+                backgroundColor: phoneSafe === true ? '#f0fdfa' : '#ffffff',
+                color: phoneSafe === true ? '#0f766e' : '#64748b',
+                fontWeight: '800',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: phoneSafe === true ? '0 4px 12px rgba(15, 118, 110, 0.15)' : 'none'
+              }}
+            >
+              <span style={{ width: 16, height: 16, borderRadius: '50%', border: phoneSafe === true ? '5px solid #0f766e' : '2px solid #cbd5e1', display: 'inline-block' }}></span>
+              نعم، بالأمانات
+            </button>
+            <button
+              type="button"
+              onClick={() => setPhoneSafe(false)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                padding: '0.75rem 1rem',
+                borderRadius: '12px',
+                border: phoneSafe === false ? '2px solid #e11d48' : '1.5px solid #e2e8f0',
+                backgroundColor: phoneSafe === false ? '#fff1f2' : '#ffffff',
+                color: phoneSafe === false ? '#e11d48' : '#64748b',
+                fontWeight: '800',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: phoneSafe === false ? '0 4px 12px rgba(225, 29, 72, 0.15)' : 'none'
+              }}
+            >
+              <span style={{ width: 16, height: 16, borderRadius: '50%', border: phoneSafe === false ? '5px solid #e11d48' : '2px solid #cbd5e1', display: 'inline-block' }}></span>
+              لا، لم يوضع بالأمانات
+            </button>
+          </div>
+        </div>
 
-        <div className="dr-phone-counter-row">
-          {/* Swapped order: label is now first (renders right) and counter is second (renders left) */}
+        <div className="dr-phone-counter-row" style={{ paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
           <div className="dr-phone-counter-label">
-            <span>عدد مرات استعمال الهاتف</span>
+            <span>عدد مرات استعمال الهاتف <span style={{ color: '#e11d48' }}>*</span></span>
             <Phone size={14} style={{ color: 'var(--primary)' }} />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'rgba(26, 141, 155, 0.05)', borderRadius: '12px', padding: '2px', border: '1px solid rgba(26, 141, 155, 0.1)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'rgba(26, 141, 155, 0.05)', borderRadius: '12px', padding: '2px', border: '1px solid rgba(26, 141, 155, 0.2)' }}>
             <button 
               type="button" 
               className="dr-counter-btn"
@@ -204,9 +248,14 @@ export const DailyReportTab = ({
             <input 
               type="number" 
               min="0" 
+              required
               className="dr-counter-val" 
-              value={phoneUsages} 
-              onChange={(e) => setPhoneUsages(Math.max(0, parseInt(e.target.value) || 0))} 
+              value={phoneUsages === null || phoneUsages === undefined ? '' : phoneUsages} 
+              placeholder="0"
+              onChange={(e) => {
+                const val = e.target.value;
+                setPhoneUsages(val === '' ? '' : Math.max(0, parseInt(val, 10) || 0));
+              }} 
             />
             <button 
               type="button" 

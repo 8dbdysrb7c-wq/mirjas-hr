@@ -3,7 +3,7 @@ import Flatpickr from 'react-flatpickr';
 import Select from '../../components/SearchSelect';
 import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import 'flatpickr/dist/themes/airbnb.css';
-import { Package, Plus, Search, Edit2, Trash2, Layers, AlertTriangle, ArrowUpDown, Filter, X, Save, History, User, MapPin, Box, Copy, ChevronDown, ChevronRight, Printer, FileText, Download, Upload, Calendar, ClipboardList, Eye, Palette } from 'lucide-react';
+import { Package, Plus, Search, Edit2, Trash2, Layers, AlertTriangle, ArrowUpDown, Filter, X, Save, History, User, MapPin, Box, Copy, ChevronDown, ChevronRight, Printer, FileText, Download, Upload, Calendar, ClipboardList, Eye, Palette, CheckCircle2, Clock, Scissors, Check } from 'lucide-react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import { getStock, saveStockItem, saveStockItemComponents, deleteStockItem, deleteMultipleStockItems, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStockVouchers, saveStockVoucher, deleteStockVoucher, getCustomers, saveCustomer, getEmployees, getSalesOrders, getMissions, canPerformStockAction, saveSalesOrder, getStocktakes, saveStocktake, approveStocktake, deleteStocktakeAndRevert, approveAuditVouchers, deleteDraftVouchers, revertAuditVouchers, revertReceiptVouchers, savePreparationOrder, getHRAssets, getOrders, saveOrder, getPreparationOrders, getProductCostings } from '../../store';
@@ -2265,7 +2265,9 @@ const AdminStock = ({ user, notificationTarget }) => {
           name: document.getElementById('swal-name').value,
           category: document.getElementById('swal-category').value,
           warehouse: document.getElementById('swal-warehouse').value.trim(),
-          location: document.getElementById('swal-location').value,
+          location: (document.getElementById('swal-new-location-input') && document.getElementById('swal-new-location-input').style.display !== 'none' && document.getElementById('swal-new-location-input').value.trim())
+            ? document.getElementById('swal-new-location-input').value.trim()
+            : document.getElementById('swal-location').value,
           spec: document.getElementById('swal-spec').value,
           quantity: Number(document.getElementById('swal-quantity').value),
           unit: document.getElementById('swal-unit').value,
@@ -3114,12 +3116,22 @@ const AdminStock = ({ user, notificationTarget }) => {
     {
       id: 'production',
       label: 'صرف الإنتاج',
-      icon: <Package />,
-      color: '#ec4899',
-      bgLight: '#fce7f3',
-      customBadge: `${totalPendingProductionCount} طلبية`,
+      icon: <Upload />,
+      color: '#ea580c',
+      bgLight: '#ffedd5',
+      customBadge: `${pendingProductionAuditCount} غير مدققة`,
       onClick: () => { setActiveStockTab('production'); setProductionSubTab('disbursement'); setProductionAuditFilterStatus('pending'); },
-      isActive: activeStockTab === 'production'
+      isActive: activeStockTab === 'production' && productionSubTab === 'disbursement'
+    },
+    {
+      id: 'production_receipt',
+      label: 'استلام منتجات PRO&PREP',
+      icon: <Download />,
+      color: '#1e3a8a',
+      bgLight: '#eff6ff',
+      customBadge: `${pendingProductionReceiptCount} غير مستلمة`,
+      onClick: () => { setActiveStockTab('production'); setProductionSubTab('receipt'); setProductionAuditFilterStatus('pending'); },
+      isActive: activeStockTab === 'production' && productionSubTab === 'receipt'
     },
     {
       id: 'stocktake',
@@ -3136,7 +3148,7 @@ const AdminStock = ({ user, notificationTarget }) => {
     if (nav.id === 'items') return hasPermission(user, 'stock_view', 'view');
     if (nav.id.startsWith('vouchers_')) return hasPermission(user, 'stock_vouchers', 'view');
     if (nav.id === 'audit') return hasPermission(user, 'stock_audit', 'view');
-    if (nav.id === 'production') return hasPermission(user, 'stock_production', 'view');
+    if (nav.id === 'production' || nav.id === 'production_receipt') return hasPermission(user, 'stock_production', 'view');
     if (nav.id === 'stocktake') return hasPermission(user, 'stock_take', 'view');
     return true;
   });
@@ -3366,7 +3378,7 @@ const AdminStock = ({ user, notificationTarget }) => {
 
       {/* ===== ACTION SQUARES BAR ===== */}
       <div className="overflow-x-auto no-print mb-6 pb-2" style={{ direction: 'rtl' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gridColumns}, 1fr)`, gap: '12px', minWidth: `${gridColumns * 120}px` }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gridColumns}, minmax(115px, 1fr))`, gap: '10px', minWidth: `${gridColumns * 115}px` }}>
           {visibleNavItems.map(item => (
             <div
               key={item.id}
@@ -3374,58 +3386,58 @@ const AdminStock = ({ user, notificationTarget }) => {
               onMouseEnter={(e) => {
                 if (!item.isActive) {
                   e.currentTarget.style.borderColor = item.color;
-                  e.currentTarget.style.boxShadow = `0 6px 15px -3px ${item.color}20`;
+                  e.currentTarget.style.boxShadow = `0 6px 15px -3px ${item.color}25`;
                   e.currentTarget.style.transform = 'translateY(-2px)';
                 }
               }}
               onMouseLeave={(e) => {
                 if (!item.isActive) {
                   e.currentTarget.style.borderColor = '#e2e8f0';
-                  e.currentTarget.style.boxShadow = '0 4px 10px -2px rgba(0, 0, 0, 0.03)';
+                  e.currentTarget.style.boxShadow = '0 2px 6px -1px rgba(0, 0, 0, 0.04)';
                   e.currentTarget.style.transform = 'translateY(0)';
                 }
               }}
               style={{
                 backgroundColor: item.isActive ? item.color : '#ffffff',
                 border: `1.5px solid ${item.isActive ? item.color : '#e2e8f0'}`,
-                borderRadius: '16px',
-                padding: '16px 8px 12px 8px',
+                borderRadius: '14px',
+                padding: '12px 6px 10px 6px',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px',
+                gap: '6px',
                 cursor: 'pointer',
                 boxShadow: item.isActive 
-                  ? `0 10px 25px -5px ${item.color}40` 
-                  : '0 4px 10px -2px rgba(0, 0, 0, 0.03)',
+                  ? `0 8px 20px -3px ${item.color}45` 
+                  : '0 2px 6px -1px rgba(0, 0, 0, 0.04)',
                 color: item.isActive ? '#ffffff' : '#334155',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                transition: 'all 0.2s ease',
                 position: 'relative',
-                height: '120px',
-                transform: item.isActive ? 'scale(1.03)' : 'scale(1)',
+                height: '114px',
+                transform: item.isActive ? 'translateY(-2px)' : 'translateY(0)',
               }}
             >
-              <div style={{ color: item.isActive ? '#ffffff' : item.color, marginBottom: '4px' }}>
-                {React.cloneElement(item.icon, { size: 28, strokeWidth: 1.5 })}
+              <div style={{ color: item.isActive ? '#ffffff' : item.color, marginBottom: '2px' }}>
+                {React.cloneElement(item.icon, { size: 26, strokeWidth: 1.8 })}
               </div>
               
-              <span style={{ fontSize: '13px', fontWeight: 'bold', textAlign: 'center', lineHeight: '1.2' }}>
+              <span style={{ fontSize: '13px', fontWeight: '800', textAlign: 'center', lineHeight: '1.25' }}>
                 {item.label}
               </span>
               
               <div style={{
-                backgroundColor: item.isActive ? 'rgba(255,255,255,0.2)' : item.bgLight,
+                backgroundColor: item.isActive ? 'rgba(255,255,255,0.22)' : item.bgLight,
                 color: item.isActive ? '#ffffff' : item.color,
-                padding: '2px 10px',
-                borderRadius: '9999px',
+                padding: '2px 8px',
+                borderRadius: '8px',
                 fontSize: '11px',
-                fontWeight: 'bold',
+                fontWeight: '800',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '4px',
                 marginTop: 'auto',
-                border: item.isActive ? 'none' : `1px solid ${item.color}20`
+                border: item.isActive ? 'none' : `1px solid ${item.color}25`
               }}>
                 <span>{item.customBadge}</span>
               </div>
@@ -4136,140 +4148,235 @@ const AdminStock = ({ user, notificationTarget }) => {
       {/* ===== TAB: PRODUCTION ===== */}
       {activeStockTab === 'production' && (
         <>
-          {/* Two Big Separation Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 mt-4">
-            <button
-              onClick={() => { setProductionSubTab('disbursement'); setProductionAuditFilterStatus('pending'); }}
-              style={{
-                display: 'flex',
-                position: 'relative',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '14px',
-                padding: '16px 20px',
-                borderRadius: '16px',
-                border: productionSubTab === 'disbursement' ? '2.5px solid #ea580c' : '1.5px solid #e2e8f0',
-                backgroundColor: productionSubTab === 'disbursement' ? '#fff7ed' : '#ffffff',
-                color: productionSubTab === 'disbursement' ? '#c2410c' : '#64748b',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                boxShadow: productionSubTab === 'disbursement' ? '0 10px 15px -3px rgba(234, 88, 12, 0.12)' : 'none',
-                transform: productionSubTab === 'disbursement' ? 'scale(1.01)' : 'scale(1)'
-              }}
-            >
-              <div style={{
-                backgroundColor: productionSubTab === 'disbursement' ? '#ffedd5' : '#f1f5f9',
-                color: productionSubTab === 'disbursement' ? '#ea580c' : '#94a3b8',
-                padding: '12px',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Upload size={24} strokeWidth={2.5} />
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '17px', fontWeight: '900' }}>صرف المواد الخام للإنتاج</div>
-                <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '2px' }}>تدقيق وصرف المواد الأولية وبدء التصنيع</div>
-                <div className="production-pending-count">غير مدققة <strong>{pendingProductionAuditCount}</strong></div>
-              </div>
-            </button>
+          {(() => {
+            const currentOrders = productionOrdersToAudit.filter(o => {
+              if (productionSubTab === 'disbursement') return !o.ignoredMaterialAudit;
+              return !o.ignoredReceiptAudit;
+            });
+            const pendingTotal = currentOrders.filter(o => productionSubTab === 'disbursement' ? !o.stockDeducted : !o.stockReceived).length;
+            const approvedTotal = currentOrders.filter(o => productionSubTab === 'disbursement' ? o.stockDeducted : o.stockReceived).length;
 
-            <button
-              onClick={() => { setProductionSubTab('receipt'); setProductionAuditFilterStatus('pending'); }}
-              style={{
-                display: 'flex',
-                position: 'relative',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '14px',
-                padding: '16px 20px',
-                borderRadius: '16px',
-                border: productionSubTab === 'receipt' ? '2.5px solid #1e3a8a' : '1.5px solid #e2e8f0',
-                backgroundColor: productionSubTab === 'receipt' ? '#eff6ff' : '#ffffff',
-                color: productionSubTab === 'receipt' ? '#1d4ed8' : '#64748b',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                boxShadow: productionSubTab === 'receipt' ? '0 10px 15px -3px rgba(30, 58, 138, 0.12)' : 'none',
-                transform: productionSubTab === 'receipt' ? 'scale(1.01)' : 'scale(1)'
-              }}
-            >
-              <div style={{
-                backgroundColor: productionSubTab === 'receipt' ? '#dbeafe' : '#f1f5f9',
-                color: productionSubTab === 'receipt' ? '#1e3a8a' : '#94a3b8',
-                padding: '12px',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Download size={24} strokeWidth={2.5} />
+            const countAll = currentOrders.filter(o => {
+              if (productionAuditFilterStatus === 'pending') return productionSubTab === 'disbursement' ? !o.stockDeducted : !o.stockReceived;
+              if (productionAuditFilterStatus === 'approved') return productionSubTab === 'disbursement' ? o.stockDeducted : o.stockReceived;
+              return true;
+            }).length;
+
+            const countSewing = currentOrders.filter(o => {
+              if (o.productionType !== 'sewing') return false;
+              if (productionAuditFilterStatus === 'pending') return productionSubTab === 'disbursement' ? !o.stockDeducted : !o.stockReceived;
+              if (productionAuditFilterStatus === 'approved') return productionSubTab === 'disbursement' ? o.stockDeducted : o.stockReceived;
+              return true;
+            }).length;
+
+            const countPrep = currentOrders.filter(o => {
+              if (o.productionType !== 'preparation') return false;
+              if (productionAuditFilterStatus === 'pending') return productionSubTab === 'disbursement' ? !o.stockDeducted : !o.stockReceived;
+              if (productionAuditFilterStatus === 'approved') return productionSubTab === 'disbursement' ? o.stockDeducted : o.stockReceived;
+              return true;
+            }).length;
+
+            const isDisburse = productionSubTab === 'disbursement';
+            const themeColor = isDisburse ? '#ea580c' : '#1e3a8a';
+            const themeBg = isDisburse ? '#fff7ed' : '#eff6ff';
+
+            return (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 mb-5 mt-2 no-print">
+                {/* Title & Status Summary Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div style={{
+                      backgroundColor: themeBg,
+                      color: themeColor,
+                      padding: '12px',
+                      borderRadius: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: `0 2px 8px ${themeColor}20`
+                    }}>
+                      {isDisburse ? <Upload size={26} strokeWidth={2.5} /> : <Download size={26} strokeWidth={2.5} />}
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-extrabold text-slate-800 m-0">
+                        {isDisburse ? 'صرف المواد الخام للإنتاج' : 'استلام منتجات PRO&PREP'}
+                      </h2>
+                      <p className="text-slate-500 text-xs sm:text-sm mt-1 m-0">
+                        {isDisburse ? 'تدقيق وصرف المواد الأولية لأوامر الخياطة والتحضير' : 'إدخال وتوريد المنتجات النهائية إلى مستودع البضاعة الجاهزة'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Prominent Pending Badge */}
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '8px 18px',
+                    borderRadius: '14px',
+                    backgroundColor: pendingTotal > 0 ? (isDisburse ? '#fff7ed' : '#eff6ff') : '#f8fafc',
+                    border: `2px solid ${isDisburse ? '#fdba74' : '#93c5fd'}`,
+                    color: isDisburse ? '#c2410c' : '#1e40af',
+                    fontWeight: '800',
+                    fontSize: '15px'
+                  }}>
+                    <Clock size={20} strokeWidth={2.5} />
+                    <span>{isDisburse ? 'بانتظار الصرف:' : 'بانتظار الاستلام:'}</span>
+                    <span style={{
+                      fontSize: '18px',
+                      fontWeight: '900',
+                      backgroundColor: isDisburse ? '#ea580c' : '#1e40af',
+                      color: '#ffffff',
+                      padding: '2px 14px',
+                      borderRadius: '10px',
+                      minWidth: '36px',
+                      textAlign: 'center'
+                    }}>
+                      {pendingTotal}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Filter Controls Row: Side-by-side on a single row */}
+                <div className="pt-4 flex flex-wrap items-center justify-between gap-4">
+                  {/* Filter 1: Type Selection (Buttons side-by-side) */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-extrabold text-slate-600 shrink-0 ml-1">نوع الطلبيات:</span>
+                    <button
+                      type="button"
+                      onClick={() => setProductionTypeFilter('all')}
+                      style={{
+                        height: '42px',
+                        padding: '0 16px',
+                        borderRadius: '12px',
+                        fontSize: '14px',
+                        fontWeight: '800',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        cursor: 'pointer',
+                        border: productionTypeFilter === 'all' ? `2px solid ${themeColor}` : '1.5px solid #cbd5e1',
+                        backgroundColor: productionTypeFilter === 'all' ? themeColor : '#ffffff',
+                        color: productionTypeFilter === 'all' ? '#ffffff' : '#334155',
+                        boxShadow: productionTypeFilter === 'all' ? `0 4px 10px ${themeColor}30` : '0 1px 2px rgba(0,0,0,0.04)',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <Layers size={17} />
+                      <span>جميع الطلبيات</span>
+                      <span style={{
+                        fontSize: '12px',
+                        fontWeight: '900',
+                        padding: '2px 7px',
+                        borderRadius: '20px',
+                        backgroundColor: productionTypeFilter === 'all' ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
+                        color: productionTypeFilter === 'all' ? '#ffffff' : '#334155'
+                      }}>
+                        {countAll}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setProductionTypeFilter('sewing')}
+                      style={{
+                        height: '42px',
+                        padding: '0 16px',
+                        borderRadius: '12px',
+                        fontSize: '14px',
+                        fontWeight: '800',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        cursor: 'pointer',
+                        border: productionTypeFilter === 'sewing' ? `2px solid ${themeColor}` : '1.5px solid #cbd5e1',
+                        backgroundColor: productionTypeFilter === 'sewing' ? themeColor : '#ffffff',
+                        color: productionTypeFilter === 'sewing' ? '#ffffff' : '#334155',
+                        boxShadow: productionTypeFilter === 'sewing' ? `0 4px 10px ${themeColor}30` : '0 1px 2px rgba(0,0,0,0.04)',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <Scissors size={17} />
+                      <span>طلبات الخياطة (PRO)</span>
+                      <span style={{
+                        fontSize: '12px',
+                        fontWeight: '900',
+                        padding: '2px 7px',
+                        borderRadius: '20px',
+                        backgroundColor: productionTypeFilter === 'sewing' ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
+                        color: productionTypeFilter === 'sewing' ? '#ffffff' : '#334155'
+                      }}>
+                        {countSewing}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setProductionTypeFilter('preparation')}
+                      style={{
+                        height: '42px',
+                        padding: '0 16px',
+                        borderRadius: '12px',
+                        fontSize: '14px',
+                        fontWeight: '800',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        cursor: 'pointer',
+                        border: productionTypeFilter === 'preparation' ? `2px solid ${themeColor}` : '1.5px solid #cbd5e1',
+                        backgroundColor: productionTypeFilter === 'preparation' ? themeColor : '#ffffff',
+                        color: productionTypeFilter === 'preparation' ? '#ffffff' : '#334155',
+                        boxShadow: productionTypeFilter === 'preparation' ? `0 4px 10px ${themeColor}30` : '0 1px 2px rgba(0,0,0,0.04)',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <Box size={17} />
+                      <span>طلبات التحضير (PREP)</span>
+                      <span style={{
+                        fontSize: '12px',
+                        fontWeight: '900',
+                        padding: '2px 7px',
+                        borderRadius: '20px',
+                        backgroundColor: productionTypeFilter === 'preparation' ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
+                        color: productionTypeFilter === 'preparation' ? '#ffffff' : '#334155'
+                      }}>
+                        {countPrep}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Filter 2: Compact Dropdown for Status */}
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <span className="text-sm font-extrabold text-slate-600 shrink-0">حالة الإجراء:</span>
+                    <select
+                      className="input-field text-sm font-bold cursor-pointer"
+                      style={{
+                        width: 'auto',
+                        minWidth: '210px',
+                        height: '42px',
+                        marginBottom: 0,
+                        borderRadius: '12px',
+                        border: '1.5px solid #cbd5e1',
+                        padding: '0 2.2rem 0 1rem',
+                        backgroundColor: '#ffffff',
+                        color: '#1e293b',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                      }}
+                      value={productionAuditFilterStatus}
+                      onChange={e => setProductionAuditFilterStatus(e.target.value)}
+                    >
+                      <option value="pending">
+                        {isDisburse ? `⏳ بانتظار الصرف (${pendingTotal})` : `⏳ بانتظار الاستلام (${pendingTotal})`}
+                      </option>
+                      <option value="approved">
+                        {isDisburse ? `✅ تم الصرف / مدققة (${approvedTotal})` : `✅ تم الاستلام / مكتملة (${approvedTotal})`}
+                      </option>
+                    </select>
+                  </div>
+                </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '17px', fontWeight: '900' }}>استلام المنتجات الجاهزة</div>
-                <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '2px' }}>إدخال المواد تامة الصنع لمستودع البضاعة الجاهزة</div>
-                <div className="production-pending-count">غير مستلمة <strong>{pendingProductionReceiptCount}</strong></div>
-              </div>
-            </button>
-          </div>
-
-          <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex-wrap gap-4 mt-4">
-            <div>
-              <h3 className="text-lg font-bold text-slate-800">
-                {productionSubTab === 'disbursement' ? 'صرف المواد الخام' : 'استلام المنتجات الجاهزة'}
-              </h3>
-              <p className="text-slate-500 text-xs mt-0.5">
-                {productionSubTab === 'disbursement' ? 'تدقيق وصرف مكونات طلبات الإنتاج من المواد الخام' : 'إثبات استلام وتوريد المنتجات النهائية للمستودعات'}
-              </p>
-            </div>
-            
-            <div className="flex items-center gap-2 flex-wrap">
-              <button 
-                onClick={() => setProductionTypeFilter('all')}
-                style={{
-                  height: '40px', padding: '0 16px', borderRadius: '12px', fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap',
-                  border: productionTypeFilter === 'all' ? 'none' : '1px solid #e2e8f0',
-                  backgroundColor: productionTypeFilter === 'all' ? '#1a8d9b' : '#ffffff',
-                  color: productionTypeFilter === 'all' ? 'white' : '#475569',
-                  transition: 'all 0.2s',
-                  boxShadow: productionTypeFilter === 'all' ? '0 4px 6px -1px rgba(26,141,155,0.2)' : '0 1px 2px rgba(0,0,0,0.05)'
-                }}
-              >الكل</button>
-              <button 
-                onClick={() => setProductionTypeFilter('sewing')}
-                style={{
-                  height: '40px', padding: '0 16px', borderRadius: '12px', fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap',
-                  border: productionTypeFilter === 'sewing' ? 'none' : '1px solid #e2e8f0',
-                  backgroundColor: productionTypeFilter === 'sewing' ? '#1a8d9b' : '#ffffff',
-                  color: productionTypeFilter === 'sewing' ? 'white' : '#475569',
-                  transition: 'all 0.2s',
-                  boxShadow: productionTypeFilter === 'sewing' ? '0 4px 6px -1px rgba(26,141,155,0.2)' : '0 1px 2px rgba(0,0,0,0.05)'
-                }}
-              >طلبات إنتاج قيد الخياطة</button>
-              <button 
-                onClick={() => setProductionTypeFilter('preparation')}
-                style={{
-                  height: '40px', padding: '0 16px', borderRadius: '12px', fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap',
-                  border: productionTypeFilter === 'preparation' ? 'none' : '1px solid #e2e8f0',
-                  backgroundColor: productionTypeFilter === 'preparation' ? '#1a8d9b' : '#ffffff',
-                  color: productionTypeFilter === 'preparation' ? 'white' : '#475569',
-                  transition: 'all 0.2s',
-                  boxShadow: productionTypeFilter === 'preparation' ? '0 4px 6px -1px rgba(26,141,155,0.2)' : '0 1px 2px rgba(0,0,0,0.05)'
-                }}
-              >طلبات إنتاج قيد التحضير</button>
-
-              <select
-                className="input-field text-sm"
-                style={{ width: 'auto', minWidth: '145px', marginBottom: 0, height: '40px', borderRadius: '12px', padding: '0 1.5rem 0 0.8rem' }}
-                value={productionAuditFilterStatus}
-                onChange={e => setProductionAuditFilterStatus(e.target.value)}
-              >
-                <option value="pending">{productionSubTab === 'disbursement' ? 'غير مدققة' : 'غير مستلمة'}</option>
-                <option value="approved">{productionSubTab === 'disbursement' ? 'مدققة' : 'مستلمة'}</option>
-              </select>
-
-            </div>
-          </div>
+            );
+          })()}
           <div className="table-container glass-panel overflow-x-auto mt-4">
             <table className="min-w-[800px]">
               <thead>

@@ -1,0 +1,75 @@
+.petty-cash-page{direction:rtl;padding:20px 24px 36px;color:#10253d;display:grid;gap:20px;font-family:inherit}
+.petty-cash-header{display:flex;align-items:center;gap:15px;padding:10px 2px 4px}
+.petty-cash-title-icon{width:54px;height:54px;display:grid;place-items:center;border-radius:17px;color:#fff;background:linear-gradient(145deg,#168796,#0b6976);box-shadow:0 10px 24px rgba(13,111,123,.2)}
+.petty-cash-eyebrow{font-size:11px;font-weight:700;color:#7b91aa;margin-bottom:3px}
+.petty-cash-header h2{margin:0;font-size:25px;font-weight:800;letter-spacing:-.4px}
+.petty-cash-header p{margin:4px 0 0;font-size:13px;color:#8b9bb0}
+.petty-cash-panel,.petty-cash-empty{background:#fff;border:1px solid #e6edf5;border-radius:18px;box-shadow:0 5px 22px rgba(28,49,77,.045)}
+.petty-cash-panel{padding:22px 24px}
+.petty-cash-panel-heading{display:flex;align-items:center;gap:11px;margin-bottom:20px}
+.petty-cash-section-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:#eaf8f8;color:#137987;flex-shrink:0}
+.petty-cash-panel-heading h3{margin:0;font-size:16px;font-weight:800;color:#142842}
+.petty-cash-panel-heading p{margin:3px 0 0;font-size:12px;color:#95a4b6}
+.petty-cash-form-grid{display:grid;grid-template-columns:1.25fr 1fr 1fr auto;gap:13px;align-items:end}
+.petty-cash-page label{font-size:12px;font-weight:750;color:#536780;display:block}
+.petty-cash-page label input:not([type=file]),.petty-cash-page label select{display:block;width:100%;height:43px;margin-top:8px;padding:0 12px;border:1px solid #dce6f0;border-radius:10px;background:#fbfdff;color:#1a314b;font-size:13px;font-weight:600;outline:none;transition:border-color .2s,box-shadow .2s;box-sizing:border-box}
+.petty-cash-page label input:focus,.petty-cash-page label select:focus{border-color:#22a0aa;box-shadow:0 0 0 3px rgba(34,160,170,.12)}
+.petty-cash-page label .form-control{display:block;width:100%;height:43px;margin-top:8px;padding:0 12px;border:1px solid #dce6f0;border-radius:10px;background:#fbfdff;color:#1a314b;font-size:13px;font-weight:600;box-sizing:border-box;outline:none}
+.petty-cash-page label .form-control:focus{border-color:#22a0aa;box-shadow:0 0 0 3px rgba(34,160,170,.12)}
+.petty-cash-page .petty-cash-date-input{display:block;width:100%;height:43px;margin-top:8px;padding:0 12px;border:1px solid #dce6f0;border-radius:10px;background:#fbfdff;color:#1a314b;font-size:13px;font-weight:600;box-sizing:border-box;outline:none;cursor:pointer}
+.petty-cash-page .petty-cash-date-input:focus{border-color:#22a0aa;box-shadow:0 0 0 3px rgba(34,160,170,.12)}
+.flatpickr-calendar.petty-cash-calendar{border:1px solid #dbe9ed!important;border-radius:16px!important;box-shadow:0 18px 42px rgba(17,54,73,.16)!important;padding:8px}
+.petty-cash-calendar .flatpickr-months,.petty-cash-calendar .flatpickr-weekdays{background:#f1faf9;border-radius:10px}
+.petty-cash-calendar .flatpickr-current-month,.petty-cash-calendar .flatpickr-weekday{color:#1c5360;font-weight:800}
+.petty-cash-calendar .flatpickr-day.selected,.petty-cash-calendar .flatpickr-day.selected:hover{background:#117987!important;border-color:#117987!important;color:white}
+.petty-cash-calendar .flatpickr-day.today:not(.selected){border-color:#27a2a5;color:#117987}
+.petty-cash-page button{cursor:pointer;transition:transform .15s,background .15s,box-shadow .15s}
+.petty-cash-page button:hover:not(:disabled){transform:translateY(-1px)}
+.petty-cash-primary{border:0;border-radius:10px;background:#117987;color:white;min-height:43px;padding:0 20px;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:800;white-space:nowrap;box-shadow:0 5px 12px rgba(17,121,135,.18)}
+.petty-cash-primary:hover:not(:disabled){background:#0b6976;box-shadow:0 7px 16px rgba(17,121,135,.24)}
+.petty-cash-primary:disabled{opacity:.55;cursor:wait}
+.petty-cash-picker .petty-cash-panel-heading{margin-bottom:10px}
+.petty-cash-select-label select{max-width:490px}
+.petty-cash-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.petty-cash-metric{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:21px 24px;background:#fff;border:1px solid #e5edf5;border-radius:17px;box-shadow:0 5px 20px rgba(28,49,77,.04)}
+.petty-cash-metric span,.petty-cash-metric strong{display:block}
+.petty-cash-metric span{font-size:12px;font-weight:750;color:#8193a7}
+.petty-cash-metric strong{font-size:24px;font-weight:850;margin-top:6px;color:#172d46;white-space:nowrap}
+.petty-cash-metric-icon{width:49px;height:49px;border-radius:14px;display:grid;place-items:center;background:#eaf3ff;color:#5b8ce1;flex-shrink:0}
+.petty-cash-metric.spent .petty-cash-metric-icon{background:#fff3e7;color:#e09338}
+.petty-cash-metric.remaining{border-color:#bfebe6;background:linear-gradient(135deg,#fff,#f4fdfb)}
+.petty-cash-metric.remaining strong{color:#117d70}
+.petty-cash-metric.remaining .petty-cash-metric-icon{background:#dff7f1;color:#159b82}
+.petty-cash-expenses-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
+.petty-cash-expenses-heading .petty-cash-panel-heading{margin:0}
+.petty-cash-expense-form{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:13px;align-items:end;padding:20px;border:1px solid #d9eae9;border-radius:14px;background:#f8fcfc;margin-bottom:20px}
+.petty-cash-form-title{grid-column:1/-1;font-size:14px;font-weight:800;color:#176f7b}
+.petty-cash-upload-label{position:relative;cursor:pointer}
+.petty-cash-upload-field{height:43px;margin-top:8px;padding:0 10px;display:flex;align-items:center;gap:7px;border:1px solid #dce6f0;border-radius:10px;background:#fbfdff;color:#61778e;font-size:12px;white-space:nowrap;overflow:hidden}
+.petty-cash-upload-field>span:nth-child(2){overflow:hidden;text-overflow:ellipsis;flex:1}
+.petty-cash-upload-field svg{color:#178391;flex-shrink:0}
+.petty-cash-upload-action{padding:5px 9px;border-radius:7px;background:#e9f7f7;color:#137a87;font-size:11px;font-weight:800}
+.petty-cash-upload-label:hover .petty-cash-upload-field,.petty-cash-upload-label:focus-within .petty-cash-upload-field{border-color:#22a0aa;box-shadow:0 0 0 3px rgba(34,160,170,.12)}
+.petty-cash-upload-label input[type=file]{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
+.petty-cash-form-actions{grid-column:1/-1;display:flex;align-items:center;gap:10px;margin-top:4px}
+.petty-cash-secondary{border:1px solid #dce6f0;background:#fff;color:#54677d;border-radius:10px;padding:0 19px;min-height:43px;font-size:13px;font-weight:750}
+.petty-cash-attached{font-size:12px;font-weight:700;color:#138571}
+.petty-cash-table-wrap{overflow-x:auto;border:1px solid #e9eff5;border-radius:12px}
+.petty-cash-table{border-collapse:collapse;width:100%;text-align:right;min-width:700px}
+.petty-cash-table thead{background:#f7fafd}
+.petty-cash-table th{font-size:12px;font-weight:800;color:#5c7088;padding:15px 17px;white-space:nowrap}
+.petty-cash-table td{font-size:13px;color:#263c55;padding:15px 17px;border-top:1px solid #edf1f5}
+.petty-cash-table tbody tr:hover{background:#fbfdfd}
+.petty-cash-table .petty-cash-description{font-weight:750}
+.petty-cash-table .petty-cash-amount{font-weight:850;color:#147a86;white-space:nowrap}
+.petty-cash-image-link{display:inline-flex;align-items:center;gap:6px;border:0;background:none;color:#168492;font-weight:750;font-size:12px}
+.petty-cash-row-actions{display:flex;align-items:center;gap:7px}
+.petty-cash-row-actions button{width:31px;height:31px;border:1px solid #dce8ef;border-radius:8px;background:#f6fbfd;color:#168492;display:grid;place-items:center}
+.petty-cash-row-actions button.delete{background:#fff7f7;border-color:#f6dddd;color:#dc6870}
+.petty-cash-table-empty{display:flex;align-items:center;justify-content:center;gap:9px;padding:32px;color:#9aacbd;font-size:13px;font-weight:650}
+.petty-cash-empty{text-align:center;padding:46px 20px;color:#91a1b3}
+.petty-cash-empty-icon{width:64px;height:64px;display:grid;place-items:center;margin:0 auto 15px;border-radius:20px;background:#e9f7f7;color:#17808d}
+.petty-cash-empty h3{margin:0;font-size:17px;font-weight:800;color:#3d536e}
+.petty-cash-empty p{margin:7px 0 0;font-size:13px}
+@media(max-width:1000px){.petty-cash-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.petty-cash-expense-form{grid-template-columns:repeat(2,minmax(0,1fr))}.petty-cash-summary{gap:9px}.petty-cash-metric{padding:18px}.petty-cash-metric strong{font-size:19px}}
+@media(max-width:650px){.petty-cash-page{padding:14px;gap:14px}.petty-cash-panel{padding:18px}.petty-cash-form-grid,.petty-cash-expense-form,.petty-cash-summary{grid-template-columns:1fr}.petty-cash-expenses-heading{align-items:stretch;flex-direction:column}.petty-cash-expenses-heading .petty-cash-primary{width:100%}.petty-cash-header h2{font-size:22px}.petty-cash-metric strong{font-size:23px}}

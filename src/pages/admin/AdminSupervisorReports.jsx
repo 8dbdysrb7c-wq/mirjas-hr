@@ -246,9 +246,19 @@ const AdminSupervisorReports = ({ user }) => {
     return [...new Set(reports.map(r => r.supervisorName).filter(Boolean))];
   }, [reports]);
 
-  const fetchOrders = async () => {
+  const getOrderScope = supervisor => {
+    const configured = supervisor?.supervisorOrderTypes;
+    if (Array.isArray(configured)) return configured;
+    const supervisorId = String(supervisor?.id || supervisor?.employeeId || '').trim();
+    if (supervisorId === 'EMP-0001') return ['PRO'];
+    if (supervisorId === 'EMP-0006') return ['PREP', 'ORD'];
+    return null;
+  };
+
+  const fetchOrders = async supervisor => {
     // Fetch active orders across all departments directly by status without date cutoff
     const { getActiveSalesOrders, getActiveOrders, getActivePreparationOrders, getActiveMissions } = await import('../../store');
+    const scope = getOrderScope(supervisor);
 
     const [salesOrdersData, productionOrdersData, preparationOrdersData, missionsData] = await Promise.all([
       getActiveSalesOrders(),
@@ -262,15 +272,18 @@ const AdminSupervisorReports = ({ user }) => {
 
     const activeSalesOrders = (salesOrdersData || [])
       .filter(o => !excludedOrderStatuses.includes(o.status) && !excludedOrderStatuses.includes(o.executionStatus))
+      .filter(o => scope === null || String(o.orderNumber || '').trim().toUpperCase().startsWith('ORD-'))
       .map(o => ({ ...o, isSales: true, currentDepartment: 'الطلبيات' }));
 
     const activeProductionOrders = (productionOrdersData || [])
       .filter(o => !excludedOrderStatuses.includes(o.status) && !excludedOrderStatuses.includes(o.executionStatus))
-      .map(o => ({ ...o, isProduction: true, currentDepartment: 'الإنتاج' }));
+      .filter(o => scope === null || String(o.orderNumber || '').trim().toUpperCase().startsWith('PRO-'))
+      .map(o => ({ ...o, isProduction: true, currentDepartment: 'إنتاج قيد الخياطة' }));
 
     const activePreparationOrders = (preparationOrdersData || [])
       .filter(o => !excludedOrderStatuses.includes(o.status) && !excludedOrderStatuses.includes(o.executionStatus))
-      .map(o => ({ ...o, isPreparation: true, currentDepartment: 'التحضير' }));
+      .filter(o => scope === null || String(o.orderNumber || '').trim().toUpperCase().startsWith('PREP-'))
+      .map(o => ({ ...o, isPreparation: true, currentDepartment: 'إنتاج قيد التحضير' }));
 
     const activeMissions = (missionsData || []).filter(m => !excludedMissionStatuses.includes(m.status));
 
@@ -283,7 +296,13 @@ const AdminSupervisorReports = ({ user }) => {
       executionStatus: m.status
     }));
 
-    setOrders([...activeSalesOrders, ...activeProductionOrders, ...activePreparationOrders, ...normalizedMissions].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
+    const scopedOrders = [
+      ...(scope === null || scope.includes('ORD') ? activeSalesOrders : []),
+      ...(scope === null || scope.includes('PRO') ? activeProductionOrders : []),
+      ...(scope === null || scope.includes('PREP') ? activePreparationOrders : []),
+      ...(scope === null || scope.includes('MISSION') ? normalizedMissions : [])
+    ];
+    setOrders(scopedOrders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
   };
 
   useEffect(() => {
@@ -321,7 +340,6 @@ const AdminSupervisorReports = ({ user }) => {
 
         if (!isMounted) return;
 
-        await fetchOrders();
         const currentUserId = String(user?.id || user?.employeeId || '').trim();
         const currentUserName = String(user?.name || '').trim();
         const cUser = emps.find(e => 
@@ -330,6 +348,7 @@ const AdminSupervisorReports = ({ user }) => {
           (user?.employeeId && String(e.id || '').trim() === String(user.employeeId).trim()) ||
           (currentUserName && String(e.name || '').trim() === currentUserName)
         );
+        await fetchOrders(cUser || user);
 
         const directReports = getDirectReports(cUser || user, emps).filter(isActiveEmployee);
         const teamIds = directReports.flatMap(e => [String(e.id || '').trim(), String(e.employeeId || '').trim()]).filter(Boolean);
@@ -659,7 +678,7 @@ const AdminSupervisorReports = ({ user }) => {
           if (!order.supervisorNotes || !order.supervisorNotes.trim()) {
             isValid = false;
             const orderRef = order.isMission ? 'مهمة التوصيل' : `الطلبية رقم ${order.orderNumber}`;
-            errorMessage = `الرجاء إدخال ملاحظة لـ ${orderRef} الخاصة بـ ${order.customerName} (أو كتابة "لا يوجد" أو "قيد العمل").`;
+            errorMessage = `الرجاء إدخال سبب عدم انتهاء ${orderRef} الخاصة بـ ${order.customerName}.`;
             break;
           }
         }
@@ -710,7 +729,7 @@ const AdminSupervisorReports = ({ user }) => {
         date,
         timeIn: autoTimeIn,
         timeOut: autoTimeOut,
-        attendanceNotes: '',
+        attendanceNotes,
         employeeEvaluations: evaluationsArray,
         employeeAttendanceStatus,
         ordersSnapshot: orders || [],
@@ -1214,7 +1233,7 @@ const AdminSupervisorReports = ({ user }) => {
             <div style="background: #ffffff; border-radius: 20px; padding: 1.25rem; margin-top: 1.25rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 10px rgba(0,0,0,0.02);">
               <div style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; font-weight: 800; color: #0f766e; font-size: 0.95rem; margin-bottom: 1rem;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                <span>متابعة الطلبيات والإنتاج المباشر</span>
+                <span>الطلبيات غير المنتهية وأسباب التأخير</span>
               </div>
               
               <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 0.8rem; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0;">
@@ -1223,7 +1242,7 @@ const AdminSupervisorReports = ({ user }) => {
                     <th style="padding: 10px; border: 1px solid #cbd5e1;">الطلبية/المهمة</th>
                     <th style="padding: 10px; border: 1px solid #cbd5e1;">القسم</th>
                     <th style="padding: 10px; border: 1px solid #cbd5e1;">الحالة</th>
-                    <th style="padding: 10px; border: 1px solid #cbd5e1;">ملاحظات المشرف</th>
+                    <th style="padding: 10px; border: 1px solid #cbd5e1;">سبب عدم الانتهاء / آخر مستجد</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1837,16 +1856,11 @@ const AdminSupervisorReports = ({ user }) => {
                 </div>
               )}
 
-              {/* زر حفظ التقرير واعتماده (منقول قبل القسم ثانياً بناءً على طلب المستخدم) */}
-              <button type="submit" className="btn btn-primary w-full h-12 text-lg font-bold mb-8 mt-4 shadow-lg">
-                <Save size={20} /> حفظ التقرير واعتماده
-              </button>
-
               {/* ثالثاً: لوحة متابعة الطلبيات والإنتاج المباشر */}
               {currentUserPerms.orders && (
                 <div className="bg-slate-50 p-4 rounded-xl mb-6 border border-slate-200">
                   <h4 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2">
-                    <Package size={18} className="text-primary" /> ثانياً: لوحة متابعة الطلبيات والإنتاج المباشر
+                    <Package size={18} className="text-primary" /> ثانياً: الطلبيات غير المنتهية ضمن اختصاصك
                   </h4>
 
                   <div className="overflow-x-auto">
@@ -1856,7 +1870,7 @@ const AdminSupervisorReports = ({ user }) => {
                           <th className="p-3 border-b whitespace-nowrap">الطلبية/المهمة</th>
                           <th className="p-3 border-b text-center whitespace-nowrap">القسم</th>
                           <th className="p-3 border-b text-center whitespace-nowrap">الحالة</th>
-                          <th className="p-3 border-b text-center whitespace-nowrap">ملاحظات سريعة</th>
+                          <th className="p-3 border-b text-center whitespace-nowrap">سبب عدم الانتهاء / آخر مستجد</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1905,7 +1919,7 @@ const AdminSupervisorReports = ({ user }) => {
                                   <input
                                     type="text"
                                     className="input-field h-9 mb-0 text-xs flex-1 px-2"
-                                    placeholder="ملاحظات المشرف..."
+                                    placeholder="لماذا لم تنتهِ الطلبية؟"
                                     value={order.supervisorNotes || ''}
                                     onChange={(e) => {
                                       const updatedOrders = orders.map(o => o.id === order.id ? { ...o, supervisorNotes: e.target.value } : o);
@@ -1950,7 +1964,7 @@ const AdminSupervisorReports = ({ user }) => {
                     </table>
                   </div>
                   <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
-                    <MessageSquare size={12} /> أي تعديل تقوم به في هذا الجدول يتم حفظه مباشرة في الطلبية.
+                    <MessageSquare size={12} /> تُحفظ هذه الأسباب ضمن تقرير المشرف عند حفظ التقرير.
                   </p>
                 </div>
               )}
@@ -1968,8 +1982,9 @@ const AdminSupervisorReports = ({ user }) => {
                 ></textarea>
               </div>
 
-              {/* مسافة سفلية بديلة عن الزر القديم */}
-              <div className="h-24 mt-4"></div>
+              <button type="submit" className="btn btn-primary w-full h-12 text-lg font-bold mb-8 mt-4 shadow-lg">
+                <Save size={20} /> حفظ التقرير واعتماده
+              </button>
             </form>
           );
         })()

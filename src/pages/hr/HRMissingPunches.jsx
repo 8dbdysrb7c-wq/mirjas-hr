@@ -11,6 +11,13 @@ import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import 'flatpickr/dist/themes/light.css';
 import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import { hasPermission } from '../../utils/permissions';
+
+const displayPunchReason = (reason) => ({
+  'فشل قراءة البصمة (دخول)': 'متبقي بصمة دخول',
+  'فشل قراءة البصمة (خروج)': 'متبقي بصمة خروج',
+  'فشل قراءة البصمة (دخول وخروج)': 'متبقي بصمة دخول وخروج'
+})[reason] || reason;
+
 const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [year, setYear] = useState(() => parseInt(selectedMonth.split('-')[0]) || new Date().getFullYear());
@@ -1451,7 +1458,7 @@ const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
                         )}
                       </div>
                     </td>
-                    <td className="p-5 text-sm text-slate-800 font-bold text-center">{p.reason}</td>
+                    <td className="p-5 text-sm text-slate-800 font-bold text-center">{displayPunchReason(p.reason)}</td>
                     <td className="p-5 text-center">
                       <div className="flex justify-center items-center gap-2">
                         <span className={`w-2 h-2 rounded-full ${dotClass}`}></span>

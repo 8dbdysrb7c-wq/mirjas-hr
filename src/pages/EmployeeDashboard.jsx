@@ -6,7 +6,7 @@ import { startVisiblePolling } from '../utils/visiblePolling';
 import { motion } from 'framer-motion';
 import { Bell, RefreshCw, Settings, LogOut, Plus, Globe, Trash2, Edit2, Save, Phone, Clock, Calendar, FileText, X, Camera, Home, ShoppingCart, ShoppingBag, Menu, MoreHorizontal, Eye, Truck, CheckCircle2, Navigation, MapPin, CheckCircle, Info, SunMoon, Mic, MicOff, ClipboardCheck, Layers, Activity, Fingerprint, DollarSign, Folder, PieChart, Users, Filter, ArrowUpDown, ArrowRight } from 'lucide-react';
 import { 
-  getDepartments, getTasksData, saveReport, getReports, getReportsForUser, getMissions, getMissionsForUser, getGlobalSettings, saveEmployee,
+  getDepartments, getTasksData, saveReport, getReports, getReportsForUser, getMissions, getMissionsForUser, updateMissionStatus, getGlobalSettings, saveEmployee,
   getSalesOrders, getOrders, getSupervisorTasks, getSupervisorTasksForUser, getEmployees, getPreparationOrders,
   getActiveSalesOrders, getActiveOrders, getActivePreparationOrders, getActiveMissions,
   getEmployeeAttendanceByDate, saveHRAttendance,
@@ -1051,8 +1051,8 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
   const [timeOut, setTimeOut] = useState('');
   const [breakTimeFrom, setBreakTimeFrom] = useState('13:00');
   const [breakTimeTo, setBreakTimeTo] = useState('13:30');
-  const [phoneSafe, setPhoneSafe] = useState(false);
-  const [phoneUsages, setPhoneUsages] = useState(0);
+  const [phoneSafe, setPhoneSafe] = useState(null);
+  const [phoneUsages, setPhoneUsages] = useState('');
   const [notes, setNotes] = useState('');
   const [tasks, setTasks] = useState([{ id: 1, name: '', operation: '', count: '', department: userRoles[0] || '', notes: '' }]);
 
@@ -1227,8 +1227,8 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
           setTimeOut(existing.timeOut || att?.timeOut || '');
           setBreakTimeFrom(existing.breakTimeFrom || '');
           setBreakTimeTo(existing.breakTimeTo || '');
-          setPhoneSafe(existing.phoneSafe || false);
-          setPhoneUsages(existing.phoneUsages || 0);
+          setPhoneSafe(existing.phoneSafe !== undefined && existing.phoneSafe !== null ? existing.phoneSafe : null);
+          setPhoneUsages(existing.phoneUsages !== undefined && existing.phoneUsages !== null ? existing.phoneUsages : '');
           setNotes(existing.notes || '');
 
           const deptKey = Object.keys(departments).find(k => departments[k] === existing.department) || userRoles[0];
@@ -1247,7 +1247,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
           setTimeIn(att?.timeIn || '');
           setTimeOut(att?.timeOut || '');
           setBreakTimeFrom('13:00'); setBreakTimeTo('13:30');
-          setPhoneSafe(false); setPhoneUsages(0); setNotes('');
+          setPhoneSafe(null); setPhoneUsages(''); setNotes('');
           const validRoles = userRoles.filter(r => departments[r]);
           const defaultDept = validRoles[0] || Object.keys(departments)[0] || '';
           setTasks([{
@@ -1440,6 +1440,16 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       return;
     }
 
+    if (phoneSafe === null || phoneSafe === undefined) {
+      MySwal.fire('حقل إلزامي', 'يرجى الإجابة على سؤال: هل تم وضع الهاتف بالأمانات؟ (نعم / لا)', 'warning');
+      return;
+    }
+
+    if (phoneUsages === '' || phoneUsages === null || phoneUsages === undefined || isNaN(Number(phoneUsages)) || Number(phoneUsages) < 0) {
+      MySwal.fire('حقل إلزامي', 'يرجى إدخال عدد مرات استعمال الهاتف خلال الدوام (0 أو أكثر)', 'warning');
+      return;
+    }
+
     // Check if report already exists for today
     const reportExists = allReports.some(
       (report) => String(report.userId || '').trim() === String(user.id || '').trim() && report.date === date
@@ -1506,7 +1516,8 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         return { ...task, min, max, hrMin, hrMax, expectedAveragePerHour, earnedHours, departmentName: departments[task.department] };
       });
 
-      let phonePenalty = phoneSafe ? (phoneUsages * scoringConfig.phoneSafePenalty) : scoringConfig.phoneUnsafeBase + (phoneUsages * scoringConfig.phoneUnsafePenalty);
+      const validPhoneUsages = Math.max(0, parseInt(phoneUsages, 10) || 0);
+      let phonePenalty = phoneSafe ? (validPhoneUsages * scoringConfig.phoneSafePenalty) : scoringConfig.phoneUnsafeBase + (validPhoneUsages * scoringConfig.phoneUnsafePenalty);
 
       const totalEarnedHours = evaluatedTasks.reduce((acc, curr) => acc + (curr.earnedHours || 0), 0);
 
@@ -1536,8 +1547,8 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         breakTimeTo,
         actualHours,
         department: reportDept,
-        phoneSafe,
-        phoneUsages,
+        phoneSafe: Boolean(phoneSafe),
+        phoneUsages: validPhoneUsages,
         notes,
         tasks: evaluatedTasks,
         totalEarnedHours,
@@ -2129,6 +2140,16 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         <div className={`modern-nav-item shrink-0 ${activeTab === 'home' ? 'active' : ''}`} onClick={() => handleTabChange('home')}>
           <Home size={22} /> <span>الرئيسية</span>
         </div>
+        {hasPermission(user, 'live') && (
+          <div className={`modern-nav-item shrink-0 ${activeTab === 'live' ? 'active' : ''}`} onClick={() => handleTabChange('live')}>
+            <Activity size={22} /> <span>التحكم المباشر</span>
+          </div>
+        )}
+        {hasPermission(user, 'production') && (
+          <div className={`modern-nav-item shrink-0 ${activeTab === 'production' ? 'active' : ''}`} onClick={() => handleTabChange('production')}>
+            <SewingMachineIcon size={22} /> <span>إدارة الإنتاج</span>
+          </div>
+        )}
         {hasPermission(user, 'hr') && (
           <div className={`modern-nav-item shrink-0 ${activeTab === 'hr' ? 'active' : ''}`} onClick={() => handleTabChange('hr')}>
             <Users size={22} /> <span>الموارد البشرية</span>
@@ -2144,6 +2165,9 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
             <ShoppingCart size={22} /> <span>الطلبيات</span>
           </div>
         )}
+        <div className="modern-nav-item shrink-0 lg:hidden" onClick={() => setIsSidebarOpen(true)}>
+          <Menu size={22} /> <span>القائمة</span>
+        </div>
       </div>
 
       {/* Sidebar Overlay */}
@@ -2189,6 +2213,51 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
             <div className={`admin-sidebar-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => handleTabChange('home')}>
               <Home size={22} /> <span>الرئيسية</span>
             </div>
+            {hasPermission(user, 'live') && (
+              <div className={`admin-sidebar-item ${activeTab === 'live' ? 'active' : ''}`} onClick={() => handleTabChange('live')}>
+                <Activity size={22} /> <span>التحكم المباشر</span>
+              </div>
+            )}
+            {hasPermission(user, 'supervisor_tasks') && (
+              <div className={`admin-sidebar-item ${activeTab === 'supervisor-tasks' ? 'active' : ''}`} onClick={() => handleTabChange('supervisor-tasks')}>
+                <Layers size={22} /> <span>إدارة المهام</span>
+              </div>
+            )}
+            {(canViewSupervisorReports || hasPermission(user, 'supervisor_reports')) && (
+              <div className={`admin-sidebar-item ${activeTab === 'supervisor-reports' ? 'active' : ''}`} onClick={() => handleTabChange('supervisor-reports')}>
+                <ClipboardCheck size={22} /> <span>تقارير المشرفين</span>
+              </div>
+            )}
+            {hasPermission(user, 'production') && (
+              <div className={`admin-sidebar-item ${activeTab === 'production' ? 'active' : ''}`} onClick={() => handleTabChange('production')}>
+                <SewingMachineIcon size={22} /> <span>إدارة الإنتاج</span>
+              </div>
+            )}
+            {hasPermission(user, 'production_packaging') && (
+              <div className={`admin-sidebar-item ${activeTab === 'production-packaging' ? 'active' : ''}`} onClick={() => handleTabChange('production-packaging')}>
+                <Layers size={22} /> <span>قسم التغليف</span>
+              </div>
+            )}
+            {hasPermission(user, 'preparation') && (
+              <div className={`admin-sidebar-item ${activeTab === 'preparation' ? 'active' : ''}`} onClick={() => handleTabChange('preparation')}>
+                <SewingMachineIcon size={22} /> <span>التحضير والقص</span>
+              </div>
+            )}
+            {hasPermission(user, 'production_tasks') && (
+              <div className={`admin-sidebar-item ${activeTab === 'production-tasks' ? 'active' : ''}`} onClick={() => handleTabChange('production-tasks')}>
+                <ClipboardCheck size={22} /> <span>مهام الإنتاج</span>
+              </div>
+            )}
+            {hasPermission(user, 'quotes') && (
+              <div className={`admin-sidebar-item ${activeTab === 'quotes' ? 'active' : ''}`} onClick={() => handleTabChange('quotes')}>
+                <FileText size={22} /> <span>عروض الأسعار</span>
+              </div>
+            )}
+            {hasPermission(user, 'customers') && (
+              <div className={`admin-sidebar-item ${activeTab === 'customers' ? 'active' : ''}`} onClick={() => handleTabChange('customers')}>
+                <Users size={22} /> <span>العملاء</span>
+              </div>
+            )}
             {hasPermission(user, 'hr') && (
               <div className={`admin-sidebar-item ${activeTab === 'hr' ? 'active' : ''}`} onClick={() => handleTabChange('hr')}>
                 <Users size={22} /> <span>الموارد البشرية</span>
@@ -2260,6 +2329,9 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
                     <SunMoon size={19} />
                   </button>
                   <HeaderUserMenu user={user} onLogout={onLogout} onUpdateUser={onUpdateUser} />
+                  <button type="button" className="header-icon-button bg-white/60 hover:bg-white/80 transition-colors lg:hidden" onClick={() => setIsSidebarOpen(true)} title="القائمة الجانبية">
+                    <Menu size={19} className="text-slate-700" />
+                  </button>
                 </div>
               </div>
 

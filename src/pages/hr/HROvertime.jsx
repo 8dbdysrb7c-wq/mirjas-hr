@@ -517,16 +517,16 @@ const HROvertime = ({ user, refreshCounts }) => {
       return;
     }
 
-    // Check if duplicate overtime request exists
+    // Give immediate feedback for another request on the same day.
     const isDuplicate = leaves.some(l => {
       if (l.status === 'مرفوض') return false;
       if (String(l.employeeId || '').trim() !== String(formData.employeeId || '').trim()) return false;
       if (l.type !== 'بدل عمل إضافي' && l.type !== 'عمل إضافي') return false;
-      return l.date === formData.date && l.startTime === formData.startTime && l.endTime === formData.endTime;
+      return (l.date || l.startDate) === formData.date;
     });
 
     if (isDuplicate) {
-      Swal.fire('خطأ', 'يوجد طلب عمل إضافي مماثل مسبقاً لهذا الموظف في نفس التاريخ والوقت!', 'error');
+      Swal.fire('خطأ', 'يوجد طلب عمل إضافي مسبقاً لهذا الموظف في نفس اليوم!', 'error');
       return;
     }
 
@@ -570,7 +570,7 @@ const HROvertime = ({ user, refreshCounts }) => {
       fetchData();
     } catch (error) {
       console.error(error);
-      Swal.fire('خطأ', 'حدث خطأ أثناء حفظ الطلب', 'error');
+      Swal.fire('خطأ', error.message || 'حدث خطأ أثناء حفظ الطلب', 'error');
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);

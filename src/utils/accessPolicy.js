@@ -7,7 +7,10 @@ export const ACCESS_ACTIONS = {
   delete: 'حذف', 
   approve: 'اعتماد', 
   print: 'طباعة', 
-  export: 'تصدير' 
+  export: 'تصدير',
+  add_expense: 'إضافة صرف',
+  manage_expense: 'تعديل/حذف صرف',
+  view_invoice: 'مشاهدة صور الفواتير'
 };
 
 // Logical actions allowed per screen to eliminate clutter and irrelevant checkboxes
@@ -56,6 +59,7 @@ export const SCREEN_ALLOWED_ACTIONS = {
   hr_leaves: ['view', 'create', 'edit', 'delete', 'approve', 'print', 'export'],
   hr_overtime: ['view', 'create', 'edit', 'delete', 'approve', 'print', 'export'],
   hr_advances: ['view', 'create', 'edit', 'delete', 'approve', 'print', 'export'],
+  hr_petty_cash: ['view', 'create', 'add_expense', 'manage_expense', 'view_invoice'],
   hr_salaries: ['view', 'create', 'edit', 'delete', 'approve', 'print', 'export'],
   hr_salary_reports: ['view', 'print', 'export'],
   hr_bonuses_violations: ['view', 'create', 'edit', 'delete', 'approve', 'print', 'export'],
@@ -136,6 +140,7 @@ export const SCREEN_DESCRIPTIONS = {
   hr_leaves: 'طلبات الإجازات والمغادرات ومتابعة الأرصدة والاعتمادات',
   hr_overtime: 'تسجيل ساعات العمل الإضافي واحتسابها واعتمادها للموظفين',
   hr_advances: 'طلبات السلف المالية وجدولة الأقساط الشهرية والخصومات',
+  hr_petty_cash: 'سجل السلف النثرية وحركات الصرف والفواتير والمتبقي',
   hr_salaries: 'احتساب ومسيرات الرواتب الشهرية والبدلات والاقتطاعات',
   hr_salary_reports: 'تقارير وكشوفات الرواتب الإجمالية والتحليلات المالية للموظفين',
   hr_bonuses_violations: 'تسجيل واعتماد المكافآت التشجيعية والخصومات والمخالفات',
@@ -190,6 +195,7 @@ export const ACCESS_SECTIONS = [
     ['hr_missing_punches', 'الختمات الناقصة وتصحيح البصمات'],
     ['hr_employee_alerts', 'تنبيهات وتعاميم الموظفين']
   ]],
+  ['petty_cash', 'السلفة النثرية', [['hr_petty_cash', 'السلفة النثرية']]],
   ['reports', 'التقارير', [
     ['reports_employees', 'تقارير الموظفين والدوام'],
     ['reports_sales', 'تقارير طلبيات المبيعات'],
@@ -308,6 +314,7 @@ const SECTION_ALIASES = {
   inventory: 'inventory',
   sales: 'sales',
   hr: 'hr',
+  petty_cash: 'petty_cash',
   costing: 'costing',
   delivery: 'delivery',
   production: 'production',

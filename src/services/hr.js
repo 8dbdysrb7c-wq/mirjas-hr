@@ -1214,6 +1214,20 @@ export const saveHRLeave = async (leave, userContext = null) => {
        if (isLocked) throw new Error("لا يمكن التعديل: تم إغلاق رواتب هذه الفترة");
     }
 
+    if (!leave.id && ['بدل عمل إضافي', 'عمل إضافي'].includes(leave.type)) {
+      const requestDate = leave.date || leave.startDate;
+      const employeeId = String(leave.employeeId || '').trim();
+      if (requestDate && employeeId) {
+        const existing = await getDocs(query(collection(db, 'hr_leaves'), where('date', '==', requestDate)));
+        const duplicate = existing.docs.some(entry => {
+          const record = entry.data();
+          return String(record.employeeId || '').trim() === employeeId &&
+            ['بدل عمل إضافي', 'عمل إضافي'].includes(record.type) && record.status !== 'مرفوض';
+        });
+        if (duplicate) throw new Error('يوجد طلب عمل إضافي مسبقاً لهذا الموظف في نفس اليوم');
+      }
+    }
+
     const docRef = leave.id ? doc(db, 'hr_leaves', leave.id) : doc(collection(db, 'hr_leaves'));
     const data = { ...leave, updatedAt: new Date().toISOString() };
     if (!leave.id) data.createdAt = new Date().toISOString();

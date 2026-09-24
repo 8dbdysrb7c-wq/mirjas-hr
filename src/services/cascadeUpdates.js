@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, getDocs, writeBatch, doc } from 'firebase/firestore';
+import { collection, getDocs, writeBatch, doc, query, where } from 'firebase/firestore';
 
 const chunkArray = (arr, size) => {
   return Array.from({ length: Math.ceil(arr.length / size) }, (v, i) =>

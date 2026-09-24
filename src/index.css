@@ -3491,19 +3491,15 @@ table {
 
 .production-pending-count {
   display: inline-flex;
-  position: absolute;
-  left: 18px;
-  top: 50%;
-  transform: translateY(-50%);
   align-items: center;
   gap: 7px;
   margin-top: 0;
-  padding: 5px 11px;
+  padding: 6px 14px;
   border: 1.5px solid currentColor;
-  border-radius: 9px;
-  background: color-mix(in srgb, currentColor 8%, transparent);
+  border-radius: 10px;
   font-size: 14px;
   font-weight: 900;
+  white-space: nowrap;
 }
 
 .production-pending-count strong {

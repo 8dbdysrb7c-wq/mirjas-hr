@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getDepartments, saveDepartments, getTasksData, saveTasksData, isAdmin, canPerformAction, getGlobalSettings } from '../../store';
-import { Plus, Edit2, Trash2, X, Layers, Search , ArrowUpDown} from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Layers, Search, ArrowUpDown, Printer, FileSpreadsheet, FileText, Download } from 'lucide-react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
@@ -14,11 +14,8 @@ const AdminSettings = ({ user }) => {
   
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm);
-  const [showDeptModal, setShowDeptModal] = useState(false);
   const [deptForm, setDeptForm] = useState({ key: '', name: '', isEdit: false });
 
-  const [showTaskModal, setShowTaskModal] = useState(false);
-  const [taskForm, setTaskForm] = useState({ oldName: '', name: '', ops: [{ name: '', min: 0, max: 0 }] });
   const [globalSettings, setGlobalSettings] = useState({});
 
   useEffect(() => {
@@ -35,24 +32,6 @@ const AdminSettings = ({ user }) => {
     };
     fetchData();
   }, []);
-
-  const handleSaveDept = async () => {
-    if (!deptForm.key || !deptForm.name) { Swal.fire('خطأ', 'أدخل معرف واسم القسم', 'error'); return; }
-    const updated = { ...departments };
-    updated[deptForm.key] = deptForm.name;
-    await saveDepartments(updated);
-    setDepartments(updated);
-
-    if (!deptForm.isEdit && !tasksData[deptForm.key]) {
-      const updatedTasks = { ...tasksData, [deptForm.key]: [] };
-      await saveTasksData(updatedTasks);
-      setTasksData(updatedTasks);
-    }
-    
-    if (!activeDept) setActiveDept(deptForm.key);
-    setShowDeptModal(false);
-    Swal.fire('تم الحفظ', 'تم حفظ القسم بنجاح', 'success');
-  };
 
   const handleDeleteDept = (key) => {
     Swal.fire({
@@ -301,15 +280,290 @@ const AdminSettings = ({ user }) => {
     });
   };
 
+  const escapeHtml = (value) => String(value ?? '-').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
+
+  const handlePrintTasks = (deptKey = null) => {
+    const targetDeptKeys = (deptKey && deptKey !== 'all') ? [deptKey] : Object.keys(departments);
+    if (targetDeptKeys.length === 0) {
+      Swal.fire('تنبيه', 'لا توجد أقسام لطباعتها', 'warning');
+      return;
+    }
+
+    const popup = window.open('', '_blank', 'width=1100,height=850');
+    if (!popup) {
+      Swal.fire('تعذر فتح الطباعة', 'يرجى السماح بالنوافذ المنبثقة من إعدادات المتصفح ثم المحاولة مرة أخرى.', 'warning');
+      return;
+    }
+
+    const todayStr = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+    const isSingle = targetDeptKeys.length === 1;
+    const singleDeptName = isSingle ? (departments[targetDeptKeys[0]] || 'القسم') : 'كافة الأقسام';
+
+    let sectionsHtml = '';
+    targetDeptKeys.forEach((dKey) => {
+      const dName = departments[dKey] || dKey;
+      const tasksList = (tasksData[dKey] || []).filter(task => 
+        matchesSearch([task.name, task.id, task.taskNumber, task.description], debouncedSearchTerm)
+      );
+
+      let rowsHtml = '';
+      if (tasksList.length === 0) {
+        rowsHtml = `<tr><td colspan="5" class="empty-cell">لا توجد أصناف أو مهام مسجلة في هذا القسم</td></tr>`;
+      } else {
+        tasksList.forEach((task, idx) => {
+          const opsEntries = Object.entries(task.ops || {});
+          if (opsEntries.length === 0) {
+            rowsHtml += `
+              <tr>
+                <td class="num-col">${idx + 1}</td>
+                <td class="item-col font-bold">${escapeHtml(task.name)}</td>
+                <td class="op-col">---</td>
+                <td class="target-col">---</td>
+                <td class="target-col">---</td>
+              </tr>`;
+          } else {
+            opsEntries.forEach(([opName, range], opIdx) => {
+              const hrMin = range[2] !== undefined ? range[2] : Math.round(range[0]/9);
+              const hrMax = range[3] !== undefined ? range[3] : Math.round(range[1]/9);
+              rowsHtml += `
+                <tr>
+                  ${opIdx === 0 ? `<td class="num-col" rowspan="${opsEntries.length}">${idx + 1}</td>` : ''}
+                  ${opIdx === 0 ? `<td class="item-col font-bold" rowspan="${opsEntries.length}">${escapeHtml(task.name)}</td>` : ''}
+                  <td class="op-col"><span class="badge-op">${escapeHtml(opName)}</span></td>
+                  <td class="target-col"><span class="daily-target">${range[0]} - ${range[1]}</span> <span class="unit">قطعة/يوم</span></td>
+                  <td class="target-col"><span class="hourly-target">${hrMin} - ${hrMax}</span> <span class="unit">قطعة/ساعة</span></td>
+                </tr>`;
+            });
+          }
+        });
+      }
+
+      sectionsHtml += `
+        <div class="dept-section">
+          <div class="dept-title-bar">
+            <h2>قسم: ${escapeHtml(dName)}</h2>
+            <span class="badge-count">إجمالي الأصناف: ${tasksList.length}</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 45px;">#</th>
+                <th style="width: 35%;">الصنف / الموديل</th>
+                <th style="width: 20%;">العملية التشغيلية</th>
+                <th style="width: 22%;">الهدف اليومي (Daily Target)</th>
+                <th style="width: 23%;">عمل الساعة (Hourly Target)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+        </div>
+      `;
+    });
+
+    popup.document.write(`<!doctype html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="utf-8">
+  <title>كشف مساطر المهام والمستهدفات - ${escapeHtml(singleDeptName)}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
+    * { box-sizing: border-box; font-family: 'Tajawal', -apple-system, sans-serif; margin: 0; padding: 0; }
+    body { color: #0f172a; background: #fff; padding: 24px; font-size: 13px; line-height: 1.4; }
+    .header-container { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f766e; padding-bottom: 14px; margin-bottom: 20px; }
+    .company-info h1 { font-size: 20px; font-weight: 900; color: #0f766e; margin-bottom: 4px; }
+    .company-info p { font-size: 12px; color: #475569; font-weight: 600; }
+    .report-meta { text-align: left; font-size: 12px; color: #334155; }
+    .report-meta div { margin-bottom: 3px; }
+    .report-meta span { font-weight: bold; color: #0f766e; }
+    
+    .dept-section { margin-bottom: 28px; page-break-inside: avoid; }
+    .dept-title-bar { display: flex; justify-content: space-between; align-items: center; background: #f0fdfa; border: 1px solid #99f6e4; border-right: 5px solid #0f766e; padding: 8px 14px; border-radius: 6px; margin-bottom: 10px; }
+    .dept-title-bar h2 { font-size: 15px; font-weight: 800; color: #115e59; }
+    .badge-count { font-size: 11px; font-weight: 700; background: #0f766e; color: #fff; padding: 2px 10px; border-radius: 20px; }
+    
+    table { width: 100%; border-collapse: collapse; margin-bottom: 10px; table-layout: fixed; }
+    th { background: #0f766e; color: #ffffff; font-weight: 800; font-size: 12px; padding: 8px 10px; border: 1px solid #0f766e; text-align: center; }
+    td { border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 12px; vertical-align: middle; text-align: center; }
+    tr:nth-child(even) { background-color: #f8fafc; }
+    
+    .num-col { font-weight: bold; color: #64748b; }
+    .item-col { text-align: right; font-weight: 800; color: #1e293b; }
+    .font-bold { font-weight: 800; }
+    .op-col { font-weight: 700; color: #0f766e; }
+    .badge-op { display: inline-block; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+    .target-col { font-weight: 800; }
+    .daily-target { color: #047857; font-size: 13px; }
+    .hourly-target { color: #2563eb; font-size: 13px; }
+    .unit { font-size: 10px; color: #64748b; font-weight: 500; }
+    .empty-cell { color: #94a3b8; font-style: italic; padding: 16px; }
+
+    .footer-signatures { display: flex; justify-content: space-between; margin-top: 30px; padding-top: 15px; border-top: 1px dashed #cbd5e1; page-break-inside: avoid; }
+    .signature-box { flex: 1; text-align: center; font-size: 12px; font-weight: 700; color: #334155; }
+    .signature-line { margin-top: 35px; border-bottom: 1px solid #94a3b8; width: 70%; margin-left: auto; margin-right: auto; }
+    
+    .print-note { background: #fefce8; border: 1px solid #fef08a; padding: 8px 12px; border-radius: 6px; font-size: 11px; color: #713f12; margin-top: 15px; text-align: center; }
+
+    @media print {
+      body { padding: 0; }
+      .dept-section { page-break-inside: avoid; }
+      .footer-signatures { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header-container">
+    <div class="company-info">
+      <h1>مصنع مرجاس للمفروشات والمنسوجات</h1>
+      <p>كشف معايير ومستهدفات الإنتاج والعمليات (Target Standards)</p>
+    </div>
+    <div class="report-meta">
+      <div>التاريخ: <span>${todayStr}</span></div>
+      <div>القسم: <span>${escapeHtml(singleDeptName)}</span></div>
+      <div>المصدر: <span>نظام إدارة العمليات</span></div>
+    </div>
+  </div>
+
+  ${sectionsHtml}
+
+  <div class="print-note">
+    ⚠️ <strong>ملاحظة للمشرفين:</strong> هذه المساطر تمثل معايير ومستهدفات الإنجاز القياسية المعتمدة للأقسام والخطوط الإنتاجية لحساب الطاقة والكفاءة.
+  </div>
+
+  <div class="footer-signatures">
+    <div class="signature-box">
+      <div>مشرف القسم</div>
+      <div class="signature-line"></div>
+    </div>
+    <div class="signature-box">
+      <div>مدير الإنتاج والعمليات</div>
+      <div class="signature-line"></div>
+    </div>
+    <div class="signature-box">
+      <div>اعتماد الإدارة العامة</div>
+      <div class="signature-line"></div>
+    </div>
+  </div>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 200);
+    };
+  </script>
+</body>
+</html>`);
+    popup.document.close();
+  };
+
+  const handleExportExcel = async (deptKey = null) => {
+    try {
+      const XLSX = await import('xlsx');
+      const targetDeptKeys = (deptKey && deptKey !== 'all') ? [deptKey] : Object.keys(departments);
+      
+      const rows = [];
+      targetDeptKeys.forEach(dKey => {
+        const dName = departments[dKey] || dKey;
+        const tasksList = (tasksData[dKey] || []).filter(task => 
+          matchesSearch([task.name, task.id, task.taskNumber, task.description], debouncedSearchTerm)
+        );
+        tasksList.forEach(task => {
+          const opsEntries = Object.entries(task.ops || {});
+          if (opsEntries.length === 0) {
+            rows.push({
+              'القسم': dName,
+              'الصنف / الموديل': task.name,
+              'العملية': 'عام',
+              'الحد الأدنى اليومي': 0,
+              'الحد الأعلى اليومي': 0,
+              'معدل الساعة الأدنى': 0,
+              'معدل الساعة الأعلى': 0
+            });
+          } else {
+            opsEntries.forEach(([opName, range]) => {
+              const hrMin = range[2] !== undefined ? range[2] : Math.round(range[0]/9);
+              const hrMax = range[3] !== undefined ? range[3] : Math.round(range[1]/9);
+              rows.push({
+                'القسم': dName,
+                'الصنف / الموديل': task.name,
+                'العملية': opName,
+                'الحد الأدنى اليومي': range[0] || 0,
+                'الحد الأعلى اليومي': range[1] || 0,
+                'معدل الساعة الأدنى': hrMin || 0,
+                'معدل الساعة الأعلى': hrMax || 0
+              });
+            });
+          }
+        });
+      });
+
+      if (rows.length === 0) {
+        Swal.fire('تنبيه', 'لا توجد بيانات لتصديرها', 'warning');
+        return;
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'مساطر_المستهدفات');
+      
+      const fileName = deptKey && deptKey !== 'all' 
+        ? `مسطرة_المستهدفات_${departments[deptKey] || deptKey}.xlsx` 
+        : `كافة_مساطر_المستهدفات_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      XLSX.writeFile(workbook, fileName);
+      Swal.fire({ icon: 'success', title: 'تم تصدير الملف بنجاح', timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      console.error("Excel export error:", err);
+      Swal.fire('خطأ', 'حدث خطأ أثناء تصدير ملف Excel', 'error');
+    }
+  };
+
   return (
     <div className="space-y-4" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {/* Header matching AdminSales/AdminSalesSimple style */}
-      <div className="flex-responsive mb-2 no-print">
+      <div className="flex-responsive mb-2 no-print flex justify-between items-center flex-wrap gap-4">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <Layers className="text-primary" /> إعدادات المهام والمساطر
           </h2>
-          <p className="text-muted">تكوين الأقسام والعمليات ونطاق المستهدفات (Targets)</p>
+          <p className="text-muted">تكوين الأقسام والعمليات ونطاق المستهدفات (Targets) للمشرفين والإنتاج</p>
+        </div>
+
+        {/* Action / Print Buttons */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => handlePrintTasks(activeDept)}
+            className="btn btn-outline flex items-center gap-1.5"
+            style={{ padding: '8px 14px', borderRadius: '10px', fontSize: '0.88rem', fontWeight: 'bold' }}
+            title="طباعة كشف مسطرة القسم المحدد حالياً"
+            disabled={!activeDept}
+          >
+            <Printer size={16} className="text-primary" />
+            <span>طباعة مسطرة ({departments[activeDept] || 'القسم'})</span>
+          </button>
+
+          <button
+            onClick={() => handlePrintTasks('all')}
+            className="btn btn-outline flex items-center gap-1.5"
+            style={{ padding: '8px 14px', borderRadius: '10px', fontSize: '0.88rem', fontWeight: 'bold' }}
+            title="طباعة كشف شامل لكافة مساطر الأقسام"
+          >
+            <FileText size={16} className="text-emerald-600" />
+            <span>طباعة كافة الأقسام</span>
+          </button>
+
+          <button
+            onClick={() => handleExportExcel(activeDept)}
+            className="btn btn-outline flex items-center gap-1.5"
+            style={{ padding: '8px 14px', borderRadius: '10px', fontSize: '0.88rem', fontWeight: 'bold' }}
+            title="تصدير مسطرة القسم كملف Excel"
+            disabled={!activeDept}
+          >
+            <FileSpreadsheet size={16} className="text-green-600" />
+            <span>تصدير Excel</span>
+          </button>
         </div>
       </div>
 
@@ -373,13 +627,31 @@ const AdminSettings = ({ user }) => {
       </div>
 
       <div className="admin-content-layout glass-card">
-          <div className="flex justify-between items-center mb-4">
-            <h4 style={{ margin: 0 }}>مهام {departments[activeDept] || 'القسم'}</h4>
-            {canPerformAction(user, 'ADD', 'TASKS', globalSettings) && (
-              <button className="btn btn-primary" disabled={!activeDept} onClick={() => handleOpenTaskModal()}>
-                <Plus size={16} /> إضافة صنف/مهمة
+          <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
+            <div className="flex items-center gap-3">
+              <h4 style={{ margin: 0, fontWeight: 800 }}>مهام {departments[activeDept] || 'القسم'}</h4>
+              <span className="badge badge-info" style={{ fontSize: '0.78rem' }}>
+                {((tasksData[activeDept] || []).filter(task => matchesSearch([task.name, task.id, task.taskNumber, task.description], debouncedSearchTerm))).length} صنف
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handlePrintTasks(activeDept)}
+                className="btn btn-outline"
+                style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                title="طباعة مسطرة هذا القسم"
+                disabled={!activeDept}
+              >
+                <Printer size={15} /> طباعة المسطرة
               </button>
-            )}
+
+              {canPerformAction(user, 'ADD', 'TASKS', globalSettings) && (
+                <button className="btn btn-primary" disabled={!activeDept} onClick={() => handleOpenTaskModal()}>
+                  <Plus size={16} /> إضافة صنف/مهمة
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="table-container">
@@ -433,7 +705,7 @@ const AdminSettings = ({ user }) => {
                   </tr>
                 ))}
                 {(!tasksData[activeDept] || tasksData[activeDept].length === 0) && (
-                  <tr><td colSpan="3" className="text-center text-muted">لا يوجد مهام مسجلة في هذا القسم</td></tr>
+                  <tr><td colSpan="4" className="text-center text-muted">لا يوجد مهام مسجلة في هذا القسم</td></tr>
                 )}
               </tbody>
             </table>
