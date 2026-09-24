@@ -11,6 +11,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "=== [2/2] Deploying to Firebase Hosting ==="
+Remove-Item -Path .firebase -Recurse -Force -ErrorAction SilentlyContinue
 & $nodeExe $firebaseJs deploy --only hosting
 
 if ($LASTEXITCODE -ne 0) {
