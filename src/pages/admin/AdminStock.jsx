@@ -642,13 +642,45 @@ const AdminStock = ({ user, notificationTarget }) => {
 
   const pendingAudits = vouchers.filter(v => v.status === 'مسودة' && v.orderNumber);
   const getDraftForOrder = (orderNumber) => pendingAudits.filter(v => v.orderNumber === orderNumber);
+  const matchReceiptLineToOrderItem = (line, item) => {
+    if (!line || !item) return false;
+    if (line.itemNumber && item.itemNumber && line.itemNumber === item.itemNumber) return true;
+    
+    const pName = String(item.productName || item.name || '').replace(/\s+/g, ' ').trim();
+    const pSpec = String(item.colorModel || item.spec || '').replace(/\s+/g, ' ').trim();
+    const lName = String(line.name || '').replace(/\s+/g, ' ').trim();
+    const lSpec = String(line.spec || '').replace(/\s+/g, ' ').trim();
+
+    if (lName === pName) return true;
+    if (lSpec && `${lName} - ${lSpec}`.trim() === pName) return true;
+    if (lSpec && `${lName} ${lSpec}`.trim() === pName) return true;
+    if (pSpec && `${lName} - ${pSpec}`.trim() === pName) return true;
+
+    const cleanP = pName.toLowerCase();
+    const cleanL = lName.toLowerCase();
+    if (cleanP.includes(cleanL) || cleanL.includes(cleanP)) {
+      if (!lSpec || cleanP.includes(lSpec.toLowerCase()) || pSpec.toLowerCase() === lSpec.toLowerCase()) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const getOrderLedgerState = (order) => {
     const orderVouchers = vouchers.filter(v => v.orderNumber === order.orderNumber);
     const approvedVouchers = orderVouchers.filter(v => v.status === 'معتمد');
     const draftVouchers = orderVouchers.filter(v => v.status === 'مسودة');
     const ledgerDeducted = approvedVouchers.some(v => v.type === 'إخراج' || v.type === 'إتلاف');
     const hasMismatch = Boolean(order.stockDeducted) !== ledgerDeducted && draftVouchers.length === 0;
-    return { orderVouchers, approvedVouchers, draftVouchers, ledgerDeducted, hasMismatch };
+
+    const receiptVouchers = approvedVouchers.filter(v => v.type === 'إدخال');
+    const isReceivedByVouchers = receiptVouchers.length > 0 && (order.items || []).length > 0 && (order.items || []).every(item => {
+      const allLines = receiptVouchers.flatMap(v => v.items || []);
+      const received = allLines.filter(line => matchReceiptLineToOrderItem(line, item)).reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+      return received >= Number(item.quantity || 0);
+    });
+
+    return { orderVouchers, approvedVouchers, draftVouchers, ledgerDeducted, hasMismatch, isReceivedByVouchers };
   };
 
   const productionOrdersToAuditRaw = productionOrders.filter(o => o.status !== 'ملغى' && o.status !== 'ملغي' && !o.ignoredAudit);
@@ -666,6 +698,7 @@ const AdminStock = ({ user, notificationTarget }) => {
       ...o,
       stockDeducted: ledger.ledgerDeducted,
       storedStockDeducted: Boolean(o.stockDeducted),
+      stockReceived: Boolean(o.stockReceived || ledger.isReceivedByVouchers),
       hasLedgerMismatch: ledger.hasMismatch,
       hasDraft: drafts.length > 0,
       draftCreatedBy: responsibleUser,
@@ -2474,7 +2507,7 @@ const AdminStock = ({ user, notificationTarget }) => {
       // Prefill for production receiving
       const previousReceipts = vouchers.filter(v => v.orderNumber === order.orderNumber && v.type === 'إدخال' && v.status !== 'مسودة');
       const receivedForItem = item => previousReceipts.reduce((sum, voucher) => sum + (voucher.items || []).filter(line =>
-        (line.itemNumber && item.itemNumber && line.itemNumber === item.itemNumber) || String(line.name || '').trim() === String(item.productName || item.name || '').trim()
+        matchReceiptLineToOrderItem(line, item)
       ).reduce((lineSum, line) => lineSum + Number(line.quantity || 0), 0), 0);
       initialItems = (order.items || []).map(item => {
         const pName = item.productName || item.name || '';
@@ -2747,15 +2780,40 @@ const AdminStock = ({ user, notificationTarget }) => {
         if (pOrder) {
           const priorReceipts = vouchers.filter(v => v.orderNumber === orderNum && v.type === 'إدخال' && v.status !== 'مسودة');
           const allReceiptLines = [...priorReceipts.flatMap(v => v.items || []), ...(result.items || [])];
-          const receiptSummary = (pOrder.items || []).map(item => {
+          // Update items with actual received quantities if higher (e.g. extra piece produced), and preserve itemNumber
+          const updatedItems = (pOrder.items || []).map(item => {
+            const matchingVoucherItems = (voucherForm.items || []).filter(line => matchReceiptLineToOrderItem(line, item));
+            const receivedInThisVoucher = matchingVoucherItems.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+            const currentQty = Number(item.quantity || 0);
+            const matchedLine = matchingVoucherItems[0];
+            const newQty = Math.max(currentQty, receivedInThisVoucher);
+            return {
+              ...item,
+              quantity: String(newQty),
+              itemNumber: item.itemNumber || matchedLine?.itemNumber || '',
+              stageQuantities: {
+                ...(item.stageQuantities || {}),
+                finished: Math.max(Number(item.stageQuantities?.finished || 0), newQty)
+              }
+            };
+          });
+
+          const receiptSummary = updatedItems.map(item => {
             const requested = Number(item.quantity || 0);
             const received = allReceiptLines.filter(line =>
-              (line.itemNumber && item.itemNumber && line.itemNumber === item.itemNumber) || String(line.name || '').trim() === String(item.productName || item.name || '').trim()
+              matchReceiptLineToOrderItem(line, item)
             ).reduce((sum, line) => sum + Number(line.quantity || 0), 0);
-            return { itemNumber: item.itemNumber || '', productName: item.productName || item.name || '', requested, received, difference: received - requested };
+            return {
+              itemNumber: item.itemNumber || '',
+              productName: item.productName || item.name || '',
+              requested,
+              received,
+              difference: received - requested
+            };
           });
           const updated = {
             ...pOrder,
+            items: updatedItems,
             stockReceived: receiptSummary.every(line => line.received >= line.requested),
             stockReceiptSummary: receiptSummary,
             lastStockReceiptAt: new Date().toISOString()
