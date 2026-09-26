@@ -2634,10 +2634,17 @@ const AdminSales = ({ user }) => {
       )}
 
       <div className="no-print">
-        <div className="flex justify-between items-center" style={{ marginBottom: isMobile ? '12px' : '24px', marginTop: isMobile ? '8px' : '0' }}>
+        <div className="flex justify-between items-center" style={{ marginBottom: isMobile ? '12px' : '24px', marginTop: isMobile ? '8px' : '0', flexWrap: 'wrap', gap: '16px' }}>
           <h2 className="text-2xl font-bold flex items-center gap-2 m-0 text-right" style={{ fontSize: isMobile ? '1.25rem' : '1.5rem' }}>
             <ShoppingCart className="text-primary" /> إدارة الطلبات
           </h2>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          {hasPermission(user, 'stock_production_receipt', 'view') && (
+            <button type="button" className="sales-receipt-button" onClick={() => window.dispatchEvent(new CustomEvent('switchAdminTab', { detail: { tab: 'stock', action: 'productionReceipt' } }))}>
+              <span className="sales-receipt-button-icon"><Package size={17} strokeWidth={1.8} /></span>
+              <span>استلام منتجات</span>
+            </button>
+          )}
           {(canPerformAction(user, 'ADD', 'SALES', globalSettings)) && (
             <div className="flex items-center gap-2">
             <button
@@ -2665,6 +2672,7 @@ const AdminSales = ({ user }) => {
             </button>
             </div>
           )}
+          </div>
         </div>
 
         {/* Filter Bar */}
@@ -5345,6 +5353,18 @@ const AdminSales = ({ user }) => {
       <style dangerouslySetInnerHTML={{
         __html: `
         #print-portal { display: none; }
+        .sales-receipt-button {
+          display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+          height: 38px; padding: 0 12px; border: 1px solid #c7d2fe; border-radius: 10px;
+          background: #eef2ff; color: #273c86; font-family: inherit; font-size: 14px;
+          font-weight: 800; white-space: nowrap; cursor: pointer;
+          transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+        }
+        .sales-receipt-button:hover { background: #e0e7ff; border-color: #a5b4fc; box-shadow: 0 3px 8px rgba(39,60,134,.12); }
+        .sales-receipt-button:focus-visible { outline: 3px solid #818cf8; outline-offset: 3px; }
+        .sales-receipt-button:active { background: #c7d2fe; }
+        .sales-receipt-button-icon { display: inline-flex; align-items: center; justify-content: center; width: 25px; height: 25px; border-radius: 7px; background: #dce4ff; }
+        @media (max-width: 767px) { .sales-receipt-button { font-size: 12px; } }
         .badge-info { background: #e0f2f1; color: #00796b; border: 1px solid #b2dfdb; }
         .badge-cutting { background: #fff3e0; color: #ef6c00; border: 1px solid #ffcc80; }
         .badge-warehouse { background: #fffde7; color: #fbc02d; border: 1px solid #fff59d; }

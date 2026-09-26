@@ -30,159 +30,162 @@ export const saveStockItem = async (item, options = {}) => {
   try {
     let oldName = null;
     const docRef = item.id ? doc(db, 'stock', item.id) : doc(collection(db, 'stock'));
+
+    // 1. If updating an EXISTING stock item (item.id exists):
+    if (item.id) {
+      const existingDoc = await getDoc(docRef);
+      if (!existingDoc.exists()) {
+        throw new Error('الصنف لم يعد موجودًا؛ حدّث القائمة');
+      }
+      const existingData = existingDoc.data();
+      oldName = existingData.name;
+      const fullItem = {
+        ...existingData,
+        ...item,
+        id: docRef.id,
+        itemNumber: item.itemNumber || existingData.itemNumber,
+        updatedAt: new Date().toISOString()
+      };
+      await setDoc(docRef, fullItem);
+
+      if (oldName && oldName !== fullItem.name) {
+        cascadeStockItemUpdate(fullItem.itemNumber, oldName, fullItem.name);
+      }
+
+      return fullItem;
+    }
+
+    // 2. If copying/duplicating an item to another warehouse/location from an existing item:
+    if (options.sourceItemId) {
+      const source = await getDoc(doc(db, 'stock', options.sourceItemId));
+      if (!source.exists()) throw new Error('الصنف الأصلي لم يعد موجودًا؛ حدّث القائمة');
+      const number = source.data().itemNumber;
+      const saved = { ...item, id: docRef.id, itemNumber: number, updatedAt: new Date().toISOString() };
+      await setDoc(docRef, saved);
+      return saved;
+    }
+
+    // 3. Creating a brand NEW item:
     if (isFinishedGoodsCategory(item.category)) {
       const counterRef = doc(db, 'stock_sequences', 'FG');
-      const counterSnapshot = await getDoc(counterRef);
-      let initialLast = 0;
-      if (!counterSnapshot.exists()) {
-        const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'FG-'), where('itemNumber', '<', 'FG.')));
-        initialLast = Math.max(0, ...existing.docs.map(row => finishedGoodsSequence(row.data().itemNumber)));
-      }
       const cleanName = String(item.name || '').replace(/\s+/g, ' ').trim();
       let existingSameNameNumber = null;
-      if (cleanName && !item.id && !options.sourceItemId) {
+      if (cleanName) {
         const existingSameNameSnap = await getDocs(query(collection(db, 'stock'), where('name', '==', cleanName)));
         const matchingDoc = existingSameNameSnap.docs.find(d => isFinishedGoodsCategory(d.data().category) && d.data().itemNumber);
         if (matchingDoc) {
           existingSameNameNumber = matchingDoc.data().itemNumber;
         }
       }
-      const savedFGItem = await runTransaction(db, async transaction => {
-        const counter = await transaction.get(counterRef);
-        const existing = item.id ? await transaction.get(docRef) : null;
-        const source = options.sourceItemId ? await transaction.get(doc(db, 'stock', options.sourceItemId)) : null;
-        if (item.id && !existing?.exists()) throw new Error('الصنف لم يعد موجودًا؛ حدّث القائمة');
-        oldName = existing?.exists() ? existing.data().name : null;
-        if (options.sourceItemId && !source?.exists()) throw new Error('الصنف الأصلي لم يعد موجودًا؛ حدّث القائمة');
-        let last = Math.max(initialLast, Number(counter.data()?.lastNumber) || 0);
-        let number;
-        if (existing?.exists() && isFinishedGoodsCategory(existing.data().category) && existing.data().itemNumber) {
-          number = existing.data().itemNumber;
-        } else if (source?.exists()) {
-          if (!isFinishedGoodsCategory(source.data().category)) throw new Error('تصنيف الصنف الأصلي تغيّر؛ حدّث القائمة');
-          number = source.data().itemNumber;
-        } else if (existingSameNameNumber) {
-          number = existingSameNameNumber;
-        } else {
+
+      let number;
+      if (existingSameNameNumber) {
+        number = existingSameNameNumber;
+      } else {
+        let initialLast = 0;
+        try {
+          const counterSnapshot = await getDoc(counterRef);
+          if (!counterSnapshot.exists()) {
+            const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'FG-'), where('itemNumber', '<', 'FG.')));
+            initialLast = Math.max(0, ...existing.docs.map(row => finishedGoodsSequence(row.data().itemNumber)));
+          }
+          let last = Math.max(initialLast, Number(counterSnapshot.data()?.lastNumber) || 0);
           number = finishedGoodsNumber(++last);
+          await setDoc(counterRef, { lastNumber: last }, { merge: true });
+        } catch (seqErr) {
+          console.warn('Sequence counter write failed, falling back to stock collection scan:', seqErr);
+          const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'FG-'), where('itemNumber', '<', 'FG.')));
+          const maxNum = Math.max(0, ...existing.docs.map(row => finishedGoodsSequence(row.data().itemNumber)));
+          number = finishedGoodsNumber(maxNum + 1);
         }
-        last = Math.max(last, finishedGoodsSequence(number));
-        const saved = { ...item, id: docRef.id, itemNumber: number, updatedAt: new Date().toISOString() };
-        transaction.set(counterRef, { lastNumber: last }, { merge: true });
-        transaction.set(docRef, saved);
-        return saved;
-      });
-      if (oldName && oldName !== item.name) cascadeStockItemUpdate(savedFGItem.itemNumber, oldName, item.name);
-      return savedFGItem;
+      }
+
+      const saved = { ...item, id: docRef.id, itemNumber: number, updatedAt: new Date().toISOString() };
+      await setDoc(docRef, saved);
+      return saved;
     }
 
     if (isPackagingCategory(item.category)) {
       const counterRef = doc(db, 'stock_sequences', 'PKG');
-      const counterSnapshot = await getDoc(counterRef);
-      let initialLast = 0;
-      if (!counterSnapshot.exists()) {
-        const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'PKG-'), where('itemNumber', '<', 'PKG.')));
-        initialLast = Math.max(0, ...existing.docs.map(row => packagingSequence(row.data().itemNumber)));
-      }
       const cleanName = String(item.name || '').replace(/\s+/g, ' ').trim();
       let existingSameNameNumber = null;
-      if (cleanName && !item.id && !options.sourceItemId) {
+      if (cleanName) {
         const existingSameNameSnap = await getDocs(query(collection(db, 'stock'), where('name', '==', cleanName)));
         const matchingDoc = existingSameNameSnap.docs.find(d => isPackagingCategory(d.data().category) && d.data().itemNumber);
         if (matchingDoc) {
           existingSameNameNumber = matchingDoc.data().itemNumber;
         }
       }
-      const savedPackagingItem = await runTransaction(db, async transaction => {
-        const counter = await transaction.get(counterRef);
-        const existing = item.id ? await transaction.get(docRef) : null;
-        const source = options.sourceItemId ? await transaction.get(doc(db, 'stock', options.sourceItemId)) : null;
-        if (item.id && !existing?.exists()) throw new Error('الصنف لم يعد موجودًا؛ حدّث القائمة');
-        oldName = existing?.exists() ? existing.data().name : null;
-        if (options.sourceItemId && !source?.exists()) throw new Error('الصنف الأصلي لم يعد موجودًا؛ حدّث القائمة');
-        let last = Math.max(initialLast, Number(counter.data()?.lastNumber) || 0);
-        let number;
-        if (existing?.exists() && isPackagingCategory(existing.data().category) && existing.data().itemNumber) {
-          number = existing.data().itemNumber;
-        } else if (source?.exists()) {
-          if (!isPackagingCategory(source.data().category)) throw new Error('تصنيف الصنف الأصلي تغيّر؛ حدّث القائمة');
-          number = source.data().itemNumber;
-        } else if (existingSameNameNumber) {
-          number = existingSameNameNumber;
-        } else {
+
+      let number;
+      if (existingSameNameNumber) {
+        number = existingSameNameNumber;
+      } else {
+        let initialLast = 0;
+        try {
+          const counterSnapshot = await getDoc(counterRef);
+          if (!counterSnapshot.exists()) {
+            const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'PKG-'), where('itemNumber', '<', 'PKG.')));
+            initialLast = Math.max(0, ...existing.docs.map(row => packagingSequence(row.data().itemNumber)));
+          }
+          let last = Math.max(initialLast, Number(counterSnapshot.data()?.lastNumber) || 0);
           number = packagingNumber(++last);
+          await setDoc(counterRef, { lastNumber: last }, { merge: true });
+        } catch (seqErr) {
+          console.warn('Sequence counter write failed, falling back to stock collection scan:', seqErr);
+          const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'PKG-'), where('itemNumber', '<', 'PKG.')));
+          const maxNum = Math.max(0, ...existing.docs.map(row => packagingSequence(row.data().itemNumber)));
+          number = packagingNumber(maxNum + 1);
         }
-        last = Math.max(last, packagingSequence(number));
-        const saved = { ...item, id: docRef.id, itemNumber: number, updatedAt: new Date().toISOString() };
-        transaction.set(counterRef, { lastNumber: last }, { merge: true });
-        transaction.set(docRef, saved);
-        return saved;
-      });
-      if (oldName && oldName !== item.name) cascadeStockItemUpdate(savedPackagingItem.itemNumber, oldName, item.name);
-      return savedPackagingItem;
+      }
+
+      const saved = { ...item, id: docRef.id, itemNumber: number, updatedAt: new Date().toISOString() };
+      await setDoc(docRef, saved);
+      return saved;
     }
 
     if (isSewingConsumablesCategory(item.category)) {
       const counterRef = doc(db, 'stock_sequences', 'CON');
-      const counterSnapshot = await getDoc(counterRef);
-      let initialLast = 0;
-      if (!counterSnapshot.exists()) {
-        const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'CON-'), where('itemNumber', '<', 'CON.')));
-        initialLast = Math.max(0, ...existing.docs.map(row => sewingConsumablesSequence(row.data().itemNumber)));
-      }
       const cleanName = String(item.name || '').replace(/\s+/g, ' ').trim();
       let existingSameNameNumber = null;
-      if (cleanName && !item.id && !options.sourceItemId) {
+      if (cleanName) {
         const existingSameNameSnap = await getDocs(query(collection(db, 'stock'), where('name', '==', cleanName)));
         const matchingDoc = existingSameNameSnap.docs.find(d => isSewingConsumablesCategory(d.data().category) && d.data().itemNumber);
         if (matchingDoc) {
           existingSameNameNumber = matchingDoc.data().itemNumber;
         }
       }
-      const savedCONItem = await runTransaction(db, async transaction => {
-        const counter = await transaction.get(counterRef);
-        const existing = item.id ? await transaction.get(docRef) : null;
-        const source = options.sourceItemId ? await transaction.get(doc(db, 'stock', options.sourceItemId)) : null;
-        if (item.id && !existing?.exists()) throw new Error('الصنف لم يعد موجودًا؛ حدّث القائمة');
-        oldName = existing?.exists() ? existing.data().name : null;
-        if (options.sourceItemId && !source?.exists()) throw new Error('الصنف الأصلي لم يعد موجودًا؛ حدّث القائمة');
-        let last = Math.max(initialLast, Number(counter.data()?.lastNumber) || 0);
-        let number;
-        if (existing?.exists() && isSewingConsumablesCategory(existing.data().category) && existing.data().itemNumber) {
-          number = existing.data().itemNumber;
-        } else if (source?.exists()) {
-          if (!isSewingConsumablesCategory(source.data().category)) throw new Error('تصنيف الصنف الأصلي تغيّر؛ حدّث القائمة');
-          number = source.data().itemNumber;
-        } else if (existingSameNameNumber) {
-          number = existingSameNameNumber;
-        } else {
+
+      let number;
+      if (existingSameNameNumber) {
+        number = existingSameNameNumber;
+      } else {
+        let initialLast = 0;
+        try {
+          const counterSnapshot = await getDoc(counterRef);
+          if (!counterSnapshot.exists()) {
+            const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'CON-'), where('itemNumber', '<', 'CON.')));
+            initialLast = Math.max(0, ...existing.docs.map(row => sewingConsumablesSequence(row.data().itemNumber)));
+          }
+          let last = Math.max(initialLast, Number(counterSnapshot.data()?.lastNumber) || 0);
           number = sewingConsumablesNumber(++last);
+          await setDoc(counterRef, { lastNumber: last }, { merge: true });
+        } catch (seqErr) {
+          console.warn('Sequence counter write failed, falling back to stock collection scan:', seqErr);
+          const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'CON-'), where('itemNumber', '<', 'CON.')));
+          const maxNum = Math.max(0, ...existing.docs.map(row => sewingConsumablesSequence(row.data().itemNumber)));
+          number = sewingConsumablesNumber(maxNum + 1);
         }
-        last = Math.max(last, sewingConsumablesSequence(number));
-        const saved = { ...item, id: docRef.id, itemNumber: number, updatedAt: new Date().toISOString() };
-        transaction.set(counterRef, { lastNumber: last }, { merge: true });
-        transaction.set(docRef, saved);
-        return saved;
-      });
-      if (oldName && oldName !== item.name) cascadeStockItemUpdate(savedCONItem.itemNumber, oldName, item.name);
-      return savedCONItem;
-    }
-    
-    if (item.id) {
-      const existingDoc = await getDoc(docRef);
-      if (existingDoc.exists()) {
-        oldName = existingDoc.data().name;
       }
+
+      const saved = { ...item, id: docRef.id, itemNumber: number, updatedAt: new Date().toISOString() };
+      await setDoc(docRef, saved);
+      return saved;
     }
 
     const id = docRef.id;
     const fullItem = { ...item, id, updatedAt: new Date().toISOString() };
     await setDoc(docRef, fullItem);
-
-    if (oldName && oldName !== item.name) {
-      cascadeStockItemUpdate(item.itemNumber, oldName, item.name); // Async fire-and-forget
-    }
-
     return fullItem;
   } catch (error) {
     console.error("Error in saveStockItem:", error);

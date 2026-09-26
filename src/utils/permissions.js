@@ -97,7 +97,7 @@ export const hasPermission = (user, module, action = 'view') => {
 
   // Handle grouped modules (stock, hr) logic BEFORE legacy fallback
   if (targetModule === 'stock') {
-    const stockSubmods = ['stock_view', 'stock_vouchers', 'stock_audit', 'stock_production', 'stock_take'];
+    const stockSubmods = ['stock_view', 'stock_vouchers', 'stock_audit', 'stock_production', 'stock_production_receipt', 'stock_take'];
     
     // Check if new granular permissions exist at all for any stock submodule
     const hasAnyGranularSetting = stockSubmods.some(sm => user.permissions?.[sm] !== undefined);

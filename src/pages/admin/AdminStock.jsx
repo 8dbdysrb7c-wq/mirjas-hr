@@ -404,7 +404,11 @@ const AdminStock = ({ user, notificationTarget }) => {
   }, [showFilterModal]);
 
   useEffect(() => {
-    if (notificationTarget && notificationTarget.action === 'openVoucher') {
+    if (notificationTarget?.action === 'productionReceipt' && hasPermission(user, 'stock_production_receipt', 'view')) {
+      setActiveStockTab('production');
+      setProductionSubTab('receipt');
+      setProductionAuditFilterStatus('pending');
+    } else if (notificationTarget && notificationTarget.action === 'openVoucher') {
       const type = notificationTarget.data?.type;
       if (type) {
         setVoucherType(type);
@@ -419,7 +423,7 @@ const AdminStock = ({ user, notificationTarget }) => {
         setActiveStockTab('vouchers');
       }
     }
-  }, [notificationTarget]);
+  }, [notificationTarget, user]);
 
   const baseLoadedRef = useRef(false);
   const loadedTabsRef = useRef(new Set());
@@ -908,6 +912,7 @@ const AdminStock = ({ user, notificationTarget }) => {
   };
 
   const handleIgnoreAudit = async (order, scope = 'sales') => {
+    if (scope === 'receipt' && (!hasPermission(user, 'stock_production_receipt', 'view') || !hasPermission(user, 'stock_production_receipt', 'add'))) return;
     MySwal.fire({
       title: 'تجاهل الطلبية؟',
       text: 'هل أنت متأكد أنك تريد تجاهل هذه الطلبية وإخفاءها من هذه القائمة؟',
@@ -2396,16 +2401,20 @@ const AdminStock = ({ user, notificationTarget }) => {
     if (newQuantity !== undefined && newQuantity !== null && newQuantity !== '') {
       const parsedQty = Number(newQuantity);
       if (parsedQty >= 0) {
-        await saveStockItem({ ...item, quantity: parsedQty, lastMovement: 'تعديل سريع', lastMovementDate: new Date().toISOString().split('T')[0] });
-        await addLog({
-          userName: user.name,
-          userId: user.id,
-          module: 'المخزون',
-          action: 'تعديل كمية مباشر',
-          details: `${item.name} (${item.itemNumber}) — ${item.warehouse}: من ${Number(item.quantity || 0)} إلى ${parsedQty}`
-        });
-        fetchData();
-        MySwal.fire({ icon: 'success', title: 'تم التحديث', timer: 1000, showConfirmButton: false });
+        const res = await saveStockItem({ ...item, quantity: parsedQty, lastMovement: 'تعديل سريع', lastMovementDate: new Date().toISOString().split('T')[0] });
+        if (res) {
+          await addLog({
+            userName: user.name,
+            userId: user.id,
+            module: 'المخزون',
+            action: 'تعديل كمية مباشر',
+            details: `${item.name} (${item.itemNumber}) — ${item.warehouse}: من ${Number(item.quantity || 0)} إلى ${parsedQty}`
+          });
+          fetchData();
+          MySwal.fire({ icon: 'success', title: 'تم التحديث بنجاح', timer: 1000, showConfirmButton: false });
+        } else {
+          MySwal.fire({ icon: 'error', title: 'فشل التحديث', text: 'حدث خطأ أثناء تعديل الكمية. يرجى المحاولة مرة أخرى.' });
+        }
       }
     }
   };
@@ -2437,14 +2446,19 @@ const AdminStock = ({ user, notificationTarget }) => {
     if (newMinLimit !== undefined && newMinLimit !== null && newMinLimit !== '') {
       const parsedLimit = parseInt(newMinLimit);
       if (parsedLimit >= 0) {
-        await saveStockItem({ ...item, minLimit: parsedLimit });
-        fetchData();
-        MySwal.fire({ icon: 'success', title: 'تم التحديث', timer: 1000, showConfirmButton: false });
+        const res = await saveStockItem({ ...item, minLimit: parsedLimit });
+        if (res) {
+          fetchData();
+          MySwal.fire({ icon: 'success', title: 'تم التحديث بنجاح', timer: 1000, showConfirmButton: false });
+        } else {
+          MySwal.fire({ icon: 'error', title: 'فشل التحديث', text: 'حدث خطأ أثناء تعديل الحد الأدنى.' });
+        }
       }
     }
   };
 
   const handleOpenVoucherModal = (type, order = null) => {
+    if (order && type === 'إدخال' && (!hasPermission(user, 'stock_production_receipt', 'view') || !hasPermission(user, 'stock_production_receipt', 'add'))) return;
     setVoucherType(type);
 
     let initialItems = [
@@ -2646,6 +2660,7 @@ const AdminStock = ({ user, notificationTarget }) => {
   };
 
   const handleSaveVoucher = async () => {
+    if (voucherForm.isProductionReceipt && (!hasPermission(user, 'stock_production_receipt', 'view') || !hasPermission(user, 'stock_production_receipt', 'add'))) return;
     if (!voucherForm.warehouse) {
       Swal.fire('خطأ', 'يرجى اختيار المستودع', 'error');
       return;
@@ -3148,13 +3163,15 @@ const AdminStock = ({ user, notificationTarget }) => {
     if (nav.id === 'items') return hasPermission(user, 'stock_view', 'view');
     if (nav.id.startsWith('vouchers_')) return hasPermission(user, 'stock_vouchers', 'view');
     if (nav.id === 'audit') return hasPermission(user, 'stock_audit', 'view');
-    if (nav.id === 'production' || nav.id === 'production_receipt') return hasPermission(user, 'stock_production', 'view');
+    if (nav.id === 'production') return hasPermission(user, 'stock_production', 'view');
+    if (nav.id === 'production_receipt') return hasPermission(user, 'stock_production_receipt', 'view');
     if (nav.id === 'stocktake') return hasPermission(user, 'stock_take', 'view');
     return true;
   });
   const gridColumns = visibleNavItems.length || 1;
 
-  const PremiumActionBtn = ({ title, icon, variant, onClick }) => {
+  const PremiumActionBtn = ({ title, icon, variant, onClick, disabled = false }) => {
+    if (disabled) return null;
     let style = {};
     let iconBg = '';
     let iconColor = '';
@@ -3624,7 +3641,17 @@ const AdminStock = ({ user, notificationTarget }) => {
                         </td>
                         <td className="text-sm text-muted text-center">{displaySpec}</td>
                         <td className="text-center">
-                          <div className="stock-balance flex items-center justify-center gap-1 text-xs font-black whitespace-nowrap" title={group.locations.length === 1 && hasPermission(user, 'stock_view', 'edit') ? 'اضغط لتعديل الكمية مباشرة' : undefined} onClick={group.locations.length === 1 && hasPermission(user, 'stock_view', 'edit') ? (e) => handleQuickQuantityEdit(e, group.locations[0]) : undefined} style={{cursor:group.locations.length === 1 && hasPermission(user, 'stock_view', 'edit')?'pointer':'default'}}>
+                          <div className="stock-balance flex items-center justify-center gap-1 text-xs font-black whitespace-nowrap" 
+                            title={hasPermission(user, 'stock_view', 'edit') ? (group.locations.length === 1 ? 'اضغط لتعديل الكمية مباشرة' : 'الصنف في أكثر من موقع - اضغط لتفصيل المواقع وتعديل الكمية') : undefined} 
+                            onClick={hasPermission(user, 'stock_view', 'edit') ? (e) => {
+                              if (group.locations.length === 1) {
+                                handleQuickQuantityEdit(e, group.locations[0]);
+                              } else {
+                                e.stopPropagation();
+                                toggleRow(group.itemNumber);
+                              }
+                            } : undefined} 
+                            style={{ cursor: hasPermission(user, 'stock_view', 'edit') ? 'pointer' : 'default' }}>
                             <span className="stock-balance-part text-slate-700"><small className="stock-balance-label stock-balance-onhand">الموجود</small><strong>{group.totalQuantity}</strong></span>
                             <span className="stock-balance-slash text-slate-300">/</span>
                             <span className="stock-balance-part text-amber-600"><small className="stock-balance-label stock-balance-reserved">المحجوز</small><strong>{group.reservedQuantity}</strong></span>
@@ -3633,7 +3660,19 @@ const AdminStock = ({ user, notificationTarget }) => {
                           </div>
                         </td>
                         <td className="text-center">
-                          <div className="text-sm font-bold text-slate-500">{group.minLimit}</div>
+                          <div className="text-sm font-bold text-slate-500"
+                            title={hasPermission(user, 'stock_view', 'edit') ? (group.locations.length === 1 ? 'اضغط لتعديل الحد الأدنى' : 'الصنف في أكثر من موقع - اضغط لتفصيل المواقع') : undefined}
+                            onClick={hasPermission(user, 'stock_view', 'edit') ? (e) => {
+                              if (group.locations.length === 1) {
+                                handleQuickMinLimitEdit(e, group.locations[0]);
+                              } else {
+                                e.stopPropagation();
+                                toggleRow(group.itemNumber);
+                              }
+                            } : undefined}
+                            style={{ cursor: hasPermission(user, 'stock_view', 'edit') ? 'pointer' : 'default' }}>
+                            {group.minLimit}
+                          </div>
                         </td>
                         <td className="text-center text-sm">{group.unit}</td>
                         <td className="text-center">
@@ -3643,6 +3682,19 @@ const AdminStock = ({ user, notificationTarget }) => {
                         </td>
                         <td onClick={e => e.stopPropagation()} className="text-center">
                           <div className="flex justify-center gap-2">
+                            {hasPermission(user, 'stock_view', 'edit') && (
+                              <button className="icon-btn icon-btn-edit" 
+                                title={group.locations.length === 1 ? "تعديل الصنف والكمية" : "عرض وتعديل مواقع الصنف"}
+                                onClick={() => {
+                                  if (group.locations.length === 1) {
+                                    handleOpenModal(group.locations[0]);
+                                  } else {
+                                    toggleRow(group.itemNumber);
+                                  }
+                                }}>
+                                <Edit2 size={16} />
+                              </button>
+                            )}
                             <button className="icon-btn" style={{ color: '#13898f', background: '#e0f2fe' }} title="معاينة أماكن التواجد"
                               onClick={() => { setSelectedItemForLocations(group); setShowLocationsModal(true); }}>
                               <Eye size={16} strokeWidth={2} />
@@ -4146,7 +4198,7 @@ const AdminStock = ({ user, notificationTarget }) => {
     })()}
 
       {/* ===== TAB: PRODUCTION ===== */}
-      {activeStockTab === 'production' && (
+      {activeStockTab === 'production' && hasPermission(user, productionSubTab === 'receipt' ? 'stock_production_receipt' : 'stock_production', 'view') && (
         <>
           {(() => {
             const currentOrders = productionOrdersToAudit.filter(o => {
@@ -4580,13 +4632,15 @@ const AdminStock = ({ user, notificationTarget }) => {
                                   title="استلام منتجات" 
                                   variant="receive" 
                                   icon={<Download size={14} />} 
-                                  onClick={() => handleOpenVoucherModal('إدخال', order)} 
+                                  onClick={() => handleOpenVoucherModal('إدخال', order)}
+                                  disabled={!hasPermission(user, 'stock_production_receipt', 'add')}
                                 />
                                 <PremiumActionBtn 
                                   title="تجاهل" 
                                   variant="ignore" 
                                   icon={<X size={14} strokeWidth={3} />} 
-                                  onClick={() => handleIgnoreAudit(order, 'receipt')} 
+                                  onClick={() => handleIgnoreAudit(order, 'receipt')}
+                                  disabled={!hasPermission(user, 'stock_production_receipt', 'add')}
                                 />
                               </>
                             )

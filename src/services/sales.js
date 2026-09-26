@@ -105,6 +105,139 @@ export const getOrders = async () => {
   }
 };
 
+export const syncProductionStatusToSalesOrder = async (prodOrPrepOrder, orderType = 'auto') => {
+  if (!prodOrPrepOrder) return false;
+  try {
+    const isPrep = orderType === 'preparation' || 
+      String(prodOrPrepOrder.orderNumber || '').toUpperCase().startsWith('PREP-') ||
+      !!prodOrPrepOrder.hasPreparationDetails;
+
+    let salesOrderDoc = null;
+    if (prodOrPrepOrder.salesOrderId) {
+      const snap = await getDoc(doc(db, 'sales_orders', prodOrPrepOrder.salesOrderId));
+      if (snap.exists()) {
+        salesOrderDoc = { ...snap.data(), id: snap.id };
+      }
+    }
+
+    if (!salesOrderDoc && prodOrPrepOrder.salesOrderNumber) {
+      const q = query(collection(db, 'sales_orders'), where('orderNumber', '==', prodOrPrepOrder.salesOrderNumber), limit(1));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        salesOrderDoc = { ...snap.docs[0].data(), id: snap.docs[0].id };
+      }
+    }
+
+    if (!salesOrderDoc && prodOrPrepOrder.orderNotes) {
+      const match = prodOrPrepOrder.orderNotes.match(/ORD-\d+/);
+      if (match) {
+        const q = query(collection(db, 'sales_orders'), where('orderNumber', '==', match[0]), limit(1));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          salesOrderDoc = { ...snap.docs[0].data(), id: snap.docs[0].id };
+        }
+      }
+    }
+
+    if (!salesOrderDoc || !Array.isArray(salesOrderDoc.items) || salesOrderDoc.items.length === 0) {
+      return false;
+    }
+
+    const normalize = str => String(str || '').replace(/أ|إ|آ/g, 'ا').replace(/ى/g, 'ي').trim().replace(/\s+/g, ' ');
+    const cardStatus = prodOrPrepOrder.status || '';
+    const cardItems = Array.isArray(prodOrPrepOrder.items) && prodOrPrepOrder.items.length > 0 
+      ? prodOrPrepOrder.items 
+      : [{ productName: prodOrPrepOrder.productName, quantity: prodOrPrepOrder.quantity, status: cardStatus }];
+
+    let hasChanged = false;
+    const updatedSalesItems = salesOrderDoc.items.map(salesItem => {
+      const sName = normalize(salesItem.productName);
+      const matchedCardItem = cardItems.find(ci => {
+        const cName = normalize(ci.productName);
+        return cName === sName || cName.includes(sName) || sName.includes(cName);
+      }) || (cardItems.length === 1 && salesOrderDoc.items.length === 1 ? cardItems[0] : null);
+
+      if (!matchedCardItem) {
+        return salesItem;
+      }
+
+      let newStatus = salesItem.itemStatus;
+
+      if (isPrep) {
+        const isFinished = cardStatus === 'منتهي' || matchedCardItem.status === 'منتهي' || matchedCardItem.status === 'جاهز';
+        const isCancelled = cardStatus === 'ملغي' || matchedCardItem.status === 'ملغي';
+
+        if (isFinished) {
+          newStatus = 'جاهز';
+        } else if (isCancelled) {
+          newStatus = 'ملغي';
+        } else {
+          newStatus = 'قيد التحضير';
+        }
+      } else {
+        const isFinished = cardStatus === 'منتهي' || matchedCardItem.status === 'منتهي' || matchedCardItem.status === 'جاهز';
+        const isCancelled = cardStatus === 'ملغي' || matchedCardItem.status === 'ملغي';
+
+        if (isFinished) {
+          newStatus = 'جاهز';
+        } else if (isCancelled) {
+          newStatus = 'ملغي';
+        } else if (matchedCardItem.stageQuantities) {
+          const sq = matchedCardItem.stageQuantities;
+          const sewing = Number(sq.sewing || 0);
+          const pending = Number(sq.pendingPackaging || 0);
+          const pkg = Number(sq.packaging || 0);
+          const fin = Number(sq.finished || 0);
+          const tot = Number(matchedCardItem.quantity || (sewing + pending + pkg + fin) || 0);
+
+          if (tot > 0 && fin >= tot) {
+            newStatus = 'جاهز';
+          } else if (pending > 0 || pkg > 0 || (fin > 0 && sewing === 0)) {
+            newStatus = 'إنتاج قيد التغليف';
+          } else {
+            newStatus = 'إنتاج قيد الخياطة';
+          }
+        } else {
+          const cItemStatus = matchedCardItem.status || cardStatus;
+          if (['مرحلة التغليف', 'بانتظار استلام التغليف', 'تحويل جزئي للتغليف', 'تغليف جزئي', 'تم التحويل إلى قسم التغليف'].includes(cItemStatus)) {
+            newStatus = 'إنتاج قيد التغليف';
+          } else {
+            newStatus = 'إنتاج قيد الخياطة';
+          }
+        }
+      }
+
+      if (newStatus && newStatus !== salesItem.itemStatus) {
+        hasChanged = true;
+        let itemToReturn = { ...salesItem, itemStatus: newStatus };
+        if (newStatus === 'ملغي') {
+          const noteText = isPrep ? '(تم إلغاء الصنف في التحضير)' : '(تم إلغاء الصنف في الإنتاج)';
+          const currNotes = itemToReturn.notes || '';
+          if (!currNotes.includes(noteText)) {
+            itemToReturn.notes = currNotes ? `${currNotes} ${noteText}` : noteText;
+          }
+        }
+        return itemToReturn;
+      }
+      return salesItem;
+    });
+
+    if (hasChanged) {
+      const orderRef = doc(db, 'sales_orders', salesOrderDoc.id);
+      await setDoc(orderRef, {
+        items: updatedSalesItems,
+        lastActionBy: isPrep ? 'نظام التحضير' : 'نظام الإنتاج',
+        statusUpdateDate: new Date().toISOString().split('T')[0]
+      }, { merge: true });
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error("Error in syncProductionStatusToSalesOrder:", err);
+    return false;
+  }
+};
+
 export const saveOrder = async (order) => {
   try {
     let orderToSave = { ...order };
@@ -159,6 +292,12 @@ export const saveOrder = async (order) => {
         status: orderToSave.status,
         employeeId: orderToSave.responsibleEmployeeId || ''
       });
+    }
+
+    try {
+      await syncProductionStatusToSalesOrder(orderToSave, 'production');
+    } catch (e) {
+      console.error("Error syncing production order to sales:", e);
     }
 
     return orderToSave;
@@ -269,6 +408,12 @@ export const savePreparationOrder = async (order) => {
         status: orderToSave.status,
         employeeId: orderToSave.responsibleEmployeeId || ''
       });
+    }
+
+    try {
+      await syncProductionStatusToSalesOrder(orderToSave, 'preparation');
+    } catch (e) {
+      console.error("Error syncing preparation order to sales:", e);
     }
 
     return orderToSave;

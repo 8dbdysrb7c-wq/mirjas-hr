@@ -3221,6 +3221,9 @@ const AdminPreparation = ({ user, notificationTarget }) => {
                     <thead className="bg-slate-50">
                       <tr>
                         <th className="border p-2 text-right">الصنف</th>
+                        <th className="border p-2 text-center">اللون</th>
+                        <th className="border p-2 text-center">المقاس</th>
+                        <th className="border p-2 text-center">السماكة</th>
                         <th className="border p-2 text-center">نوع التغليف</th>
                         <th className="border p-2 text-center">الكمية</th>
                         <th className="border p-2 text-center">الحالة</th>
@@ -3229,7 +3232,14 @@ const AdminPreparation = ({ user, notificationTarget }) => {
                     <tbody>
                       {normalizedItems.map((item, idx) => (
                         <tr key={idx}>
-                          <td className="border p-2 text-right font-bold">{item.productName}</td>
+                          <td className="border p-2 text-right font-bold">
+                            <div>{item.productName}</div>
+                            {(item.notes || item.preparationNotes) && (
+                              <div style={{ marginTop: '4px', color: '#64748b', fontWeight: 'normal', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                                ملاحظات: {item.notes || item.preparationNotes}
+                              </div>
+                            )}
+                          </td>
                           <td className="border p-2 text-center">{item.colorModel}</td>
                           <td className="border p-2 text-center" dir="ltr">{item.sizeCm}</td>
                           <td className="border p-2 text-center">{item.thickness}</td>

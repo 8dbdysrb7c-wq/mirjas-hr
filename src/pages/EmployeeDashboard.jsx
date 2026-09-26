@@ -1,6 +1,7 @@
 import { subscribeToPendingEmployeeAlerts } from '../services/employeeAlertSubscription';
 import { subscribeWhileVisible } from '../utils/visibleSubscription.js';
 import { escapeReportNote } from '../utils/reportNote.js';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { startVisiblePolling } from '../utils/visiblePolling';
 import { motion } from 'framer-motion';
@@ -926,6 +927,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
 
   const [notificationTarget, setNotificationTarget] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isProductionMenuOpen, setIsProductionMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
 
@@ -2228,26 +2230,31 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
                 <ClipboardCheck size={22} /> <span>تقارير المشرفين</span>
               </div>
             )}
-            {hasPermission(user, 'production') && (
-              <div className={`admin-sidebar-item ${activeTab === 'production' ? 'active' : ''}`} onClick={() => handleTabChange('production')}>
-                <SewingMachineIcon size={22} /> <span>إدارة الإنتاج</span>
-              </div>
-            )}
-            {hasPermission(user, 'production_packaging') && (
-              <div className={`admin-sidebar-item ${activeTab === 'production-packaging' ? 'active' : ''}`} onClick={() => handleTabChange('production-packaging')}>
-                <Layers size={22} /> <span>قسم التغليف</span>
-              </div>
-            )}
-            {hasPermission(user, 'preparation') && (
-              <div className={`admin-sidebar-item ${activeTab === 'preparation' ? 'active' : ''}`} onClick={() => handleTabChange('preparation')}>
-                <SewingMachineIcon size={22} /> <span>التحضير والقص</span>
-              </div>
-            )}
-            {hasPermission(user, 'production_tasks') && (
-              <div className={`admin-sidebar-item ${activeTab === 'production-tasks' ? 'active' : ''}`} onClick={() => handleTabChange('production-tasks')}>
-                <ClipboardCheck size={22} /> <span>مهام الإنتاج</span>
-              </div>
-            )}
+            {(() => {
+              const productionLinks = [
+                { tab: 'production', permission: 'production', label: 'إنتاج قيد الخياطة', icon: <SewingMachineIcon size={19} /> },
+                { tab: 'production-packaging', permission: 'production_packaging', label: 'قسم التغليف', icon: <Layers size={19} /> },
+                { tab: 'preparation', permission: 'preparation', label: 'إنتاج قيد التحضير', icon: <SewingMachineIcon size={19} /> },
+                { tab: 'production-tasks', permission: 'production_tasks', label: 'مهام الإنتاج', icon: <ClipboardCheck size={19} /> }
+              ].filter(link => hasPermission(user, link.permission));
+              if (!productionLinks.length) return null;
+              const activeProductionLink = productionLinks.find(link => link.tab === activeTab);
+              return (
+                <div className="sidebar-group" style={{ gridColumn: '1 / -1', minWidth: 0 }}>
+                  <button type="button" className="admin-sidebar-item" style={{ width: '100%', fontFamily: 'inherit', color: isProductionMenuOpen || activeProductionLink ? 'var(--primary)' : undefined }} aria-expanded={isProductionMenuOpen} aria-controls="employee-production-menu" onClick={() => setIsProductionMenuOpen(open => !open)}>
+                    <span className="flex items-center gap-3"><SewingMachineIcon size={22} /><span>إدارة الإنتاج</span></span>
+                    {isProductionMenuOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+                  {isProductionMenuOpen && <div id="employee-production-menu" className="sidebar-submenu">
+                    {productionLinks.map(link => (
+                      <button key={link.tab} type="button" className={`submenu-item ${activeTab === link.tab ? 'active' : ''}`} aria-current={activeTab === link.tab ? 'page' : undefined} style={{ width: '100%', fontFamily: 'inherit', border: 'none', textAlign: 'right', background: activeTab === link.tab ? undefined : 'transparent' }} onClick={() => handleTabChange(link.tab)}>
+                        <span>{link.label}</span>
+                      </button>
+                    ))}
+                  </div>}
+                </div>
+              );
+            })()}
             {hasPermission(user, 'quotes') && (
               <div className={`admin-sidebar-item ${activeTab === 'quotes' ? 'active' : ''}`} onClick={() => handleTabChange('quotes')}>
                 <FileText size={22} /> <span>عروض الأسعار</span>

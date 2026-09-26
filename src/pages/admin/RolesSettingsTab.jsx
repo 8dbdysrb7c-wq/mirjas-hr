@@ -35,7 +35,8 @@ const STOCK_MODULES = {
   stock_view: 'معاينة الأرصدة والمخزون',
   stock_vouchers: 'السندات المخزنية (إدخال وإخراج)',
   stock_audit: 'تدقيق وصرف المبيعات',
-  stock_production: 'استلام وصرف الإنتاج',
+  stock_production: 'صرف الإنتاج',
+  stock_production_receipt: 'استلام منتجات PRO&PREP',
   stock_take: 'الجرد والتسوية المخزنية',
 };
 

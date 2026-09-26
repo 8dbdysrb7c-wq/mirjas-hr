@@ -12,8 +12,14 @@ import { getGlobalSettings, isAdmin, getEmployees, getAttendanceLogs, saveAttend
 function App() {
   const [currentUser, setCurrentUser] = useState(() => {
     if (FREE_AUTH_ENABLED) return null;
-    const saved = localStorage.getItem('currentUser');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('currentUser');
+      return (saved && saved !== 'undefined' && saved !== 'null') ? JSON.parse(saved) : null;
+    } catch (e) {
+      console.error('Failed to parse currentUser from localStorage:', e);
+      localStorage.removeItem('currentUser');
+      return null;
+    }
   });
   const [authReady, setAuthReady] = useState(!FREE_AUTH_ENABLED);
   useEffect(() => {

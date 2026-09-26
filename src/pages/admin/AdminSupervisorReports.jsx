@@ -1022,76 +1022,88 @@ const AdminSupervisorReports = ({ user }) => {
       },
       showConfirmButton: false,
       buttonsStyling: false,
-      width: '600px',
+      width: 'min(980px, 96vw)',
       didOpen: popup => {
         popup.querySelector('[data-close-supervisor-report]')?.addEventListener('click', () => MySwal.close());
+        window.printSupervisorReport = () => window.print();
       },
       html: `
-        <div style="direction: rtl; text-align: right; font-family: 'Tajawal', sans-serif; color: #1e293b; display: flex; flex-direction: column; height: 80vh; overflow: hidden; margin: -2rem;">
+        <div style="direction: rtl; text-align: right; font-family: 'Tajawal', sans-serif; color: #1e293b; display: flex; flex-direction: column; height: 86vh; max-height: 86vh; overflow: hidden; margin: -2rem;">
           
           <!-- Header -->
-          <div style="display: flex; align-items: center; justify-content: space-between; padding: 1.25rem; border-bottom: 1px solid #e2e8f0; background: #ffffff;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 1.75rem; border-bottom: 1.5px solid #e2e8f0; background: #ffffff; flex-shrink: 0;">
             <!-- Close button stays on the visual left in RTL. -->
-            <button type="button" data-close-supervisor-report aria-label="إغلاق تقرير المشرف" title="إغلاق" style="order: 3; flex-shrink: 0; width: 2.75rem; height: 2.75rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #475569;">
+            <button type="button" data-close-supervisor-report aria-label="إغلاق تقرير المشرف" title="إغلاق" style="order: 3; flex-shrink: 0; width: 2.75rem; height: 2.75rem; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #475569; transition: all 0.2s ease;">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
             </button>
             
             <!-- Title (Center) -->
-            <div style="order: 1; text-align: center; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-              <h3 style="margin: 0; font-size: 1.05rem; font-weight: 800; color: #1e293b;">تقرير المشرف: ${report.supervisorName}</h3>
-              <span style="font-size: 0.72rem; color: #64748b; font-weight: bold; background: #f1f5f9; padding: 2px 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-family: monospace;">${report.supervisorId || ''}</span>
+            <div style="order: 2; text-align: center; display: flex; align-items: center; justify-content: center; gap: 0.75rem;">
+              <div style="width: 40px; height: 40px; border-radius: 12px; background: #ecfdf5; color: #0f766e; display: flex; align-items: center; justify-content: center; border: 1.5px solid #a7f3d0;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              </div>
+              <div style="text-align: right;">
+                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 800; color: #0f172a;">تقرير المشرف: ${report.supervisorName || '---'}</h3>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 3px;">
+                  <span style="font-size: 0.75rem; color: #475569; font-weight: 700; background: #f1f5f9; padding: 2px 8px; border-radius: 6px; border: 1px solid #e2e8f0; font-family: monospace;">كود: ${report.supervisorId || '---'}</span>
+                  <span style="font-size: 0.75rem; color: #0f766e; font-weight: 700; background: #ccfbf1; padding: 2px 8px; border-radius: 6px; border: 1px solid #99f6e4;">📅 ${report.date}</span>
+                </div>
+              </div>
             </div>
             
             <!-- Print Button (Right) -->
-            <button onclick="window.printSupervisorReport()" style="width: 2.75rem; height: 2.75rem; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #0f766e; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+            <button onclick="window.printSupervisorReport()" title="طباعة التقرير" style="order: 1; width: 2.75rem; height: 2.75rem; background: #ffffff; border: 1.5px solid #0f766e; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #0f766e; box-shadow: 0 2px 5px rgba(15,118,110,0.1); transition: all 0.2s ease;">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
             </button>
           </div>
 
           <!-- Body (Scrollable) -->
-          <div style="flex: 1; overflow-y: auto; padding: 1.25rem; background-color: #f8fafc;">
+          <div style="flex: 1; overflow-y: auto; padding: 1.5rem; background-color: #f8fafc;">
             
             <!-- الدوام Card -->
-            <div style="background: #ffffff; border-radius: 20px; padding: 1.25rem; margin-bottom: 1.25rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 10px rgba(0,0,0,0.02);">
-              <div style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; font-weight: 800; color: #0f766e; font-size: 0.95rem; margin-bottom: 1rem;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                <span>الدوام</span>
+            <div style="background: #ffffff; border-radius: 18px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
+              <div style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; font-weight: 800; color: #0f766e; font-size: 1rem; margin-bottom: 1rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.6rem;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                <span>سجل الدوام والحضور للمشرف</span>
               </div>
               
-              <div style="display: flex; gap: 0.75rem;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
                 <!-- التاريخ -->
-                <div style="flex: 1; border: 1.5px solid #cbd5e1; border-radius: 14px; padding: 0.75rem 0.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.25rem; background: #f8fafc;">
-                  <span style="font-size: 0.7rem; font-weight: 700; color: #64748b; display: flex; align-items: center; gap: 0.25rem;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                    <span>التاريخ:</span>
+                <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 0.9rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.35rem;">
+                  <span style="font-size: 0.75rem; font-weight: 700; color: #64748b; display: flex; align-items: center; gap: 0.3rem;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    <span>تاريخ التقرير:</span>
                   </span>
-                  <span style="font-weight: 800; color: #1e293b; font-size: 0.85rem;">${report.date}</span>
+                  <span style="font-weight: 800; color: #0f172a; font-size: 1.05rem;">${report.date}</span>
                 </div>
                 
                 <!-- وقت الحضور -->
-                <div style="flex: 1; border: 1.5px solid #cbd5e1; border-radius: 14px; padding: 0.75rem 0.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.25rem; background: #f8fafc;">
-                  <span style="font-size: 0.7rem; font-weight: 700; color: #64748b; display: flex; align-items: center; gap: 0.25rem;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                    <span>وقت الحضور:</span>
+                <div style="background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 14px; padding: 0.9rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.35rem;">
+                  <span style="font-size: 0.75rem; font-weight: 700; color: #15803d; display: flex; align-items: center; gap: 0.3rem;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                    <span>وقت الحضور (دخول):</span>
                   </span>
-                  <span style="font-weight: 800; color: #1e293b; font-size: 0.85rem;" dir="ltr">${supTimeIn}</span>
+                  <span style="font-weight: 800; color: #166534; font-size: 1.05rem;" dir="ltr">${supTimeIn}</span>
                 </div>
                 
                 <!-- وقت الخروج -->
-                <div style="flex: 1; border: 1.5px solid #cbd5e1; border-radius: 14px; padding: 0.75rem 0.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.25rem; background: #f8fafc;">
-                  <span style="font-size: 0.7rem; font-weight: 700; color: #64748b; display: flex; align-items: center; gap: 0.25rem;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                    <span>وقت الخروج:</span>
+                <div style="background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 14px; padding: 0.9rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.35rem;">
+                  <span style="font-size: 0.75rem; font-weight: 700; color: #1d4ed8; display: flex; align-items: center; gap: 0.3rem;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                    <span>وقت الانصراف (خروج):</span>
                   </span>
-                  <span style="font-weight: 800; color: #1e293b; font-size: 0.85rem;" dir="ltr">${supTimeOut}</span>
+                  <span style="font-weight: 800; color: #1e40af; font-size: 1.05rem;" dir="ltr">${supTimeOut}</span>
                 </div>
               </div>
               
               <!-- الملاحظات اليومية للمشرف -->
               ${report.notes ? `
-                <div style="margin-top: 1rem; padding: 0.75rem; border-radius: 12px; background-color: #f1f5f9; border: 1px solid #e2e8f0;">
-                  <span style="display: block; font-size: 0.7rem; font-weight: 700; color: #475569; margin-bottom: 0.25rem;">الملاحظات اليومية للمشرف:</span>
-                  <span style="font-weight: 600; color: #1e293b; font-size: 0.85rem; white-space: pre-wrap;">${report.notes}</span>
+                <div style="margin-top: 1rem; padding: 0.9rem 1.1rem; border-radius: 12px; background: #fffbeb; border: 1.5px solid #fde68a; display: flex; align-items: flex-start; gap: 0.6rem;">
+                  <span style="color: #d97706; font-size: 1.1rem; line-height: 1;">📝</span>
+                  <div style="flex: 1;">
+                    <span style="display: block; font-size: 0.78rem; font-weight: 800; color: #b45309; margin-bottom: 0.25rem;">ملاحظات المشرف العامة لهذا اليوم:</span>
+                    <span style="font-weight: 600; color: #78350f; font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap;">${report.notes}</span>
+                  </div>
                 </div>
               ` : ''}
             </div>
@@ -1102,82 +1114,60 @@ const AdminSupervisorReports = ({ user }) => {
 
         return `
                 <!-- Employee evaluation card wrapper -->
-                <div style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 20px; padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03); position: relative;">
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02); position: relative;">
                   
                   <!-- Employee Header -->
-                  <div style="display: flex; justify-content: flex-start; align-items: center; gap: 0.75rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
-                    <!-- Circular Green Badge index (Right) -->
-                    <div style="width: 26px; height: 26px; background-color: #0f766e; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.8rem; box-shadow: 0 2px 6px rgba(15,118,110,0.2); flex-shrink: 0;">
-                      ${String(idx + 1).padStart(2, '0')}
+                  <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #f1f5f9; padding-bottom: 0.75rem; margin-bottom: 0.85rem;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                      <div style="width: 32px; height: 32px; background-color: #0f766e; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.85rem; box-shadow: 0 2px 6px rgba(15,118,110,0.25); flex-shrink: 0;">
+                        ${String(idx + 1).padStart(2, '0')}
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0e7490" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        <span style="font-weight: 800; color: #0f172a; font-size: 1.05rem;">${ev.employeeName}</span>
+                        <span style="font-size: 0.75rem; color: #475569; font-weight: 700; background: #f1f5f9; padding: 2px 8px; border-radius: 6px; border: 1px solid #cbd5e1; font-family: monospace;">${ev.employeeId}</span>
+                      </div>
                     </div>
-                    <!-- User icon & name -->
-                    <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 800; color: #1e293b; font-size: 0.95rem;">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0e7490" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                      <span>${ev.employeeName}</span>
-                      <span style="font-size: 0.72rem; color: #64748b; font-weight: bold; background: #f1f5f9; padding: 2px 6px; border-radius: 6px; border: 1px solid #e2e8f0; font-family: monospace; margin-right: 4px;">${ev.employeeId}</span>
+                    
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                      <span style="padding: 4px 12px; border-radius: 9999px; font-weight: 800; font-size: 0.82rem; background: ${ev.rating === 'ممتاز' || ev.rating === 'جيد' ? '#ecfdf5' : ev.rating === 'سيئ' || ev.rating === 'لم يقدم تقرير' ? '#fef2f2' : '#f8fafc'}; color: ${ev.rating === 'ممتاز' || ev.rating === 'جيد' ? '#059669' : ev.rating === 'سيئ' || ev.rating === 'لم يقدم تقرير' ? '#dc2626' : '#334155'}; border: 1px solid ${ev.rating === 'ممتاز' || ev.rating === 'جيد' ? '#a7f3d0' : ev.rating === 'سيئ' || ev.rating === 'لم يقدم تقرير' ? '#fecaca' : '#e2e8f0'};">
+                        التقييم: ${ev.rating}
+                      </span>
+                      ${ev.scorePercentage ? `<span style="padding: 4px 10px; border-radius: 9999px; font-weight: 800; font-size: 0.82rem; background: #f0fdfa; color: #0f766e; border: 1px solid #99f6e4;" dir="ltr">${ev.scorePercentage}%</span>` : ''}
                     </div>
                   </div>
 
-                  <!-- Mini evaluation table -->
-                  <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 0.8rem; margin-bottom: 1rem; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0;">
-                    <thead>
-                      <tr style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: bold;">
-                        <th style="padding: 8px; border: 1px solid #cbd5e1;">التقييم</th>
-                        <th style="padding: 8px; border: 1px solid #cbd5e1;">النسبة</th>
-                        <th style="padding: 8px; border: 1px solid #cbd5e1;">الملاحظة</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr style="background-color: #ffffff;">
-                        <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold; color: ${ev.rating === 'ممتاز' || ev.rating === 'جيد' ? '#10b981' : ev.rating === 'سيئ' || ev.rating === 'لم يقدم تقرير' ? '#ef4444' : '#334155'};">
-                          ${ev.rating}
-                        </td>
-                        <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold; color: #0e7490;" dir="ltr">
-                          ${ev.scorePercentage ? ev.scorePercentage + '%' : '---'}
-                        </td>
-                        <td style="padding: 8px; border: 1px solid #cbd5e1; color: #475569; font-weight: 600;">
-                          ${escapeReportNote(ev.reason || '---')}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-
-                  <!-- Collapsible section header -->
-                  <div style="display: flex; align-items: center; justify-content: space-between; color: #0e7490; font-weight: bold; font-size: 0.85rem; padding: 0.5rem 0; border-top: 1px dashed #cbd5e1; margin-top: 0.5rem; cursor: pointer;">
-                    <span style="display: flex; align-items: center; gap: 0.25rem;">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                      <span>تفاصيل تقرير الموظف</span>
-                    </span>
-                  </div>
+                  ${ev.reason ? `
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 12px; margin-bottom: 0.85rem; font-size: 0.85rem; color: #334155;">
+                      <strong style="color: #0f766e;">ملاحظة التقييم:</strong> ${escapeReportNote(ev.reason)}
+                    </div>
+                  ` : ''}
 
                   <!-- Tasks Table Container -->
-                  <div style="background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; margin: 0.5rem 0; overflow-x: auto;">
-                    <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 0.65rem;">
+                  <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; margin: 0.75rem 0; overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 0.82rem; min-width: 500px;">
                       <thead>
-                        <tr style="background-color: #f8fafc; border-bottom: 1px solid #cbd5e1; color: #64748b; font-weight: bold;">
-                          <th style="padding: 5px 3px; border: 1px solid #cbd5e1; font-size: 0.62rem !important; font-weight: bold !important;">القسم</th>
-                          <th style="padding: 5px 3px; border: 1px solid #cbd5e1; font-size: 0.62rem !important; font-weight: bold !important;">الصنف</th>
-                          <th style="padding: 5px 3px; border: 1px solid #cbd5e1; font-size: 0.62rem !important; font-weight: bold !important;">العملية</th>
-                          <th style="padding: 5px 3px; border: 1px solid #cbd5e1; font-size: 0.62rem !important; font-weight: bold !important;">المنجز</th>
-                          <th style="padding: 5px 3px; border: 1px solid #cbd5e1; font-size: 0.62rem !important; font-weight: bold !important;">الحد المطلوب</th>
+                        <tr style="background-color: #f1f5f9; border-bottom: 1.5px solid #e2e8f0; color: #475569; font-weight: 800;">
+                          <th style="padding: 8px 12px; border-bottom: 1.5px solid #e2e8f0; width: 18%;">القسم</th>
+                          <th style="padding: 8px 12px; border-bottom: 1.5px solid #e2e8f0; width: 28%; text-align: right;">الصنف / المنتج</th>
+                          <th style="padding: 8px 12px; border-bottom: 1.5px solid #e2e8f0; width: 22%;">العملية</th>
+                          <th style="padding: 8px 12px; border-bottom: 1.5px solid #e2e8f0; width: 16%;">المنجز</th>
+                          <th style="padding: 8px 12px; border-bottom: 1.5px solid #e2e8f0; width: 16%;">المطلوب</th>
                         </tr>
                       </thead>
                       <tbody>
                         ${(empDailyReport && empDailyReport.tasks && empDailyReport.tasks.length > 0) ? empDailyReport.tasks.map(t => `
-                          <tr style="background-color: #ffffff;">
-                            <td style="padding: 5px 3px; border: 1px solid #cbd5e1; font-weight: normal !important; color: #0e7490; font-size: 0.6rem !important;">${t.departmentName || t.department || 'عام'}</td>
-                            <td style="padding: 5px 3px; border: 1px solid #cbd5e1; font-weight: normal !important; color: #1e293b; font-size: 0.6rem !important;">${t.name}</td>
-                            <td style="padding: 5px 3px; border: 1px solid #cbd5e1; color: #475569; font-size: 0.6rem !important; font-weight: normal !important;">${t.operation}</td>
-                            <td style="padding: 5px 3px; border: 1px solid #cbd5e1; font-weight: 800 !important; color: #0e7490; font-size: 0.68rem !important;">${t.count}</td>
-                            <td style="padding: 5px 3px; border: 1px solid #cbd5e1; color: #64748b; font-size: 0.58rem !important; font-weight: normal !important;">${(t.min > 0 || t.max > 0) ? `<span dir="ltr">${t.max} - ${t.min}</span>` : '-'}</td>
+                          <tr style="border-bottom: 1px solid #f1f5f9;">
+                            <td style="padding: 8px 12px; border-bottom: 1px solid #f1f5f9; font-weight: 700; color: #0284c7;">${t.departmentName || t.department || 'عام'}</td>
+                            <td style="padding: 8px 12px; border-bottom: 1px solid #f1f5f9; font-weight: 700; color: #1e293b; text-align: right;">${t.name}</td>
+                            <td style="padding: 8px 12px; border-bottom: 1px solid #f1f5f9; color: #475569;">${t.operation}</td>
+                            <td style="padding: 8px 12px; border-bottom: 1px solid #f1f5f9; font-weight: 800; color: #0f766e; font-size: 0.95rem;">${t.count}</td>
+                            <td style="padding: 8px 12px; border-bottom: 1px solid #f1f5f9; color: #64748b; font-weight: 700;">${(t.min > 0 || t.max > 0) ? `<span dir="ltr">${t.max} - ${t.min}</span>` : '-'}</td>
                           </tr>
                         `).join('') : `
                           <tr>
-                            <td colspan="5" style="padding: 1rem; color: #94a3b8; text-align: center;">
-                              <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem; justify-content: center;">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><line x1="12" y1="11" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                                <span style="font-weight: bold; font-size: 0.8rem;">لا توجد مهام مسجلة.</span>
-                              </div>
+                            <td colspan="5" style="padding: 1.25rem; color: #94a3b8; text-align: center;">
+                              <span style="font-weight: 700; font-size: 0.85rem;">لا توجد مهام تفصيلية مسجلة لهذا الموظف</span>
                             </td>
                           </tr>
                         `}
@@ -1186,19 +1176,19 @@ const AdminSupervisorReports = ({ user }) => {
                   </div>
 
                   <!-- Metadata Row badges -->
-                  <div style="display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: space-between; align-items: center; background-color: #f0f9fa; padding: 0.5rem 0.75rem; border-radius: 12px; border: 1px solid #cfeef1; font-size: 0.75rem; font-weight: bold;">
+                  <div style="display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: flex-start; align-items: center; background-color: #f8fafc; padding: 0.6rem 0.9rem; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 0.8rem; font-weight: bold;">
                     <!-- Phone Safe -->
-                    <span style="color: ${empDailyReport && empDailyReport.phoneSafe ? '#16a34a' : '#ef4444'}; display: flex; align-items: center; gap: 0.25rem;">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    <span style="padding: 4px 10px; border-radius: 8px; background: ${empDailyReport && empDailyReport.phoneSafe ? '#ecfdf5' : '#fef2f2'}; color: ${empDailyReport && empDailyReport.phoneSafe ? '#15803d' : '#dc2626'}; border: 1px solid ${empDailyReport && empDailyReport.phoneSafe ? '#bbf7d0' : '#fecaca'}; display: inline-flex; align-items: center; gap: 0.35rem;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                       <span>الهاتف بالأمانات: ${empDailyReport && empDailyReport.phoneSafe ? 'نعم' : 'لا'}</span>
                     </span>
                     <!-- Phone Usages -->
-                    <span style="color: ${empDailyReport && empDailyReport.phoneUsages > 0 ? '#ef4444' : '#16a34a'}; display: flex; align-items: center; gap: 0.25rem;">
+                    <span style="padding: 4px 10px; border-radius: 8px; background: ${empDailyReport && empDailyReport.phoneUsages > 0 ? '#fef2f2' : '#ecfdf5'}; color: ${empDailyReport && empDailyReport.phoneUsages > 0 ? '#dc2626' : '#15803d'}; border: 1px solid ${empDailyReport && empDailyReport.phoneUsages > 0 ? '#fecaca' : '#bbf7d0'}; display: inline-flex; align-items: center; gap: 0.35rem;">
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
                       <span>استخدام الهاتف: ${empDailyReport ? empDailyReport.phoneUsages || 0 : 0} مرات</span>
                     </span>
                     <!-- Check-in Time -->
-                    <span style="color: #0e7490; display: flex; align-items: center; gap: 0.25rem;">
+                    <span style="padding: 4px 10px; border-radius: 8px; background: #f0fdfa; color: #0f766e; border: 1px solid #99f6e4; display: inline-flex; align-items: center; gap: 0.35rem;">
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
                       <span>دخول: ${(() => {
             let attLog = hrAttLogs.find(l => matchAttendance(l, ev.employeeId, ev.employeeName, report.date));
@@ -1211,7 +1201,7 @@ const AdminSupervisorReports = ({ user }) => {
           })()}</span>
                     </span>
                     <!-- Check-out Time -->
-                    <span style="color: #0e7490; display: flex; align-items: center; gap: 0.25rem;">
+                    <span style="padding: 4px 10px; border-radius: 8px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; display: inline-flex; align-items: center; gap: 0.35rem;">
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
                       <span>خروج: ${(() => {
             let attLog = hrAttLogs.find(l => matchAttendance(l, ev.employeeId, ev.employeeName, report.date));
@@ -1229,59 +1219,120 @@ const AdminSupervisorReports = ({ user }) => {
               `;
       }).join('')}
 
-            <!-- متابعة الطلبيات والإنتاج المباشر -->
-            <div style="background: #ffffff; border-radius: 20px; padding: 1.25rem; margin-top: 1.25rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 10px rgba(0,0,0,0.02);">
-              <div style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; font-weight: 800; color: #0f766e; font-size: 0.95rem; margin-bottom: 1rem;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                <span>الطلبيات غير المنتهية وأسباب التأخير</span>
+            <!-- الطلبيات غير المنتهية وأسباب التأخير -->
+            <div style="background: #ffffff; border-radius: 18px; padding: 1.25rem 1.5rem; margin-top: 1.25rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 14px rgba(0,0,0,0.03);">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; border-bottom: 1.5px solid #f1f5f9; padding-bottom: 0.75rem;">
+                <div style="display: flex; align-items: center; gap: 0.6rem; font-weight: 800; color: #0f766e; font-size: 1.05rem;">
+                  <div style="width: 34px; height: 34px; border-radius: 10px; background: #ccfbf1; color: #0f766e; display: flex; align-items: center; justify-content: center; border: 1.5px solid #99f6e4;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                  </div>
+                  <span>الطلبيات غير المنتهية وأسباب التأخير</span>
+                </div>
+                <span style="background: #f1f5f9; color: #475569; font-size: 0.8rem; font-weight: 800; padding: 4px 12px; border-radius: 9999px; border: 1px solid #e2e8f0;">
+                  ${(report.ordersSnapshot && report.ordersSnapshot.length > 0) ? `${report.ordersSnapshot.length} طلبيات مسجلة` : 'لا توجد طلبيات'}
+                </span>
               </div>
               
-              <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 0.8rem; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0;">
-                <thead>
-                  <tr style="background-color: #f8fafc; border-bottom: 1px solid #cbd5e1; color: #64748b; font-weight: bold;">
-                    <th style="padding: 10px; border: 1px solid #cbd5e1;">الطلبية/المهمة</th>
-                    <th style="padding: 10px; border: 1px solid #cbd5e1;">القسم</th>
-                    <th style="padding: 10px; border: 1px solid #cbd5e1;">الحالة</th>
-                    <th style="padding: 10px; border: 1px solid #cbd5e1;">سبب عدم الانتهاء / آخر مستجد</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${(report.ordersSnapshot && report.ordersSnapshot.length > 0) ? (() => {
-          const getDept = (o) => o.isMission ? 'مهمة توصيل' : (o.currentDepartment || (['جديد', 'مؤكد', 'قيد الانتظار', 'طلب جديد'].includes(o.status || '') ? 'إدارة الطلبات' : ((o.status || '').includes('توصيل') || (o.status || '').includes('تسليم') ? 'مهمة توصيل' : 'إنتاج قيد الخياطة')));
+              <div style="overflow-x: auto; border-radius: 14px; border: 1px solid #e2e8f0; background: #ffffff;">
+                <table style="width: 100%; border-collapse: separate; border-spacing: 0; text-align: right; font-size: 0.88rem; min-width: 680px;">
+                  <thead>
+                    <tr style="background: #f8fafc; color: #475569; font-weight: 800; font-size: 0.82rem; border-bottom: 1.5px solid #e2e8f0;">
+                      <th style="padding: 12px 16px; border-bottom: 1.5px solid #e2e8f0; width: 34%;">الطلبية / المهمة والعميل</th>
+                      <th style="padding: 12px 14px; border-bottom: 1.5px solid #e2e8f0; text-align: center; width: 18%; white-space: nowrap !important;">القسم المسؤول</th>
+                      <th style="padding: 12px 14px; border-bottom: 1.5px solid #e2e8f0; text-align: center; width: 22%; white-space: nowrap !important;">حالة الطلبية</th>
+                      <th style="padding: 12px 16px; border-bottom: 1.5px solid #e2e8f0; width: 26%;">سبب عدم الانتهاء / آخر مستجد</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${(report.ordersSnapshot && report.ordersSnapshot.length > 0) ? (() => {
+            const getDept = (o) => o.isMission ? 'مهمة توصيل' : (o.currentDepartment || (['جديد', 'مؤكد', 'قيد الانتظار', 'طلب جديد'].includes(o.status || '') ? 'إدارة الطلبات' : ((o.status || '').includes('توصيل') || (o.status || '').includes('تسليم') ? 'مهمة توصيل' : 'إنتاج قيد الخياطة')));
 
-          const sorted = [...report.ordersSnapshot].sort((a, b) => {
-            const d1 = getDept(a);
-            const d2 = getDept(b);
-            if (d1 === d2) return 0;
-            if (d1.includes('الطلبات')) return -1;
-            if (d2.includes('الطلبات')) return 1;
-            if (d1.includes('الخياطة')) return -1;
-            if (d2.includes('الخياطة')) return 1;
-            return 0;
-          });
+            const sorted = [...report.ordersSnapshot].sort((a, b) => {
+              const d1 = getDept(a);
+              const d2 = getDept(b);
+              if (d1 === d2) return 0;
+              if (d1.includes('الطلبات')) return -1;
+              if (d2.includes('الطلبات')) return 1;
+              if (d1.includes('الخياطة')) return -1;
+              if (d2.includes('الخياطة')) return 1;
+              return 0;
+            });
 
-          return sorted.map(o => {
-            const dept = getDept(o);
-            const deptColor = dept.includes('الطلبات') ? '#3b82f6' : dept.includes('الخياطة') ? '#f59e0b' : dept.includes('التحضير') ? '#8b5cf6' : '#10b981';
-            const deptBg = dept.includes('الطلبات') ? '#eff6ff' : dept.includes('الخياطة') ? '#fffbeb' : dept.includes('التحضير') ? '#f5f3ff' : '#ecfdf5';
-
-            return `
-                        <tr style="background-color: ${deptBg}; border-bottom: 1px solid #e2e8f0;">
-                          <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold; border-right: 4px solid ${deptColor}; text-align: right;">
-                            ${o.isMission
-                ? `<span style="color: #f97316; font-size: 0.85rem;">🚚 ${o.customerName || ''}</span>`
-                : `<span style="color: ${deptColor}; font-size: 0.85rem;">${o.orderNumber?.toString().includes('-') ? o.orderNumber : '#' + parseInt(o.orderNumber || 0)}</span><span style="font-size: 0.75rem; color: #64748b; margin-right: 5px;">- ${o.customerName || ''}</span>`
+            return sorted.map(o => {
+              const dept = getDept(o);
+              let deptColor = '#0284c7';
+              let deptBg = '#f0f9ff';
+              let deptBorder = '#bae6fd';
+              if (dept.includes('الطلبات') || dept === 'الطلبيات') {
+                deptColor = '#2563eb'; deptBg = '#eff6ff'; deptBorder = '#bfdbfe';
+              } else if (dept.includes('الخياطة') || dept.includes('إنتاج') || dept === 'الإنتاج') {
+                deptColor = '#d97706'; deptBg = '#fffbeb'; deptBorder = '#fde68a';
+              } else if (dept.includes('التحضير')) {
+                deptColor = '#7c3aed'; deptBg = '#f5f3ff'; deptBorder = '#ddd6fe';
+              } else if (dept.includes('توصيل') || dept.includes('تسليم')) {
+                deptColor = '#059669'; deptBg = '#ecfdf5'; deptBorder = '#a7f3d0';
               }
-                          </td>
-                          <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold; color: ${deptColor};">${dept}</td>
-                          <td style="padding: 8px; border: 1px solid #cbd5e1; color: #64748b;">${o.executionStatus || o.status || 'غير محدد'}</td>
-                          <td style="padding: 8px; border: 1px solid #cbd5e1; color: #475569; font-weight: bold;">${o.supervisorNotes || '---'}</td>
-                        </tr>
-                      `;
-          }).join('');
-        })() : '<tr><td colspan="4" style="padding: 15px; border: 1px solid #cbd5e1; color: #64748b;">لا توجد طلبيات مسجلة</td></tr>'}
-                </tbody>
-              </table>
+
+              const rawStatus = String(o.executionStatus || o.status || 'غير محدد').trim();
+              let statusBg = '#f1f5f9';
+              let statusColor = '#475569';
+              let statusBorder = '#e2e8f0';
+              if (rawStatus.includes('جاهز') || rawStatus.includes('مكتمل') || rawStatus.includes('تم التسليم')) {
+                statusBg = '#ecfdf5'; statusColor = '#059669'; statusBorder = '#a7f3d0';
+              } else if (rawStatus.includes('خياطة') || rawStatus.includes('تنفيذ') || rawStatus.includes('تشغيل')) {
+                statusBg = '#fffbeb'; statusColor = '#b45309'; statusBorder = '#fde68a';
+              } else if (rawStatus.includes('توصيل') || rawStatus.includes('تسليم')) {
+                statusBg = '#eff6ff'; statusColor = '#1d4ed8'; statusBorder = '#bfdbfe';
+              } else if (rawStatus.includes('معلق') || rawStatus.includes('تأخير') || rawStatus.includes('مرفوض') || rawStatus.includes('إلغاء')) {
+                statusBg = '#fef2f2'; statusColor = '#dc2626'; statusBorder = '#fecaca';
+              } else if (rawStatus.includes('جديد') || rawStatus.includes('انتظار')) {
+                statusBg = '#f8fafc'; statusColor = '#475569'; statusBorder = '#cbd5e1';
+              }
+
+              return `
+                <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.15s ease;">
+                  <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; vertical-align: middle;">
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                      <div style="display: flex; align-items: center; gap: 6px;">
+                        ${o.isMission 
+                          ? `<span style="display: inline-flex; align-items: center; gap: 4px; background: #fff7ed; color: #ea580c; border: 1px solid #ffedd5; padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 0.78rem;">🚚 مهمة توصيل</span>`
+                          : `<span style="display: inline-block; background: #f0fdfa; color: #0f766e; border: 1.5px solid #99f6e4; padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 0.8rem; font-family: monospace;">${o.orderNumber?.toString().includes('-') ? o.orderNumber : '#' + parseInt(o.orderNumber || 0)}</span>`
+                        }
+                      </div>
+                      <span style="font-weight: 700; color: #1e293b; font-size: 0.92rem; line-height: 1.3;">${o.customerName || 'بدون اسم عميل'}</span>
+                    </div>
+                  </td>
+                  <td style="padding: 12px 14px; border-bottom: 1px solid #f1f5f9; text-align: center; vertical-align: middle; white-space: nowrap !important;">
+                    <span style="display: inline-block; white-space: nowrap !important; padding: 5px 12px; border-radius: 9999px; font-weight: 800; font-size: 0.82rem; background: ${deptBg}; color: ${deptColor}; border: 1px solid ${deptBorder}; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                      ${dept}
+                    </span>
+                  </td>
+                  <td style="padding: 12px 14px; border-bottom: 1px solid #f1f5f9; text-align: center; vertical-align: middle; white-space: nowrap !important;">
+                    <span style="display: inline-block; white-space: nowrap !important; padding: 5px 12px; border-radius: 9999px; font-weight: 800; font-size: 0.82rem; background: ${statusBg}; color: ${statusColor}; border: 1px solid ${statusBorder};">
+                      ${rawStatus}
+                    </span>
+                  </td>
+                  <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; vertical-align: middle;">
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 12px; font-weight: 700; color: #334155; font-size: 0.88rem; line-height: 1.4; display: inline-block; min-width: 80px; text-align: right;">
+                      ${o.supervisorNotes ? o.supervisorNotes : '<span style="color: #94a3b8; font-weight: normal;">لا توجد ملاحظة</span>'}
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join('');
+          })() : `
+            <tr>
+              <td colspan="4" style="padding: 2rem 1rem; color: #64748b; text-align: center;">
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem;">
+                  <span style="font-size: 1.5rem;">✅</span>
+                  <span style="font-weight: 700; font-size: 0.95rem; color: #0f766e;">لا توجد طلبيات غير منتهية مسجلة في هذا التقرير</span>
+                </div>
+              </td>
+            </tr>
+          `}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
           </div>

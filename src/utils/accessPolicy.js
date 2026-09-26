@@ -29,6 +29,7 @@ export const SCREEN_ALLOWED_ACTIONS = {
   stock_vouchers: ['view', 'create', 'edit', 'delete', 'approve', 'print', 'export'],
   stock_audit: ['view', 'approve', 'print', 'export'],
   stock_production: ['view', 'create', 'edit', 'delete', 'approve', 'print'],
+  stock_production_receipt: ['view', 'create'],
   stock_take: ['view', 'create', 'edit', 'approve', 'print', 'export'],
   stock_quick_add: ['view', 'create'],
 
@@ -109,7 +110,8 @@ export const SCREEN_DESCRIPTIONS = {
   stock_view: 'معاينة الأصناف والأرصدة الحالية في المستودعات وتفاصيلها',
   stock_vouchers: 'إصدار وتعديل وحذف سندات الإدخال والإخراج المخزنية',
   stock_audit: 'تدقيق سندات المبيعات وصرف بضائع الطلبيات من المستودع',
-  stock_production: 'استلام وصرف مستلزمات الإنتاج والأقمشة والمواد الخام',
+  stock_production: 'صرف مستلزمات الإنتاج والأقمشة والمواد الخام',
+  stock_production_receipt: 'استلام المنتجات من أوامر الإنتاج والتحضير إلى المخزون',
   stock_take: 'عمليات الجرد والتسويات الجردية الدورية للمستودعات',
   stock_quick_add: 'الإضافة السريعة للأصناف والمنتجات مباشرة للمخزون',
 
@@ -174,7 +176,7 @@ export const SCREEN_DESCRIPTIONS = {
 export const ACCESS_SECTIONS = [
   ['home', 'الرئيسية', [['overview', 'الرئيسية'], ['live', 'التحكم المباشر']]],
   ['tasks', 'إدارة المهام', [['supervisor_tasks', 'مهام المشرفين'], ['supervisor_reports', 'تقارير المشرفين'], ['assigned_missions', 'المهمات المكلّف بها']]],
-  ['inventory', 'المخزون', [['stock_view', 'الأصناف'], ['stock_vouchers', 'سندات المخزون'], ['stock_audit', 'تدقيق المبيعات'], ['stock_production', 'صرف واستلام الإنتاج'], ['stock_take', 'الجرد'], ['stock_quick_add', 'الإضافة السريعة']]],
+  ['inventory', 'المخزون', [['stock_view', 'الأصناف'], ['stock_vouchers', 'سندات المخزون'], ['stock_audit', 'تدقيق المبيعات'], ['stock_production', 'صرف الإنتاج'], ['stock_production_receipt', 'استلام منتجات PRO&PREP'], ['stock_take', 'الجرد'], ['stock_quick_add', 'الإضافة السريعة']]],
   ['production', 'إدارة الإنتاج', [['production', 'إنتاج قيد الخياطة'], ['preparation', 'إنتاج قيد التحضير'], ['production_packaging', 'قسم التغليف (إنتاج قيد التغليف)'], ['production_tasks', 'مهام الإنتاج']]],
   ['sales', 'المبيعات', [['orders', 'الطلبيات'], ['quotes', 'عروض الأسعار'], ['pricelists', 'قوائم الأسعار'], ['customers', 'العملاء'], ['customer_statements', 'كشوفات الحساب'], ['rep_visits', 'زيارات المندوبين']]],
   ['delivery', 'التوصيل', [['delivery', 'التوصيل']]],
