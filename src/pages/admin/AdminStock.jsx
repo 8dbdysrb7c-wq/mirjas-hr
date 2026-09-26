@@ -501,7 +501,7 @@ const AdminStock = ({ user, notificationTarget }) => {
           extraPromises.push(getStockVouchers().then(d => setVouchers(d || [])));
         }
         
-        if (tabToLoad === 'production') {
+        if (tabToLoad === 'audit' || tabToLoad === 'production') {
           extraPromises.push(getSalesOrders().then(d => setSalesOrders(d || [])));
           extraPromises.push(getMissions().then(d => setMissions(d || [])));
           extraPromises.push(getProductCostings().then(d => setProductCostings(d || [])));
@@ -713,12 +713,22 @@ const AdminStock = ({ user, notificationTarget }) => {
   ).length;
   const totalPendingProductionCount = pendingProductionAuditCount + pendingProductionReceiptCount;
 
+  const normalizeDeliveryStatus = s => String(s || '').trim().replace('إ', 'ا');
   const ordersToAuditRaw = salesOrders.filter(o => {
     if (o.ignoredAudit) return false;
     // Explicitly exclude any production or preparation orders that might have been miscategorized
     if (String(o.orderNumber || '').startsWith('PREP-') || String(o.orderNumber || '').startsWith('PRO-')) return false;
     
-    return o.status === 'تم التوصيل' || missions.find(m => m.salesOrderNumber === o.orderNumber && m.status === 'تم الإنجاز');
+    const isDeliveredByStatus = ['تم التوصيل', 'تم الانجاز', 'تم الإنجاز'].some(st =>
+      normalizeDeliveryStatus(o.status) === normalizeDeliveryStatus(st) ||
+      normalizeDeliveryStatus(o.deliveryStatus) === normalizeDeliveryStatus(st)
+    );
+    const linkedMission = missions.find(m =>
+      (m.salesOrderNumber === o.orderNumber || m.orderNumber === o.orderNumber || (m.salesOrderId && m.salesOrderId === o.id)) &&
+      ['تم الإنجاز', 'تم الانجاز', 'مكتمل'].some(st => normalizeDeliveryStatus(m.status) === normalizeDeliveryStatus(st))
+    );
+
+    return isDeliveredByStatus || Boolean(linkedMission);
   });
   const ordersToAudit = ordersToAuditRaw.map(o => {
     const drafts = getDraftForOrder(o.orderNumber);
