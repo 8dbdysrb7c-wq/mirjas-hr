@@ -14,7 +14,7 @@ import {
   updateDoc,
   writeBatch
 } from 'firebase/firestore';
-import { getGlobalSettings, createNotification } from './settings';
+import { getGlobalSettings, createNotification, isAdmin } from './settings';
 import { triggerWhatsAppRouting } from './whatsappRouter';
 import {
   getOfficialAbsenceMinutes,
@@ -1214,6 +1214,7 @@ export const saveHRLeave = async (leave, userContext = null) => {
        if (isLocked) throw new Error("لا يمكن التعديل: تم إغلاق رواتب هذه الفترة");
     }
 
+    let duplicateAuthorized = false;
     if (!leave.id && ['بدل عمل إضافي', 'عمل إضافي'].includes(leave.type)) {
       const requestDate = leave.date || leave.startDate;
       const employeeId = String(leave.employeeId || '').trim();
@@ -1224,12 +1225,18 @@ export const saveHRLeave = async (leave, userContext = null) => {
           return String(record.employeeId || '').trim() === employeeId &&
             ['بدل عمل إضافي', 'عمل إضافي'].includes(record.type) && record.status !== 'مرفوض';
         });
-        if (duplicate) throw new Error('يوجد طلب عمل إضافي مسبقاً لهذا الموظف في نفس اليوم');
+        if (duplicate && !isAdmin(userContext)) throw new Error('يوجد طلب عمل إضافي مسبقاً لهذا الموظف في نفس اليوم؛ يسمح بالتكرار للأدمن فقط');
+        duplicateAuthorized = duplicate && isAdmin(userContext);
       }
     }
 
     const docRef = leave.id ? doc(db, 'hr_leaves', leave.id) : doc(collection(db, 'hr_leaves'));
     const data = { ...leave, updatedAt: new Date().toISOString() };
+    if (duplicateAuthorized) {
+      data.duplicateAuthorizedById = userContext.id || '';
+      data.duplicateAuthorizedByName = userContext.name || '';
+      data.duplicateAuthorizedAt = data.updatedAt;
+    }
     if (!leave.id) data.createdAt = new Date().toISOString();
     await setDoc(docRef, data, { merge: true });
 

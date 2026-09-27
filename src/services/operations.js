@@ -2,6 +2,7 @@ import { db } from '../firebase';
 import { 
   collection, 
   getDocs, 
+  getDoc,
   doc, 
   setDoc, 
   deleteDoc, 
@@ -202,6 +203,29 @@ export const updateMissionStatus = async (missionId, status, note = '') => {
     if (status === 'تم الإنجاز') updateData.completedAt = new Date().toISOString();
     
     await setDoc(missionRef, updateData, { merge: true });
+
+    // Sync delivery status to sales order if linked
+    try {
+      const missionSnap = await getDoc(missionRef);
+      const missionData = missionSnap.data();
+      if (missionData && missionData.salesOrderNumber) {
+        const orderQ = query(collection(db, 'sales_orders'), where('orderNumber', '==', missionData.salesOrderNumber));
+        const orderSnap = await getDocs(orderQ);
+        for (const orderDoc of orderSnap.docs) {
+          const syncUpdates = {
+            deliveryStatus: status,
+            deliveryDriverName: missionData.assignedEmployeeName || '',
+            deliveryDriverId: missionData.assignedEmployeeId || ''
+          };
+          if (status === 'تم الإنجاز') {
+            syncUpdates.deliveryCompletedAt = new Date().toISOString();
+          }
+          await setDoc(doc(db, 'sales_orders', orderDoc.id), syncUpdates, { merge: true });
+        }
+      }
+    } catch (syncErr) {
+      console.error("Error syncing mission status to sales order:", syncErr);
+    }
   } catch (error) {
     console.error("Error in updateMissionStatus:", error);
   }

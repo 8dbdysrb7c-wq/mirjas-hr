@@ -501,9 +501,12 @@ const AdminStock = ({ user, notificationTarget }) => {
           extraPromises.push(getStockVouchers().then(d => setVouchers(d || [])));
         }
 
-        if (tabToLoad === 'production') {
+        if (tabToLoad === 'audit' || tabToLoad === 'production') {
           extraPromises.push(getSalesOrders().then(d => setSalesOrders(d || [])));
           extraPromises.push(getMissions().then(d => setMissions(d || [])));
+        }
+
+        if (tabToLoad === 'production') {
           extraPromises.push(getProductCostings().then(d => setProductCostings(d || [])));
           extraPromises.push(
             Promise.all([getOrders(), getPreparationOrders()]).then(([prod, prep]) => {
@@ -798,6 +801,52 @@ const AdminStock = ({ user, notificationTarget }) => {
         }
       }
     });
+  };
+
+  const handleApproveAllWaitingDrafts = async () => {
+    const waitingOrders = ordersToAudit.filter(o => o.hasDraft);
+    if (waitingOrders.length === 0) return;
+
+    const result = await MySwal.fire({
+      title: `اعتماد جميع الطلبات (${waitingOrders.length})؟`,
+      text: `سيتم اعتماد جميع المسودات (${waitingOrders.length} طلبية) وخصم الأصناف من المخزون فوراً.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'نعم، اعتماد وخصم الجميع',
+      cancelButtonText: 'إلغاء',
+      confirmButtonColor: '#059669',
+    });
+
+    if (result.isConfirmed) {
+      setLoading(true);
+      let successCount = 0;
+      for (const order of waitingOrders) {
+        try {
+          const success = await approveAuditVouchers(order.orderNumber);
+          if (success) {
+            if (order.isProduction) {
+              const updatedOrder = { ...order, stockDeducted: true };
+              delete updatedOrder.hasDraft;
+              delete updatedOrder.draftCreatedBy;
+              delete updatedOrder.isProduction;
+              if (order.productionType === 'preparation') {
+                await savePreparationOrder(updatedOrder);
+              } else {
+                await saveOrder(updatedOrder);
+              }
+            } else {
+              await saveSalesOrder({ ...order, stockDeducted: true });
+            }
+            successCount++;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      setLoading(false);
+      Swal.fire('تم الاعتماد!', `تم اعتماد وخصم ${successCount} طلبية بنجاح من المخزون.`, 'success');
+      fetchData();
+    }
   };
 
   const handleDeleteDraft = async (orderNumber) => {
@@ -3203,8 +3252,19 @@ const AdminStock = ({ user, notificationTarget }) => {
       icon: <AlertTriangle />,
       color: '#8b5cf6',
       bgLight: '#f3e8ff',
-      customBadge: `${ordersToAudit.filter(o => !o.stockDeducted && !o.hasDraft).length} غير مدققة`,
-      onClick: () => setActiveStockTab('audit'),
+      customBadge: (() => {
+        const pendingCount = ordersToAudit.filter(o => !o.stockDeducted && !o.hasDraft).length;
+        const waitingCount = ordersToAudit.filter(o => o.hasDraft).length;
+        if (waitingCount > 0 && pendingCount === 0) return `${waitingCount} بانتظار الاعتماد`;
+        if (waitingCount > 0 && pendingCount > 0) return `${pendingCount} غير مدققة | ${waitingCount} للاعتماد`;
+        return `${pendingCount} غير مدققة`;
+      })(),
+      onClick: () => {
+        setActiveStockTab('audit');
+        const pendingCount = ordersToAudit.filter(o => !o.stockDeducted && !o.hasDraft).length;
+        const waitingCount = ordersToAudit.filter(o => o.hasDraft).length;
+        if (pendingCount === 0 && waitingCount > 0) setAuditFilterStatus('waiting');
+      },
       isActive: activeStockTab === 'audit'
     },
     {
@@ -4062,6 +4122,18 @@ const AdminStock = ({ user, notificationTarget }) => {
         const unappliedAudits = ordersToAudit.filter(o => o.stockDeducted && vouchers.some(v => v.orderNumber === o.orderNumber && v.status === 'مسودة'));
         const unappliedProductionAudits = productionOrdersToAudit.filter(o => o.stockDeducted && vouchers.some(v => v.orderNumber === o.orderNumber && v.status === 'مسودة'));
         const totalUnapplied = unappliedAudits.length + unappliedProductionAudits.length;
+        const pendingCount = ordersToAudit.filter(o => !o.stockDeducted && !o.hasDraft).length;
+        const waitingCount = ordersToAudit.filter(o => o.hasDraft).length;
+        const approvedCount = ordersToAudit.filter(o => o.stockDeducted && !o.hasDraft).length;
+        const allCount = ordersToAudit.length;
+        const currentFilteredOrders = applySort(ordersToAudit.filter(o => {
+          if (auditFilterStatus === 'pending') return !o.stockDeducted && !o.hasDraft;
+          if (auditFilterStatus === 'waiting') return o.hasDraft;
+          if (auditFilterStatus === 'approved') return o.stockDeducted && !o.hasDraft;
+          if (auditFilterStatus === 'issues') return !o.stockDeducted && !o.hasDraft;
+          if (auditFilterStatus === 'rejected') return false;
+          return true;
+        }));
         return (
           <>
             {totalUnapplied > 0 && isAdmin(user) && (
@@ -4090,17 +4162,28 @@ const AdminStock = ({ user, notificationTarget }) => {
                 <h3 className="text-lg font-bold text-slate-800">طلبات خصم المخزون</h3>
                 <p className="text-slate-500 text-xs mt-0.5">سجل متابعة خصم الطلبيات من المخزون واعتمادها</p>
               </div>
-              <select
-                className="input-field text-sm"
-                style={{ width: 'auto', minWidth: '200px', marginBottom: 0, height: '40px', borderRadius: '12px', padding: '0 1.5rem 0 0.8rem' }}
-                value={auditFilterStatus === 'issues' ? 'pending' : auditFilterStatus}
-                onChange={e => setAuditFilterStatus(e.target.value)}
-              >
-                <option value="all">سجل جميع الطلبات</option>
-                <option value="pending">طلبات غير مدققة</option>
-                <option value="waiting">بانتظار موافقة الإدارة</option>
-                <option value="approved">طلبات مدققة</option>
-              </select>
+              <div className="flex items-center gap-3 flex-wrap">
+                {waitingCount > 0 && isAdmin(user) && (
+                  <button
+                    onClick={handleApproveAllWaitingDrafts}
+                    className="btn flex items-center gap-1.5 font-bold text-xs text-white shadow-sm hover:opacity-90 transition-all"
+                    style={{ background: '#059669', padding: '0.55rem 1.1rem', borderRadius: '10px', border: 'none' }}
+                  >
+                    <CheckCircle2 size={15} /> اعتماد الكل ({waitingCount})
+                  </button>
+                )}
+                <select
+                  className="input-field text-sm"
+                  style={{ width: 'auto', minWidth: '220px', marginBottom: 0, height: '40px', borderRadius: '12px', padding: '0 1.5rem 0 0.8rem' }}
+                  value={auditFilterStatus === 'issues' ? 'pending' : auditFilterStatus}
+                  onChange={e => setAuditFilterStatus(e.target.value)}
+                >
+                  <option value="all">سجل جميع الطلبات ({allCount})</option>
+                  <option value="waiting">بانتظار موافقة الإدارة ({waitingCount})</option>
+                  <option value="pending">طلبات غير مدققة ({pendingCount})</option>
+                  <option value="approved">طلبات مدققة ومعتمدة ({approvedCount})</option>
+                </select>
+              </div>
             </div>
             <div className="table-container glass-panel overflow-x-auto mt-4">
               <table className="min-w-[800px]">
@@ -4124,14 +4207,7 @@ const AdminStock = ({ user, notificationTarget }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {applySort(ordersToAudit.filter(o => {
-                    if (auditFilterStatus === 'pending') return !o.stockDeducted && !o.hasDraft;
-                    if (auditFilterStatus === 'waiting') return o.hasDraft;
-                    if (auditFilterStatus === 'approved') return o.stockDeducted && !o.hasDraft;
-                    if (auditFilterStatus === 'issues') return !o.stockDeducted && !o.hasDraft;
-                    if (auditFilterStatus === 'rejected') return false;
-                    return true;
-                  })).map(order => (
+                  {currentFilteredOrders.map(order => (
                     <tr key={order.id} className="hover:bg-slate-50 transition-colors">
                       <td className="font-bold text-primary text-center">{order.orderNumber}</td>
                       <td className="text-center">{order.orderDate}</td>
@@ -4266,8 +4342,35 @@ const AdminStock = ({ user, notificationTarget }) => {
                       </td>
                     </tr>
                   ))}
-                  {ordersToAudit.length === 0 && (
-                    <tr><td colSpan="7" className="text-center p-10 text-muted italic">لا يوجد طلبيات بانتظار الخصم</td></tr>
+                  {currentFilteredOrders.length === 0 && (
+                    <tr>
+                      <td colSpan="7" className="text-center p-8">
+                        {auditFilterStatus === 'approved' && waitingCount > 0 ? (
+                          <div className="flex flex-col items-center justify-center gap-2 py-4">
+                            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
+                              <AlertTriangle size={24} />
+                            </div>
+                            <h4 className="font-bold text-slate-800 text-sm">
+                              لا توجد طلبات معتمدة نهائياً، لكن يوجد {waitingCount} طلبية تم تدقيقها وبانتظار موافقة الإدارة!
+                            </h4>
+                            <p className="text-xs text-slate-500 max-w-md">
+                              تم تدقيق هذه الطلبيات كـ "مسودات" من قِبل المشرف، وتتطلب اعتماد الإدارة ليتم خصمها من المستودع واعتبارها معتمدة نهائياً.
+                            </p>
+                            <button
+                              onClick={() => setAuditFilterStatus('waiting')}
+                              className="btn btn-primary text-xs mt-2 font-bold px-4 py-2"
+                              style={{ borderRadius: '8px' }}
+                            >
+                              عرض الطلبات بانتظار الاعتماد ({waitingCount})
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-muted italic py-6">
+                            لا توجد طلبيات تطابق الفلتر المحدد
+                          </div>
+                        )}
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>

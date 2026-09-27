@@ -216,8 +216,12 @@ const AdminSettings = ({ user }) => {
         data.stockColors.sort((a, b) => {
           const isModelA = String(a).trim().startsWith('موديل');
           const isModelB = String(b).trim().startsWith('موديل');
+          const isLightCodeA = /^B(?:[1-9]|1[0-7])$/i.test(String(a).trim());
+          const isLightCodeB = /^B(?:[1-9]|1[0-7])$/i.test(String(b).trim());
           if (isModelA && !isModelB) return -1;
           if (!isModelA && isModelB) return 1;
+          if (isLightCodeA && !isLightCodeB) return 1;
+          if (!isLightCodeA && isLightCodeB) return -1;
           return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
         });
       }
@@ -523,8 +527,12 @@ const AdminSettings = ({ user }) => {
           newArray.sort((a, b) => {
             const isModelA = String(a).trim().startsWith('موديل');
             const isModelB = String(b).trim().startsWith('موديل');
+            const isLightCodeA = /^B(?:[1-9]|1[0-7])$/i.test(String(a).trim());
+            const isLightCodeB = /^B(?:[1-9]|1[0-7])$/i.test(String(b).trim());
             if (isModelA && !isModelB) return -1;
             if (!isModelA && isModelB) return 1;
+            if (isLightCodeA && !isLightCodeB) return 1;
+            if (!isLightCodeA && isLightCodeB) return -1;
             return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
           });
         }

@@ -1,4 +1,5 @@
 import { isActiveEmployee } from '../../utils/employeeStatus';
+import { isAdmin } from '../../services/settings';
 import React, { useState, useEffect, useRef } from 'react';
 import { CheckCircle, Clock, XCircle, Calendar, Plus, X, ArrowUpDown, ArrowUp, ArrowDown, Check, Undo2, Trash2, Eye, ChevronDown, ChevronUp, User, Bell } from 'lucide-react';
 import { promptEmployeeAlert } from '../../utils/employeeAlerts';
@@ -525,7 +526,7 @@ const HROvertime = ({ user, refreshCounts }) => {
       return (l.date || l.startDate) === formData.date;
     });
 
-    if (isDuplicate) {
+    if (isDuplicate && !isAdmin(user)) {
       Swal.fire('خطأ', 'يوجد طلب عمل إضافي مسبقاً لهذا الموظف في نفس اليوم!', 'error');
       return;
     }
@@ -563,7 +564,7 @@ const HROvertime = ({ user, refreshCounts }) => {
         ...formData,
         employeeName: emp.name,
         department: emp.department || 'غير محدد'
-      });
+      }, user);
       
       Swal.fire('نجاح', 'تم تسجيل الطلب بنجاح', 'success');
       setShowModal(false);

@@ -1,8 +1,8 @@
 import { hasDraftItems, readLocalDrafts, mergeDrafts, writeLocalDraft, removeLocalDraft } from '../../utils/salesDrafts';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal, flushSync } from 'react-dom';
-import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText, Briefcase, Clock, Check, Save, Share2, Layers, Clipboard, CheckCircle, Copy, Archive } from 'lucide-react';
-import { getSalesOrders, subscribeToSalesOrders, saveSalesOrder, deleteSalesOrder, getSalesOrderDrafts, saveSalesOrderDraft, deleteSalesOrderDraft, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getPreparationOrders, savePreparationOrder, getMissions, saveMission, deleteMission } from '../../store';
+import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText, Briefcase, Clock, Check, Save, Share2, Layers, Clipboard, CheckCircle, Copy, Archive, Truck } from 'lucide-react';
+import { getSalesOrders, subscribeToSalesOrders, saveSalesOrder, deleteSalesOrder, getSalesOrderDrafts, saveSalesOrderDraft, deleteSalesOrderDraft, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getPreparationOrders, savePreparationOrder, getMissions, saveMission, deleteMission, getEmployees, createNotification } from '../../store';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 import { hasPermission } from '../../utils/permissions';
 import Swal from 'sweetalert2';
@@ -41,6 +41,17 @@ const getLocalDateStr = (d) => {
   const offset = d.getTimezoneOffset();
   const localDate = new Date(d.getTime() - (offset * 60 * 1000));
   return localDate.toISOString().split('T')[0];
+};
+
+const getShortName = (fullName) => {
+  if (!fullName || fullName === '---') return '---';
+  const trimmed = String(fullName).trim();
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 0) return '---';
+  if (['عبد', 'أبو', 'ابو', 'أم', 'ام'].includes(parts[0]) && parts[1]) {
+    return `${parts[0]} ${parts[1]}`;
+  }
+  return parts[0];
 };
 
 const AdminSales = ({ user }) => {
@@ -117,6 +128,7 @@ const AdminSales = ({ user }) => {
   const [stock, setStock] = useState([]);
   const [missions, setMissions] = useState([]);
   const [productionOrders, setProductionOrders] = useState([]);
+  const [employees, setEmployees] = useState([]);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
@@ -253,13 +265,14 @@ const AdminSales = ({ user }) => {
 
   const fetchData = async () => {
     setLoading(true);
-    const [customersData, settingsData, stockData, missionsData, prodOrdersData, prepOrdersData] = await Promise.all([
+    const [customersData, settingsData, stockData, missionsData, prodOrdersData, prepOrdersData, employeesData] = await Promise.all([
       getCustomers(),
       getGlobalSettings(),
       getStock(),
       getMissions(),
       getOrders(),
-      getPreparationOrders()
+      getPreparationOrders(),
+      getEmployees()
     ]);
     setCustomers(customersData.filter(c => (c.type || 'عميل') === 'عميل'));
     setGlobalSettings(settingsData);
@@ -267,6 +280,7 @@ const AdminSales = ({ user }) => {
     setMissions(missionsData || []);
     setProductionOrders(prodOrdersData || []);
     setPreparationOrders(prepOrdersData || []);
+    setEmployees(employeesData || []);
     setLoading(false);
   };
 
@@ -369,6 +383,282 @@ const AdminSales = ({ user }) => {
 
   const isOrderTotallyFrozen = (order) => {
     return isOrderDeliveryFrozen(order) || order.stockDeducted;
+  };
+
+  const getOrderMission = (orderNumber) => {
+    if (!orderNumber || !missions) return null;
+    const cleanNum = String(orderNumber).trim();
+    return missions.find(m =>
+      m.type === 'تسليم طلبية' &&
+      String(m.salesOrderNumber || '').trim() === cleanNum
+    ) || null;
+  };
+
+  const deliveryStaffList = React.useMemo(() => {
+    if (!employees || employees.length === 0) return [];
+    return [...employees].sort((a, b) => {
+      const aIsDriver = (a.department || '').includes('توصيل') || (a.role || '').includes('سائق') || (a.position || '').includes('سائق') || (a.name || '').includes('بهاء');
+      const bIsDriver = (b.department || '').includes('توصيل') || (b.role || '').includes('سائق') || (b.position || '').includes('سائق') || (b.name || '').includes('بهاء');
+      if (aIsDriver && !bIsDriver) return -1;
+      if (!aIsDriver && bIsDriver) return 1;
+      return (a.name || '').localeCompare(b.name || '', 'ar');
+    });
+  }, [employees]);
+
+  const getDeliveryStatusBadge = (status) => {
+    switch (status) {
+      case 'تم الإنجاز':
+        return { label: 'تم الإنجاز', bg: '#dcfce7', text: '#15803d', border: '#86efac' };
+      case 'تم التوصيل':
+        return { label: 'تم التوصيل', bg: '#e0f2fe', text: '#0369a1', border: '#7dd3fc' };
+      case 'عند الموقع':
+        return { label: 'عند الموقع', bg: '#f3e8ff', text: '#7e22ce', border: '#d8b4fe' };
+      case 'في الطريق':
+        return { label: 'في الطريق', bg: '#dbeafe', text: '#1d4ed8', border: '#93c5fd' };
+      case 'تم الاستلام':
+        return { label: 'تم الاستلام', bg: '#fef3c7', text: '#b45309', border: '#fcd34d' };
+      case 'بانتظار الاستلام':
+        return { label: 'بانتظار الاستلام', bg: '#fff7ed', text: '#c2410c', border: '#ffedd5' };
+      case 'تم تأجيل التوصيل':
+        return { label: 'تم التأجيل', bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5' };
+      default:
+        return { label: status || 'غير محدد', bg: '#f1f5f9', text: '#64748b', border: '#e2e8f0' };
+    }
+  };
+
+  const handleAssignDriver = async (order, driverEmployeeId) => {
+    try {
+      if (driverEmployeeId) {
+        const allItemsReady = Boolean(
+          order.items &&
+          order.items.length > 0 &&
+          order.items.every(item => item.itemStatus === 'جاهز')
+        );
+
+        if (!allItemsReady) {
+          MySwal.fire({
+            title: 'الأصناف غير جاهزة',
+            text: 'لا يمكن تعيين سائق للطلبية إلا بعد أن تكون جميع أصناف وبنود الطلب بحالة "جاهز".',
+            icon: 'warning',
+            confirmButtonText: 'حسناً',
+            customClass: {
+              container: 'premium-modal-container',
+              popup: 'premium-modal-popup',
+              confirmButton: 'btn-premium-save'
+            }
+          });
+          return;
+        }
+      }
+      const matchingEmployee = employees.find(emp => emp.id === driverEmployeeId);
+      const driverName = matchingEmployee ? matchingEmployee.name : '';
+
+      const allMissions = await getMissions();
+      const linkedMission = allMissions.find(m =>
+        m.type === 'تسليم طلبية' &&
+        String(m.salesOrderNumber || '').trim() === String(order.orderNumber || '').trim()
+      );
+
+      if (!driverEmployeeId) {
+        if (linkedMission) {
+          if (['تم الاستلام', 'في الطريق', 'عند الموقع', 'تم التوصيل', 'تم الإنجاز'].includes(linkedMission.status)) {
+            MySwal.fire({
+              title: 'لا يمكن إلغاء التعيين',
+              text: 'لقد بدأ السائق بمهمة التوصيل بالفعل ولا يمكن إلغاء تعيينه الآن.',
+              icon: 'error',
+              confirmButtonText: 'حسناً'
+            });
+            return;
+          }
+          await deleteMission(linkedMission.id);
+        }
+        await saveSalesOrder({
+          ...order,
+          deliveryDriverId: '',
+          deliveryDriverName: '',
+          deliveryStatus: '',
+          lastActionBy: user?.name || 'مشرف'
+        });
+
+        await addLog({
+          userName: user?.name || 'مشرف',
+          userId: user?.id,
+          module: 'طلبيات العملاء',
+          action: 'إلغاء تعيين سائق',
+          details: `إلغاء تعيين السائق للطلبية رقم ${order.orderNumber}`
+        });
+
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'info',
+          title: 'تم إلغاء تعيين السائق',
+          showConfirmButton: false,
+          timer: 1500
+        });
+        await fetchData();
+        return;
+      }
+
+      if (linkedMission) {
+        await saveMission({
+          ...linkedMission,
+          assignedEmployeeId: driverEmployeeId,
+          assignedEmployeeName: driverName
+        });
+      } else {
+        const maxNum = allMissions.reduce((max, o) => {
+          const str = String(o.missionNumber || '');
+          if (str.startsWith('DEL-')) {
+            const match = str.match(/DEL-(\d+)/);
+            return match ? Math.max(max, parseInt(match[1], 10)) : max;
+          }
+          return max;
+        }, 0);
+        const nextMissionNumber = `DEL-${String(maxNum + 1).padStart(4, '0')}`;
+
+        await saveMission({
+          id: null,
+          missionNumber: nextMissionNumber,
+          type: 'تسليم طلبية',
+          customType: '',
+          sourceEntity: 'مرجاس للتجارة - قسم الاثاث',
+          targetEntity: order.customerName || 'العميل',
+          details: `تسليم طلبية رقم ${order.orderNumber} للعميل ${order.customerName || ''}`,
+          assignedEmployeeId: driverEmployeeId,
+          assignedEmployeeName: driverName,
+          dueDate: order.deliveryDate || order.orderDate || getLocalDateStr(new Date()),
+          status: 'بانتظار الاستلام',
+          salesOrderNumber: order.orderNumber
+        });
+      }
+
+      await saveSalesOrder({
+        ...order,
+        deliveryDriverId: driverEmployeeId,
+        deliveryDriverName: driverName,
+        deliveryStatus: linkedMission?.status || 'بانتظار الاستلام',
+        lastActionBy: user?.name || 'مشرف'
+      });
+
+      await createNotification({
+        settingKey: 'delivery',
+        moduleKey: 'delivery',
+        moduleLabel: 'التوصيل',
+        title: 'مهمة توصيل جديدة',
+        message: `تم تعيينك لتوصيل الطلبية رقم ${order.orderNumber} للعميل ${order.customerName || ''}`,
+        targetEmployeeId: driverEmployeeId,
+        createdById: user?.id,
+        createdByName: user?.name,
+        createdByRole: user?.level || user?.role,
+        target: { tab: 'missions' }
+      }).catch(() => {});
+
+      await addLog({
+        userName: user?.name || 'مشرف',
+        userId: user?.id,
+        module: 'طلبيات العملاء',
+        action: 'تعيين سائق',
+        details: `تعيين السائق ${driverName} للطلبية رقم ${order.orderNumber}`
+      });
+
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: `تم تعيين السائق ${driverName}`,
+        showConfirmButton: false,
+        timer: 1500
+      });
+
+      await fetchData();
+    } catch (err) {
+      console.error('Error assigning driver to sales order:', err);
+      Swal.fire({
+        icon: 'error',
+        title: 'خطأ',
+        text: 'تعذر تعيين السائق، يرجى المحاولة مرة أخرى.'
+      });
+    }
+  };
+
+  const handleManagerApproveDelivery = async (order) => {
+    const isManager = isAdmin(user) || ['admin', 'إدارة'].includes(user?.level) || user?.role === 'admin' || user?.name === 'المدير العام';
+    if (!isManager) {
+      MySwal.fire({
+        icon: 'warning',
+        title: 'صلاحية غير كافية',
+        text: 'إنهاء الطلبية وإغلاقها نهائياً يتطلب موافقة المدير العام أو الإدارة.',
+        confirmButtonText: 'حسناً',
+        customClass: {
+          container: 'premium-modal-container',
+          popup: 'premium-modal-popup',
+          confirmButton: 'btn-premium-save'
+        }
+      });
+      return;
+    }
+
+    const linkedMission = getOrderMission(order.orderNumber);
+    const missionStatus = linkedMission?.status || order.deliveryStatus;
+    if (missionStatus !== 'تم الإنجاز') {
+      MySwal.fire({
+        icon: 'warning',
+        title: 'التوصيل غير مكتمل',
+        text: 'لا يمكن إغلاق الطلبية حتى يكتمل التوصيل ويقوم السائق بتحديد حالة (تم الإنجاز).',
+        confirmButtonText: 'حسناً',
+        customClass: {
+          container: 'premium-modal-container',
+          popup: 'premium-modal-popup',
+          confirmButton: 'btn-premium-save'
+        }
+      });
+      return;
+    }
+
+    const confirm = await MySwal.fire({
+      icon: 'question',
+      title: 'موافقة المدير على إنهاء الطلبية',
+      text: `هل تود اعتماد إنجاز التوصيل وإغلاق الطلبية رقم ${order.orderNumber} وتحويل حالتها إلى "منتهي"؟`,
+      showCancelButton: true,
+      confirmButtonText: 'نعم، إغلاق الطلبية',
+      cancelButtonText: 'إلغاء',
+      customClass: {
+        container: 'premium-modal-container',
+        popup: 'premium-modal-popup',
+        confirmButton: 'btn-premium-save',
+        cancelButton: 'btn-premium-cancel'
+      }
+    });
+
+    if (confirm.isConfirmed) {
+      await saveSalesOrder({
+        ...order,
+        status: 'منتهي',
+        managerApprovedAt: new Date().toISOString(),
+        managerApprovedBy: user?.name || 'المدير',
+        lastActionBy: user?.name || 'المدير',
+        statusUpdateDate: getLocalDateStr(new Date())
+      });
+
+      await addLog({
+        userName: user?.name || 'المدير',
+        userId: user?.id,
+        module: 'طلبيات العملاء',
+        action: 'موافقة وإغلاق',
+        details: `موافقة المدير على إنهاء الطلبية رقم ${order.orderNumber} بعد إنجاز التوصيل`
+      });
+
+      Swal.fire({
+        icon: 'success',
+        title: 'تم إغلاق الطلبية',
+        text: 'تم إنهاء وإغلاق الطلبية بنجاح بعد اكتمال التوصيل وموافقة المدير.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+
+      await fetchData();
+    }
   };
 
   const handleCopyOrder = async (order) => {
@@ -2134,6 +2424,41 @@ const AdminSales = ({ user }) => {
   };
 
   const handleUpdateStatus = async (order, newStatus) => {
+    if (newStatus === 'منتهي') {
+      const linkedMission = getOrderMission(order.orderNumber);
+      const missionStatus = linkedMission?.status || order.deliveryStatus;
+
+      if (missionStatus !== 'تم الإنجاز') {
+        MySwal.fire({
+          title: 'لا يمكن إنهاء الطلبية',
+          text: 'لا يمكن تحويل حالة الطلب إلى "منتهي" إلا بعد أن يقوم السائق بتوصيل الطلبية وتحديث حالتها إلى (تم الإنجاز).',
+          icon: 'warning',
+          confirmButtonText: 'حسناً',
+          customClass: {
+            container: 'premium-modal-container',
+            popup: 'premium-modal-popup',
+            confirmButton: 'btn-premium-save'
+          }
+        });
+        return;
+      }
+
+      const isManager = isAdmin(user) || ['admin', 'إدارة'].includes(user?.level) || user?.role === 'admin' || user?.name === 'المدير العام';
+      if (!isManager) {
+        MySwal.fire({
+          title: 'موافقة الإدارة مطلوبة',
+          text: 'إنهاء الطلبية وإغلاقها نهائياً يتطلب موافقة المدير العام أو الإدارة حصراً.',
+          icon: 'warning',
+          confirmButtonText: 'حسناً',
+          customClass: {
+            container: 'premium-modal-container',
+            popup: 'premium-modal-popup',
+            confirmButton: 'btn-premium-save'
+          }
+        });
+        return;
+      }
+    }
     if (newStatus === 'جاهز للتسليم للتوصيل' || newStatus === 'تم التسليم للتوصيل') {
       const allReady = (order.items || []).every(item => item.itemStatus === 'جاهز');
       if (!allReady) {
@@ -3125,7 +3450,7 @@ const AdminSales = ({ user }) => {
                     >
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'right', minWidth: 0, flex: 1 }}>
                         <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold', marginBottom: '2px' }}>آخر إجراء</span>
-                        <span style={{ color: '#1e293b', fontSize: '0.85rem', fontWeight: '800', width: '100%' }} className="truncate">{order.lastActionBy || '---'}</span>
+                        <span style={{ color: '#1e293b', fontSize: '0.85rem', fontWeight: '800', width: '100%' }} className="truncate" title={order.lastActionBy || '---'}>{getShortName(order.lastActionBy)}</span>
                       </div>
                       <div
                         style={{
@@ -3162,7 +3487,7 @@ const AdminSales = ({ user }) => {
                     >
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'right', minWidth: 0, flex: 1 }}>
                         <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold', marginBottom: '2px' }}>أنشئت بواسطة</span>
-                        <span style={{ color: '#1e293b', fontSize: '0.85rem', fontWeight: '800', width: '100%' }} className="truncate">{order.createdBy || '---'}</span>
+                        <span style={{ color: '#1e293b', fontSize: '0.85rem', fontWeight: '800', width: '100%' }} className="truncate" title={order.createdBy || '---'}>{getShortName(order.createdBy)}</span>
                       </div>
                       <div
                         style={{
@@ -3180,6 +3505,96 @@ const AdminSales = ({ user }) => {
                       >
                         <Briefcase size={16} />
                       </div>
+                    </div>
+
+                    {/* Item 6: السائق والتوصيل */}
+                    <div
+                      style={{
+                        gridColumn: 'span 2',
+                        backgroundColor: '#f0fdfa',
+                        borderRadius: '12px',
+                        padding: '10px 12px',
+                        borderLeft: '3px solid #0d9488',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                        direction: 'rtl'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Truck size={16} className="text-teal-600" />
+                          <span style={{ color: '#0f766e', fontSize: '0.8rem', fontWeight: 'bold' }}>السائق والتوصيل</span>
+                        </div>
+                        {(() => {
+                          const linkedMission = getOrderMission(order.orderNumber);
+                          const deliveryStatus = linkedMission?.status || order.deliveryStatus;
+                          if (!deliveryStatus) return null;
+                          const badge = getDeliveryStatusBadge(deliveryStatus);
+                          return (
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 'bold',
+                                padding: '2px 8px',
+                                borderRadius: '9999px',
+                                backgroundColor: badge.bg,
+                                color: badge.text,
+                                border: `1px solid ${badge.border}`
+                              }}
+                            >
+                              {badge.label}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <select
+                          className="input-field cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                          style={{ padding: '0 0.5rem', width: '100%', height: '36px', fontSize: '13px', borderRadius: '8px', marginBottom: 0, border: '1px solid var(--primary-light, #bfdbfe)', fontWeight: 'bold', backgroundColor: '#ffffff', color: '#1e293b' }}
+                          value={getOrderMission(order.orderNumber)?.assignedEmployeeId || order.deliveryDriverId || employees.find(e => e.name === (getOrderMission(order.orderNumber)?.assignedEmployeeName || order.deliveryDriverName))?.id || ''}
+                          onChange={(e) => handleAssignDriver(order, e.target.value)}
+                          disabled={order.status === 'منتهي' || !Boolean(order.items && order.items.length > 0 && order.items.every(item => item.itemStatus === 'جاهز'))}
+                          title={order.status === 'منتهي' ? 'الطلبية منتهية ومغلقة' : !Boolean(order.items && order.items.length > 0 && order.items.every(item => item.itemStatus === 'جاهز')) ? 'لا يمكن تعيين سائق حتى تصبح جميع أصناف وبنود الطلبية بحالة (جاهز)' : 'اختر السائق لإسناد مهمة التوصيل فوراً'}
+                        >
+                          <option value="">-- اختر السائق --</option>
+                          {deliveryStaffList.map(emp => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {(() => {
+                        const linkedMission = getOrderMission(order.orderNumber);
+                        const isCompleted = (linkedMission?.status || order.deliveryStatus) === 'تم الإنجاز';
+                        if (isCompleted && order.status !== 'منتهي') {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => handleManagerApproveDelivery(order)}
+                              style={{
+                                width: '100%',
+                                marginTop: '8px',
+                                backgroundColor: '#059669',
+                                color: '#fff',
+                                fontWeight: 'bold',
+                                fontSize: '0.8rem',
+                                padding: '8px 12px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <CheckCircle size={14} />
+                              <span>موافقة المدير على إنهاء الطلبية (التوصيل مكتمل)</span>
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </div>
 
@@ -3304,6 +3719,7 @@ const AdminSales = ({ user }) => {
                   <th className="text-center cursor-pointer hover:text-primary transition-colors" onClick={() => handleSort('status')}>
                     <div className="flex items-center justify-center gap-1">الحالة {getSortIcon('status')}</div>
                   </th>
+                  <th className="text-center" style={{ minWidth: '175px' }}>السائق والتوصيل</th>
                   <th className="text-center" style={{ textAlign: 'center' }}>تغيير الحالة</th>
                   <th className="text-center" style={{ textAlign: 'center' }}>إجراءات</th>
                 </tr>
@@ -3311,7 +3727,7 @@ const AdminSales = ({ user }) => {
               <tbody>
                 {filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="text-center py-12 text-slate-400">
+                    <td colSpan="9" className="text-center py-12 text-slate-400">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-primary shadow-sm border border-slate-100">
                           <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><circle cx="12" cy="13" r="3" /><path d="m14.5 15.5 2.5 2.5" /></svg>
@@ -3379,8 +3795,8 @@ const AdminSales = ({ user }) => {
                         })()}
                       </td>
                       <td data-label="العميل" className="text-right font-bold text-slate-800">{order.customerName}</td>
-                      <td data-label="أنشئت بواسطة" className="text-xs text-center">{order.createdBy || '---'}</td>
-                      <td data-label="آخر إجراء" className="text-xs font-semibold text-center">{order.lastActionBy || '---'}</td>
+                      <td data-label="أنشئت بواسطة" className="text-xs text-center font-medium" title={order.createdBy || '---'}>{getShortName(order.createdBy)}</td>
+                      <td data-label="آخر إجراء" className="text-xs font-semibold text-center" title={order.lastActionBy || '---'}>{getShortName(order.lastActionBy)}</td>
                       <td data-label="التاريخ" className="text-center">{order.orderDate}</td>
                       <td data-label="الحالة" className="text-center">
                         {(() => {
@@ -3406,6 +3822,65 @@ const AdminSales = ({ user }) => {
                               {order.status || 'جديد'}
                               {order.status === 'تم تأجيل التوصيل' && order.postponedDate && ` (${order.postponedDate})`}
                             </span>
+                          );
+                        })()}
+                      </td>
+                      <td data-label="السائق والتوصيل" className="text-center" style={{ minWidth: '175px', padding: '6px 8px' }}>
+                        {(() => {
+                          const linkedMission = getOrderMission(order.orderNumber);
+                          const assignedId = linkedMission?.assignedEmployeeId || order.deliveryDriverId || employees.find(e => e.name === (linkedMission?.assignedEmployeeName || order.deliveryDriverName))?.id || '';
+                          const deliveryStatus = linkedMission?.status || order.deliveryStatus;
+                          const badge = deliveryStatus ? getDeliveryStatusBadge(deliveryStatus) : null;
+                          const isCompleted = deliveryStatus === 'تم الإنجاز';
+                          const allItemsReady = Boolean(order.items && order.items.length > 0 && order.items.every(item => item.itemStatus === 'جاهز'));
+
+                          return (
+                            <div className="flex flex-col items-center justify-center gap-1.5" style={{ minWidth: '165px' }}>
+                                <select
+                                  className="input-field cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                                  style={{ padding: '0 0.5rem', width: '100%', maxWidth: '190px', height: '36px', fontSize: '13px', borderRadius: '8px', marginBottom: 0, border: '1px solid var(--primary-light, #bfdbfe)', fontWeight: 'bold', backgroundColor: '#ffffff', color: '#1e293b', textAlign: 'center', margin: '0 auto' }}
+                                value={assignedId}
+                                onChange={(e) => handleAssignDriver(order, e.target.value)}
+                                disabled={order.status === 'منتهي' || !allItemsReady}
+                                title={order.status === 'منتهي' ? 'الطلبية منتهية ومغلقة' : !allItemsReady ? 'لا يمكن تعيين سائق حتى تصبح جميع أصناف وبنود الطلبية بحالة (جاهز)' : 'اختر السائق لإسناد مهمة التوصيل فوراً'}
+                              >
+                                <option value="">-- اختر السائق --</option>
+                                {deliveryStaffList.map(emp => (
+                                  <option key={emp.id} value={emp.id}>
+                                    {emp.name}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <div className="flex items-center justify-center gap-1 w-full">
+                                {badge ? (
+                                  <span
+                                    className="text-[11px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 shadow-sm"
+                                    style={{
+                                      backgroundColor: badge.bg,
+                                      color: badge.text,
+                                      border: `1px solid ${badge.border}`
+                                    }}
+                                  >
+                                    <Truck size={12} />
+                                    {badge.label}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              {isCompleted && order.status !== 'منتهي' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleManagerApproveDelivery(order)}
+                                  className="w-full text-[11px] font-bold py-1 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow flex items-center justify-center gap-1 transition-all cursor-pointer"
+                                  style={{ animation: 'pulse 2s infinite' }}
+                                  title="السائق أنجز التوصيل - اضغط لاعتماد المدير وإنهاء الطلبية"
+                                >
+                                  <CheckCircle size={13} />
+                                  <span>موافقة المدير / إنهاء</span>
+                                </button>
+                              )}
+                            </div>
                           );
                         })()}
                       </td>
