@@ -202,9 +202,21 @@ const AdminSupervisorReports = ({ user }) => {
   // An employer is ONLY the system owner (Anas/Mashhour/Admin)
   const isEmployer = user.id === 'admin' || String(user.name).includes('مشهور') || String(user.name).includes('انس') || String(user.name).includes('أنس') || user.name === 'المدير العام';
   const isSuperAdmin = isEmployer;
+  const currentUserId = String(user?.id || user?.employeeId || '').trim();
+  const currentUserName = String(user?.name || '').trim();
+
+  const isOwnReport = report => {
+    if (!report) return false;
+    const repSupId = String(report.supervisorId || '').trim();
+    const repSupName = String(report.supervisorName || '').trim();
+    return (repSupId && repSupId === currentUserId) ||
+      (user?.employeeId && repSupId === String(user.employeeId).trim()) ||
+      (currentUserName && repSupName && repSupName === currentUserName);
+  };
+
   const [subordinateIds, setSubordinateIds] = useState([]);
-  const canReviewReport = report => isSuperAdmin || canReviewSubordinateReport(user, subordinateIds, report);
-  const canReviewTeam = isSuperAdmin || subordinateIds.length > 0;
+  const canReviewReport = report => isSuperAdmin || hasPermission(user, 'supervisor_reports', 'approve') || canReviewSubordinateReport(user, subordinateIds, report);
+  const canReviewTeam = isSuperAdmin || hasPermission(user, 'supervisor_reports', 'approve') || subordinateIds.length > 0;
 
   const [activeTab, setActiveTab] = useState(isSuperAdmin ? 'history' : 'add');
   const [isEditMode, setIsEditMode] = useState(false);
@@ -238,7 +250,7 @@ const AdminSupervisorReports = ({ user }) => {
   const [dateTo, setDateTo] = useState('');
   const [filterSupervisor, setFilterSupervisor] = useState('');
   const [filterAttendance, setFilterAttendance] = useState('');
-  const [filterStatus, setFilterStatus] = useState('قيد المراجعة');
+  const [filterStatus, setFilterStatus] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
   const supervisorsList = React.useMemo(() => {
@@ -887,7 +899,7 @@ const AdminSupervisorReports = ({ user }) => {
   };
 
   const filteredReports = reports.filter(report => {
-    if (!canReviewReport(report) && String(report.supervisorId) !== String(user?.id)) return false;
+    if (!canReviewReport(report) && !isOwnReport(report)) return false;
 
     let matchDate = true;
     if (dateMode === 'day') {
@@ -947,11 +959,8 @@ const AdminSupervisorReports = ({ user }) => {
       return 0;
     });
 
-    if (!isSuperAdmin && dateMode === 'range' && !dateFrom && !dateTo) {
-      return sorted.slice(0, 5);
-    }
     return sorted;
-  }, [filteredReports, supSortKey, supSortDir, isSuperAdmin, dateMode, dateFrom, dateTo]);
+  }, [filteredReports, supSortKey, supSortDir]);
 
   const handleViewReport = async (report) => {
     try {
@@ -1351,7 +1360,7 @@ const AdminSupervisorReports = ({ user }) => {
   };
 
   const handleEditReport = (report) => {
-    if (String(report.supervisorId) !== String(user.id)) return;
+    if (!isOwnReport(report)) return;
     setDate(report.date);
     setIsEditMode(true);
     setActiveTab('add');
@@ -2210,7 +2219,7 @@ const AdminSupervisorReports = ({ user }) => {
                           <button className="action-btn info" style={{ backgroundColor: '#f0f9ff' }} onClick={() => handleViewReport(report)} title="عرض التفاصيل">
                             <Eye size={18} />
                           </button>
-                          {!isSuperAdmin && String(report.supervisorId) === String(user.id) && report.status !== 'معتمد' && (
+                          {!isSuperAdmin && isOwnReport(report) && report.status !== 'معتمد' && (
                             <button className="action-btn info" onClick={() => handleEditReport(report)} title="تعديل التقرير">
                               <Edit size={18} />
                             </button>
@@ -2225,7 +2234,7 @@ const AdminSupervisorReports = ({ user }) => {
                               <X size={18} />
                             </button>
                           )}
-                          {isSuperAdmin && (
+                          {(isSuperAdmin || hasPermission(user, 'supervisor_reports', 'delete')) && (
                             <button className="action-btn danger" onClick={() => handleDeleteReport(report)} title="حذف التقرير">
                               <Trash2 size={18} />
                             </button>

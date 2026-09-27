@@ -354,7 +354,17 @@ export function evaluateAccessPolicy(policy, targetModule, action = 'view', now 
     return false;
   }
 
-  // 2. Check if checking a specific screen
+  // 2. Check alias for supervisor reports
+  if (targetModule === 'reports_supervisors' || targetModule === 'supervisor_reports') {
+    const resTasks = evaluateDraft(policy, 'tasks', 'supervisor_reports', normAction, now);
+    const resReports = evaluateDraft(policy, 'reports', 'reports_supervisors', normAction, now);
+    if (resTasks === true || resReports === true) return true;
+    if (resTasks === false && resReports === false) return false;
+    if (typeof resTasks === 'boolean') return resTasks;
+    if (typeof resReports === 'boolean') return resReports;
+  }
+
+  // 3. Check if checking a specific screen
   const foundSection = ACCESS_SECTIONS.find(s => s.screens.some(sc => sc.id === targetModule));
   if (foundSection) {
     return evaluateDraft(policy, foundSection.id, targetModule, normAction, now);

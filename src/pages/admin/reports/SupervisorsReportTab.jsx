@@ -1,15 +1,33 @@
 import React from 'react';
-import { Eye, X, Check, Trash2 } from 'lucide-react';
+import { Eye, X, Check, Trash2, Edit } from 'lucide-react';
+import { hasPermission } from '../../../utils/permissions';
 
 export const SupervisorsReportTab = ({
   sortedSupervisors,
   handleSort,
   getSortIcon,
+  user,
   onView,
+  onEdit,
   onApprove,
   onReject,
   onDelete
 }) => {
+  const isSuperAdmin = !user || user.id === 'admin' || String(user.name).includes('مشهور') || String(user.name).includes('انس') || String(user.name).includes('أنس') || user.name === 'المدير العام';
+  const canApprove = isSuperAdmin || hasPermission(user, 'supervisor_reports', 'approve') || hasPermission(user, 'reports_supervisors', 'approve');
+  const canDelete = isSuperAdmin || hasPermission(user, 'supervisor_reports', 'delete') || hasPermission(user, 'reports_supervisors', 'delete');
+
+  const currentUserId = String(user?.id || user?.employeeId || '').trim();
+  const currentUserName = String(user?.name || '').trim();
+  const isOwnReport = row => {
+    if (!row) return false;
+    const repSupId = String(row.supervisorId || '').trim();
+    const repSupName = String(row.supervisorName || '').trim();
+    return (repSupId && repSupId === currentUserId) ||
+      (user?.employeeId && repSupId === String(user.employeeId).trim()) ||
+      (currentUserName && repSupName && repSupName === currentUserName);
+  };
+
   return (
     <>
       <thead>
@@ -51,7 +69,17 @@ export const SupervisorsReportTab = ({
                 >
                   <Eye size={18} className="text-blue-600" />
                 </button>
-                {row.status !== 'معتمد' && (
+                {onEdit && isOwnReport(row) && row.status !== 'معتمد' && (
+                  <button 
+                    className="action-btn info" 
+                    style={{ backgroundColor: '#f8fafc', border: '1px solid #94a3b8', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} 
+                    onClick={() => onEdit(row)} 
+                    title="تعديل التقرير"
+                  >
+                    <Edit size={18} className="text-slate-700" />
+                  </button>
+                )}
+                {canApprove && row.status !== 'معتمد' && (
                   <button 
                     className="action-btn success" 
                     style={{ backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} 
@@ -61,7 +89,7 @@ export const SupervisorsReportTab = ({
                     <Check size={18} className="text-emerald-600" />
                   </button>
                 )}
-                {row.status !== 'مرفوض/مُعاد' && (
+                {canApprove && row.status !== 'مرفوض/مُعاد' && (
                   <button 
                     className="action-btn danger" 
                     style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} 
@@ -71,14 +99,16 @@ export const SupervisorsReportTab = ({
                     <X size={18} className="text-red-500" />
                   </button>
                 )}
-                <button 
-                  className="action-btn danger" 
-                  style={{ backgroundColor: '#fff5f5', border: '1px solid #feb2b2', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} 
-                  onClick={() => onDelete(row)} 
-                  title="حذف التقرير"
-                >
-                  <Trash2 size={18} className="text-red-600" />
-                </button>
+                {canDelete && (
+                  <button 
+                    className="action-btn danger" 
+                    style={{ backgroundColor: '#fff5f5', border: '1px solid #feb2b2', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} 
+                    onClick={() => onDelete(row)} 
+                    title="حذف التقرير"
+                  >
+                    <Trash2 size={18} className="text-red-600" />
+                  </button>
+                )}
               </div>
             </td>
           </tr>

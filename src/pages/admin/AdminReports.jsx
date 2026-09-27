@@ -174,6 +174,10 @@ const REPORT_TABS_CONFIG = [
 ];
 
 const AdminReports = ({ user, notificationTarget }) => {
+  const isSuperAdmin = !user || user.id === 'admin' || String(user.name).includes('مشهور') || String(user.name).includes('انس') || String(user.name).includes('أنس') || user.name === 'المدير العام';
+  const canApproveSupervisorReport = isSuperAdmin || hasPermission(user, 'supervisor_reports', 'approve') || hasPermission(user, 'reports_supervisors', 'approve');
+  const canDeleteSupervisorReport = isSuperAdmin || hasPermission(user, 'supervisor_reports', 'delete') || hasPermission(user, 'reports_supervisors', 'delete');
+
   const visibleReportTabs = REPORT_TABS_CONFIG.filter(tab => hasPermission(user, tab.permission, 'view'));
   const [activeReportTab, setActiveReportTab] = useState(() => visibleReportTabs[0]?.id || 'employees');
 
@@ -3738,19 +3742,21 @@ Swal.fire({
                        <button onClick={() => handleViewSupervisorReport(row)} className="flex-1 flex items-center justify-center gap-2 text-primary font-bold text-xs py-1 hover:bg-slate-50 transition-colors">
                          <Eye size={14} /> عرض
                        </button>
-                       {!isApproved && (
+                       {canApproveSupervisorReport && !isApproved && (
                          <button onClick={() => handleChangeSupervisorReportStatus(row, 'معتمد')} className="flex-1 flex items-center justify-center gap-2 text-emerald-600 font-bold text-xs py-1 hover:bg-slate-50 transition-colors">
                            <CheckCircle size={14} /> اعتماد
                          </button>
                        )}
-                       {!isRejected && (
+                       {canApproveSupervisorReport && !isRejected && (
                          <button onClick={() => handleChangeSupervisorReportStatus(row, 'مرفوض/مُعاد')} className="flex-1 flex items-center justify-center gap-2 text-amber-600 font-bold text-xs py-1 hover:bg-slate-50 transition-colors">
                            <X size={14} /> إرجاع
                          </button>
                        )}
-                       <button onClick={() => handleDeleteSupervisorReport(row)} className="flex-1 flex items-center justify-center gap-2 text-red-500 font-bold text-xs py-1 hover:bg-slate-50 transition-colors">
-                         <Trash2 size={14} /> حذف
-                       </button>
+                       {canDeleteSupervisorReport && (
+                         <button onClick={() => handleDeleteSupervisorReport(row)} className="flex-1 flex items-center justify-center gap-2 text-red-500 font-bold text-xs py-1 hover:bg-slate-50 transition-colors">
+                           <Trash2 size={14} /> حذف
+                         </button>
+                       )}
                     </div>
                   </div>
                 );
@@ -3845,6 +3851,7 @@ Swal.fire({
                 sortedSupervisors={sortedRowsByTab.supervisors}
                 handleSort={handleSort}
                 getSortIcon={getSortIcon}
+                user={user}
                 onView={handleViewSupervisorReport}
                 onApprove={(report) => handleChangeSupervisorReportStatus(report, 'معتمد')}
                 onReject={(report) => handleChangeSupervisorReportStatus(report, 'مرفوض/مُعاد')}

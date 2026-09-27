@@ -46,7 +46,7 @@ const LEGACY_ACCESS_KEYS = {
   'reports_stock': 'hasReportsAccess',
   'reports_hr': 'hasReportsAccess',
   'reports_tasks': 'hasReportsAccess',
-  'reports_supervisors': 'hasReportsAccess',
+  'reports_supervisors': 'hasSupervisorReportsAccess',
   'reports_customers': 'hasReportsAccess',
   'settings': 'hasSettingsAccess',
   'data_management': 'hasSettingsAccess',
@@ -128,17 +128,47 @@ export const hasPermission = (user, module, action = 'view') => {
     return Boolean(user.hasHRAccess || user.hasEmployeesAccess);
   }
 
+  // Alias and handling between reports_supervisors and supervisor_reports
+  if (targetModule === 'reports_supervisors' || targetModule === 'supervisor_reports') {
+    const isSupervisor = user.level === 'supervisor' || user.level === 'مشرف' || user.level === 'مشرف قسم';
+
+    // 1. If explicitly granted true on either key
+    if (user.permissions?.reports_supervisors?.[action] === true || user.permissions?.supervisor_reports?.[action] === true) {
+      return true;
+    }
+
+    // 2. Supervisor level inherently has view/add/edit/print/export for supervisor reports
+    if (isSupervisor && ['view', 'add', 'edit', 'print', 'export'].includes(action)) {
+      return true;
+    }
+
+    // 3. Legacy flags
+    if (user.hasSupervisorReportsAccess === true) return true;
+    if (action === 'view' && user.hasReportsAccess === true) return true;
+
+    // 4. If explicitly denied on either matrix key (for non-supervisors)
+    if (user.permissions?.reports_supervisors?.[action] === false || user.permissions?.supervisor_reports?.[action] === false) {
+      return false;
+    }
+
+    return false;
+  }
+
   if (targetModule === 'reports') {
+    const isSupervisor = user.level === 'supervisor' || user.level === 'مشرف' || user.level === 'مشرف قسم';
+    if (isSupervisor && ['view', 'print', 'export'].includes(action)) {
+      return true;
+    }
+    if (user.hasReportsAccess === true || user.hasSupervisorReportsAccess === true) {
+      return true;
+    }
+
     const reportSubmods = [
       'reports_employees', 'reports_sales', 'reports_quotes', 'reports_production',
       'reports_delivery', 'reports_stock', 'reports_hr', 'reports_tasks',
-      'reports_supervisors', 'reports_customers', 'scoring'
+      'reports_supervisors', 'reports_customers', 'scoring', 'supervisor_reports'
     ];
-    const hasAnyGranularSetting = reportSubmods.some(sm => user.permissions?.[sm] !== undefined);
-    if (hasAnyGranularSetting) {
-      return reportSubmods.some(sm => user.permissions[sm]?.[action] === true);
-    }
-    return Boolean(user.hasReportsAccess);
+    return reportSubmods.some(sm => hasPermission(user, sm, action));
   }
 
   if (targetModule.startsWith('reports_')) {
@@ -146,10 +176,48 @@ export const hasPermission = (user, module, action = 'view') => {
       const directVal = user.permissions[targetModule][action];
       if (directVal !== undefined) return Boolean(directVal);
     }
-    if (user.permissions?.['reports']) {
-      const parentVal = user.permissions['reports'][action];
-      if (parentVal !== undefined) return Boolean(parentVal);
+
+    const isSupervisor = user.level === 'supervisor' || user.level === 'مشرف' || user.level === 'مشرف قسم';
+
+    if (targetModule === 'reports_employees') {
+      if (user.permissions?.employees?.[action] !== undefined) return Boolean(user.permissions.employees[action]);
+      if (user.hasEmployeesAccess || (isSupervisor && ['view', 'print', 'export'].includes(action))) return true;
     }
+
+    if (targetModule === 'reports_production') {
+      if (user.permissions?.production?.[action] !== undefined) return Boolean(user.permissions.production[action]);
+      if (user.hasProductionAccess || user.hasPreparationAccess || user.role === 'sewing') {
+        if (['view', 'print', 'export'].includes(action)) return true;
+      }
+    }
+
+    if (targetModule === 'reports_sales') {
+      if (user.permissions?.orders?.[action] !== undefined) return Boolean(user.permissions.orders[action]);
+      if (user.permissions?.sales?.[action] !== undefined) return Boolean(user.permissions.sales[action]);
+      if (user.hasSalesAccess) return true;
+    }
+
+    if (targetModule === 'reports_delivery') {
+      if (user.permissions?.delivery?.[action] !== undefined) return Boolean(user.permissions.delivery[action]);
+      if (user.hasDeliveryAccess) return true;
+    }
+
+    if (targetModule === 'reports_stock') {
+      if (user.permissions?.stock?.[action] !== undefined) return Boolean(user.permissions.stock[action]);
+      if (user.hasStockAccess) return true;
+    }
+
+    if (targetModule === 'reports_tasks') {
+      if (user.permissions?.supervisor_tasks?.[action] !== undefined) return Boolean(user.permissions.supervisor_tasks[action]);
+      if (user.permissions?.production_tasks?.[action] !== undefined) return Boolean(user.permissions.production_tasks[action]);
+      if (user.hasSupervisorTasksAccess || user.hasProductionTasksAccess) return true;
+    }
+
+    // Only inherit broad reports permission if explicitly granted true
+    if (user.permissions?.['reports']?.[action] === true) {
+      return true;
+    }
+
     return Boolean(user.hasReportsAccess);
   }
 
@@ -176,13 +244,6 @@ export const hasPermission = (user, module, action = 'view') => {
     if (modulePermissions && modulePermissions[action] !== undefined) {
       return Boolean(modulePermissions[action]);
     }
-  }
-
-  // Special legacy cases
-  if (targetModule === 'supervisor_reports') {
-     if (user.hasSupervisorReportsAccess === true || (user.hasSupervisorReportsAccess !== false && (user.level === 'supervisor' || user.level === 'مشرف' || user.level === 'مشرف قسم'))) {
-       return true;
-     }
   }
 
   if (targetModule === 'hr_employees') {
