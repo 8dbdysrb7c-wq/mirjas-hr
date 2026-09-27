@@ -204,6 +204,7 @@ const AdminSupervisorReports = ({ user }) => {
   const isSuperAdmin = isEmployer;
   const currentUserId = String(user?.id || user?.employeeId || '').trim();
   const currentUserName = String(user?.name || '').trim();
+  const isImad = currentUserId === 'EMP-0025' || currentUserName.includes('عماد');
 
   const isOwnReport = report => {
     if (!report) return false;
@@ -218,7 +219,7 @@ const AdminSupervisorReports = ({ user }) => {
   const canReviewReport = report => isSuperAdmin || hasPermission(user, 'supervisor_reports', 'approve') || canReviewSubordinateReport(user, subordinateIds, report);
   const canReviewTeam = isSuperAdmin || hasPermission(user, 'supervisor_reports', 'approve') || subordinateIds.length > 0;
 
-  const [activeTab, setActiveTab] = useState(isSuperAdmin ? 'history' : 'add');
+  const [activeTab, setActiveTab] = useState(isSuperAdmin || isImad ? 'history' : 'add');
   const [isEditMode, setIsEditMode] = useState(false);
 
   const [date, setDate] = useState(getLocalDateStr(new Date()));
@@ -240,7 +241,7 @@ const AdminSupervisorReports = ({ user }) => {
   const [globalSettings, setGlobalSettings] = useState({});
   const [currentUserPerms, setCurrentUserPerms] = useState({ attendance: true, smoking: true, absences: true, evaluations: true, orders: true });
 
-  const [dateMode, setDateMode] = useState('month');
+  const [dateMode, setDateMode] = useState(isImad ? 'all' : 'month');
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
@@ -250,13 +251,16 @@ const AdminSupervisorReports = ({ user }) => {
   const [dateTo, setDateTo] = useState('');
   const [filterSupervisor, setFilterSupervisor] = useState('');
   const [filterAttendance, setFilterAttendance] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
+  const [filterStatus, setFilterStatus] = useState(isImad ? 'قيد المراجعة' : '');
   const [showFilters, setShowFilters] = useState(false);
 
   const supervisorsList = React.useMemo(() => {
     if (!reports) return [];
+    if (isImad && subordinateIds.length > 0) {
+      return [...new Set(reports.filter(r => subordinateIds.includes(String(r.supervisorId).trim())).map(r => r.supervisorName).filter(Boolean))];
+    }
     return [...new Set(reports.map(r => r.supervisorName).filter(Boolean))];
-  }, [reports]);
+  }, [reports, isImad, subordinateIds]);
 
   const getOrderScope = supervisor => {
     const configured = supervisor?.supervisorOrderTypes;
@@ -327,7 +331,10 @@ const AdminSupervisorReports = ({ user }) => {
         let fetchTo = date;
         
         if (activeTab === 'history') {
-          if (dateMode === 'month') {
+          if (dateMode === 'all') {
+            fetchFrom = '';
+            fetchTo = '';
+          } else if (dateMode === 'month') {
             fetchFrom = `${selectedMonth}-01`;
             const nextMonth = new Date(`${selectedMonth}-01`);
             nextMonth.setMonth(nextMonth.getMonth() + 1);
@@ -899,7 +906,14 @@ const AdminSupervisorReports = ({ user }) => {
   };
 
   const filteredReports = reports.filter(report => {
-    if (!canReviewReport(report) && !isOwnReport(report)) return false;
+    if (isImad) {
+      const isSubordinate = subordinateIds.includes(String(report.supervisorId).trim());
+      if (!filterSupervisor && !isSubordinate) return false;
+      if (filterSupervisor && String(report.supervisorName || '').trim().toLowerCase() !== filterSupervisor.trim().toLowerCase()) return false;
+    } else {
+      if (!canReviewReport(report) && !isOwnReport(report)) return false;
+      if (filterSupervisor && String(report.supervisorName || '').trim().toLowerCase() !== filterSupervisor.trim().toLowerCase()) return false;
+    }
 
     let matchDate = true;
     if (dateMode === 'day') {
@@ -910,13 +924,14 @@ const AdminSupervisorReports = ({ user }) => {
       const matchFrom = dateFrom ? report.date >= dateFrom : true;
       const matchTo = dateTo ? report.date <= dateTo : true;
       matchDate = matchFrom && matchTo;
+    } else if (dateMode === 'all') {
+      matchDate = true;
     }
 
-    const matchSupervisor = filterSupervisor ? String(report.supervisorName || '').trim().toLowerCase() === filterSupervisor.trim().toLowerCase() : true;
     const matchAttendance = filterAttendance ? report.employeeAttendanceStatus === filterAttendance : true;
     const matchStatus = filterStatus ? (report.status || 'قيد المراجعة') === filterStatus : true;
 
-    return matchDate && matchSupervisor && matchAttendance && matchStatus;
+    return matchDate && matchAttendance && matchStatus;
   });
 
   const visibleReports = React.useMemo(() => {
@@ -2061,6 +2076,23 @@ const AdminSupervisorReports = ({ user }) => {
             <div className="flex flex-wrap items-center gap-3 flex-1 justify-end">
               {/* Mode Toggle */}
               <div style={{ display: 'flex', backgroundColor: '#ffffff', borderRadius: '10px', padding: '4px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', height: '44px', alignItems: 'center', gap: '4px' }}>
+                 <button
+                    type="button"
+                    onClick={() => setDateMode('all')}
+                    style={{
+                      padding: '6px 14px',
+                      fontSize: '13px',
+                      fontWeight: 'bold',
+                      borderRadius: '8px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      backgroundColor: dateMode === 'all' ? '#e0f2fe' : 'transparent',
+                      color: dateMode === 'all' ? '#0284c7' : '#64748b',
+                      transition: 'all 0.2s'
+                    }}
+                 >
+                    الكل
+                 </button>
                  <button
                     type="button"
                     onClick={() => setDateMode('day')}

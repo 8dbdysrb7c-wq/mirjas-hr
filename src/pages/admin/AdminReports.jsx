@@ -23,6 +23,8 @@ import { MissingPunchesReportTab } from './reports/MissingPunchesReportTab';
 import { TasksReportTab } from './reports/TasksReportTab';
 import { SupervisorsReportTab } from './reports/SupervisorsReportTab';
 import { CustomersReportTab } from './reports/CustomersReportTab';
+import { getDirectReports } from '../../utils/supervisorHierarchy';
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import HRDateFilter from '../../components/ui/HRDateFilter';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 import Select from '../../components/SearchSelect';
@@ -209,6 +211,16 @@ const AdminReports = ({ user, notificationTarget }) => {
   const [supervisorTasks, setSupervisorTasks] = useState([]);
   const [supervisorReports, setSupervisorReports] = useState([]);
 
+  const currentUserId = String(user?.id || user?.employeeId || '').trim();
+  const currentUserName = String(user?.name || '').trim();
+  const isImad = currentUserId === 'EMP-0025' || currentUserName.includes('عماد');
+
+  const subordinateIds = React.useMemo(() => {
+    if (!employees || employees.length === 0) return [];
+    const directReports = getDirectReports(user, employees).filter(isActiveEmployee);
+    return directReports.flatMap(e => [String(e.id || '').trim(), String(e.employeeId || '').trim()]).filter(Boolean);
+  }, [user, employees]);
+
   const [selectedEmployee, setSelectedEmployee] = useState('');
   const [selectedJobDepartment, setSelectedJobDepartment] = useState('');
   const [selectedJobTitle, setSelectedJobTitle] = useState('');
@@ -217,7 +229,7 @@ const AdminReports = ({ user, notificationTarget }) => {
   const [selectedSector, setSelectedSector] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
   const [customerSectors, setCustomerSectors] = useState([]);
-  const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState(() => (visibleReportTabs[0]?.id === 'supervisors' && isImad) ? 'قيد المراجعة' : '');
   const [selectedType, setSelectedType] = useState('');
   const [selectedSalesRep, setSelectedSalesRep] = useState('');
   const [selectedWarehouse, setSelectedWarehouse] = useState('');
@@ -292,7 +304,7 @@ const AdminReports = ({ user, notificationTarget }) => {
     setSelectedCategory('');
     setSelectedSector('');
     setSelectedCity('');
-    setSelectedStatus('');
+    setSelectedStatus(tab === 'supervisors' && isImad ? 'قيد المراجعة' : '');
     setSelectedType('');
     setSelectedSalesRep('');
     setSelectedWarehouse('');
@@ -888,6 +900,9 @@ const AdminReports = ({ user, notificationTarget }) => {
   });
 
   const filteredSupervisorReports = supervisorReports.filter(item => {
+    if (isImad && subordinateIds.length > 0) {
+      if (!subordinateIds.includes(String(item.supervisorId || '').trim())) return false;
+    }
     const matchSearch = matchesSearch([item.attendanceNotes, item.supervisorName, item.id], debouncedSearchTerm);
     const matchEmp = selectedEmployee ? item.supervisorName === selectedEmployee : true;
     const matchStatus = selectedStatus ? (item.status || 'قيد المراجعة') === selectedStatus : true;

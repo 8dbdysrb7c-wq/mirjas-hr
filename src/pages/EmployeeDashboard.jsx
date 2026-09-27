@@ -53,6 +53,7 @@ import AdminReports from './admin/AdminReports';
 import AdminTasks from './admin/AdminTasks';
 import AdminSettings from './admin/AdminSettings';
 import AdminHR from './hr/AdminHR';
+import HRPettyCash from './hr/HRPettyCash';
 import AdminProductCosting from './admin/AdminProductCosting';
 
 import NotificationCenter from '../components/NotificationCenter';
@@ -2111,6 +2112,9 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
 
       case 'stock': return <AdminStock user={user} notificationTarget={notificationTarget} />;
       case 'hr': return <AdminHR user={user} notificationTarget={notificationTarget} />;
+      case 'petty_cash': return hasPermission(user, 'hr_petty_cash', 'view')
+        ? <HRPettyCash user={user} />
+        : <div role="alert" className="glass-panel p-6 text-center">لا تملك صلاحية مشاهدة السلفة النثرية.</div>;
       case 'delivery': return <AdminDelivery user={user} notificationTarget={notificationTarget} />;
       case 'customers': return <AdminCustomers user={user} />;
       case 'reports': return <AdminReports user={user} notificationTarget={notificationTarget} />;
