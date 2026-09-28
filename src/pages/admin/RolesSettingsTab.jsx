@@ -86,6 +86,9 @@ const ACTIONS = {
   add: 'إضافة',
   edit: 'تعديل',
   delete: 'حذف',
+  final_approve: 'الموافقة النهائية',
+  complete_delivery: 'تم الإنجاز',
+  assign_delivery: 'تعيين السائق وطريقة التسليم',
   approve: 'اعتماد',
   print: 'طباعة',
   export: 'تصدير',
@@ -811,7 +814,7 @@ export default function RolesSettingsTab() {
                       </td>
                       {Object.keys(ACTIONS).map(actKey => (
                         <td key={actKey} className="px-4 py-4 text-center align-middle">
-                          {(['add_expense', 'manage_expense', 'view_invoice'].includes(actKey) && modKey !== 'hr_petty_cash') ? null : <label className="premium-checkbox-container">
+                          {((['add_expense', 'manage_expense', 'view_invoice'].includes(actKey) && modKey !== 'hr_petty_cash') || (['final_approve', 'complete_delivery', 'assign_delivery'].includes(actKey) && modKey !== 'orders')) ? null : <label className="premium-checkbox-container">
                             <input
                               type="checkbox"
                               checked={editingEmp.permissions[modKey]?.[actKey] || false}

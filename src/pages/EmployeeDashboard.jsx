@@ -1,3 +1,5 @@
+import { subscribeToAssignedMissions } from '../services/operations';
+import { isAssignedMission } from '../utils/assignedMission';
 import { subscribeToPendingEmployeeAlerts } from '../services/employeeAlertSubscription';
 import { subscribeWhileVisible } from '../utils/visibleSubscription.js';
 import { escapeReportNote } from '../utils/reportNote.js';
@@ -563,7 +565,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         // 2. Missions
         const fetchedMissions = results[1] || [];
         // Already filtered by getMissionsForUser if not employer
-        const myMissions = fetchedMissions;
+        const myMissions = fetchedMissions.filter(mission => isAssignedMission(mission, user));
         setMissions(myMissions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
 
         setPendingMissionsCount(myMissions.filter(m => m.status !== 'تم الانجاز' && m.status !== 'تم الإنجاز' && m.status !== 'ملغية' && m.status !== 'ملغي' && m.status !== 'ملغاة').length);
@@ -1194,7 +1196,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       setDepartments(depts);
       setTasksData(tasks);
       setAllReports(reports);
-      setMissions(mData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+      setMissions(mData.filter(mission => isAssignedMission(mission, user)).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
       setGlobalSettings(sData);
       setMyLeaves(leavesData);
       setMissingPunches(punchesData);
@@ -1204,6 +1206,11 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
     };
     fetchData();
   }, [user.id, user.name]);
+
+  useEffect(() => subscribeToAssignedMissions(user, list => {
+    setMissions(list);
+    setPendingMissionsCount(list.filter(m => !['تم الإنجاز', 'تم الانجاز', 'ملغي', 'ملغية', 'ملغاة'].includes(m.status)).length);
+  }, error => console.error('Assigned missions subscription failed:', error)), [user.id, user.employeeId, user.name]);
 
   const hasAssignedMissionsPermission = user.permissions?.assigned_missions !== undefined;
   const canViewMissions = hasAssignedMissionsPermission
@@ -1613,11 +1620,16 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
     setter(now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
   };
   const handleUpdateMissionStatus = async (missionId, status) => {
-    if (!canUpdateMissions) {
+    const assignedMission = missions.find(m => m.id === missionId);
+    if (!isAssignedMission(assignedMission, user)) {
       MySwal.fire('غير مسموح', 'لا تملك صلاحية تعديل حالة المهمة.', 'warning');
       return;
     }
-    await updateMissionStatus(missionId, status, '');
+    const saved = await updateMissionStatus(missionId, status, '', user);
+    if (!saved) {
+      MySwal.fire('تعذر تحديث الحالة', 'لم يتم حفظ التغيير. تأكد من الاتصال وجاهزية أصناف الطلبية قبل الإنجاز، ثم أعد المحاولة.', 'error');
+      return;
+    }
     const mission = missions.find(m => m.id === missionId);
 
     if (mission) {
@@ -1635,7 +1647,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       });
     }
     const updatedMissions = await getMissions();
-    setMissions(updatedMissions.filter(m => String(m.assignedEmployeeId || '').trim() === String(user.id || '').trim() || String(m.assignedEmployeeName || '').trim() === String(user.name || '').trim()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+    setMissions(updatedMissions.filter(m => isAssignedMission(m, user)).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
     MySwal.fire({ icon: 'success', title: 'تم تحديث الحالة', timer: 1000, showConfirmButton: false });
   };
 
@@ -2051,7 +2063,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
             missions={missions}
             globalSettings={globalSettings}
             handleUpdateMissionStatus={handleUpdateMissionStatus}
-            canUpdateMissions={canUpdateMissions}
+            canUpdateMissions={mission => isAssignedMission(mission, user)}
           />
         );
 

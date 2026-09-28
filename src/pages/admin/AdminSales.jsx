@@ -58,8 +58,21 @@ const getShortName = (fullName) => {
 const AdminSales = ({ user }) => {
   const currentUserId = user?.id || user?.employeeId || '';
   const currentUserName = user?.name || '';
+  const userDept = String(user?.department || '').trim();
   const isImad = currentUserId === 'EMP-0025' || currentUserName.includes('عماد');
-  const isManager = isAdmin(user) || ['admin', 'إدارة'].includes(user?.level) || user?.role === 'admin' || user?.name === 'المدير العام';
+  const isManager = isAdmin(user) || 
+    ['admin', 'إدارة', 'الادارة', 'الإدارة', 'مدير'].includes(user?.level) || 
+    ['إدارة', 'الادارة', 'الإدارة'].includes(userDept) ||
+    user?.role === 'admin' || 
+    user?.role === 'مدير' || 
+    user?.name === 'المدير العام' || 
+    user?.name === 'المدير' ||
+    Boolean(user?.accessAdmin) ||
+    hasPermission(user, 'orders', 'final_approve');
+
+  const canApproveOrders = isAdmin(user) || hasPermission(user, 'orders', 'final_approve');
+  const canCompleteDelivery = isAdmin(user) || hasPermission(user, 'orders', 'complete_delivery');
+  const canAssignDelivery = isAdmin(user) || hasPermission(user, 'orders', 'assign_delivery');
 
   const [orders, setOrders] = useState([]);
   const [orderLimit, setOrderLimit] = useState(50);
@@ -440,6 +453,7 @@ const AdminSales = ({ user }) => {
   };
 
   const handleAssignDriver = async (order, selection) => {
+    if (!canAssignDelivery) { Swal.fire('غير مسموح', 'لا تملك صلاحية تعيين السائق وطريقة التسليم', 'warning'); return; }
     const deliveryMethod = selection === '__pickup' ? 'pickup' : selection === '__courier' ? 'courier' : selection ? 'employee' : 'unassigned';
     const driverEmployeeId = deliveryMethod === 'employee' ? selection : '';
     const methodLabel = deliveryMethod === 'pickup' ? 'استلام من الشركة' : deliveryMethod === 'courier' ? 'شركة توصيل' : 'بدون سائق';
@@ -610,7 +624,7 @@ const AdminSales = ({ user }) => {
 
   const [completingDelivery, setCompletingDelivery] = useState(null);
   const handleCompleteExternalDelivery = async (order) => {
-    if (!canPerformAction(user, 'EDIT', 'SALES', globalSettings) || !['pickup', 'courier'].includes(order.deliveryMethod) || order.status === 'منتهي' || completingDelivery || !allDeliveryItemsReady(order)) return;
+    if (!canCompleteDelivery || !['pickup', 'courier'].includes(order.deliveryMethod) || order.status === 'منتهي' || completingDelivery || !allDeliveryItemsReady(order)) return;
     setCompletingDelivery(order.id);
     try {
       const current = (await getMissions()).find(m => m.type === 'تسليم طلبية' && m.salesOrderNumber === order.orderNumber);
@@ -645,7 +659,7 @@ const AdminSales = ({ user }) => {
       Swal.fire('تعذر حفظ الإنجاز', error.message, 'error');
     } finally { setCompletingDelivery(null); }
   };
-  const renderExternalDeliveryCompletion = order => ['pickup', 'courier'].includes(order.deliveryMethod) && order.status !== 'منتهي' && (getOrderMission(order.orderNumber)?.status || order.deliveryStatus) !== 'تم الإنجاز' && canPerformAction(user, 'EDIT', 'SALES', globalSettings) ? (
+  const renderExternalDeliveryCompletion = order => ['pickup', 'courier'].includes(order.deliveryMethod) && order.status !== 'منتهي' && (getOrderMission(order.orderNumber)?.status || order.deliveryStatus) !== 'تم الإنجاز' && canCompleteDelivery ? (
     <button
       type="button"
       disabled={Boolean(completingDelivery) || !allDeliveryItemsReady(order)}
@@ -680,13 +694,35 @@ const AdminSales = ({ user }) => {
   const renderFinalApproval = order => {
     if (order.status === 'منتهي') return <span style={{ color: '#15803d', fontWeight: 'bold' }}>تمت الموافقة</span>;
     const completed = (getOrderMission(order.orderNumber)?.status || order.deliveryStatus) === 'تم الإنجاز';
-    const allowed = isManager || isImad;
-    return <button type="button" disabled={!completed || !allowed} onClick={() => handleManagerApproveDelivery(order)} title={!completed ? 'بانتظار إنجاز التسليم' : !allowed ? 'الموافقة النهائية للإدارة أو عماد' : 'تدقيق الطلب بالكامل والموافقة النهائية'} style={{ background: completed && allowed ? '#2563eb' : '#e2e8f0', color: completed && allowed ? '#fff' : '#64748b', border: 'none', borderRadius: 8, padding: '9px 14px', fontWeight: 'bold', whiteSpace: 'nowrap', cursor: completed && allowed ? 'pointer' : 'not-allowed' }}>{completed ? 'الموافقة النهائية' : 'بانتظار الإنجاز'}</button>;
+    const isSuperOrManager = isAdmin(user) || isManager;
+    // للإدارة والمدير: الزر مفعل دائماً دون أي شروط (حتى لو بدون سائق وبدون انتظار الإنجاز)
+    const canApprove = isSuperOrManager || isImad || completed;
+    return (
+      <button
+        type="button"
+        disabled={!canApprove}
+        onClick={() => handleManagerApproveDelivery(order)}
+        title={canApprove ? 'تدقيق الطلب بالكامل والموافقة النهائية' : 'بانتظار إنجاز التسليم'}
+        style={{
+          background: canApprove ? '#2563eb' : '#e2e8f0',
+          color: canApprove ? '#fff' : '#64748b',
+          border: 'none',
+          borderRadius: 8,
+          padding: '9px 14px',
+          fontWeight: 'bold',
+          whiteSpace: 'nowrap',
+          cursor: canApprove ? 'pointer' : 'not-allowed'
+        }}
+      >
+        الموافقة النهائية
+      </button>
+    );
   };
 
   const handleManagerApproveDelivery = async (order) => {
-    const isManagerRole = isManager || isImad;
-    if (!isManagerRole) {
+    const isSuperOrManager = isAdmin(user) || isManager;
+    const isAuthorized = isSuperOrManager || isImad;
+    if (!isAuthorized) {
       MySwal.fire({
         icon: 'warning',
         title: 'صلاحية غير كافية',
@@ -703,7 +739,8 @@ const AdminSales = ({ user }) => {
 
     const linkedMission = getOrderMission(order.orderNumber);
     const missionStatus = linkedMission?.status || order.deliveryStatus;
-    if (missionStatus !== 'تم الإنجاز') {
+    // للإدارة والأدمن والمشرف عماد: يتم السماح بالموافقة والإنهاء مباشرة حتى لو بدون سائق أو لم يكتمل التوصيل
+    if (!isSuperOrManager && !isImad && missionStatus !== 'تم الإنجاز') {
       MySwal.fire({
         icon: 'warning',
         title: 'التوصيل غير مكتمل',
@@ -738,11 +775,12 @@ const AdminSales = ({ user }) => {
         ...order,
         status: 'منتهي',
         managerApprovedAt: new Date().toISOString(),
+        managerApprovalOverride: isSuperOrManager && missionStatus !== 'تم الإنجاز',
         managerApprovedById: user?.id || user?.employeeId || '',
         managerApprovedBy: user?.name || 'المدير',
         lastActionBy: user?.name || 'المدير',
         statusUpdateDate: getLocalDateStr(new Date())
-      });
+      }, { preserveStatus: true });
 
       await addLog({
         userName: user?.name || 'المدير',
@@ -3660,7 +3698,7 @@ const AdminSales = ({ user }) => {
                           style={{ padding: '0 0.5rem', width: '100%', height: '36px', fontSize: '13px', borderRadius: '8px', marginBottom: 0, border: '1px solid var(--primary-light, #bfdbfe)', fontWeight: 'bold', backgroundColor: '#ffffff', color: '#1e293b' }}
                           value={getDeliverySelection(order)}
                           onChange={(e) => handleAssignDriver(order, e.target.value)}
-                          disabled={order.status === 'منتهي'}
+                          disabled={!canAssignDelivery || order.status === 'منتهي'}
                           title={order.status === 'منتهي' ? 'الطلبية منتهية ومغلقة' : !Boolean(order.items && order.items.length > 0 && order.items.every(item => item.itemStatus === 'جاهز')) ? 'لا يمكن تحديد سائق أو طريقة تسليم حتى تصبح جميع أصناف وبنود الطلبية بحالة (جاهز)' : 'اختر السائق لإسناد مهمة التوصيل فوراً'}
                         >
                           <option value="">بدون سائق</option>
@@ -3895,7 +3933,7 @@ const AdminSales = ({ user }) => {
                                   style={{ padding: '0 10px 0 26px', width: '185px', minWidth: '185px', maxWidth: '185px', height: '36px', fontSize: '12px', borderRadius: '8px', marginBottom: 0, border: '1.5px solid #cbd5e1', fontWeight: 'bold', backgroundColor: '#ffffff', color: '#0f172a', textAlign: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}
                                 value={assignedId}
                                 onChange={(e) => handleAssignDriver(order, e.target.value)}
-                                disabled={order.status === 'منتهي'}
+                                disabled={!canAssignDelivery || order.status === 'منتهي'}
                                 title={order.status === 'منتهي' ? 'الطلبية منتهية ومغلقة' : !allItemsReady ? 'لا يمكن تحديد سائق أو طريقة تسليم حتى تصبح جميع أصناف وبنود الطلبية بحالة (جاهز)' : 'اختر السائق لإسناد مهمة التوصيل فوراً'}
                               >
                                 <option value="">بدون سائق</option>

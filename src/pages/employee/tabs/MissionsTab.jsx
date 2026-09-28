@@ -1,8 +1,11 @@
+import { employeeMissionStatuses } from '../../../utils/assignedMission';
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Truck, Pin, ClipboardList, Store, MapPin, Calendar, ChevronRight, ChevronDown, Send, FileText } from 'lucide-react';
 
 export const MissionsTab = ({ missions, globalSettings, handleUpdateMissionStatus, canUpdateMissions = true }) => {
+  const mayUpdate = mission => typeof canUpdateMissions === 'function' ? canUpdateMissions(mission) : canUpdateMissions;
+  const statusOptions = employeeMissionStatuses(globalSettings);
   const [filterType, setFilterType] = useState('pending');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -184,14 +187,14 @@ export const MissionsTab = ({ missions, globalSettings, handleUpdateMissionStatu
                   {/* Status Dropdown disguised as a Green Button */}
                   <div style={{ position: 'relative', background: '#1a8d9b', borderRadius: '12px', boxShadow: '0 4px 12px rgba(26, 141, 155, 0.2)' }}>
                     <select
-                      disabled={!canUpdateMissions}
-                      title={!canUpdateMissions ? 'لا تملك صلاحية تعديل حالة المهمة' : 'تحديث حالة المهمة'}
+                      disabled={!mayUpdate(mission)}
+                      title={!mayUpdate(mission) ? 'لا تملك صلاحية تعديل حالة المهمة' : 'تحديث حالة المهمة'}
                       style={{ width: '100%', appearance: 'none', border: 'none', color: '#ffffff', padding: '12px 40px', fontWeight: 'bold', fontSize: '14px', backgroundColor: 'transparent', textAlign: 'center', textAlignLast: 'center', direction: 'rtl', outline: 'none', cursor: 'pointer' }}
                       value={mission.status}
                       onChange={(e) => handleUpdateMissionStatus(mission.id, e.target.value)}
                     >
                       <option value="" disabled style={{ color: '#1e293b' }}>تحديث الحالة</option>
-                      {(globalSettings.missionStatuses || []).map((status) => (
+                      {statusOptions.map((status) => (
                         <option key={status.name} value={status.name} style={{ color: '#1e293b' }}>
                           {status.name}
                         </option>
@@ -270,8 +273,8 @@ export const MissionsTab = ({ missions, globalSettings, handleUpdateMissionStatu
                   </td>
                   <td className="p-3 text-center align-middle" data-label="تحديث الحالة">
                     <select
-                      disabled={!canUpdateMissions}
-                      title={!canUpdateMissions ? 'لا تملك صلاحية تعديل حالة المهمة' : 'تحديث حالة المهمة'}
+                      disabled={!mayUpdate(mission)}
+                      title={!mayUpdate(mission) ? 'لا تملك صلاحية تعديل حالة المهمة' : 'تحديث حالة المهمة'}
                       className="rounded-lg focus:ring-1 focus:ring-primary/20 outline-none transition-all text-right font-bold"
                       style={{
                         height: '32px',
@@ -296,7 +299,7 @@ export const MissionsTab = ({ missions, globalSettings, handleUpdateMissionStatu
                       value={mission.status}
                       onChange={(e) => handleUpdateMissionStatus(mission.id, e.target.value)}
                     >
-                      {(globalSettings.missionStatuses || []).map((status) => (
+                      {statusOptions.map((status) => (
                         <option key={status.name} value={status.name} className="bg-white text-slate-800 font-normal">
                           {status.name}
                         </option>

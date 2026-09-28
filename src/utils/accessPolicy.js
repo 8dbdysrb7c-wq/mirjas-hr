@@ -5,6 +5,9 @@ export const ACCESS_ACTIONS = {
   create: 'إضافة', 
   edit: 'تعديل', 
   delete: 'حذف', 
+  final_approve: 'الموافقة النهائية',
+  complete_delivery: 'تم الإنجاز',
+  assign_delivery: 'تعيين السائق وطريقة التسليم',
   approve: 'اعتماد', 
   print: 'طباعة', 
   export: 'تصدير',
@@ -40,7 +43,7 @@ export const SCREEN_ALLOWED_ACTIONS = {
   production_tasks: ['view', 'create', 'edit', 'delete', 'export'],
 
   // المبيعات
-  orders: ['view', 'create', 'edit', 'delete', 'print', 'export'],
+  orders: ['view', 'create', 'edit', 'delete', 'print', 'export', 'final_approve', 'complete_delivery', 'assign_delivery'],
   quotes: ['view', 'create', 'edit', 'delete', 'print', 'export'],
   pricelists: ['view', 'create', 'edit', 'delete', 'export'],
   customers: ['view', 'create', 'edit', 'delete', 'export'],

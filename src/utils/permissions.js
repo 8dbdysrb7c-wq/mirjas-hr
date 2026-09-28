@@ -232,6 +232,10 @@ export const hasPermission = (user, module, action = 'view') => {
   // Petty cash is a new financial module; never inherit broad legacy HR access.
   if (targetModule === 'hr_petty_cash') return false;
 
+  if (targetModule === 'orders' && ['final_approve', 'complete_delivery', 'assign_delivery'].includes(action)) {
+    return user.role?.permissions?.orders?.[action] === true;
+  }
+
   // Check individual legacy override checkboxes first (if explicitly set to true)
   const legacyKey = LEGACY_ACCESS_KEYS[targetModule];
   if (legacyKey && user[legacyKey] === true) {

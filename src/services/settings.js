@@ -233,12 +233,30 @@ export const getNotificationRule = (settings, moduleKey) => {
 
 export const isAdmin = (user) => {
   if (!user) return false;
-  if (FREE_AUTH_ENABLED) return user.accessAdmin === true;
+  if (FREE_AUTH_ENABLED) {
+    if (user.accessAdmin === true) return true;
+  }
+  const dept = String(user.department || '').trim();
+  const level = String(user.level || '').trim();
+  const role = String(user.role || '').trim();
+  const name = String(user.name || '').trim();
+  const id = String(user.id || user.employeeId || '').trim();
+
   return (
-    user.role === 'admin' || 
-    user.level === 'admin' || 
-    user.level === 'إدارة' || 
-    user.id === 'admin'
+    role === 'admin' || 
+    level === 'admin' || 
+    level === 'إدارة' || 
+    level === 'الادارة' || 
+    level === 'الإدارة' || 
+    level === 'مدير' || 
+    dept === 'إدارة' || 
+    dept === 'الادارة' || 
+    dept === 'الإدارة' || 
+    id === 'admin' || 
+    name === 'المدير العام' || 
+    name === 'المدير' ||
+    user.accessAdmin === true ||
+    user.permissions?.all === true
   );
 };
 

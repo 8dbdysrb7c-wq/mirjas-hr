@@ -1,6 +1,8 @@
+import { isAssignedMission } from '../utils/assignedMission';
 import { allDeliveryItemsReady } from '../utils/deliveryMethod';
 import { db } from '../firebase';
 import { 
+  onSnapshot,
   writeBatch,
   collection, 
   getDocs, 
@@ -131,6 +133,22 @@ export const getActiveMissions = async () => {
   }
 };
 
+export const subscribeToAssignedMissions = (user, callback, onError) => {
+  const targets = [...new Set([user.id, user.employeeId].filter(Boolean).map(String))].map(id => ['assignedEmployeeId', id]);
+  if (user.name) targets.push(['assignedEmployeeName', user.name]);
+  const results = new Map();
+  const unsubscribers = targets.map(([field, value], index) => onSnapshot(
+    query(collection(db, 'missions'), where(field, '==', value)),
+    snapshot => {
+      results.set(index, snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+      const merged = new Map();
+      for (const list of results.values()) for (const mission of list) if (isAssignedMission(mission, user)) merged.set(mission.id, mission);
+      callback([...merged.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+    }, onError
+  ));
+  return () => unsubscribers.forEach(unsubscribe => unsubscribe());
+};
+
 export const getMissionsForUser = async (userId, userName) => {
   try {
     // Missions might be assigned by employeeId or employeeName based on the data structure
@@ -145,7 +163,7 @@ export const getMissionsForUser = async (userId, userName) => {
     snap1.docs.forEach(doc => map.set(doc.id, { ...doc.data(), id: doc.id }));
     snap2.docs.forEach(doc => map.set(doc.id, { ...doc.data(), id: doc.id }));
     
-    return Array.from(map.values());
+    return Array.from(map.values()).filter(mission => isAssignedMission(mission, { id: userId, name: userName }));
   } catch (error) {
     console.error("Error in getMissionsForUser:", error);
     return [];
@@ -213,7 +231,7 @@ export const deleteMission = async (id) => {
   }
 };
 
-export const updateMissionStatus = async (missionId, status, note = '') => {
+export const updateMissionStatus = async (missionId, status, note = '', actor = null) => {
   try {
     const missionRef = doc(db, 'missions', missionId);
     const updateData = { 
@@ -227,6 +245,7 @@ export const updateMissionStatus = async (missionId, status, note = '') => {
     
     const snapshot = await getDoc(missionRef);
     if (!snapshot.exists()) throw new Error('مهمة التوصيل غير موجودة');
+    if (actor && !isAssignedMission(snapshot.data(), actor)) throw new Error('تم تغيير الموظف المكلف بهذه المهمة');
     await persistMission(missionRef, { ...snapshot.data(), ...updateData });
     return true;
   } catch (error) {
