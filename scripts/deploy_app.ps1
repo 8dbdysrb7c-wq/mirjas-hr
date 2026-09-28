@@ -1,4 +1,9 @@
-$nodeExe = "C:\Users\HP\AppData\Local\OpenAI\Codex\runtimes\cua_node\df473e5367fa2b42\bin\node.exe"
+$nodeCandidates = Get-ChildItem -Path "C:\Users\HP\AppData\Local\OpenAI\Codex\runtimes\cua_node" -Filter "node.exe" -Recurse -ErrorAction SilentlyContinue
+if ($nodeCandidates) {
+    $nodeExe = ($nodeCandidates | Select-Object -First 1).FullName
+} else {
+    $nodeExe = "node"
+}
 $viteJs = ".\node_modules\vite\bin\vite.js"
 $firebaseJs = ".\node_modules\firebase-tools\lib\bin\firebase.js"
 

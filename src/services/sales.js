@@ -569,7 +569,7 @@ export const subscribeToSalesOrders = (onOrders, onError = console.error, orderL
   };
 };
 
-export const saveSalesOrder = async (order) => {
+export const saveSalesOrder = async (order, { preserveStatus = false } = {}) => {
   try {
     let orderToSave = { ...order };
     let isNew = !orderToSave.id;
@@ -661,8 +661,8 @@ export const saveSalesOrder = async (order) => {
     // delivered or cancelled orders backwards when they are edited later.
     const items = Array.isArray(orderToSave.items) ? orderToSave.items : [];
     const allItemsReady = items.length > 0 && items.every(item => String(item.itemStatus || '').trim() === 'جاهز');
-    const terminalOrderStatuses = ['تم التسليم للتوصيل', 'تم تسليمها للتوصيل', 'تم التوصيل', 'ملغي', 'ملغى'];
-    if (allItemsReady && !terminalOrderStatuses.includes(String(orderToSave.status || '').trim())) {
+    const terminalOrderStatuses = ['منتهي', 'تم التسليم', 'تم التسليم للتوصيل', 'تم تسليمها للتوصيل', 'تم التوصيل', 'ملغي', 'ملغى'];
+    if (!preserveStatus && allItemsReady && !terminalOrderStatuses.includes(String(orderToSave.status || '').trim())) {
       orderToSave.status = 'جاهز للتسليم للتوصيل';
       orderToSave.readyForDeliveryAt = orderToSave.readyForDeliveryAt || new Date().toISOString();
       orderToSave.readyForDeliveryBy = orderToSave.lastActionBy || orderToSave.updatedBy || orderToSave.createdBy || 'النظام';

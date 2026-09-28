@@ -1,3 +1,4 @@
+import { allDeliveryItemsReady, orderDeliveryMission } from '../../utils/deliveryMethod';
 import { hasDraftItems, readLocalDrafts, mergeDrafts, writeLocalDraft, removeLocalDraft } from '../../utils/salesDrafts';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal, flushSync } from 'react-dom';
@@ -55,6 +56,11 @@ const getShortName = (fullName) => {
 };
 
 const AdminSales = ({ user }) => {
+  const currentUserId = user?.id || user?.employeeId || '';
+  const currentUserName = user?.name || '';
+  const isImad = currentUserId === 'EMP-0025' || currentUserName.includes('عماد');
+  const isManager = isAdmin(user) || ['admin', 'إدارة'].includes(user?.level) || user?.role === 'admin' || user?.name === 'المدير العام';
+
   const [orders, setOrders] = useState([]);
   const [orderLimit, setOrderLimit] = useState(50);
   const [customers, setCustomers] = useState([]);
@@ -311,7 +317,7 @@ const AdminSales = ({ user }) => {
 
   const isOrderDeliveryFrozen = (order) => {
     if (!order) return false;
-    if (isAdmin(user)) return false; // Admins are never frozen
+    if (isAdmin(user) || isImad) return false; // Admins and supervisor Emad are never frozen
 
     // 1. If the order is already audited and deducted in the stock department
     if (order.stockDeducted) return true;
@@ -333,7 +339,7 @@ const AdminSales = ({ user }) => {
 
   const isOrderFrozenByProductionOrPreparation = (order) => {
     if (!order) return false;
-    if (isAdmin(user)) return false; // Admins are never frozen
+    if (isAdmin(user) || isImad) return false; // Admins and supervisor Emad are never frozen
     const normalize = (str) => String(str || '').replace(/أ|إ|آ/g, 'ا').replace(/ى/g, 'ي').trim();
 
     // Check Production
@@ -408,27 +414,38 @@ const AdminSales = ({ user }) => {
   const getDeliveryStatusBadge = (status) => {
     switch (status) {
       case 'تم الإنجاز':
-        return { label: 'تم الإنجاز', bg: '#dcfce7', text: '#15803d', border: '#86efac' };
+        return { label: 'تم الإنجاز', bg: '#ecfdf5', text: '#065f46', border: '#a7f3d0', dot: '#10b981' };
       case 'تم التوصيل':
-        return { label: 'تم التوصيل', bg: '#e0f2fe', text: '#0369a1', border: '#7dd3fc' };
+        return { label: 'تم التوصيل', bg: '#f0f9ff', text: '#075985', border: '#bae6fd', dot: '#0284c7' };
       case 'عند الموقع':
-        return { label: 'عند الموقع', bg: '#f3e8ff', text: '#7e22ce', border: '#d8b4fe' };
+        return { label: 'عند الموقع', bg: '#faf5ff', text: '#6b21a8', border: '#e9d5ff', dot: '#9333ea' };
       case 'في الطريق':
-        return { label: 'في الطريق', bg: '#dbeafe', text: '#1d4ed8', border: '#93c5fd' };
+        return { label: 'في الطريق', bg: '#eff6ff', text: '#1e40af', border: '#bfdbfe', dot: '#2563eb' };
       case 'تم الاستلام':
-        return { label: 'تم الاستلام', bg: '#fef3c7', text: '#b45309', border: '#fcd34d' };
+        return { label: 'تم الاستلام', bg: '#fefce8', text: '#854d0e', border: '#fef08a', dot: '#ca8a04' };
       case 'بانتظار الاستلام':
-        return { label: 'بانتظار الاستلام', bg: '#fff7ed', text: '#c2410c', border: '#ffedd5' };
+        return { label: 'بانتظار الاستلام', bg: '#fffbeb', text: '#92400e', border: '#fde68a', dot: '#d97706' };
       case 'تم تأجيل التوصيل':
-        return { label: 'تم التأجيل', bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5' };
+        return { label: 'تم التأجيل', bg: '#fef2f2', text: '#991b1b', border: '#fecaca', dot: '#ef4444' };
       default:
-        return { label: status || 'غير محدد', bg: '#f1f5f9', text: '#64748b', border: '#e2e8f0' };
+        return { label: status || 'غير محدد', bg: '#f8fafc', text: '#475569', border: '#cbd5e1', dot: '#94a3b8' };
     }
   };
 
-  const handleAssignDriver = async (order, driverEmployeeId) => {
+  const getDeliverySelection = (order) => {
+    if (order.deliveryMethod === 'pickup') return '__pickup';
+    if (order.deliveryMethod === 'courier') return '__courier';
+    const mission = getOrderMission(order.orderNumber);
+    return mission?.assignedEmployeeId || order.deliveryDriverId || employees.find(e => e.name === (mission?.assignedEmployeeName || order.deliveryDriverName))?.id || '';
+  };
+
+  const handleAssignDriver = async (order, selection) => {
+    const deliveryMethod = selection === '__pickup' ? 'pickup' : selection === '__courier' ? 'courier' : selection ? 'employee' : 'unassigned';
+    const driverEmployeeId = deliveryMethod === 'employee' ? selection : '';
+    const methodLabel = deliveryMethod === 'pickup' ? 'استلام من الشركة' : deliveryMethod === 'courier' ? 'شركة توصيل' : 'بدون سائق';
+    let correction = false;
     try {
-      if (driverEmployeeId) {
+      if (selection) {
         const allItemsReady = Boolean(
           order.items &&
           order.items.length > 0 &&
@@ -438,7 +455,7 @@ const AdminSales = ({ user }) => {
         if (!allItemsReady) {
           MySwal.fire({
             title: 'الأصناف غير جاهزة',
-            text: 'لا يمكن تعيين سائق للطلبية إلا بعد أن تكون جميع أصناف وبنود الطلب بحالة "جاهز".',
+            text: 'لا يمكن تحديد سائق أو طريقة تسليم للطلبية إلا بعد أن تكون جميع أصناف وبنود الطلب بحالة "جاهز".',
             icon: 'warning',
             confirmButtonText: 'حسناً',
             customClass: {
@@ -459,24 +476,35 @@ const AdminSales = ({ user }) => {
         String(m.salesOrderNumber || '').trim() === String(order.orderNumber || '').trim()
       );
 
+      if (linkedMission && ['تم الاستلام', 'في الطريق', 'عند الموقع', 'تم التوصيل', 'تم الإنجاز'].includes(String(linkedMission.status || '').trim())) {
+        const confirmation = await MySwal.fire({
+          title: 'تأكيد تصحيح تعيين التوصيل',
+          text: 'المهمة مسجلة بحالة (' + linkedMission.status + '). أكد فقط إذا كان السائق لم يستلم الطلبية ولم يبدأ فعلياً. سيتم حفظ المهمة السابقة وسجل التصحيح.',
+          icon: 'warning', showCancelButton: true,
+          confirmButtonText: 'السائق لم يبدأ، تصحيح التعيين', cancelButtonText: 'إبقاء التعيين'
+        });
+        if (!confirmation.isConfirmed) return;
+        correction = true;
+      }
+      if (linkedMission) {
+        const archived = await saveMission({
+          ...linkedMission, salesOrderNumber: '', previousSalesOrderNumber: order.orderNumber,
+          status: 'ملغي', previousStatus: linkedMission.status || '',
+          cancellationReason: correction ? 'تصحيح التعيين: السائق لم يستلم ولم يبدأ بحسب المشرف' : 'تغيير طريقة التسليم أو السائق',
+          cancelledBy: user?.name || 'مشرف', cancelledAt: new Date().toISOString()
+        });
+        if (!archived) throw new Error('تعذر حفظ المهمة السابقة');
+      }
       if (!driverEmployeeId) {
-        if (linkedMission) {
-          if (['تم الاستلام', 'في الطريق', 'عند الموقع', 'تم التوصيل', 'تم الإنجاز'].includes(linkedMission.status)) {
-            MySwal.fire({
-              title: 'لا يمكن إلغاء التعيين',
-              text: 'لقد بدأ السائق بمهمة التوصيل بالفعل ولا يمكن إلغاء تعيينه الآن.',
-              icon: 'error',
-              confirmButtonText: 'حسناً'
-            });
-            return;
-          }
-          await deleteMission(linkedMission.id);
-        }
+        const mission = await saveMission({ ...orderDeliveryMission(order), deliveryMethod, assignedEmployeeId: '', assignedEmployeeName: '', status: 'بانتظار الاستلام' });
+        if (!mission) throw new Error('تعذر حفظ طريقة التسليم');
         await saveSalesOrder({
           ...order,
+          deliveryMethod,
+          deliveryCompletedAt: null,
           deliveryDriverId: '',
           deliveryDriverName: '',
-          deliveryStatus: '',
+          deliveryStatus: 'بانتظار الاستلام',
           lastActionBy: user?.name || 'مشرف'
         });
 
@@ -484,15 +512,15 @@ const AdminSales = ({ user }) => {
           userName: user?.name || 'مشرف',
           userId: user?.id,
           module: 'طلبيات العملاء',
-          action: 'إلغاء تعيين سائق',
-          details: `إلغاء تعيين السائق للطلبية رقم ${order.orderNumber}`
+          action: correction ? 'تصحيح تعيين التوصيل' : 'تغيير طريقة التسليم',
+          details: `تغيير تسليم الطلبية رقم ${order.orderNumber} إلى ${methodLabel}${correction ? " — تأكيد المشرف أن السائق لم يبدأ" : ""}`
         });
 
         Swal.fire({
           toast: true,
           position: 'top-end',
           icon: 'info',
-          title: 'تم إلغاء تعيين السائق',
+          title: 'تم الحفظ: ' + methodLabel,
           showConfirmButton: false,
           timer: 1500
         });
@@ -500,13 +528,7 @@ const AdminSales = ({ user }) => {
         return;
       }
 
-      if (linkedMission) {
-        await saveMission({
-          ...linkedMission,
-          assignedEmployeeId: driverEmployeeId,
-          assignedEmployeeName: driverName
-        });
-      } else {
+      {
         const maxNum = allMissions.reduce((max, o) => {
           const str = String(o.missionNumber || '');
           if (str.startsWith('DEL-')) {
@@ -517,7 +539,7 @@ const AdminSales = ({ user }) => {
         }, 0);
         const nextMissionNumber = `DEL-${String(maxNum + 1).padStart(4, '0')}`;
 
-        await saveMission({
+        const savedMission = await saveMission({
           id: null,
           missionNumber: nextMissionNumber,
           type: 'تسليم طلبية',
@@ -525,19 +547,23 @@ const AdminSales = ({ user }) => {
           sourceEntity: 'مرجاس للتجارة - قسم الاثاث',
           targetEntity: order.customerName || 'العميل',
           details: `تسليم طلبية رقم ${order.orderNumber} للعميل ${order.customerName || ''}`,
+          deliveryMethod: 'employee',
           assignedEmployeeId: driverEmployeeId,
           assignedEmployeeName: driverName,
           dueDate: order.deliveryDate || order.orderDate || getLocalDateStr(new Date()),
           status: 'بانتظار الاستلام',
           salesOrderNumber: order.orderNumber
         });
+        if (!savedMission) throw new Error("تعذر إنشاء مهمة التوصيل");
       }
 
       await saveSalesOrder({
         ...order,
+        deliveryMethod: 'employee',
+        deliveryCompletedAt: null,
         deliveryDriverId: driverEmployeeId,
         deliveryDriverName: driverName,
-        deliveryStatus: linkedMission?.status || 'بانتظار الاستلام',
+        deliveryStatus: 'بانتظار الاستلام',
         lastActionBy: user?.name || 'مشرف'
       });
 
@@ -559,7 +585,7 @@ const AdminSales = ({ user }) => {
         userId: user?.id,
         module: 'طلبيات العملاء',
         action: 'تعيين سائق',
-        details: `تعيين السائق ${driverName} للطلبية رقم ${order.orderNumber}`
+        details: `تعيين السائق ${driverName} للطلبية رقم ${order.orderNumber}${correction ? " — تصحيح بتأكيد المشرف أن السائق السابق لم يبدأ" : ""}`
       });
 
       Swal.fire({
@@ -582,9 +608,85 @@ const AdminSales = ({ user }) => {
     }
   };
 
+  const [completingDelivery, setCompletingDelivery] = useState(null);
+  const handleCompleteExternalDelivery = async (order) => {
+    if (!canPerformAction(user, 'EDIT', 'SALES', globalSettings) || !['pickup', 'courier'].includes(order.deliveryMethod) || order.status === 'منتهي' || completingDelivery || !allDeliveryItemsReady(order)) return;
+    setCompletingDelivery(order.id);
+    try {
+      const current = (await getMissions()).find(m => m.type === 'تسليم طلبية' && m.salesOrderNumber === order.orderNumber);
+      const saved = await saveMission({
+        ...(current || orderDeliveryMission(order)), deliveryMethod: order.deliveryMethod,
+        status: 'تم الإنجاز', completedAt: new Date().toISOString(), completedBy: user?.name || 'مشرف'
+      });
+      if (!saved) throw new Error('تعذر حفظ الإنجاز');
+
+      // المشرف عماد لا يحتاج لموافقة إدارة: إنهاء الطلبية مباشرة عند إنجاز الاستلام/التوصيل
+      if (isImad) {
+        await saveSalesOrder({
+          ...order,
+          status: 'منتهي',
+          deliveryStatus: 'تم الإنجاز',
+          lastActionBy: user?.name || 'عماد',
+          statusUpdateDate: getLocalDateStr(new Date())
+        }, { preserveStatus: true });
+
+        await addLog({
+          userId: user?.id,
+          userName: user?.name || 'عماد',
+          module: 'طلبيات العملاء',
+          action: 'إنهاء الطلبية',
+          details: `إنهاء وإغلاق الطلبية رقم ${order.orderNumber} مباشرة بواسطة المشرف عماد`
+        });
+      }
+
+      await addLog({ userId: user?.id, userName: user?.name, module: 'التوصيل', action: 'تم الإنجاز', details: 'إنجاز تسليم الطلبية ' + order.orderNumber + ' من قسم الطلبيات' });
+      await fetchData();
+    } catch (error) {
+      Swal.fire('تعذر حفظ الإنجاز', error.message, 'error');
+    } finally { setCompletingDelivery(null); }
+  };
+  const renderExternalDeliveryCompletion = order => ['pickup', 'courier'].includes(order.deliveryMethod) && order.status !== 'منتهي' && (getOrderMission(order.orderNumber)?.status || order.deliveryStatus) !== 'تم الإنجاز' && canPerformAction(user, 'EDIT', 'SALES', globalSettings) ? (
+    <button
+      type="button"
+      disabled={Boolean(completingDelivery) || !allDeliveryItemsReady(order)}
+      onClick={() => handleCompleteExternalDelivery(order)}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '4px',
+        height: '36px',
+        padding: '0 10px',
+        borderRadius: '8px',
+        fontSize: '12px',
+        fontWeight: 'bold',
+        backgroundColor: '#10b981',
+        color: '#ffffff',
+        border: 'none',
+        cursor: completingDelivery ? 'not-allowed' : 'pointer',
+        whiteSpace: 'nowrap',
+        boxShadow: '0 2px 4px rgba(16, 185, 129, 0.25)',
+        transition: 'all 0.2s ease',
+        flexShrink: 0
+      }}
+      className="hover:bg-emerald-600 active:scale-95"
+      title="تسجيل إتمام الاستلام / التوصيل"
+    >
+      <CheckCircle size={14} />
+      <span>تم الإنجاز</span>
+    </button>
+  ) : null;
+
+  const renderFinalApproval = order => {
+    if (order.status === 'منتهي') return <span style={{ color: '#15803d', fontWeight: 'bold' }}>تمت الموافقة</span>;
+    const completed = (getOrderMission(order.orderNumber)?.status || order.deliveryStatus) === 'تم الإنجاز';
+    const allowed = isManager || isImad;
+    return <button type="button" disabled={!completed || !allowed} onClick={() => handleManagerApproveDelivery(order)} title={!completed ? 'بانتظار إنجاز التسليم' : !allowed ? 'الموافقة النهائية للإدارة أو عماد' : 'تدقيق الطلب بالكامل والموافقة النهائية'} style={{ background: completed && allowed ? '#2563eb' : '#e2e8f0', color: completed && allowed ? '#fff' : '#64748b', border: 'none', borderRadius: 8, padding: '9px 14px', fontWeight: 'bold', whiteSpace: 'nowrap', cursor: completed && allowed ? 'pointer' : 'not-allowed' }}>{completed ? 'الموافقة النهائية' : 'بانتظار الإنجاز'}</button>;
+  };
+
   const handleManagerApproveDelivery = async (order) => {
-    const isManager = isAdmin(user) || ['admin', 'إدارة'].includes(user?.level) || user?.role === 'admin' || user?.name === 'المدير العام';
-    if (!isManager) {
+    const isManagerRole = isManager || isImad;
+    if (!isManagerRole) {
       MySwal.fire({
         icon: 'warning',
         title: 'صلاحية غير كافية',
@@ -619,7 +721,7 @@ const AdminSales = ({ user }) => {
     const confirm = await MySwal.fire({
       icon: 'question',
       title: 'موافقة المدير على إنهاء الطلبية',
-      text: `هل تود اعتماد إنجاز التوصيل وإغلاق الطلبية رقم ${order.orderNumber} وتحويل حالتها إلى "منتهي"؟`,
+      text: `هل تؤكد تدقيق الطلبية بالكامل وسلامة جميع تفاصيلها والموافقة النهائية على الطلبية رقم ${order.orderNumber} وتحويل حالتها إلى "منتهي"؟`,
       showCancelButton: true,
       confirmButtonText: 'نعم، إغلاق الطلبية',
       cancelButtonText: 'إلغاء',
@@ -636,6 +738,7 @@ const AdminSales = ({ user }) => {
         ...order,
         status: 'منتهي',
         managerApprovedAt: new Date().toISOString(),
+        managerApprovedById: user?.id || user?.employeeId || '',
         managerApprovedBy: user?.name || 'المدير',
         lastActionBy: user?.name || 'المدير',
         statusUpdateDate: getLocalDateStr(new Date())
@@ -646,13 +749,13 @@ const AdminSales = ({ user }) => {
         userId: user?.id,
         module: 'طلبيات العملاء',
         action: 'موافقة وإغلاق',
-        details: `موافقة المدير على إنهاء الطلبية رقم ${order.orderNumber} بعد إنجاز التوصيل`
+        details: `موافقة المدير على إنهاء الطلبية رقم ${order.orderNumber} باعتماد الإدارة`
       });
 
       Swal.fire({
         icon: 'success',
         title: 'تم إغلاق الطلبية',
-        text: 'تم إنهاء وإغلاق الطلبية بنجاح بعد اكتمال التوصيل وموافقة المدير.',
+        text: 'تم اعتماد وإنهاء الطلبية بنجاح بموافقة المدير.',
         timer: 2000,
         showConfirmButton: false
       });
@@ -1891,7 +1994,7 @@ const AdminSales = ({ user }) => {
         return { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' }; // Green
       case 'تم تأجيل التوصيل':
       case 'مؤجل':
-        return { bg: '#fff7ed', text: '#c2410c', border: '#ffedd5' }; // Dark Orange
+        return { bg: '#fffbeb', text: '#92400e', border: '#fde68a', dot: '#d97706' }; // Dark Orange
       case 'ملغي':
         return { bg: '#fef2f2', text: '#b91c1c', border: '#fca5a5' }; // Red
       default:
@@ -2236,6 +2339,10 @@ const AdminSales = ({ user }) => {
       }
     }
 
+    if (formData.status === 'منتهي' && editingOrder?.status !== 'منتهي') {
+      Swal.fire('الموافقة النهائية مطلوبة', 'احفظ الطلبية أولاً ثم استخدم زر الموافقة النهائية بعد إنجاز التسليم.', 'warning');
+      return;
+    }
     const dataToSave = {
       ...formData,
       createdBy: formData.createdBy || user?.name || 'مدير',
@@ -2338,6 +2445,7 @@ const AdminSales = ({ user }) => {
   };
 
   const checkAndCreateMission = async (order, newStatus) => {
+    if (['pickup', 'courier', 'unassigned'].includes(order.deliveryMethod)) return;
     if (newStatus === 'تم التسليم للتوصيل' || newStatus === 'تم تسليمها للتوصيل' || newStatus === 'جاهز للتوصيل') {
       try {
         const allMissions = await getMissions();
@@ -2425,41 +2533,41 @@ const AdminSales = ({ user }) => {
 
   const handleUpdateStatus = async (order, newStatus) => {
     if (newStatus === 'منتهي') {
-      const linkedMission = getOrderMission(order.orderNumber);
-      const missionStatus = linkedMission?.status || order.deliveryStatus;
+      if (isImad) {
+        // المشرف عماد لا يحتاج لموافقة الإدارة لإنهاء الطلبية
+        await saveSalesOrder({
+          ...order,
+          status: 'منتهي',
+          deliveryStatus: order.deliveryStatus || 'تم الإنجاز',
+          lastActionBy: user?.name || 'عماد',
+          statusUpdateDate: getLocalDateStr(new Date())
+        }, { preserveStatus: true });
 
-      if (missionStatus !== 'تم الإنجاز') {
-        MySwal.fire({
-          title: 'لا يمكن إنهاء الطلبية',
-          text: 'لا يمكن تحويل حالة الطلب إلى "منتهي" إلا بعد أن يقوم السائق بتوصيل الطلبية وتحديث حالتها إلى (تم الإنجاز).',
-          icon: 'warning',
-          confirmButtonText: 'حسناً',
-          customClass: {
-            container: 'premium-modal-container',
-            popup: 'premium-modal-popup',
-            confirmButton: 'btn-premium-save'
-          }
+        await addLog({
+          userName: user?.name || 'عماد',
+          userId: user?.id,
+          module: 'طلبيات العملاء',
+          action: 'إنهاء الطلبية',
+          details: `إنهاء الطلبية رقم ${order.orderNumber} مباشرة بواسطة المشرف عماد دون الحاجة لموافقة الإدارة`
         });
+
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: 'تم إنهاء الطلبية بنجاح',
+          showConfirmButton: false,
+          timer: 1500
+        });
+
+        fetchData();
         return;
       }
 
-      const isManager = isAdmin(user) || ['admin', 'إدارة'].includes(user?.level) || user?.role === 'admin' || user?.name === 'المدير العام';
-      if (!isManager) {
-        MySwal.fire({
-          title: 'موافقة الإدارة مطلوبة',
-          text: 'إنهاء الطلبية وإغلاقها نهائياً يتطلب موافقة المدير العام أو الإدارة حصراً.',
-          icon: 'warning',
-          confirmButtonText: 'حسناً',
-          customClass: {
-            container: 'premium-modal-container',
-            popup: 'premium-modal-popup',
-            confirmButton: 'btn-premium-save'
-          }
-        });
-        return;
-      }
+      await handleManagerApproveDelivery(order);
+      return;
     }
-    if (newStatus === 'جاهز للتسليم للتوصيل' || newStatus === 'تم التسليم للتوصيل') {
+    if (!isAdmin(user) && !isImad && (newStatus === 'جاهز للتسليم للتوصيل' || newStatus === 'تم التسليم للتوصيل')) {
       const allReady = (order.items || []).every(item => item.itemStatus === 'جاهز');
       if (!allReady) {
         MySwal.fire({
@@ -2477,7 +2585,7 @@ const AdminSales = ({ user }) => {
       }
     }
 
-    if ((order.status === 'تم التسليم للتوصيل' || order.status === 'تم تسليمها للتوصيل' || order.status === 'جاهز للتوصيل') &&
+    if (!isAdmin(user) && !isImad && (order.status === 'تم التسليم للتوصيل' || order.status === 'تم تسليمها للتوصيل' || order.status === 'جاهز للتوصيل') &&
       (newStatus !== 'تم التسليم للتوصيل' && newStatus !== 'تم تسليمها للتوصيل' && newStatus !== 'جاهز للتوصيل')) {
       try {
         const allMissions = await getMissions();
@@ -2510,7 +2618,7 @@ const AdminSales = ({ user }) => {
 
     await checkAndCreateMission(order, newStatus);
 
-    await saveSalesOrder({ ...order, status: newStatus, lastActionBy: user?.name || 'مدير', statusUpdateDate: getLocalDateStr(new Date()) });
+    await saveSalesOrder({ ...order, status: newStatus, lastActionBy: user?.name || 'مدير', statusUpdateDate: getLocalDateStr(new Date()) }, { preserveStatus: isAdmin(user) || isImad });
     await addLog({
       userName: user.name,
       userId: user.id,
@@ -2698,7 +2806,7 @@ const AdminSales = ({ user }) => {
     const matchDateTo = dateTo ? o.orderDate <= dateTo : true;
     const matchCust = selectedCustomer ? o.customerId === selectedCustomer : true;
     const matchStatus = selectedStatus === 'معلق' 
-      ? (o.status !== 'تم التسليم للتوصيل' && o.status !== 'ملغي')
+      ? !['منتهي', 'ملغي', 'ملغى'].includes(o.status)
       : (selectedStatus ? o.status === selectedStatus : true);
     const matchCreatedBy = filterCreatedBy ? (o.createdBy || '').includes(filterCreatedBy) : true;
     return matchOrderNum && matchSearch && matchDateFrom && matchDateTo && matchCust && matchStatus && matchCreatedBy;
@@ -3253,8 +3361,8 @@ const AdminSales = ({ user }) => {
                     {/* Status Select with Checkmark Icon */}
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                       <select
-                        disabled={isOrderTotallyFrozen(order)}
-                        title={isOrderTotallyFrozen(order) ? (order.stockDeducted ? 'لا يمكن تعديل الطلبية لأنه تم تدقيقها وخصمها من المخزون' : (isOrderFrozenByProductionOrPreparation(order) ? 'لا يمكن التعديل لأن الطلبية قيد التنفيذ في قسم الإنتاج أو التحضير' : 'لا يمكن تعديل حالة الطلبية لأن موظف التوصيل قد استلمها')) : ''}
+                        disabled={!isAdmin(user) && !isImad && isOrderTotallyFrozen(order)}
+                        title={!isAdmin(user) && !isImad && isOrderTotallyFrozen(order) ? (order.stockDeducted ? 'لا يمكن تعديل الطلبية لأنه تم تدقيقها وخصمها من المخزون' : (isOrderFrozenByProductionOrPreparation(order) ? 'لا يمكن التعديل لأن الطلبية قيد التنفيذ في قسم الإنتاج أو التحضير' : 'لا يمكن تعديل حالة الطلبية لأن موظف التوصيل قد استلمها')) : ''}
                         style={{
                           textAlign: 'center',
                           textAlignLast: 'center',
@@ -3507,7 +3615,7 @@ const AdminSales = ({ user }) => {
                       </div>
                     </div>
 
-                    {/* Item 6: السائق والتوصيل */}
+                    {/* Item 6: طريقة التسليم / السائق */}
                     <div
                       style={{
                         gridColumn: 'span 2',
@@ -3522,7 +3630,7 @@ const AdminSales = ({ user }) => {
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <Truck size={16} className="text-teal-600" />
-                          <span style={{ color: '#0f766e', fontSize: '0.8rem', fontWeight: 'bold' }}>السائق والتوصيل</span>
+                          <span style={{ color: '#0f766e', fontSize: '0.8rem', fontWeight: 'bold' }}>طريقة التسليم / السائق</span>
                         </div>
                         {(() => {
                           const linkedMission = getOrderMission(order.orderNumber);
@@ -3550,51 +3658,23 @@ const AdminSales = ({ user }) => {
                         <select
                           className="input-field cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                           style={{ padding: '0 0.5rem', width: '100%', height: '36px', fontSize: '13px', borderRadius: '8px', marginBottom: 0, border: '1px solid var(--primary-light, #bfdbfe)', fontWeight: 'bold', backgroundColor: '#ffffff', color: '#1e293b' }}
-                          value={getOrderMission(order.orderNumber)?.assignedEmployeeId || order.deliveryDriverId || employees.find(e => e.name === (getOrderMission(order.orderNumber)?.assignedEmployeeName || order.deliveryDriverName))?.id || ''}
+                          value={getDeliverySelection(order)}
                           onChange={(e) => handleAssignDriver(order, e.target.value)}
-                          disabled={order.status === 'منتهي' || !Boolean(order.items && order.items.length > 0 && order.items.every(item => item.itemStatus === 'جاهز'))}
-                          title={order.status === 'منتهي' ? 'الطلبية منتهية ومغلقة' : !Boolean(order.items && order.items.length > 0 && order.items.every(item => item.itemStatus === 'جاهز')) ? 'لا يمكن تعيين سائق حتى تصبح جميع أصناف وبنود الطلبية بحالة (جاهز)' : 'اختر السائق لإسناد مهمة التوصيل فوراً'}
+                          disabled={order.status === 'منتهي'}
+                          title={order.status === 'منتهي' ? 'الطلبية منتهية ومغلقة' : !Boolean(order.items && order.items.length > 0 && order.items.every(item => item.itemStatus === 'جاهز')) ? 'لا يمكن تحديد سائق أو طريقة تسليم حتى تصبح جميع أصناف وبنود الطلبية بحالة (جاهز)' : 'اختر السائق لإسناد مهمة التوصيل فوراً'}
                         >
-                          <option value="">-- اختر السائق --</option>
+                          <option value="">بدون سائق</option>
+                          <option value="__pickup" disabled={!allDeliveryItemsReady(order)}>استلام من الشركة (الزبون)</option>
+                          <option value="__courier" disabled={!allDeliveryItemsReady(order)}>شركة توصيل</option>
                           {deliveryStaffList.map(emp => (
-                            <option key={emp.id} value={emp.id}>
+                            <option key={emp.id} value={emp.id} disabled={!allDeliveryItemsReady(order)}>
                               {emp.name}
                             </option>
                           ))}
                         </select>
+                        {renderExternalDeliveryCompletion(order)}
                       </div>
-                      {(() => {
-                        const linkedMission = getOrderMission(order.orderNumber);
-                        const isCompleted = (linkedMission?.status || order.deliveryStatus) === 'تم الإنجاز';
-                        if (isCompleted && order.status !== 'منتهي') {
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => handleManagerApproveDelivery(order)}
-                              style={{
-                                width: '100%',
-                                marginTop: '8px',
-                                backgroundColor: '#059669',
-                                color: '#fff',
-                                fontWeight: 'bold',
-                                fontSize: '0.8rem',
-                                padding: '8px 12px',
-                                borderRadius: '8px',
-                                border: 'none',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '6px',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              <CheckCircle size={14} />
-                              <span>موافقة المدير على إنهاء الطلبية (التوصيل مكتمل)</span>
-                            </button>
-                          );
-                        }
-                        return null;
-                      })()}
+                      <div style={{ marginTop: 10 }}><strong>الموافقة النهائية</strong>{renderFinalApproval(order)}</div>
                     </div>
                   </div>
 
@@ -3716,11 +3796,11 @@ const AdminSales = ({ user }) => {
                   <th className="text-center cursor-pointer hover:text-primary transition-colors" onClick={() => handleSort('orderDate')}>
                     <div className="flex items-center justify-center gap-1">التاريخ {getSortIcon('orderDate')}</div>
                   </th>
-                  <th className="text-center cursor-pointer hover:text-primary transition-colors" onClick={() => handleSort('status')}>
-                    <div className="flex items-center justify-center gap-1">الحالة {getSortIcon('status')}</div>
+                  <th className="text-center" style={{ minWidth: '290px' }}>طريقة التسليم / السائق</th>
+                  <th className="text-center">موافقة</th>
+                  <th className="text-center cursor-pointer hover:text-primary transition-colors" onClick={() => handleSort('status')} style={{ textAlign: 'center' }}>
+                    <div className="flex items-center justify-center gap-1">تغيير الحالة {getSortIcon('status')}</div>
                   </th>
-                  <th className="text-center" style={{ minWidth: '175px' }}>السائق والتوصيل</th>
-                  <th className="text-center" style={{ textAlign: 'center' }}>تغيير الحالة</th>
                   <th className="text-center" style={{ textAlign: 'center' }}>إجراءات</th>
                 </tr>
               </thead>
@@ -3798,92 +3878,70 @@ const AdminSales = ({ user }) => {
                       <td data-label="أنشئت بواسطة" className="text-xs text-center font-medium" title={order.createdBy || '---'}>{getShortName(order.createdBy)}</td>
                       <td data-label="آخر إجراء" className="text-xs font-semibold text-center" title={order.lastActionBy || '---'}>{getShortName(order.lastActionBy)}</td>
                       <td data-label="التاريخ" className="text-center">{order.orderDate}</td>
-                      <td data-label="الحالة" className="text-center">
-                        {(() => {
-                          const colors = getSalesStatusColor(order.status || 'جديد');
-                          return (
-                            <span
-                              className="badge font-bold"
-                              style={{
-                                width: '130px',
-                                height: '36px',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '13px',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                backgroundColor: colors.bg,
-                                color: colors.text,
-                                border: `1px solid ${colors.border}`
-                              }}
-                            >
-                              {order.status || 'جديد'}
-                              {order.status === 'تم تأجيل التوصيل' && order.postponedDate && ` (${order.postponedDate})`}
-                            </span>
-                          );
-                        })()}
-                      </td>
-                      <td data-label="السائق والتوصيل" className="text-center" style={{ minWidth: '175px', padding: '6px 8px' }}>
+                      <td data-label="طريقة التسليم / السائق" className="text-center" style={{ minWidth: '290px', padding: '10px 8px' }}>
                         {(() => {
                           const linkedMission = getOrderMission(order.orderNumber);
-                          const assignedId = linkedMission?.assignedEmployeeId || order.deliveryDriverId || employees.find(e => e.name === (linkedMission?.assignedEmployeeName || order.deliveryDriverName))?.id || '';
+                          const assignedId = getDeliverySelection(order);
                           const deliveryStatus = linkedMission?.status || order.deliveryStatus;
                           const badge = deliveryStatus ? getDeliveryStatusBadge(deliveryStatus) : null;
                           const isCompleted = deliveryStatus === 'تم الإنجاز';
                           const allItemsReady = Boolean(order.items && order.items.length > 0 && order.items.every(item => item.itemStatus === 'جاهز'));
 
                           return (
-                            <div className="flex flex-col items-center justify-center gap-1.5" style={{ minWidth: '165px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', minWidth: '280px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%' }}>
                                 <select
                                   className="input-field cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                                  style={{ padding: '0 0.5rem', width: '100%', maxWidth: '190px', height: '36px', fontSize: '13px', borderRadius: '8px', marginBottom: 0, border: '1px solid var(--primary-light, #bfdbfe)', fontWeight: 'bold', backgroundColor: '#ffffff', color: '#1e293b', textAlign: 'center', margin: '0 auto' }}
+                                  style={{ padding: '0 10px 0 26px', width: '185px', minWidth: '185px', maxWidth: '185px', height: '36px', fontSize: '12px', borderRadius: '8px', marginBottom: 0, border: '1.5px solid #cbd5e1', fontWeight: 'bold', backgroundColor: '#ffffff', color: '#0f172a', textAlign: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}
                                 value={assignedId}
                                 onChange={(e) => handleAssignDriver(order, e.target.value)}
-                                disabled={order.status === 'منتهي' || !allItemsReady}
-                                title={order.status === 'منتهي' ? 'الطلبية منتهية ومغلقة' : !allItemsReady ? 'لا يمكن تعيين سائق حتى تصبح جميع أصناف وبنود الطلبية بحالة (جاهز)' : 'اختر السائق لإسناد مهمة التوصيل فوراً'}
+                                disabled={order.status === 'منتهي'}
+                                title={order.status === 'منتهي' ? 'الطلبية منتهية ومغلقة' : !allItemsReady ? 'لا يمكن تحديد سائق أو طريقة تسليم حتى تصبح جميع أصناف وبنود الطلبية بحالة (جاهز)' : 'اختر السائق لإسناد مهمة التوصيل فوراً'}
                               >
-                                <option value="">-- اختر السائق --</option>
+                                <option value="">بدون سائق</option>
+                          <option value="__pickup" disabled={!allDeliveryItemsReady(order)}>استلام من الشركة (الزبون)</option>
+                          <option value="__courier" disabled={!allDeliveryItemsReady(order)}>شركة توصيل</option>
                                 {deliveryStaffList.map(emp => (
-                                  <option key={emp.id} value={emp.id}>
+                                  <option key={emp.id} value={emp.id} disabled={!allDeliveryItemsReady(order)}>
                                     {emp.name}
                                   </option>
                                 ))}
                               </select>
+                                {renderExternalDeliveryCompletion(order)}
+                              </div>
 
-                              <div className="flex items-center justify-center gap-1 w-full">
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', marginTop: '2px' }}>
                                 {badge ? (
                                   <span
-                                    className="text-[11px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 shadow-sm"
                                     style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '5px',
+                                      padding: '3px 10px',
+                                      borderRadius: '9999px',
+                                      fontSize: '11px',
+                                      fontWeight: '700',
                                       backgroundColor: badge.bg,
                                       color: badge.text,
-                                      border: `1px solid ${badge.border}`
+                                      border: `1px solid ${badge.border}`,
+                                      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+                                      lineHeight: '1.3',
+                                      whiteSpace: 'nowrap'
                                     }}
                                   >
-                                    <Truck size={12} />
-                                    {badge.label}
+                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: badge.dot || badge.text, display: 'inline-block', flexShrink: 0 }} />
+                                    <Truck size={12} style={{ flexShrink: 0, opacity: 0.9 }} />
+                                    <span>{badge.label}</span>
                                   </span>
                                 ) : null}
                               </div>
 
-                              {isCompleted && order.status !== 'منتهي' && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleManagerApproveDelivery(order)}
-                                  className="w-full text-[11px] font-bold py-1 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow flex items-center justify-center gap-1 transition-all cursor-pointer"
-                                  style={{ animation: 'pulse 2s infinite' }}
-                                  title="السائق أنجز التوصيل - اضغط لاعتماد المدير وإنهاء الطلبية"
-                                >
-                                  <CheckCircle size={13} />
-                                  <span>موافقة المدير / إنهاء</span>
-                                </button>
-                              )}
+
                             </div>
                           );
                         })()}
                       </td>
+                      <td data-label="موافقة" style={{ textAlign: "center" }}>{renderFinalApproval(order)}</td>
                       <td data-label="تغيير الحالة" style={{ textAlign: 'center' }}>
                         {(() => {
                           const colors = getSalesStatusColor(order.status || 'جديد');
@@ -3908,8 +3966,8 @@ const AdminSales = ({ user }) => {
                               }}
                               value={order.status || 'جديد'}
                               onChange={(e) => handleUpdateStatus(order, e.target.value)}
-                              disabled={isOrderTotallyFrozen(order)}
-                              title={isOrderTotallyFrozen(order) ? (order.stockDeducted ? 'لا يمكن تعديل الطلبية لأنه تم تدقيقها وخصمها من المخزون' : (isOrderFrozenByProductionOrPreparation(order) ? 'لا يمكن التعديل لأن الطلبية قيد التنفيذ في قسم الإنتاج أو التحضير' : 'لا يمكن تعديل حالة الطلبية لأن موظف التوصيل قد استلمها')) : ''}
+                              disabled={!isAdmin(user) && !isImad && isOrderTotallyFrozen(order)}
+                              title={!isAdmin(user) && !isImad && isOrderTotallyFrozen(order) ? (order.stockDeducted ? 'لا يمكن تعديل الطلبية لأنه تم تدقيقها وخصمها من المخزون' : (isOrderFrozenByProductionOrPreparation(order) ? 'لا يمكن التعديل لأن الطلبية قيد التنفيذ في قسم الإنتاج أو التحضير' : 'لا يمكن تعديل حالة الطلبية لأن موظف التوصيل قد استلمها')) : ''}
                             >
                               {globalSettings.salesStatuses.map(s => (
                                 <option key={s} value={s} className="bg-white text-slate-800 font-normal">

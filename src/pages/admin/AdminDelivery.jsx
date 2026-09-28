@@ -1,3 +1,4 @@
+import { allDeliveryItemsReady, deliveryAssignment, deliverySelection, deliveryLabel, orderDeliveryMission } from '../../utils/deliveryMethod';
 import React, { useEffect, useState } from 'react';
 import { Truck, Search, Plus, Trash2, Edit2, ArrowUpDown, ArrowUp, ArrowDown, Calendar, Pin, ClipboardList, Store, MapPin, ChevronRight, ChevronDown, Send, FileText, ChevronLeft, UserCheck, Eye, X, Package } from 'lucide-react';
 import {
@@ -61,7 +62,8 @@ const AdminDelivery = ({ user }) => {
       getGlobalSettings(),
       getSalesOrders()
     ]);
-    setMissions(missionsData);
+    const missing = salesData.filter(order => order.deliveryMethod && !missionsData.some(m => m.salesOrderNumber === order.orderNumber));
+    setMissions([...missionsData, ...missing.map(order => ({ ...orderDeliveryMission(order), id: 'order:' + order.id, virtual: true, missionNumber: order.orderNumber }))]);
     setEmployees(employeesData);
     setGlobalSettings(settingsData);
     setSalesOrders(salesData);
@@ -111,6 +113,7 @@ const AdminDelivery = ({ user }) => {
     const initialData = mission
       ? {
         ...mission,
+        id: mission.virtual ? null : mission.id,
         type: DELIVERY_TYPE_OPTIONS.includes(mission.type) ? mission.type : 'أخرى',
         customType: mission.customType || (DELIVERY_TYPE_OPTIONS.includes(mission.type) ? '' : mission.type)
       }
@@ -186,7 +189,7 @@ const AdminDelivery = ({ user }) => {
             <label class="text-primary font-bold">الطلبية المرتبطة (إجباري)</label>
             <select id="swal-related-order" class="premium-input bg-blue-50">
               <option value="">اختر الطلبية...</option>
-              ${salesOrders.filter(o => ['تم التسليم للتوصيل', 'تم تسليمها للتوصيل', 'جاهز للتوصيل'].includes(o.status)).map(o => `<option value="${o.orderNumber}" data-customer="${o.customerName || ''}" ${initialData.salesOrderNumber === o.orderNumber ? 'selected' : ''}>${o.orderNumber} - ${o.customerName || 'بدون اسم'}</option>`).join('')}
+              ${salesOrders.filter(o => o.orderNumber === initialData.salesOrderNumber || ['جاهز للتسليم للتوصيل', 'تم التسليم للتوصيل', 'تم تسليمها للتوصيل', 'جاهز للتوصيل'].includes(o.status)).map(o => `<option value="${o.orderNumber}" data-customer="${o.customerName || ''}" ${initialData.salesOrderNumber === o.orderNumber ? 'selected' : ''}>${o.orderNumber} - ${o.customerName || 'بدون اسم'}</option>`).join('')}
               ${initialData.salesOrderNumber && !salesOrders.find(o => o.orderNumber === initialData.salesOrderNumber) ? `<option value="${initialData.salesOrderNumber}" selected>${initialData.salesOrderNumber} (مؤرشفة/مخفية)</option>` : ''}
             </select>
           </div>
@@ -203,9 +206,11 @@ const AdminDelivery = ({ user }) => {
             <input id="swal-target" class="premium-input" placeholder="اكتب اسم الشركة المتجه إليها" value="${initialData.targetEntity || ''}">
           </div>
           <div class="premium-form-group col-span-12 md:col-span-6">
-            <label>الموظف المسؤول</label>
+            <label>طريقة التسليم / السائق</label>
             <select id="swal-employee-select" class="premium-input bg-white">
-              <option value="">اختر الموظف المسؤول...</option>
+              <option value="">بدون سائق</option>
+              <option value="__pickup" ${initialData.deliveryMethod === "pickup" ? "selected" : ""}>استلام من الشركة (الزبون)</option>
+              <option value="__courier" ${initialData.deliveryMethod === "courier" ? "selected" : ""}>شركة توصيل</option>
               ${employees.map(emp => `<option value="${emp.id}" ${(initialData.assignedEmployeeId === emp.id || initialData.assignedEmployeeName === emp.name) ? 'selected' : ''}>${emp.name}</option>`).join('')}
             </select>
           </div>
@@ -258,7 +263,8 @@ const AdminDelivery = ({ user }) => {
       cancelButtonText: 'إلغاء',
       preConfirm: () => {
         const employeeSelect = document.getElementById('swal-employee-select');
-        const employeeId = employeeSelect ? employeeSelect.value : '';
+        const assignment = deliveryAssignment(employeeSelect ? employeeSelect.value : '', employees);
+        const employeeId = assignment.assignedEmployeeId;
         const matchingEmployee = employees.find((emp) => emp.id === employeeId);
         const employeeName = matchingEmployee ? matchingEmployee.name : '';
         const selectedType = document.getElementById('swal-type').value;
@@ -269,10 +275,13 @@ const AdminDelivery = ({ user }) => {
 
         const data = {
           ...initialData,
+          virtual: false,
+          ...(deliverySelection(initialData) !== deliverySelection(assignment) ? { status: 'بانتظار الاستلام', receivedAt: null, completedAt: null } : {}),
           type: selectedType,
           customType: selectedType === 'أخرى' ? customType : '',
           sourceEntity,
           targetEntity,
+          ...assignment,
           assignedEmployeeName: employeeName,
           assignedEmployeeId: employeeId,
           dueDate: document.getElementById('swal-date').value,
@@ -280,13 +289,18 @@ const AdminDelivery = ({ user }) => {
           salesOrderNumber: selectedType === 'تسليم طلبية' ? relatedOrder : ''
         };
 
-        if (!data.targetEntity || !data.sourceEntity || !data.assignedEmployeeName || !data.dueDate) {
+        if (!data.targetEntity || !data.sourceEntity || !data.dueDate) {
           Swal.showValidationMessage('يرجى تعبئة جميع الخانات المطلوبة بنسبة 100%');
           return false;
         }
 
         if (selectedType === 'تسليم طلبية' && !relatedOrder) {
           Swal.showValidationMessage('يرجى اختيار الطلبية المرتبطة من قسم الطلبيات');
+          return false;
+        }
+
+        if (selectedType === 'تسليم طلبية' && assignment.deliveryMethod !== 'unassigned' && !allDeliveryItemsReady(salesOrders.find(order => order.orderNumber === relatedOrder))) {
+          Swal.showValidationMessage('لا يمكن تحديد سائق أو طريقة تسليم حتى تكون جميع أصناف الطلبية بحالة جاهز');
           return false;
         }
 
@@ -376,7 +390,7 @@ const AdminDelivery = ({ user }) => {
           <p><strong>نوع المهمة:</strong> ${getMissionTypeLabel(mission)}</p>
           <p><strong>من شركة:</strong> ${mission.sourceEntity || '---'}</p>
           <p><strong>الوجهة:</strong> ${mission.targetEntity || '---'}</p>
-          <p><strong>الموظف المسؤول:</strong> ${mission.assignedEmployeeName || '---'}</p>
+          <p><strong>طريقة التسليم / السائق:</strong> ${deliveryLabel(mission)}</p>
           <p><strong>تاريخ التنفيذ:</strong> ${mission.dueDate || '---'}</p>
           <p><strong>حالة المهمة:</strong> ${mission.status}</p>
           <hr style="margin: 15px 0; border: 0; border-top: 1px solid #e2e8f0;"/>
@@ -396,7 +410,15 @@ const AdminDelivery = ({ user }) => {
 
   const handleUpdateStatus = async (id, status) => {
     const mission = missions.find((item) => item.id === id);
-    await updateMissionStatus(id, status);
+    if (mission.type === 'تسليم طلبية' && status === 'تم الإنجاز' && !allDeliveryItemsReady(salesOrders.find(order => order.orderNumber === mission.salesOrderNumber))) {
+      Swal.fire('الأصناف غير جاهزة', 'يجب أن تكون جميع أصناف الطلبية جاهزة قبل إنجاز التسليم', 'warning');
+      return;
+    }
+    if (mission.virtual) {
+      const { id: ignoredId, virtual, ...data } = mission;
+      const saved = await saveMission({ ...data, status, completedAt: status === 'تم الإنجاز' ? new Date().toISOString() : null });
+      if (!saved) { Swal.fire('خطأ', 'تعذر حفظ حالة التسليم', 'error'); return; }
+    } else if (!await updateMissionStatus(id, status)) { Swal.fire('خطأ', 'تعذر حفظ حالة التسليم', 'error'); return; }
 
     await createNotification({
       settingKey: 'delivery',
@@ -429,13 +451,28 @@ const AdminDelivery = ({ user }) => {
     fetchData();
   };
 
-  const handleUpdateEmployee = async (id, employeeId) => {
+  const handleUpdateEmployee = async (id, selection) => {
+    const assignment = deliveryAssignment(selection, employees);
+    const employeeId = assignment.assignedEmployeeId;
     const mission = missions.find((item) => item.id === id);
     const matchingEmployee = employees.find((emp) => emp.id === employeeId);
     const employeeName = matchingEmployee ? matchingEmployee.name : '';
 
+    if (['تم الاستلام', 'في الطريق', 'عند الموقع', 'تم التوصيل', 'تم الإنجاز'].includes(mission.status)) {
+      const result = await MySwal.fire({ title: 'تأكيد تصحيح تعيين التوصيل', text: 'أكد فقط إذا كان السائق لم يستلم ولم يبدأ فعلياً. سيُسجّل التصحيح.', icon: 'warning', showCancelButton: true, confirmButtonText: 'تصحيح التعيين', cancelButtonText: 'إلغاء' });
+      if (!result.isConfirmed) return;
+    }
+    if (mission.type === 'تسليم طلبية' && assignment.deliveryMethod !== 'unassigned' && !allDeliveryItemsReady(salesOrders.find(order => order.orderNumber === mission.salesOrderNumber))) {
+      Swal.fire('الأصناف غير جاهزة', 'لا يمكن تحديد سائق أو طريقة تسليم حتى تكون جميع أصناف الطلبية بحالة جاهز', 'warning');
+      return;
+    }
     const updatedMission = {
       ...mission,
+      id: mission.virtual ? null : mission.id,
+      virtual: false,
+      ...assignment,
+      previousAssignment: { deliveryMethod: mission.deliveryMethod || '', employeeId: mission.assignedEmployeeId || '', status: mission.status || '' },
+      status: 'بانتظار الاستلام', receivedAt: null, completedAt: null,
       assignedEmployeeId: employeeId,
       assignedEmployeeName: employeeName
     };
@@ -467,7 +504,7 @@ const AdminDelivery = ({ user }) => {
         userId: user.id,
         module: 'التوصيل',
         action: 'تعديل',
-        details: `تعيين الموظف ${employeeName || 'بدون اسم'} للمهمة: ${getMissionTypeLabel(mission)}`
+        details: `تغيير التسليم من ${deliveryLabel(mission)} (${mission.status}) إلى ${deliveryLabel(updatedMission)} للمهمة: ${getMissionTypeLabel(mission)}`
       });
       fetchData();
     }
@@ -497,10 +534,10 @@ const AdminDelivery = ({ user }) => {
     missions.filter((mission) => {
       const searchMatches = matchesSearch([
         mission.id, mission.sourceEntity, mission.targetEntity,
-        mission.assignedEmployeeName, getMissionTypeLabel(mission)
+        deliveryLabel(mission), getMissionTypeLabel(mission)
       ], debouncedSearchTerm);
       const matchesStatus = statusFilter === 'معلق' 
-        ? (mission.status !== 'تم الإنجاز' && mission.status !== 'ملغي / تعذر التنفيذ')
+        ? (!['ملغي / تعذر التنفيذ', 'ملغي'].includes(mission.status) && (mission.salesOrderNumber ? !['منتهي', 'ملغي', 'ملغى'].includes(salesOrders.find(order => order.orderNumber === mission.salesOrderNumber)?.status) : mission.status !== 'تم الإنجاز'))
         : (statusFilter === 'الكل' || mission.status === statusFilter);
       const matchesSource = sourceFilter === 'الكل' || mission.sourceEntity === sourceFilter;
 
@@ -715,12 +752,14 @@ const AdminDelivery = ({ user }) => {
                   <div style={{ flex: 1, textAlign: 'left' }}>
                     <select
                       style={{ width: '100%', maxWidth: '200px', appearance: 'none', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#1e293b', borderRadius: '8px', padding: '8px 12px', fontWeight: 'bold', fontSize: '13px', textAlign: 'right', direction: 'rtl', outline: 'none' }}
-                      value={mission.assignedEmployeeId || employees.find(emp => emp.name === mission.assignedEmployeeName)?.id || ''}
+                      value={deliverySelection(mission) || employees.find(emp => emp.name === mission.assignedEmployeeName)?.id || ''}
                       onChange={(event) => handleUpdateEmployee(mission.id, event.target.value)}
                     >
-                      <option value="">-- اختر الموظف --</option>
+                      <option value="">بدون سائق</option>
+                      <option value="__pickup" disabled={mission.type === "تسليم طلبية" && !allDeliveryItemsReady(salesOrders.find(order => order.orderNumber === mission.salesOrderNumber))}>استلام من الشركة (الزبون)</option>
+                      <option value="__courier" disabled={mission.type === "تسليم طلبية" && !allDeliveryItemsReady(salesOrders.find(order => order.orderNumber === mission.salesOrderNumber))}>شركة توصيل</option>
                       {employees.map((emp) => (
-                        <option key={emp.id} value={emp.id}>
+                        <option key={emp.id} value={emp.id} disabled={mission.type === "تسليم طلبية" && !allDeliveryItemsReady(salesOrders.find(order => order.orderNumber === mission.salesOrderNumber))}>
                           {emp.name}
                         </option>
                       ))}
@@ -798,7 +837,7 @@ const AdminDelivery = ({ user }) => {
                   <div className="flex items-center gap-1">الشركة المتجه إليها {getSortIcon('targetEntity')}</div>
                 </th>
                 <th onClick={() => handleSort('assignedEmployeeName')} className="cursor-pointer hover:text-primary transition-colors">
-                  <div className="flex items-center gap-1">الموظف المسؤول {getSortIcon('assignedEmployeeName')}</div>
+                  <div className="flex items-center gap-1">طريقة التسليم / السائق {getSortIcon('assignedEmployeeName')}</div>
                 </th>
                 <th onClick={() => handleSort('dueDate')} className="cursor-pointer hover:text-primary transition-colors">
                   <div className="flex items-center gap-1">موعد التنفيذ {getSortIcon('dueDate')}</div>
@@ -827,17 +866,19 @@ const AdminDelivery = ({ user }) => {
                   <td data-label="الشركة المتجه إليها" className="text-primary font-semibold">
                     {mission.targetEntity}
                   </td>
-                  <td data-label="الموظف المسؤول">
+                  <td data-label="طريقة التسليم / السائق">
                     <select
                       className="input-field"
                       style={{ padding: '0 0.5rem', width: '220px', height: '36px', fontSize: '13px', borderRadius: '8px', marginBottom: 0, border: '1px solid var(--primary-light)', fontWeight: 'bold' }}
-                      value={mission.assignedEmployeeId || employees.find(emp => emp.name === mission.assignedEmployeeName)?.id || ''}
+                      value={deliverySelection(mission) || employees.find(emp => emp.name === mission.assignedEmployeeName)?.id || ''}
                       onChange={(event) => handleUpdateEmployee(mission.id, event.target.value)}
                       disabled={!canPerformAction(user, 'EDIT', 'MISSIONS', globalSettings)}
                     >
-                      <option value="">-- اختر الموظف --</option>
+                      <option value="">بدون سائق</option>
+                      <option value="__pickup" disabled={mission.type === "تسليم طلبية" && !allDeliveryItemsReady(salesOrders.find(order => order.orderNumber === mission.salesOrderNumber))}>استلام من الشركة (الزبون)</option>
+                      <option value="__courier" disabled={mission.type === "تسليم طلبية" && !allDeliveryItemsReady(salesOrders.find(order => order.orderNumber === mission.salesOrderNumber))}>شركة توصيل</option>
                       {employees.map((emp) => (
-                        <option key={emp.id} value={emp.id}>
+                        <option key={emp.id} value={emp.id} disabled={mission.type === "تسليم طلبية" && !allDeliveryItemsReady(salesOrders.find(order => order.orderNumber === mission.salesOrderNumber))}>
                           {emp.name}
                         </option>
                       ))}

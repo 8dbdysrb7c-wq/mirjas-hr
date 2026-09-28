@@ -1884,12 +1884,6 @@ const AdminProduction = ({ user, notificationTarget, initialSection = 'sewing' }
   const normalizedItems = selectedOrder
     ? getNormalizedItems(selectedOrder)
         .map((item, originalIndex) => ({ ...item, _originalIndex: originalIndex }))
-        .filter(item => {
-          const status = canonicalizeProductionStatus(item.status || selectedOrder.status);
-          if (productionSection === 'packaging') return status === 'مرحلة التغليف';
-          if (productionSection === 'sewing') return !NON_SEWING_PRODUCTION_STATUSES.includes(status);
-          return true;
-        })
     : [];
 
   const isProductionEditable = isAdmin(user) || 

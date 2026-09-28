@@ -1,5 +1,7 @@
+import { allDeliveryItemsReady } from '../utils/deliveryMethod';
 import { db } from '../firebase';
 import { 
+  writeBatch,
   collection, 
   getDocs, 
   getDoc,
@@ -151,6 +153,26 @@ export const getMissionsForUser = async (userId, userName) => {
 };
 
 
+const persistMission = async (ref, mission, validateAssignment = false) => {
+  const batch = writeBatch(db);
+  batch.set(ref, mission);
+  if (mission.salesOrderNumber && mission.type === 'تسليم طلبية') {
+    const orders = await getDocs(query(collection(db, 'sales_orders'), where('orderNumber', '==', mission.salesOrderNumber)));
+    if (((validateAssignment && (mission.assignedEmployeeId || ['pickup', 'courier'].includes(mission.deliveryMethod))) || mission.status === 'تم الإنجاز') && (!orders.docs.length || orders.docs.some(order => !allDeliveryItemsReady(order.data())))) {
+      throw new Error('لا يمكن تحديد سائق أو طريقة تسليم أو إنجاز التسليم حتى تكون جميع أصناف الطلبية بحالة جاهز');
+    }
+    for (const order of orders.docs) {
+      batch.set(order.ref, {
+        deliveryMethod: mission.deliveryMethod || (mission.assignedEmployeeId ? 'employee' : 'unassigned'),
+        deliveryDriverId: mission.assignedEmployeeId || '', deliveryDriverName: mission.assignedEmployeeName || '',
+        deliveryStatus: mission.status || 'بانتظار الاستلام',
+        deliveryCompletedAt: mission.status === 'تم الإنجاز' ? mission.completedAt || new Date().toISOString() : null
+      }, { merge: true });
+    }
+  }
+  await batch.commit();
+};
+
 export const saveMission = async (mission) => {
   try {
     let missionToSave = { ...mission };
@@ -169,12 +191,12 @@ export const saveMission = async (mission) => {
       missionToSave.id = docRef.id;
       missionToSave.createdAt = missionToSave.createdAt || new Date().toISOString();
       missionToSave.updatedAt = new Date().toISOString();
-      await setDoc(docRef, missionToSave);
+      await persistMission(docRef, missionToSave, true);
       return missionToSave;
     } else {
       const docRef = doc(db, 'missions', missionToSave.id);
       missionToSave.updatedAt = new Date().toISOString();
-      await setDoc(docRef, missionToSave);
+      await persistMission(docRef, missionToSave, true);
       return missionToSave;
     }
   } catch (error) {
@@ -195,39 +217,21 @@ export const updateMissionStatus = async (missionId, status, note = '') => {
   try {
     const missionRef = doc(db, 'missions', missionId);
     const updateData = { 
-      status, 
+      status,
+      completedAt: status === 'تم الإنجاز' ? new Date().toISOString() : null,
       updatedAt: new Date().toISOString() 
     };
     if (note) updateData.lastNote = note;
     if (status === 'تم الاستلام') updateData.receivedAt = new Date().toISOString();
     if (status === 'تم الإنجاز') updateData.completedAt = new Date().toISOString();
     
-    await setDoc(missionRef, updateData, { merge: true });
-
-    // Sync delivery status to sales order if linked
-    try {
-      const missionSnap = await getDoc(missionRef);
-      const missionData = missionSnap.data();
-      if (missionData && missionData.salesOrderNumber) {
-        const orderQ = query(collection(db, 'sales_orders'), where('orderNumber', '==', missionData.salesOrderNumber));
-        const orderSnap = await getDocs(orderQ);
-        for (const orderDoc of orderSnap.docs) {
-          const syncUpdates = {
-            deliveryStatus: status,
-            deliveryDriverName: missionData.assignedEmployeeName || '',
-            deliveryDriverId: missionData.assignedEmployeeId || ''
-          };
-          if (status === 'تم الإنجاز') {
-            syncUpdates.deliveryCompletedAt = new Date().toISOString();
-          }
-          await setDoc(doc(db, 'sales_orders', orderDoc.id), syncUpdates, { merge: true });
-        }
-      }
-    } catch (syncErr) {
-      console.error("Error syncing mission status to sales order:", syncErr);
-    }
+    const snapshot = await getDoc(missionRef);
+    if (!snapshot.exists()) throw new Error('مهمة التوصيل غير موجودة');
+    await persistMission(missionRef, { ...snapshot.data(), ...updateData });
+    return true;
   } catch (error) {
     console.error("Error in updateMissionStatus:", error);
+    return false;
   }
 };
 
