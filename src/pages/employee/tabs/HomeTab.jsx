@@ -377,7 +377,7 @@ export const HomeTab = ({
       {todayEvaluatedReport && (
         <div style={{ marginBottom: '1.25rem', padding: isMobile ? '14px' : '18px 20px', borderRadius: '16px', border: '1px solid #c4b5fd', background: 'linear-gradient(135deg, #faf5ff 0%, #f5f3ff 100%)', boxShadow: '0 4px 14px rgba(124,58,237,.08)', direction: 'rtl', display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', gap: '12px' }}>
           <div>
-            <div style={{ color: '#6d28d9', fontSize: '12px', fontWeight: 900, marginBottom: '5px' }}>تقييم المشرف اليومي</div>
+            <div style={{ color: '#6d28d9', fontSize: '12px', fontWeight: 900, marginBottom: '5px' }}>آخر تقييم للمشرف · {todayEvaluatedReport.date}</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
               <strong style={{ color: '#1e293b', fontSize: '20px' }}>{todayEvaluatedReport.supervisorRating}</strong>
               <span dir="ltr" style={{ color: '#7c3aed', fontSize: '18px', fontWeight: 900 }}>{Math.round(Number(todayEvaluatedReport.finalScore || 0))}%</span>

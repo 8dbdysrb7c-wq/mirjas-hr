@@ -251,7 +251,7 @@ const AdminSupervisorReports = ({ user }) => {
   const [dateTo, setDateTo] = useState('');
   const [filterSupervisor, setFilterSupervisor] = useState('');
   const [filterAttendance, setFilterAttendance] = useState('');
-  const [filterStatus, setFilterStatus] = useState(isImad ? 'قيد المراجعة' : '');
+  const [filterStatus, setFilterStatus] = useState('قيد المراجعة');
   const [showFilters, setShowFilters] = useState(false);
 
   const supervisorsList = React.useMemo(() => {
@@ -1473,7 +1473,7 @@ const AdminSupervisorReports = ({ user }) => {
           <button className={`premium-tab ${activeTab === 'add' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => { setActiveTab('add'); setIsEditMode(false); setDate(getLocalDateStr(new Date())); }}>
             <Plus size={20} /> <span>إضافة/تعديل تقرير</span>
           </button>
-          <button className={`premium-tab ${activeTab === 'history' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('history')}>
+          <button className={`premium-tab ${activeTab === 'history' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => { setFilterStatus('قيد المراجعة'); setActiveTab('history'); }}>
             <ClipboardList size={20} /> <span>{canReviewTeam ? 'سجل تقارير المشرفين' : 'سجل تقاريري'}</span>
           </button>
         </>

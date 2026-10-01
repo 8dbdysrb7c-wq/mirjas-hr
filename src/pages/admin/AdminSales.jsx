@@ -3,7 +3,7 @@ import { hasDraftItems, readLocalDrafts, mergeDrafts, writeLocalDraft, removeLoc
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText, Briefcase, Clock, Check, Save, Share2, Layers, Clipboard, CheckCircle, Copy, Archive, Truck } from 'lucide-react';
-import { getSalesOrders, subscribeToSalesOrders, saveSalesOrder, deleteSalesOrder, getSalesOrderDrafts, saveSalesOrderDraft, deleteSalesOrderDraft, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getPreparationOrders, savePreparationOrder, getMissions, saveMission, deleteMission, getEmployees, createNotification } from '../../store';
+import { approveSalesOrder, getSalesOrders, subscribeToSalesOrders, saveSalesOrder, deleteSalesOrder, getSalesOrderDrafts, saveSalesOrderDraft, deleteSalesOrderDraft, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getPreparationOrders, savePreparationOrder, getMissions, saveMission, deleteMission, getEmployees, createNotification } from '../../store';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 import { hasPermission } from '../../utils/permissions';
 import Swal from 'sweetalert2';
@@ -185,6 +185,7 @@ const AdminSales = ({ user }) => {
       
       if (qty > 0) {
         const warehouse = String(s.warehouse || 'الرئيسي').trim();
+        validMap[`${key} (مستودع: ${warehouse})`] = true;
         const existingWh = lookup[key].breakdown.find(b => b.warehouse === warehouse);
         if (existingWh) {
           existingWh.quantity += qty;
@@ -695,7 +696,7 @@ const AdminSales = ({ user }) => {
     if (order.status === 'منتهي') return <span style={{ color: '#15803d', fontWeight: 'bold' }}>تمت الموافقة</span>;
     const completed = (getOrderMission(order.orderNumber)?.status || order.deliveryStatus) === 'تم الإنجاز';
     const isSuperOrManager = isAdmin(user) || isManager;
-    // للإدارة والمدير: الزر مفعل دائماً دون أي شروط (حتى لو بدون سائق وبدون انتظار الإنجاز)
+    // للإدارة والمدير والمشرف عماد: الزر مفعل دائماً دون أي شروط (حتى لو بدون سائق وبدون انتظار الإنجاز)
     const canApprove = isSuperOrManager || isImad || completed;
     return (
       <button
@@ -771,16 +772,15 @@ const AdminSales = ({ user }) => {
     });
 
     if (confirm.isConfirmed) {
-      await saveSalesOrder({
-        ...order,
-        status: 'منتهي',
-        managerApprovedAt: new Date().toISOString(),
-        managerApprovalOverride: isSuperOrManager && missionStatus !== 'تم الإنجاز',
-        managerApprovedById: user?.id || user?.employeeId || '',
-        managerApprovedBy: user?.name || 'المدير',
-        lastActionBy: user?.name || 'المدير',
-        statusUpdateDate: getLocalDateStr(new Date())
-      }, { preserveStatus: true });
+      try {
+        await approveSalesOrder(order.id, {
+          userId: user?.id || user?.employeeId || '', userName: user?.name || 'المدير',
+          date: getLocalDateStr(new Date())
+        }, isAdmin(user));
+      } catch (error) {
+        await MySwal.fire('تعذر حفظ الموافقة النهائية', error.message || 'يرجى إعادة المحاولة', 'error');
+        return;
+      }
 
       await addLog({
         userName: user?.name || 'المدير',
@@ -1855,11 +1855,26 @@ const AdminSales = ({ user }) => {
   };
 
   const getProductStockSummary = (prodName) => {
-    const key = cleanStockProductName(prodName);
+    if (!prodName) return { physical: 0, reserved: 0, available: 0 };
+    let targetWarehouse = null;
+    let cleanProdName = String(prodName || '').trim();
+    const warehouseMatch = cleanProdName.match(/\s*\(مستودع:\s*([^\)]+)\)\s*$/);
+    if (warehouseMatch) {
+      targetWarehouse = warehouseMatch[1].trim();
+      cleanProdName = cleanProdName.replace(/\s*\(مستودع:\s*[^\)]+\)\s*$/, '').trim();
+    }
+
+    const key = cleanStockProductName(cleanProdName);
     const stockData = stockLookup[key] || {};
-    const physical = Number(stockData.total || 0);
+    
+    let physical = Number(stockData.total || 0);
+    if (targetWarehouse) {
+      const wh = (stockData.breakdown || []).find(b => b.warehouse === targetWarehouse);
+      physical = wh ? Number(wh.quantity || 0) : 0;
+    }
+
     const reserved = Number(stockData.reserved || 0);
-    return { physical, reserved, available: getAvailableQuantity(physical, reserved) };
+    return { physical, reserved, available: getAvailableQuantity(physical, reserved), warehouse: targetWarehouse };
   };
 
   const formatProductStockSummary = prodName => {
@@ -6317,6 +6332,7 @@ const AdminSales = ({ user }) => {
         onAddItems={handleAddMultiColors}
         stockColors={globalSettings.stockColors || []}
         stock={stock}
+        orders={orders}
       />
     </>
   );

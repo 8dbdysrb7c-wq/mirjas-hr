@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Check, Minus, Plus, Search } from 'lucide-react';
 import Select from './SearchSelect';
 import { matchesSearch, useDebounce } from '../utils/searchEngine';
+import { buildReservedQuantityMap } from '../utils/stockAvailability';
 
 const MultiColorSelectionModal = ({ 
   isOpen, 
@@ -10,6 +11,7 @@ const MultiColorSelectionModal = ({
   onAddItems, 
   stockColors = [], 
   stock = [],
+  orders = [],
   title = "اختيار الألوان والكمية",
   maxQuantity = null
 }) => {
@@ -23,6 +25,7 @@ const MultiColorSelectionModal = ({
   const groupedProducts = useMemo(() => {
     const groups = {};
     const stockMap = {};
+    const reservedMap = buildReservedQuantityMap(orders);
     stock.forEach(s => { stockMap[s.id] = s; });
 
     stock.filter(s => {
@@ -45,39 +48,54 @@ const MultiColorSelectionModal = ({
         groups[pName] = {
           name: pName,
           totalQuantity: 0,
+          totalReserved: 0,
+          totalAvailable: 0,
           colors: {}
         };
       }
       
       // Use spec as color, or extract it from name if it's a child without spec
-      let color = (s.spec || '').trim();
-      if (!color && (s.parentItemId || String(s.name).includes(' - '))) {
+      let rawColor = (s.spec || '').trim();
+      if (!rawColor && (s.parentItemId || String(s.name).includes(' - '))) {
          if (String(s.name).includes(' - ')) {
             const parts = String(s.name).split(' - ');
-            color = parts[parts.length - 1].trim();
+            rawColor = parts[parts.length - 1].trim();
          } else {
-            color = 'نسخة مخصصة';
+            rawColor = 'نسخة مخصصة';
          }
-      } else if (!color) {
-         color = 'أساسي';
+      } else if (!rawColor) {
+         rawColor = 'أساسي';
       }
 
       // Append warehouse name to distinguish same colors in different warehouses
       const warehouse = s.warehouse || 'الرئيسي';
+      let colorKey = rawColor;
       if (warehouse !== 'الرئيسي') {
-         color = `${color} (مستودع: ${warehouse})`;
+         colorKey = `${rawColor} (مستودع: ${warehouse})`;
       }
       
       const qty = Number(s.quantity) || 0;
+      const itemReserved = Number(reservedMap[`${pName} - ${rawColor}`] || reservedMap[`${pName} - ${colorKey}`] || 0);
       
       groups[pName].totalQuantity += qty;
+      groups[pName].totalReserved += itemReserved;
       
-      if (color) {
-        if (!groups[pName].colors[color]) {
-          groups[pName].colors[color] = 0;
+      if (colorKey) {
+        if (!groups[pName].colors[colorKey]) {
+          groups[pName].colors[colorKey] = {
+            physical: 0,
+            reserved: 0,
+            available: 0
+          };
         }
-        groups[pName].colors[color] += qty;
+        groups[pName].colors[colorKey].physical += qty;
+        groups[pName].colors[colorKey].reserved = itemReserved;
+        groups[pName].colors[colorKey].available = Math.max(0, groups[pName].colors[colorKey].physical - itemReserved);
       }
+    });
+
+    Object.values(groups).forEach(p => {
+      p.totalAvailable = Math.max(0, p.totalQuantity - p.totalReserved);
     });
     
     // Filter only products that have actual colors (not just 'أساسي')
@@ -91,12 +109,12 @@ const MultiColorSelectionModal = ({
          return hasRealVariants;
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [stock]);
+  }, [stock, orders]);
 
   const productOptions = useMemo(() => {
     return groupedProducts.map(p => ({
       value: p.name,
-      label: `${p.name} (متوفر: ${p.totalQuantity})`
+      label: `${p.name} (الموجود: ${p.totalQuantity} | المحجوز: ${p.totalReserved} | المتاح: ${p.totalAvailable})`
     }));
   }, [groupedProducts]);
 
@@ -293,9 +311,20 @@ const MultiColorSelectionModal = ({
                           <div style={{ width: '20px', height: '20px', borderRadius: '4px', border: isSelected ? '1px solid var(--primary, #1a8d9b)' : '1px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: isSelected ? 'var(--primary, #1a8d9b)' : 'transparent' }}>
                             {isSelected && <Check size={14} color="#fff" />}
                           </div>
-                          <span style={{ fontSize: '0.875rem', fontWeight: isSelected ? 'bold' : 'normal', color: isSelected ? '#1e293b' : '#475569' }}>
-                            {color} <span style={{ color: '#94a3b8', fontSize: '0.75rem', marginRight: '6px' }}>(متوفر: {selectedProductData?.colors[color] || 0})</span>
-                          </span>
+                          {(() => {
+                            const cVal = selectedProductData?.colors[color];
+                            const physical = typeof cVal === 'object' ? cVal.physical : Number(cVal || 0);
+                            const reserved = typeof cVal === 'object' ? cVal.reserved : 0;
+                            const available = typeof cVal === 'object' ? cVal.available : physical;
+                            return (
+                              <span style={{ fontSize: '0.875rem', fontWeight: isSelected ? 'bold' : 'normal', color: isSelected ? '#1e293b' : '#475569' }}>
+                                {color}{' '}
+                                <span style={{ color: available > 0 ? '#0d9488' : '#e11d48', fontSize: '0.75rem', marginRight: '6px', fontWeight: 'bold' }}>
+                                  (الموجود: {physical} | المحجوز: {reserved} | المتاح: {available})
+                                </span>
+                              </span>
+                            );
+                          })()}
                         </div>
                         
                         <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', height: '36px' }} onClick={e => e.stopPropagation()}>

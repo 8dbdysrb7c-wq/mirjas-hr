@@ -555,6 +555,18 @@ export const getSupervisorTasksByDateRange = async (dateFrom, dateTo) => {
   }
 };
 
+export const subscribeToReportsForUser = (userId, employeeId, callback, onError) => {
+  const ids = [...new Set([userId, employeeId].filter(Boolean).map(id => String(id).trim()))].filter(Boolean);
+  if (!ids.length) {
+    callback([]);
+    return () => {};
+  }
+  const q = query(collection(db, 'reports'), where('userId', 'in', ids), orderBy('date', 'desc'), limit(60));
+  return onSnapshot(q, snapshot => {
+    callback(snapshot.docs.map(report => ({ ...report.data(), id: report.id })));
+  }, onError);
+};
+
 export const getReportsForUser = async (userId, employeeId = null) => {
   try {
     const ids = [...new Set([userId, employeeId])].filter(Boolean).map(id => String(id).trim());
@@ -602,4 +614,3 @@ export const getAttendanceLogsByDateRange = async (dateFrom, dateTo) => {
     return [];
   }
 };
-

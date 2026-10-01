@@ -9,7 +9,7 @@ import { startVisiblePolling } from '../utils/visiblePolling';
 import { motion } from 'framer-motion';
 import { Bell, RefreshCw, Settings, LogOut, Plus, Globe, Trash2, Edit2, Save, Phone, Clock, Calendar, FileText, X, Camera, Home, ShoppingCart, ShoppingBag, Menu, MoreHorizontal, Eye, Truck, CheckCircle2, Navigation, MapPin, CheckCircle, Info, SunMoon, Mic, MicOff, ClipboardCheck, Layers, Activity, Fingerprint, DollarSign, Folder, PieChart, Users, Filter, ArrowUpDown, ArrowRight } from 'lucide-react';
 import { 
-  getDepartments, getTasksData, saveReport, getReports, getReportsForUser, getMissions, getMissionsForUser, updateMissionStatus, getGlobalSettings, saveEmployee,
+  getDepartments, getTasksData, saveReport, getReports, getReportsForUser, subscribeToReportsForUser, getMissions, getMissionsForUser, updateMissionStatus, getGlobalSettings, saveEmployee,
   getSalesOrders, getOrders, getSupervisorTasks, getSupervisorTasksForUser, getEmployees, getPreparationOrders,
   getActiveSalesOrders, getActiveOrders, getActivePreparationOrders, getActiveMissions,
   getEmployeeAttendanceByDate, saveHRAttendance,
@@ -1181,10 +1181,9 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       // Is employer/admin?
       const isEmployer = user.id === 'admin' || String(user.name).includes('مشهور') || String(user.name).includes('انس') || String(user.name).includes('أنس') || user.name === 'المدير العام';
       
-      const [depts, tasks, reports, mData, sData, leavesData, punchesData, advancesData, repVisitsData, petitionsData] = await Promise.all([
+      const [depts, tasks, mData, sData, leavesData, punchesData, advancesData, repVisitsData, petitionsData] = await Promise.all([
         getDepartments(),
         getTasksData(),
-        getReportsForUser(user.id, user.employeeId || user.id),
         isEmployer ? getMissions() : getMissionsForUser(user.id, user.name),
         getGlobalSettings(),
         getHRLeavesForUser(user.id, user.name),
@@ -1195,7 +1194,6 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       ]);
       setDepartments(depts);
       setTasksData(tasks);
-      setAllReports(reports);
       setMissions(mData.filter(mission => isAssignedMission(mission, user)).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
       setGlobalSettings(sData);
       setMyLeaves(leavesData);
@@ -1206,6 +1204,9 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
     };
     fetchData();
   }, [user.id, user.name]);
+
+  useEffect(() => subscribeToReportsForUser(user.id, user.employeeId || user.id, setAllReports,
+    error => console.error('Employee reports subscription failed:', error)), [user.id, user.employeeId]);
 
   useEffect(() => subscribeToAssignedMissions(user, list => {
     setMissions(list);
@@ -1651,8 +1652,10 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
     MySwal.fire({ icon: 'success', title: 'تم تحديث الحالة', timer: 1000, showConfirmButton: false });
   };
 
-  const myReports = allReports.filter(r => String(r.userId || '').trim() === String(user.id || '').trim()).reverse();
-  const todayEvaluatedReport = myReports.find(r => r.date === getLocalDateStr(new Date()) && r.supervisorRating);
+  const reportOwnerIds = [user.id, user.employeeId].filter(Boolean).map(id => String(id).trim());
+  const myReports = allReports.filter(r => reportOwnerIds.includes(String(r.userId || '').trim()))
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  const todayEvaluatedReport = myReports.find(r => r.supervisorRating && !['محذوف', 'deleted'].includes(r.status));
   const filteredHistory = myReports.filter(r => {
     const matchFrom = dateFrom ? r.date >= dateFrom : true;
     const matchTo = dateTo ? r.date <= dateTo : true;

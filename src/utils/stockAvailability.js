@@ -1,7 +1,16 @@
-export const cleanStockProductName = (value) => String(value || '')
-  .replace(/\s*\(المتوفر:\s*[-+]?\d+(?:\.\d+)?\)\s*$/, '')
-  .replace(/\s*\(الموجود:\s*[-+]?\d+(?:\.\d+)?\s*\|\s*المحجوز:\s*[-+]?\d+(?:\.\d+)?\s*\|\s*المتاح:\s*[-+]?\d+(?:\.\d+)?\)\s*$/, '')
-  .trim();
+export const cleanStockProductName = (value) => {
+  let result = String(value || '');
+  let prev;
+  do {
+    prev = result;
+    result = result
+      .replace(/\s*\(المتوفر:\s*[-+]?\d+(?:\.\d+)?\)\s*$/, '')
+      .replace(/\s*\(الموجود:\s*[-+]?\d+(?:\.\d+)?\s*\|\s*المحجوز:\s*[-+]?\d+(?:\.\d+)?\s*\|\s*المتاح:\s*[-+]?\d+(?:\.\d+)?\)\s*$/, '')
+      .replace(/\s*\(مستودع:\s*[^\)]+\)\s*$/, '')
+      .trim();
+  } while (result !== prev);
+  return result;
+};
 
 export const isCancelledOrder = (order) => {
   const status = String(order?.status || '').trim();
