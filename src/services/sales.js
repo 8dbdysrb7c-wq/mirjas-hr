@@ -569,6 +569,26 @@ export const subscribeToSalesOrders = (onOrders, onError = console.error, orderL
   };
 };
 
+// Final approval changes workflow metadata only, never item quantities or stock reservations.
+export const approveSalesOrder = async (orderId, approval, allowIncomplete = false) => {
+  const ref = doc(db, 'sales_orders', orderId);
+  return runTransaction(db, async transaction => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error('الطلبية غير موجودة');
+    const current = snapshot.data();
+    if (current.status === 'منتهي') return { ...current, id: orderId };
+    if (!allowIncomplete && current.deliveryStatus !== 'تم الإنجاز') throw new Error('يجب إنجاز التسليم قبل الموافقة النهائية');
+    const updates = {
+      status: 'منتهي', managerApprovedAt: new Date().toISOString(),
+      managerApprovedById: approval.userId || '', managerApprovedBy: approval.userName || 'المدير',
+      managerApprovalOverride: allowIncomplete && current.deliveryStatus !== 'تم الإنجاز',
+      lastActionBy: approval.userName || 'المدير', statusUpdateDate: approval.date
+    };
+    transaction.update(ref, updates);
+    return { ...current, ...updates, id: orderId };
+  });
+};
+
 export const saveSalesOrder = async (order, { preserveStatus = false } = {}) => {
   try {
     let orderToSave = { ...order };

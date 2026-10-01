@@ -226,9 +226,14 @@ const HRLeaves = ({ user, refreshCounts }) => {
         if (!isDept) {
           const empToUpdate = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim());
           if (empToUpdate) {
-            const d1 = new Date(leave.startDate);
-            const d2 = new Date(leave.endDate);
-            const days = Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)) + 1;
+            let days = 1;
+            if (leave.startDate && leave.endDate) {
+              const d1 = new Date(leave.startDate);
+              const d2 = new Date(leave.endDate);
+              days = Math.max(1, Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)) + 1);
+            } else if (leave.days || leave.daysCount) {
+              days = Number(leave.days || leave.daysCount) || 1;
+            }
 
             if (days > 0) {
               let updated = false;
@@ -252,9 +257,14 @@ const HRLeaves = ({ user, refreshCounts }) => {
         if (!isDept) {
           const empToUpdate = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim());
           if (empToUpdate) {
-            const d1 = new Date(leave.startDate);
-            const d2 = new Date(leave.endDate);
-            const days = Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)) + 1;
+            let days = 1;
+            if (leave.startDate && leave.endDate) {
+              const d1 = new Date(leave.startDate);
+              const d2 = new Date(leave.endDate);
+              days = Math.max(1, Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)) + 1);
+            } else if (leave.days || leave.daysCount) {
+              days = Number(leave.days || leave.daysCount) || 1;
+            }
 
             if (days > 0) {
               let updated = false;
@@ -373,13 +383,15 @@ const HRLeaves = ({ user, refreshCounts }) => {
         <tr><th>القسم</th><td>${formatDepartmentName(emp?.department || leave.department)}</td></tr>
         <tr><th>نوع الطلب</th><td><span style="color:var(--primary); font-weight:bold;">${leave.type}</span></td></tr>
     `;
-    if (isDept) {
-      htmlContent += `<tr><th>التاريخ</th><td>${leave.date || '-'}</td></tr>`;
+    if (isDept && (leave.startTime || leave.endTime)) {
+      htmlContent += `<tr><th>التاريخ</th><td>${leave.date || leave.startDate || '-'}</td></tr>`;
       htmlContent += `<tr><th>من الساعة</th><td>${leave.startTime || '-'}</td></tr>`;
       htmlContent += `<tr><th>إلى الساعة</th><td>${leave.endTime || '-'}</td></tr>`;
-    } else {
+    } else if (leave.startDate && leave.endDate && leave.startDate !== leave.endDate) {
       htmlContent += `<tr><th>من تاريخ</th><td>${leave.startDate || '-'}</td></tr>`;
       htmlContent += `<tr><th>إلى تاريخ</th><td>${leave.endDate || '-'}</td></tr>`;
+    } else {
+      htmlContent += `<tr><th>التاريخ</th><td>${leave.date || leave.startDate || leave.endDate || '-'}</td></tr>`;
     }
     htmlContent += `</table>`;
     htmlContent += `<div class="swal-notes-box"><strong>السبب / الملاحظات:</strong><br><div style="margin-top: 8px;">${leave.notes ? leave.notes.replace(/\n/g, '<br>') : '<span style="color:#94a3b8; font-style:italic;">لا يوجد ملاحظات</span>'}</div></div>`;
@@ -573,18 +585,26 @@ const HRLeaves = ({ user, refreshCounts }) => {
 
     let cost = 0;
     let durationStr = '';
+    let days = 0;
 
     if (l.type === 'إجازة غير مدفوعة') {
       if (l.startDate && l.endDate) {
         const d1 = new Date(l.startDate);
         const d2 = new Date(l.endDate);
-        const days = Math.max(0, Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)) + 1);
+        days = Math.max(1, Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)) + 1);
+      } else if (l.days || l.daysCount) {
+        days = Number(l.days || l.daysCount) || 1;
+      } else if (l.date || l.startDate || l.endDate) {
+        days = 1;
+      }
+
+      if (days > 0) {
         if (settings?.hrSettings?.absenceHandling === 'work_hours') {
           cost = days * (empStandardWorkHours * hourlyRate);
         } else {
           cost = days * dailyRate;
         }
-        durationStr = `${days} أيام`;
+        durationStr = `${days} ${days === 1 ? 'يوم' : days === 2 ? 'يومان' : 'أيام'}`;
       }
     } else if (['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(l.type)) {
       if (l.startTime && l.endTime) {
@@ -595,7 +615,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
         durationStr = `${Math.floor(mins / 60)}س ${mins % 60}د`;
       }
     }
-    return { cost, durationStr };
+    return { cost, durationStr, days };
   };
 
   let totalUnpaidDays = 0;
@@ -608,12 +628,8 @@ const HRLeaves = ({ user, refreshCounts }) => {
     const res = getLeaveCost(l, emp);
 
     if (l.type === 'إجازة غير مدفوعة') {
-      if (l.startDate && l.endDate) {
-        const d1 = new Date(l.startDate);
-        const d2 = new Date(l.endDate);
-        totalUnpaidDays += Math.max(0, Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)) + 1);
-        totalUnpaidCost += res.cost;
-      }
+      totalUnpaidDays += res.days || 0;
+      totalUnpaidCost += res.cost;
     } else if (['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(l.type)) {
       if (l.startTime && l.endTime) {
         const [sh, sm] = l.startTime.split(':').map(Number);
@@ -847,26 +863,33 @@ const HRLeaves = ({ user, refreshCounts }) => {
                     </td>
 
                     <td className="p-5 text-muted text-sm text-center">
-                      {leave.date ? (
+                      {leave.startTime && leave.endTime ? (
                         <div className="flex flex-col items-center justify-center">
                           <div className="flex items-center justify-center gap-2">
-                            <span className="font-bold text-slate-800 text-xs" dir="ltr">{leave.date}</span>
+                            <span className="font-bold text-slate-800 text-xs" dir="ltr">{leave.date || leave.startDate}</span>
                             <Calendar size={14} className="text-[#0f766e]" />
                           </div>
                           <span className="font-bold text-xs mt-1 text-[#0f766e]" dir="rtl">
                             من {leave.startTime} إلى {leave.endTime}
                           </span>
                         </div>
-                      ) : (
+                      ) : leave.startDate && leave.endDate && leave.startDate !== leave.endDate ? (
                         <div className="flex flex-col items-center justify-center">
                           <span className="font-bold text-xs text-slate-800" dir="rtl">
                             من <span className="font-mono" dir="ltr">{leave.startDate}</span>
                           </span>
-                          {leave.endDate && (
-                            <span className="font-bold text-xs mt-1 text-slate-800" dir="rtl">
-                              إلى <span className="font-mono" dir="ltr">{leave.endDate}</span>
+                          <span className="font-bold text-xs mt-1 text-slate-800" dir="rtl">
+                            إلى <span className="font-mono" dir="ltr">{leave.endDate}</span>
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="font-bold text-slate-800 text-xs font-mono" dir="ltr">
+                              {leave.date || leave.startDate || leave.endDate}
                             </span>
-                          )}
+                            <Calendar size={14} className="text-[#0f766e]" />
+                          </div>
                         </div>
                       )}
                     </td>

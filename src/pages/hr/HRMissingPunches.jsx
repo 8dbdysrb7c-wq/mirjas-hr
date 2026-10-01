@@ -682,6 +682,8 @@ const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
           department: emp.department || 'غير محدد',
           type: 'إجازة سنوية',
           date: punch.date,
+          startDate: punch.date,
+          endDate: punch.date,
           status: 'موافق',
           notes: `تسوية بصمة ناقصة: حُسب كإجازة سنوية لاكتشاف غياب البصمة`,
           createdAt: new Date().toISOString()
@@ -700,6 +702,8 @@ const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
           department: emp.department || 'غير محدد',
           type: 'إجازة مرضية',
           date: punch.date,
+          startDate: punch.date,
+          endDate: punch.date,
           status: 'موافق',
           notes: `تسوية بصمة ناقصة: حُسب كإجازة مرضية لاكتشاف غياب البصمة`,
           createdAt: new Date().toISOString()
@@ -716,6 +720,8 @@ const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
           department: emp.department || 'غير محدد',
           type: 'إجازة غير مدفوعة',
           date: punch.date,
+          startDate: punch.date,
+          endDate: punch.date,
           status: 'موافق',
           notes: `تسوية بصمة ناقصة: حُسب كإجازة غير مدفوعة لاكتشاف غياب البصمة`,
           createdAt: new Date().toISOString()

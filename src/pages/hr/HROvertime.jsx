@@ -758,12 +758,21 @@ const HROvertime = ({ user, refreshCounts }) => {
     if (searchTerm && String(l.employeeId) !== String(searchTerm)) return false;
     if (l.type !== 'بدل عمل إضافي' && l.type !== 'عمل إضافي') return false;
     
-    const reqDate = new Date(l.createdAt).toISOString().split('T')[0];
-    const reqMonth = reqDate.slice(0, 7);
+    const targetDate = l.date || l.startDate || (l.createdAt ? new Date(l.createdAt).toISOString().split('T')[0] : '');
+    const createdDate = l.createdAt ? new Date(l.createdAt).toISOString().split('T')[0] : '';
     
-    if (dateMode === 'day' && reqDate !== selectedDate) return false;
-    if (dateMode === 'month' && reqMonth !== selectedMonth) return false;
-    if (dateMode === 'range' && (reqDate < startDate || reqDate > endDate)) return false;
+    const targetMonth = targetDate ? targetDate.slice(0, 7) : '';
+    const createdMonth = createdDate ? createdDate.slice(0, 7) : '';
+
+    if (dateMode === 'day') {
+      if (targetDate !== selectedDate && createdDate !== selectedDate) return false;
+    } else if (dateMode === 'month') {
+      if (targetMonth !== selectedMonth && createdMonth !== selectedMonth) return false;
+    } else if (dateMode === 'range') {
+      const inTarget = targetDate >= startDate && targetDate <= endDate;
+      const inCreated = createdDate >= startDate && createdDate <= endDate;
+      if (!inTarget && !inCreated) return false;
+    }
     return true;
   });
 

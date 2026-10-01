@@ -1200,6 +1200,15 @@ export const getHRLeavesByDateRange = async (dateFrom, dateTo) => {
     const snap3 = await getDocs(query(collection(db, 'hr_leaves'), where('endDate', '>=', dateFrom)));
     snap3.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
 
+    try {
+      const [snapPending, snapCreated] = await Promise.all([
+        getDocs(query(collection(db, 'hr_leaves'), where('status', 'in', ['معلق', 'قيد المراجعة']))),
+        getDocs(query(collection(db, 'hr_leaves'), where('createdAt', '>=', dateFrom), where('createdAt', '<=', `${dateTo}T23:59:59.999Z`)))
+      ]);
+      snapPending.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+      snapCreated.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
+    } catch (_) {}
+
     return Array.from(map.values()).sort((a, b) => new Date(b.date || b.startDate || b.createdAt || 0) - new Date(a.date || a.startDate || a.createdAt || 0));
   } catch (error) {
     console.error("Error in getHRLeavesByDateRange:", error);
