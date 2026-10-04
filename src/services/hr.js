@@ -1,5 +1,6 @@
 import { db } from '../firebase';
 import { 
+  onSnapshot,
   collection, 
   getDocs, 
   doc, 
@@ -453,6 +454,13 @@ export const syncToHRAttendance = async (userId, userName, date, timeIn, timeOut
   } catch (err) {
     console.error("Error syncing attendance:", err);
   }
+};
+
+export const subscribeToHRAttendanceForDate = (date, callback, onError) => {
+  const attendanceQuery = query(collection(db, 'hr_attendance'), where('date', '==', date));
+  return onSnapshot(attendanceQuery, snapshot => {
+    callback(snapshot.docs.map(record => ({ ...record.data(), id: record.id })));
+  }, onError);
 };
 
 export const getHRAttendance = async (date = null) => {

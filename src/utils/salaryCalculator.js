@@ -525,7 +525,10 @@ export const calculateSalaries = ({
       }
     });
     
-    const totalDeductions = manualDeductions + lateDeduction + unpaidLeaveDeduction + unexcusedAbsenceDeduction + socialSecurityEmployeeDeduction + advanceDeduction;
+    const healthInsuranceAmount = hasServiceInCycle ? Math.max(0, Number(emp.healthInsuranceAmount) || 0) : 0;
+    const healthInsuranceDeduction = emp.healthInsurancePayer === 'company' ? 0 : healthInsuranceAmount;
+    const healthInsuranceCompanyContribution = emp.healthInsurancePayer === 'company' ? healthInsuranceAmount : 0;
+    const totalDeductions = manualDeductions + lateDeduction + unpaidLeaveDeduction + unexcusedAbsenceDeduction + socialSecurityEmployeeDeduction + advanceDeduction + healthInsuranceDeduction;
 
     const transportAllowanceFull = (Number(emp.transportationAllowance) || 0) * (serviceCalendarDays / daysInMonth);
     const transportDailyRate = transportAllowanceFull / daysInMonth;
@@ -562,6 +565,9 @@ export const calculateSalaries = ({
       totalBonusAmount: totalBonusAmount || 0,
       bonusesList,
       socialSecurityEmployeeDeduction: socialSecurityEmployeeDeduction || 0,
+      healthInsuranceAmount,
+      healthInsuranceDeduction,
+      healthInsuranceCompanyContribution,
       socialSecurityCompanyContribution: socialSecurityCompanyContribution || 0,
       totalDeductions: totalDeductions || 0,
       netSalary: netSalary || 0,

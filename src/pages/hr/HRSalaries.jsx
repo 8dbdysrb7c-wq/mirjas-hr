@@ -721,6 +721,7 @@ const HRSalaries = ({ user }) => {
                 <div className="flex items-center justify-center gap-1">إجمالي المستحق {renderSortIcon('totalEntitlements')}</div></th>
               <th className="text-rose-500 cursor-pointer hover:bg-gray-100 transition-colors text-center" title="إجمالي الخصومات اليدوية والآلية" onClick={() =>handleSort('totalDeductions')}>
                 <div className="flex items-center justify-center gap-1">إجمالي الخصم {renderSortIcon('totalDeductions')}</div></th>
+              <th className="text-center cursor-pointer" onClick={() => handleSort('healthInsuranceDeduction')}>التأمين الصحي {renderSortIcon('healthInsuranceDeduction')}</th>
               <th className="text-blue-500 cursor-pointer hover:bg-gray-100 transition-colors text-center" title="اقتطاع الضمان الاجتماعي" onClick={() =>handleSort('socialSecurityEmployeeDeduction')}>
                 <div className="flex items-center justify-center gap-1">ضمان موظف {renderSortIcon('socialSecurityEmployeeDeduction')}</div></th>
               <th className="font-bold cursor-pointer hover:bg-gray-100 transition-colors text-center" onClick={() =>handleSort('netSalary')}>
@@ -742,6 +743,7 @@ const HRSalaries = ({ user }) => {
                 <td className="text-rose-500 font-medium text-center">{formatVal(emp.advanceDeduction)}</td>
                 <td className="text-emerald-600 font-bold text-center">{formatVal(emp.totalEntitlements)}</td>
                 <td className="py-3 px-2 font-bold text-rose-600 text-center">{formatVal(emp.totalDeductions)}</td>
+                <td className="py-3 px-2 font-medium text-center">{formatVal(emp.healthInsuranceDeduction || 0)}</td>
                 <td className="py-3 px-2 font-medium text-blue-500 text-center">{formatVal(emp.socialSecurityEmployeeDeduction)}</td>
                 <td className="font-bold text-lg bg-slate-50 text-center">{formatVal(emp.netSalary, false)} د.أ</td>
               </tr>

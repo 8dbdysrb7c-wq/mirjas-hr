@@ -389,6 +389,14 @@ const AdminEmployees = ({ user }) => {
                 <label class="whitespace-nowrap">بدل مواصلات</label>
                 <input id="swal-transportation-allowance" type="number" class="premium-input" placeholder="بدل مواصلات" value="${initialData.transportationAllowance}">
               </div>
+              <div class="premium-form-group flex flex-col justify-end">
+                <label>التأمين الصحي الشهري (د.أ)</label>
+                <input id="swal-health-insurance" type="number" min="0" step="0.01" class="premium-input" value="${isEdit ? emp?.healthInsuranceAmount || 0 : 0}">
+                <select id="swal-health-insurance-payer" class="premium-input">
+                  <option value="employee" ${emp?.healthInsurancePayer !== 'company' ? 'selected' : ''}>يخصم من الموظف</option>
+                  <option value="company" ${emp?.healthInsurancePayer === 'company' ? 'selected' : ''}>تتحمله الشركة</option>
+                </select>
+              </div>
 
               <div class="premium-form-group flex flex-col justify-end">
                 <label class="whitespace-nowrap">الختمات الناقصة <span class="text-muted text-xs font-normal">(شهرياً)</span></label>
@@ -622,6 +630,12 @@ const AdminEmployees = ({ user }) => {
         const annualRaiseDate = document.getElementById('swal-annual-raise')?.value || '';
         const basicSalary = document.getElementById('swal-basic-salary').value;
         const transportationAllowance = document.getElementById('swal-transportation-allowance')?.value || '';
+        const healthInsuranceAmount = Number(document.getElementById('swal-health-insurance')?.value || 0);
+        const healthInsurancePayer = document.getElementById('swal-health-insurance-payer')?.value || 'employee';
+        if (!Number.isFinite(healthInsuranceAmount) || healthInsuranceAmount < 0) {
+          Swal.showValidationMessage('قيمة التأمين الصحي يجب أن تكون صفرًا أو أكبر');
+          return false;
+        }
         const vBalanceRaw = document.getElementById('swal-vacation-balance').value;
         const sBalanceRaw = document.getElementById('swal-sick-balance')?.value;
         const missingPunchesRaw = document.getElementById('swal-missing-punches')?.value;
@@ -729,7 +743,7 @@ const AdminEmployees = ({ user }) => {
         }
         return { 
           id, name, jobTitle, department, directManager, phone, dateOfBirth, joinDate, annualRaiseDate, basicSalary, transportationAllowance, employmentStatus, employmentType, contractEndDate, terminationDate, vacationBalance, sickLeaveBalance, allowedMissingPunches, bonusMissingPunches, allowedLeaveTypes, hrNotes, level, password, 
-          workShiftName, shiftStart, shiftEnd, workLocationId, hasSocialSecurity, socialSecuritySalary, isHazardousProfession,
+          workShiftName, shiftStart, shiftEnd, workLocationId, hasSocialSecurity, socialSecuritySalary, isHazardousProfession, healthInsuranceAmount, healthInsurancePayer,
           allowAdvances, useCustomAdvancePeriods, customAdvancePeriods,
           hasOverviewAccess, hasLiveAccess, hasEmployeesAccess, hasSalesAccess, 
           hasProductionAccess, hasProductionTasksAccess, hasPreparationAccess, hasPreparationTasksAccess, hasDeliveryAccess, hasReportsAccess, 

@@ -6,6 +6,7 @@ import 'flatpickr/dist/themes/airbnb.css';
 import { FileText, Printer, Calendar, ChevronDown, ChevronUp, CheckCircle, Search, User, Briefcase, Filter, ArrowUpDown, ArrowUp, ArrowDown, DollarSign, Fingerprint, Clock, AlertCircle, ArrowLeft, Package, Users, FileSpreadsheet, FileDown, Settings, Plus, X } from 'lucide-react';
 import { getEmployees, getHRViolationsByDateRange, getHRAttendanceByDateRange, getDepartments, getGlobalSettings, getHRLeavesByDateRange, getHRAdvances, getMissingPunchesByDateRange, getHRBonuses, getHRSalaryArchive, getHRAssets, getStock } from '../../store';
 import { calculateSalaries as calculateSalariesLogic } from '../../utils/salaryCalculator';
+import { isActiveEmployee } from '../../utils/employeeStatus';
 import html2pdf from 'html2pdf.js';
 import HRDateFilter from '../../components/ui/HRDateFilter';
 import Swal from 'sweetalert2';
@@ -210,6 +211,7 @@ const HRSalaryReports = ({ user, isNested }) => {
   const [selectedDepartment, setSelectedDepartment] = useLocalStorageState('hr_selectedDepartment', 'all');
 
   // Employee Report State
+  const [employeeReportStatus, setEmployeeReportStatus] = useLocalStorageState('hr_employeeReportStatus', 'active');
   const [employeeReportFields, setEmployeeReportFields] = useLocalStorageState('hr_employeeReportFields', {
     id: true,
     name: true,
@@ -218,6 +220,8 @@ const HRSalaryReports = ({ user, isNested }) => {
     joinDate: true,
     annualRaiseDate: true,
     basicSalary: true,
+    transportationAllowance: true,
+    healthInsuranceAmount: true,
     phone: true,
     directManager: true,
     annualLeaveBalance: true,
@@ -226,6 +230,17 @@ const HRSalaryReports = ({ user, isNested }) => {
     shiftPeriod: true,
     status: true
   });
+
+  useEffect(() => {
+    if (employeeReportFields.transportationAllowance === undefined || employeeReportFields.healthInsuranceAmount === undefined) {
+      setEmployeeReportFields(previous => ({ ...previous, transportationAllowance: previous.transportationAllowance ?? true, healthInsuranceAmount: previous.healthInsuranceAmount ?? true }));
+    }
+  }, [employeeReportFields.transportationAllowance, employeeReportFields.healthInsuranceAmount]);
+
+  const getEmployeeSocialSecurityValue = employee => employee.hasSocialSecurity
+    ? (Number(employee.socialSecuritySalary) || Number(employee.basicSalary) || 0)
+      * (Number(settings?.hrSettings?.socialSecurityEmployeePercentage ?? 7.5) / 100)
+    : 0;
 
   const arabicMonths = [
     'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
@@ -1435,6 +1450,12 @@ const HRSalaryReports = ({ user, isNested }) => {
                     ))}
                   </div>
                 )}
+                {(selectedEmployeeData.healthInsuranceAmount || 0) > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
+                    <span>التأمين الصحي {selectedEmployeeData.healthInsuranceCompanyContribution > 0 ? '(تتحمله الشركة)' : '(اقتطاع الموظف)'}</span>
+                    <span>{formatVal(selectedEmployeeData.healthInsuranceAmount, false)} د.أ</span>
+                  </div>
+                )}
                 {selectedEmployeeData.socialSecurityEmployeeDeduction > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                     <span style={{ color: '#475569', fontSize: '0.875rem' }}>اقتطاع الضمان الاجتماعي</span>
@@ -1534,6 +1555,7 @@ const HRSalaryReports = ({ user, isNested }) => {
                   <th style={{ padding: '12px', color: '#475569', width: '90px', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('bonuses')}>بدلات {getSortIcon('bonuses')}</th>
                   <th style={{ padding: '12px', color: '#475569', width: '100px', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('overtime')}>إضافي {getSortIcon('overtime')}</th>
                   <th style={{ padding: '12px', color: '#475569', width: '100px', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('deductions')}>خصومات {getSortIcon('deductions')}</th>
+                  <th style={{ padding: '12px', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('healthInsuranceDeduction')}>التأمين الصحي {getSortIcon('healthInsuranceDeduction')}</th>
                   <th style={{ padding: '12px', color: '#475569', width: '100px', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('socialEmp')}>ضمان الموظف {getSortIcon('socialEmp')}</th>
                   <th style={{ padding: '12px', color: '#475569', width: '100px', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('socialComp')}>ضمان الشركة {getSortIcon('socialComp')}</th>
                   <th style={{ padding: '12px', color: '#1a8d9b', width: '120px', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('net')}>الصافي {getSortIcon('net')}</th>
@@ -1563,6 +1585,7 @@ const HRSalaryReports = ({ user, isNested }) => {
                       <td style={{ padding: '12px', color: '#10b981', textAlign: 'center' }}>{formatVal(emp.totalBonusAmount)}</td>
                       <td style={{ padding: '12px', color: '#059669', textAlign: 'center' }}>{formatVal(emp.overtimePay)}</td>
                       <td style={{ padding: '12px', color: '#e11d48', textAlign: 'center' }}>{formatVal(emp.totalDeductions)}</td>
+                      <td style={{ padding: '12px', textAlign: 'center' }}>{formatVal(emp.healthInsuranceDeduction || 0)}</td>
                       <td style={{ padding: '12px', color: '#3b82f6', textAlign: 'center' }}>{formatVal(emp.socialSecurityEmployeeDeduction || 0)}</td>
                       <td style={{ padding: '12px', color: '#6366f1', textAlign: 'center' }}>{formatVal(emp.socialSecurityCompanyContribution || 0)}</td>
                       <td style={{ padding: '12px', fontWeight: 'bold', color: '#0f172a', textAlign: 'center' }}>{formatVal(emp.netSalary, false)}</td>
@@ -1591,6 +1614,9 @@ const HRSalaryReports = ({ user, isNested }) => {
                     {formatVal(filteredSheetSalaryData.reduce((sum, e) => sum + e.totalDeductions, 0), false)}
                   </td>
                   <td style={{ padding: '16px 12px', fontWeight: 'bold', color: '#3b82f6', textAlign: 'center' }}>
+                    {formatVal(filteredSheetSalaryData.reduce((sum, e) => sum + (e.healthInsuranceDeduction || 0), 0), false)}
+                  </td>
+                  <td style={{ padding: '16px 12px', fontWeight: 'bold', textAlign: 'center' }}>
                     {formatVal(filteredSheetSalaryData.reduce((sum, e) => sum + (e.socialSecurityEmployeeDeduction || 0), 0), false)}
                   </td>
                   <td style={{ padding: '16px 12px', fontWeight: 'bold', color: '#6366f1', textAlign: 'center' }}>
@@ -2202,13 +2228,22 @@ const HRSalaryReports = ({ user, isNested }) => {
 
         {activeReportTab === 'employees' && (
           <>
+            <div className="no-print mb-4 input-group" style={{ maxWidth: '280px' }}>
+              <label>حالة الموظفين</label>
+              <select className="input-field" value={employeeReportStatus} onChange={event => setEmployeeReportStatus(event.target.value)}>
+                <option value="active">الموظفون الفعّالون</option>
+                <option value="inactive">الموظفون غير الفعّالين</option>
+                <option value="all">جميع الموظفين</option>
+              </select>
+            </div>
             <div className="no-print mb-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
               <h3 className="font-bold text-slate-700 mb-3 text-sm">تخصيص أعمدة التقرير:</h3>
               <div className="premium-checkbox-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '12px' }}>
                 {(() => {
                   const labelMap = {
-                    id: 'الرقم الوظيفي', name: 'اسم الموظف', department: 'القسم الوظيفي', jobTitle: 'المسمى الوظيفي', joinDate: 'تاريخ التعيين', annualRaiseDate: 'موعد الزيادة السنوية', basicSalary: 'الراتب الأساسي', transportation: 'بدل مواصلات', phone: 'رقم الهاتف', directManager: 'المدير المباشر', annualLeaveBalance: 'رصيد الإجازات السنوي', sickLeaveBalance: 'رصيد الإجازات المرضي', socialSecurity: 'الضمان الاجتماعي', shiftPeriod: 'فترة الدوام', status: 'الحالة'
+                    id: 'الرقم الوظيفي', name: 'اسم الموظف', department: 'القسم الوظيفي', jobTitle: 'المسمى الوظيفي', joinDate: 'تاريخ التعيين', annualRaiseDate: 'موعد الزيادة السنوية', basicSalary: 'الراتب الأساسي', transportationAllowance: 'بدل مواصلات', phone: 'رقم الهاتف', directManager: 'المدير المباشر', annualLeaveBalance: 'رصيد الإجازات السنوي', sickLeaveBalance: 'رصيد الإجازات المرضي', socialSecurity: 'قيمة ضمان الموظف', shiftPeriod: 'فترة الدوام', status: 'الحالة'
                   };
+                  labelMap.healthInsuranceAmount = 'التأمين الصحي';
                   return Object.keys(labelMap).map(key => (
                     <label key={key} className="premium-checkbox-item hover:border-primary/40 hover:bg-slate-100/50 hover:shadow-sm" style={{ flexDirection: 'row', justifyContent: 'flex-start', height: '48px', textAlign: 'right', gap: '8px', display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '8px 12px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', transition: 'all 0.2s', color: '#1e293b' }}>
                       <input 
@@ -2232,6 +2267,10 @@ const HRSalaryReports = ({ user, isNested }) => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '1px solid #cbd5e1', paddingBottom: '20px', marginBottom: '32px' }}>
               <div>
                 <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#0f172a', marginBottom: '8px' }}>تقرير كشف الموظفين</h1>
+                <p style={{ color: '#64748b', fontSize: '0.8rem', margin: '0 0 8px' }}>
+                  {employeeReportStatus === 'active' ? 'الموظفون الفعّالون' : employeeReportStatus === 'inactive' ? 'الموظفون غير الفعّالين' : 'جميع الموظفين'}
+                  {' · بدل المواصلات وقيمة ضمان الموظف شهريًا بالدينار الأردني'}
+                </p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#64748b', fontSize: '0.875rem' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Calendar size={16} /> {new Date().toLocaleDateString('en-GB')}</span>
                   <span>|</span>
@@ -2259,20 +2298,22 @@ const HRSalaryReports = ({ user, isNested }) => {
                   {employeeReportFields.joinDate && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('joinDate')}>تاريخ التعيين {getSortIcon('joinDate')}</th>}
                   {employeeReportFields.annualRaiseDate && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('annualRaiseDate')}>موعد الزيادة السنوية {getSortIcon('annualRaiseDate')}</th>}
                   {employeeReportFields.basicSalary && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('basicSalary')}>الراتب الأساسي {getSortIcon('basicSalary')}</th>}
-                  {employeeReportFields.transportationAllowance && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('transportationAllowance')}>بدل مواصلات {getSortIcon('transportationAllowance')}</th>}
+                  {employeeReportFields.transportationAllowance && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('transportationAllowance')}>بدل مواصلات {getSortIcon('transportationAllowance')}</th>}
                   {employeeReportFields.phone && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('phone')}>رقم الهاتف {getSortIcon('phone')}</th>}
                   {employeeReportFields.directManager && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('directManager')}>المدير المباشر {getSortIcon('directManager')}</th>}
                   {employeeReportFields.annualLeaveBalance && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('vacationBalance')}>الرصيد السنوي {getSortIcon('vacationBalance')}</th>}
                   {employeeReportFields.sickLeaveBalance && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('sickLeaveBalance')}>الرصيد المرضي {getSortIcon('sickLeaveBalance')}</th>}
-                  {employeeReportFields.socialSecurity && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('hasSocialSecurity')}>الضمان الاجتماعي {getSortIcon('hasSocialSecurity')}</th>}
+                  {employeeReportFields.healthInsuranceAmount && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('healthInsuranceAmount')}>التأمين الصحي (د.أ) {getSortIcon('healthInsuranceAmount')}</th>}
+                  {employeeReportFields.socialSecurity && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('socialSecurityValue')}>ضمان الموظف (د.أ) {getSortIcon('socialSecurityValue')}</th>}
                   {employeeReportFields.shiftPeriod && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('shiftStart')}>فترة الدوام {getSortIcon('shiftStart')}</th>}
                   {employeeReportFields.status && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('status')}>الحالة {getSortIcon('status')}</th>}
                 </tr>
               </thead>
               <tbody>
                 {(() => {
-                  const data = employees.filter(emp => selectedDepartment === 'all' || emp.department === selectedDepartment);
-                  return sortData(data, { id: e => e.employeeId || e.id }).map((emp, index) => (
+                  const data = employees.filter(emp => (selectedDepartment === 'all' || emp.department === selectedDepartment)
+                    && (employeeReportStatus === 'all' || isActiveEmployee(emp) === (employeeReportStatus === 'active')));
+                  return sortData(data, { id: e => e.employeeId || e.id, socialSecurityValue: getEmployeeSocialSecurityValue }).map((emp, index) => (
                     <tr key={emp.id} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: index % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
                       <td style={{ padding: '12px', color: '#64748b' }}>{index + 1}</td>
                       {employeeReportFields.id && <td style={{ padding: '12px', fontWeight: '500', direction: 'ltr', textAlign: 'right' }}>{emp.employeeId || emp.id}</td>}
@@ -2281,17 +2322,18 @@ const HRSalaryReports = ({ user, isNested }) => {
                       {employeeReportFields.jobTitle && <td style={{ padding: '12px' }}>{emp.jobTitle}</td>}
                       {employeeReportFields.joinDate && <td style={{ padding: '12px' }}>{emp.joinDate}</td>}
                       {employeeReportFields.annualRaiseDate && <td style={{ padding: '12px', textAlign: 'center', color: '#0f766e', fontWeight: 'bold' }}>{emp.annualRaiseDate || getNextAnnualRaiseDate(emp.joinDate)}</td>}
-                      {employeeReportFields.basicSalary && <td style={{ padding: '12px', fontWeight: 'bold', textAlign: 'center' }}>{Number(emp.basicSalary || 0).toLocaleString()}</td>}
-                      {employeeReportFields.transportationAllowance && <td style={{ padding: '12px', fontWeight: 'bold' }}>{Number(emp.transportationAllowance || 0).toLocaleString()}</td>}
+                      {employeeReportFields.basicSalary && <td style={{ padding: '12px', fontWeight: 'bold', textAlign: 'center' }}>{Number(emp.basicSalary || 0).toFixed(2)}</td>}
+                      {employeeReportFields.transportationAllowance && <td style={{ padding: '12px', fontWeight: 'bold', textAlign: 'center' }}>{Number(emp.transportationAllowance || 0).toFixed(2)}</td>}
                       {employeeReportFields.phone && <td style={{ padding: '12px', direction: 'ltr', textAlign: 'right' }}>{emp.phone}</td>}
                       {employeeReportFields.directManager && <td style={{ padding: '12px' }}>{emp.directManager || '-'}</td>}
                       {employeeReportFields.annualLeaveBalance && <td style={{ padding: '12px', fontWeight: 'bold', textAlign: 'center' }}>{emp.vacationBalance ?? 14}</td>}
                       {employeeReportFields.sickLeaveBalance && <td style={{ padding: '12px', fontWeight: 'bold', textAlign: 'center' }}>{emp.sickLeaveBalance ?? 14}</td>}
-                      {employeeReportFields.socialSecurity && <td style={{ padding: '12px', textAlign: 'center' }}>{emp.hasSocialSecurity ? 'نعم' : 'لا'}</td>}
+                      {employeeReportFields.healthInsuranceAmount && <td style={{ padding: '12px', textAlign: 'center' }}>{Number(emp.healthInsuranceAmount || 0).toFixed(2)}</td>}
+                      {employeeReportFields.socialSecurity && <td style={{ padding: '12px', textAlign: 'center' }}>{getEmployeeSocialSecurityValue(emp).toFixed(2)}</td>}
                       {employeeReportFields.shiftPeriod && <td style={{ padding: '12px', direction: 'ltr', textAlign: 'center' }}>{emp.shiftStart && emp.shiftEnd ? `${emp.shiftStart} - ${emp.shiftEnd}` : '-'}</td>}
                       {employeeReportFields.status && <td style={{ padding: '12px' }}>
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${emp.status === 'نشط' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          {emp.status || 'نشط'}
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${isActiveEmployee(emp) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {isActiveEmployee(emp) ? 'فعّال' : (emp.employmentStatus || emp.status || 'غير فعّال')}
                         </span>
                       </td>}
                     </tr>

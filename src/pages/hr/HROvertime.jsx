@@ -6,11 +6,12 @@ import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
-import { getEmployees, getHRLeaves, getHRLeavesByDateRange, saveHRLeave, deleteHRLeave, getGlobalSettings, getHRAttendance } from '../../store';
+import { getEmployees, getHRLeaves, getHRLeavesByDateRange, saveHRLeave, deleteHRLeave, getGlobalSettings, getHRAttendance, subscribeToHRAttendanceForDate } from '../../store';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
 import HRDateFilter from '../../components/ui/HRDateFilter';
 import { hasPermission } from '../../utils/permissions';
+import { getOfficialAbsenceMinutes, getTimedLeaveMinutes, timeToMinutes } from '../../utils/attendancePolicy';
 
 const getLocalDateStr = (d) => {
   const offset = d.getTimezoneOffset();
@@ -23,6 +24,7 @@ const HROvertime = ({ user, refreshCounts }) => {
   const canDelete = hasPermission(user, 'hr_overtime', 'delete');
 
   const [leaves, setLeaves] = useState([]);
+  const [attendanceByDate, setAttendanceByDate] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [employees, setEmployees] = useState([]);
   const [hrSettings, setHrSettings] = useState(null);
@@ -110,6 +112,7 @@ const HROvertime = ({ user, refreshCounts }) => {
         }
       } catch(e) {}
       
+      reqMins = getTimedLeaveMinutes(leave);
       const [ssh, ssm] = shiftStart.split(':').map(Number);
       const [seh, sem] = shiftEnd.split(':').map(Number);
       const shiftMins = (seh * 60 + sem) - (ssh * 60 + ssm);
@@ -144,7 +147,9 @@ const HROvertime = ({ user, refreshCounts }) => {
            earlyMins = shiftEndMins - actualEndMins;
         }
         
-        defMins = lateMins + earlyMins;
+        defMins = getOfficialAbsenceMinutes({ timeIn: attendanceData.timeIn, timeOut: attendanceData.timeOut, shiftStart, shiftEnd });
+        lateMins = Math.min(defMins, Math.max(0, timeToMinutes(attendanceData.timeIn) - timeToMinutes(shiftStart)));
+        earlyMins = defMins - lateMins;
       } else {
         const lDate = new Date(leave.date);
         if (lDate.getDay() !== 5) { // Assuming Friday is weekend
@@ -153,6 +158,9 @@ const HROvertime = ({ user, refreshCounts }) => {
       }
     } catch (err) {
       console.error(err);
+      setSmartModal(previous => ({ ...previous, show: false, loading: false }));
+      Swal.fire('تعذر تحميل الحضور', 'لم يتم احتساب الإضافي. أعد المحاولة بعد تحميل الختمات المعتمدة.', 'error');
+      return;
     }
     
     setSmartModal({
@@ -397,7 +405,7 @@ const HROvertime = ({ user, refreshCounts }) => {
       }
     }
     
-    let mins = Number(leave?.rateDetails?.extraMins);
+    let mins = getPayableOvertimeMinutes(leave);
     if (!Number.isFinite(mins) && leave.startTime && leave.endTime) {
       const [sh, sm] = leave.startTime.split(':').map(Number);
       const [eh, em] = leave.endTime.split(':').map(Number);
@@ -415,7 +423,7 @@ const HROvertime = ({ user, refreshCounts }) => {
   };
 
   const getOvertimeDuration = (leave) => {
-    let mins = Number(leave?.rateDetails?.extraMins);
+    let mins = getPayableOvertimeMinutes(leave);
     if (!Number.isFinite(mins) && leave.startTime && leave.endTime) {
       const [sh, sm] = leave.startTime.split(':').map(Number);
       const [eh, em] = leave.endTime.split(':').map(Number);
@@ -482,6 +490,79 @@ const HROvertime = ({ user, refreshCounts }) => {
 
   useEffect(() => { fetchData(); }, [dateMode, selectedMonth, selectedDate, startDate, endDate]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const dates = [...new Set(leaves.filter(leave => ['بدل عمل إضافي', 'عمل إضافي'].includes(leave.type))
+      .map(leave => leave.date || leave.startDate).filter(Boolean))];
+    setAttendanceByDate({});
+    const unsubscribe = dates.map(date => subscribeToHRAttendanceForDate(date, records => {
+      if (!cancelled) setAttendanceByDate(previous => ({ ...previous, [date]: { records } }));
+    }, error => {
+      console.error('Overtime attendance subscription failed:', error);
+      if (!cancelled) setAttendanceByDate(previous => ({ ...previous, [date]: { error: true } }));
+    }));
+    return () => { cancelled = true; unsubscribe.forEach(stop => stop()); };
+  }, [leaves]);
+
+  const renderRequestAttendance = (leave, emp) => {
+    const date = leave.date || leave.startDate;
+    if (!date) return <span className="text-muted text-xs">تاريخ الطلب غير محدد</span>;
+    const attendance = attendanceByDate[date];
+    if (!attendance) return <span className="text-muted text-xs">جاري تحميل الحضور...</span>;
+    if (attendance.error) return <span className="text-rose-600 text-xs">تعذر تحميل سجل الحضور</span>;
+    const ids = [leave.employeeId, emp?.id, emp?.employeeId].filter(Boolean).map(id => String(id).trim());
+    const records = attendance.records.filter(record => {
+      if (record.date !== date) return false;
+      const recordIds = [record.employeeId, record.userId].filter(Boolean).map(id => String(id).trim());
+      if (recordIds.length) return recordIds.some(id => ids.includes(id));
+      const name = String(record.employeeName || '').trim();
+      return Boolean(name && [leave.employeeName, emp?.name].some(value => String(value || '').trim() === name));
+    });
+    if (!records.length) return <span className="text-muted text-xs">لا يوجد سجل حضور لهذا اليوم</span>;
+    const displayTime = value => {
+      const minutes = timeToMinutes(value);
+      if (minutes == null) return 'غير مسجل';
+      const hours = Math.floor(minutes / 60);
+      return `${hours % 12 || 12}:${String(minutes % 60).padStart(2, '0')} ${hours >= 12 ? 'م' : 'ص'}`;
+    };
+    return <div className="flex flex-col gap-2 text-xs">
+      {records.map((record, index) => <div key={record.id || index}>
+        <div>الدخول: <span dir="ltr" className="font-mono font-semibold">{displayTime(record.timeIn)}</span></div>
+        <div>الخروج: <span dir="ltr" className="font-mono font-semibold">{displayTime(record.timeOut)}</span></div>
+        {record.status && <div className="text-muted">{record.status}</div>}
+        {record.isMissingPunch && <div className="text-emerald-700">ختمة ناقصة معتمدة</div>}
+        {record.notes && <div className="text-muted whitespace-normal max-w-[220px]">{record.notes}</div>}
+      </div>)}
+    </div>;
+  };
+
+  const getPayableOvertimeMinutes = leave => {
+    if (leave.status !== 'معلق') {
+      const saved = Number(leave.rateDetails?.extraMins);
+      if (Number.isFinite(saved)) return saved;
+    }
+    const requested = getTimedLeaveMinutes(leave);
+    const emp = employees.find(employee => [employee.id, employee.employeeId].some(id =>
+      id && String(id).trim() === String(leave.employeeId || '').trim()));
+    const ids = [leave.employeeId, emp?.id, emp?.employeeId].filter(Boolean).map(String);
+    const records = attendanceByDate[leave.date || leave.startDate]?.records;
+    if (!records) return requested;
+    const attendance = records.find(record => !record.isLeave && record.status !== 'محذوف'
+      && [record.employeeId, record.userId].some(id => id && ids.includes(String(id))));
+    if (!attendance || timeToMinutes(attendance.timeIn) == null || timeToMinutes(attendance.timeOut) == null) return requested;
+    const shift = globalShiftForEmployee(emp);
+    const dayName = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'][new Date(leave.date || leave.startDate).getDay()];
+    const deficit = (hrSettings?.weekendDays || ['الجمعة']).includes(dayName) ? 0
+      : getOfficialAbsenceMinutes({ timeIn: attendance.timeIn, timeOut: attendance.timeOut, ...shift });
+    const payable = Math.max(0, requested - deficit);
+    return hrSettings?.maxDailyOvertimeHours ? Math.min(payable, hrSettings.maxDailyOvertimeHours * 60) : payable;
+  };
+
+  const globalShiftForEmployee = emp => {
+    const shift = hrSettings?.workShifts?.find(item => item.name === emp?.workShiftName);
+    return { shiftStart: shift?.startTime || emp?.shiftStart || '08:00', shiftEnd: shift?.endTime || emp?.shiftEnd || '16:00' };
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     if (!canAdd) {
@@ -507,8 +588,13 @@ const HROvertime = ({ user, refreshCounts }) => {
     const [eHours, eMins] = formData.endTime.split(':').map(Number);
     const diffMins = (eHours * 60 + eMins) - (sHours * 60 + sMins);
     
-    if (diffMins > 360) {
-      Swal.fire('خطأ', 'يوجد مشكلة بالوقت المدخل', 'error');
+    if (!Number.isFinite(diffMins) || diffMins <= 0) {
+      Swal.fire('خطأ', 'يرجى إدخال وقت بداية ونهاية صحيحين للعمل الإضافي.', 'error');
+      return;
+    }
+
+    if (diffMins > 360 && !isAdmin(user)) {
+      Swal.fire('خطأ', 'الحد الأقصى لطلب العمل الإضافي 6 ساعات. يمكن للمدير إدخال مدة أطول.', 'error');
       return;
     }
     
@@ -552,7 +638,7 @@ const HROvertime = ({ user, refreshCounts }) => {
     const shiftStartMins = shiftStartH * 60 + shiftStartM;
     const shiftEndMins = shiftEndH * 60 + shiftEndM;
 
-    if (overtimeStartMins < shiftEndMins && overtimeEndMins > shiftStartMins) {
+    if (!isAdmin(user) && overtimeStartMins < shiftEndMins && overtimeEndMins > shiftStartMins) {
       Swal.fire('خطأ', 'لا يمكن تقديم عمل إضافي خلال أوقات الدوام الرسمي الخاصة بالموظف (' + shiftStart + ' إلى ' + shiftEnd + ')', 'error');
       return;
     }
@@ -949,6 +1035,7 @@ const HROvertime = ({ user, refreshCounts }) => {
                 <div className="flex items-center gap-2">الموظف {renderSortIcon('employeeName')}</div>
               </th>
               <th className="text-center">التاريخ والوقت</th>
+              <th className="text-center">الحضور والانصراف الفعلي</th>
               <th className="text-center">السبب / الملاحظات</th>
               <th className="text-center">الإضافي المستحق</th>
               <th className="text-center">قيمة العمل الإضافي</th>
@@ -960,7 +1047,10 @@ const HROvertime = ({ user, refreshCounts }) => {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {overtimeRequests.map((leave) => {
-              const emp = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim() || String(e.name || '').trim() === String(leave.employeeName || '').trim());
+              const employeeId = String(leave.employeeId || '').trim();
+              const employeeName = String(leave.employeeName || '').trim();
+              const emp = employees.find(e => employeeId && [e.id, e.employeeId].some(id => String(id || '').trim() === employeeId))
+                || employees.find(e => employeeName && String(e.name || '').trim() === employeeName);
               const empCode = emp ? (emp.employeeId || emp.id) : leave.employeeId;
               return (
               <tr key={leave.id} className="hover:bg-gray-50/50 transition-colors">
@@ -984,6 +1074,7 @@ const HROvertime = ({ user, refreshCounts }) => {
                     </div>
                   )}
                 </td>
+                <td className="text-center">{renderRequestAttendance(leave, emp)}</td>
                 <td className="max-w-[200px] whitespace-normal text-sm text-center">{getOvertimeReason(leave)}</td>
                 <td className="text-center font-semibold text-slate-600 font-mono">
                   {getOvertimeDuration(leave)}
@@ -1042,7 +1133,7 @@ const HROvertime = ({ user, refreshCounts }) => {
               );
             })}
             {overtimeRequests.length === 0 && (
-              <tr><td colSpan="7" className="py-10 text-center text-muted">لا توجد طلبات عمل إضافي حالياً</td></tr>
+              <tr><td colSpan="10" className="py-10 text-center text-muted">لا توجد طلبات عمل إضافي حالياً</td></tr>
             )}
           </tbody>
         </table>

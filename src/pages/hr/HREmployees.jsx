@@ -114,6 +114,8 @@ const HREmployees = ({ user, onViewProfile }) => {
         joinDate: emp.joinDate || '',
         dateOfBirth: emp.dateOfBirth || '',
         basicSalary: emp.basicSalary || 0,
+        healthInsuranceAmount: emp.healthInsuranceAmount || 0,
+        healthInsurancePayer: emp.healthInsurancePayer || 'employee',
         phone: emp.phone || '',
         employmentStatus: emp.employmentStatus || 'فعال',
         directManager: emp.directManager || emp.directManagerId || '',
@@ -433,6 +435,14 @@ const HREmployees = ({ user, onViewProfile }) => {
                   }} className="input-field" />
                 </div>
 
+                <div className="input-group">
+                  <label>التأمين الصحي الشهري (د.أ)</label>
+                  <input type="number" min="0" step="0.01" value={formData.healthInsuranceAmount || 0} onChange={event => setFormData({ ...formData, healthInsuranceAmount: Number(event.target.value) })} className="input-field" />
+                  <select value={formData.healthInsurancePayer || 'employee'} onChange={event => setFormData({ ...formData, healthInsurancePayer: event.target.value })} className="input-field">
+                    <option value="employee">يخصم من الموظف</option>
+                    <option value="company">تتحمله الشركة</option>
+                  </select>
+                </div>
                 <div className="input-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                   <label className="font-bold flex items-center gap-2">
                     <input 
