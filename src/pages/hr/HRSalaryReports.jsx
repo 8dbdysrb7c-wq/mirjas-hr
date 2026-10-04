@@ -2287,26 +2287,26 @@ const HRSalaryReports = ({ user, isNested }) => {
               </div>
             </div>
 
-            <table style={{ width: '100%', fontSize: '0.875rem', textAlign: 'right', borderCollapse: 'collapse' }}>
+            <table style={{ width: '100%', fontSize: '0.875rem', textAlign: 'center', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ backgroundColor: '#f8fafc', color: '#475569', fontWeight: 'bold' }}>
-                  <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1' }}>#</th>
-                  {employeeReportFields.id && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('id')}>الرقم الوظيفي {getSortIcon('id')}</th>}
-                  {employeeReportFields.name && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('name')}>اسم الموظف {getSortIcon('name')}</th>}
-                  {employeeReportFields.department && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('department')}>القسم {getSortIcon('department')}</th>}
-                  {employeeReportFields.jobTitle && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('jobTitle')}>المسمى الوظيفي {getSortIcon('jobTitle')}</th>}
-                  {employeeReportFields.joinDate && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('joinDate')}>تاريخ التعيين {getSortIcon('joinDate')}</th>}
+                  <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center' }}>#</th>
+                  {employeeReportFields.id && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('id')}>الرقم الوظيفي {getSortIcon('id')}</th>}
+                  {employeeReportFields.name && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('name')}>اسم الموظف {getSortIcon('name')}</th>}
+                  {employeeReportFields.department && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('department')}>القسم {getSortIcon('department')}</th>}
+                  {employeeReportFields.jobTitle && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('jobTitle')}>المسمى الوظيفي {getSortIcon('jobTitle')}</th>}
+                  {employeeReportFields.joinDate && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('joinDate')}>تاريخ التعيين {getSortIcon('joinDate')}</th>}
                   {employeeReportFields.annualRaiseDate && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('annualRaiseDate')}>موعد الزيادة السنوية {getSortIcon('annualRaiseDate')}</th>}
                   {employeeReportFields.basicSalary && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('basicSalary')}>الراتب الأساسي {getSortIcon('basicSalary')}</th>}
                   {employeeReportFields.transportationAllowance && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('transportationAllowance')}>بدل مواصلات {getSortIcon('transportationAllowance')}</th>}
-                  {employeeReportFields.phone && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('phone')}>رقم الهاتف {getSortIcon('phone')}</th>}
-                  {employeeReportFields.directManager && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('directManager')}>المدير المباشر {getSortIcon('directManager')}</th>}
+                  {employeeReportFields.phone && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('phone')}>رقم الهاتف {getSortIcon('phone')}</th>}
+                  {employeeReportFields.directManager && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('directManager')}>المدير المباشر {getSortIcon('directManager')}</th>}
                   {employeeReportFields.annualLeaveBalance && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('vacationBalance')}>الرصيد السنوي {getSortIcon('vacationBalance')}</th>}
                   {employeeReportFields.sickLeaveBalance && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('sickLeaveBalance')}>الرصيد المرضي {getSortIcon('sickLeaveBalance')}</th>}
-                  {employeeReportFields.healthInsuranceAmount && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('healthInsuranceAmount')}>التأمين الصحي (د.أ) {getSortIcon('healthInsuranceAmount')}</th>}
+                  {employeeReportFields.healthInsuranceAmount && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('healthInsuranceAmount')}>التأمين الصحي (د.أ) {getSortIcon('healthInsuranceAmount')}</th>}
                   {employeeReportFields.socialSecurity && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('socialSecurityValue')}>ضمان الموظف (د.أ) {getSortIcon('socialSecurityValue')}</th>}
                   {employeeReportFields.shiftPeriod && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('shiftStart')}>فترة الدوام {getSortIcon('shiftStart')}</th>}
-                  {employeeReportFields.status && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('status')}>الحالة {getSortIcon('status')}</th>}
+                  {employeeReportFields.status && <th style={{ padding: '12px', borderBottom: '2px solid #cbd5e1', textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => handleSort('status')}>الحالة {getSortIcon('status')}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -2315,23 +2315,23 @@ const HRSalaryReports = ({ user, isNested }) => {
                     && (employeeReportStatus === 'all' || isActiveEmployee(emp) === (employeeReportStatus === 'active')));
                   return sortData(data, { id: e => e.employeeId || e.id, socialSecurityValue: getEmployeeSocialSecurityValue }).map((emp, index) => (
                     <tr key={emp.id} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: index % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
-                      <td style={{ padding: '12px', color: '#64748b' }}>{index + 1}</td>
-                      {employeeReportFields.id && <td style={{ padding: '12px', fontWeight: '500', direction: 'ltr', textAlign: 'right' }}>{emp.employeeId || emp.id}</td>}
-                      {employeeReportFields.name && <td style={{ padding: '12px', fontWeight: 'bold', color: '#0f172a' }}>{emp.name}</td>}
-                      {employeeReportFields.department && <td style={{ padding: '12px' }}>{departments[emp.department] || emp.department}</td>}
-                      {employeeReportFields.jobTitle && <td style={{ padding: '12px' }}>{emp.jobTitle}</td>}
-                      {employeeReportFields.joinDate && <td style={{ padding: '12px' }}>{emp.joinDate}</td>}
+                      <td style={{ padding: '12px', color: '#64748b', textAlign: 'center' }}>{index + 1}</td>
+                      {employeeReportFields.id && <td style={{ padding: '12px', fontWeight: '500', direction: 'ltr', textAlign: 'center' }}>{emp.employeeId || emp.id}</td>}
+                      {employeeReportFields.name && <td style={{ padding: '12px', fontWeight: 'bold', color: '#0f172a', textAlign: 'center' }}>{emp.name}</td>}
+                      {employeeReportFields.department && <td style={{ padding: '12px', textAlign: 'center' }}>{departments[emp.department] || emp.department}</td>}
+                      {employeeReportFields.jobTitle && <td style={{ padding: '12px', textAlign: 'center' }}>{emp.jobTitle}</td>}
+                      {employeeReportFields.joinDate && <td style={{ padding: '12px', textAlign: 'center' }}>{emp.joinDate}</td>}
                       {employeeReportFields.annualRaiseDate && <td style={{ padding: '12px', textAlign: 'center', color: '#0f766e', fontWeight: 'bold' }}>{emp.annualRaiseDate || getNextAnnualRaiseDate(emp.joinDate)}</td>}
                       {employeeReportFields.basicSalary && <td style={{ padding: '12px', fontWeight: 'bold', textAlign: 'center' }}>{Number(emp.basicSalary || 0).toFixed(2)}</td>}
                       {employeeReportFields.transportationAllowance && <td style={{ padding: '12px', fontWeight: 'bold', textAlign: 'center' }}>{Number(emp.transportationAllowance || 0).toFixed(2)}</td>}
-                      {employeeReportFields.phone && <td style={{ padding: '12px', direction: 'ltr', textAlign: 'right' }}>{emp.phone}</td>}
-                      {employeeReportFields.directManager && <td style={{ padding: '12px' }}>{emp.directManager || '-'}</td>}
+                      {employeeReportFields.phone && <td style={{ padding: '12px', direction: 'ltr', textAlign: 'center' }}>{emp.phone}</td>}
+                      {employeeReportFields.directManager && <td style={{ padding: '12px', textAlign: 'center' }}>{emp.directManager || '-'}</td>}
                       {employeeReportFields.annualLeaveBalance && <td style={{ padding: '12px', fontWeight: 'bold', textAlign: 'center' }}>{emp.vacationBalance ?? 14}</td>}
                       {employeeReportFields.sickLeaveBalance && <td style={{ padding: '12px', fontWeight: 'bold', textAlign: 'center' }}>{emp.sickLeaveBalance ?? 14}</td>}
                       {employeeReportFields.healthInsuranceAmount && <td style={{ padding: '12px', textAlign: 'center' }}>{Number(emp.healthInsuranceAmount || 0).toFixed(2)}</td>}
                       {employeeReportFields.socialSecurity && <td style={{ padding: '12px', textAlign: 'center' }}>{getEmployeeSocialSecurityValue(emp).toFixed(2)}</td>}
                       {employeeReportFields.shiftPeriod && <td style={{ padding: '12px', direction: 'ltr', textAlign: 'center' }}>{emp.shiftStart && emp.shiftEnd ? `${emp.shiftStart} - ${emp.shiftEnd}` : '-'}</td>}
-                      {employeeReportFields.status && <td style={{ padding: '12px' }}>
+                      {employeeReportFields.status && <td style={{ padding: '12px', textAlign: 'center' }}>
                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${isActiveEmployee(emp) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                           {isActiveEmployee(emp) ? 'فعّال' : (emp.employmentStatus || emp.status || 'غير فعّال')}
                         </span>
