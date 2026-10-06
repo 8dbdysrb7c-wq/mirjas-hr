@@ -521,19 +521,12 @@ const HROvertime = ({ user, refreshCounts }) => {
     if (!records.length) return <span className="text-muted text-xs">لا يوجد سجل حضور لهذا اليوم</span>;
     const formatTimePart = (value) => {
       const minutes = timeToMinutes(value);
-      if (minutes == null) {
-        return <span className="text-slate-400 font-normal">--:--</span>;
-      }
+      if (minutes == null) return '--:--';
       const hours = Math.floor(minutes / 60);
-      const period = hours >= 12 ? 'م' : 'ص';
+      const period = hours >= 12 ? 'PM' : 'AM';
       const formattedHours = hours % 12 || 12;
       const formattedMins = String(minutes % 60).padStart(2, '0');
-      return (
-        <span className="inline-flex items-center gap-0.5">
-          <span>{formattedHours}:{formattedMins}</span>
-          <span className="text-[10px] text-slate-500 font-sans">{period}</span>
-        </span>
-      );
+      return `${formattedHours}:${formattedMins} ${period}`;
     };
 
     return (
@@ -541,12 +534,12 @@ const HROvertime = ({ user, refreshCounts }) => {
         {records.map((record, index) => (
           <div
             key={record.id || index}
-            className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 border border-slate-200/80 rounded font-mono text-xs font-semibold text-slate-700 whitespace-nowrap"
+            className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-50 border border-slate-200/80 rounded font-mono text-xs font-semibold text-slate-700 whitespace-nowrap"
             dir="ltr"
           >
-            {formatTimePart(record.timeIn)}
-            <span className="text-slate-300 font-sans mx-0.5">-</span>
-            {formatTimePart(record.timeOut)}
+            <span>{formatTimePart(record.timeIn)}</span>
+            <span className="text-slate-400 mx-1">-</span>
+            <span>{formatTimePart(record.timeOut)}</span>
           </div>
         ))}
       </div>
