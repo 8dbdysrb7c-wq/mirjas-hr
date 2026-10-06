@@ -20,6 +20,7 @@ import { hasPermission } from '../../../utils/permissions';
 // For now, let's pass it as a prop.
 
 export const HomeTab = ({
+  hasSharedSalarySlip,
   isMobile,
   isFlash,
   fetchAddress,
@@ -495,6 +496,7 @@ export const HomeTab = ({
         />
         {/* SUPERVISOR / EXTRA ACCESS BUTTONS */}
         <DashboardCard isMobile={isMobile} icon={FileText} title="تقرير الدوام" onClick={() => handleTabChange('my-monthly-reports')} />
+        {hasSharedSalarySlip && <DashboardCard isMobile={isMobile} icon={DollarSign} title="قسيمة الراتب" onClick={() => handleTabChange('my-salary-slips')} />}
         {hasPermission(user, 'live') && (
           <DashboardCard isMobile={isMobile} icon={Activity} title="التحكم المباشر" onClick={() => handleTabChange('live')} />
         )}

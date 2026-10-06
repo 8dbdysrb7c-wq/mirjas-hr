@@ -699,7 +699,12 @@ const HROvertime = ({ user, refreshCounts }) => {
     try {
       const reasonLabel = newStatus === 'موافق' ? 'ملاحظات الإدارة' : 'سبب الرفض';
       const updatedNotes = (newStatus === 'موافق' || newStatus === 'مرفوض') && actionReason ? `${leave.notes || ''}\n(${reasonLabel}: ${actionReason})` : leave.notes;
-      await saveHRLeave({ ...leave, status: newStatus, notes: updatedNotes });
+      await saveHRLeave({
+        ...leave,
+        status: newStatus,
+        notes: updatedNotes,
+        ...(newStatus === 'مرفوض' ? { rejectionReason: actionReason } : {})
+      });
 
       if (newStatus === 'موافق' || newStatus === 'مرفوض') {
         try {

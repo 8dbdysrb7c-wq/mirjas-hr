@@ -509,6 +509,7 @@ export const calculateSalaries = ({
       return true;
     }) : [];
 
+    const advanceDeductionDetails = [];
     empAdvancesList.forEach(a => {
       let amountToProcess = 0;
       if (a.isInstallment && a.installments && a.installments.length > 0) {
@@ -520,6 +521,14 @@ export const calculateSalaries = ({
 
       if (a.type === 'سلفة شخصية') {
         advanceDeduction += amountToProcess;
+        if (amountToProcess > 0) advanceDeductionDetails.push({
+          id: a.id,
+          date: a.isInstallment ? selectedMonth : (a.date || a.createdAt?.slice(0, 10)),
+          originalDate: a.date || a.createdAt?.slice(0, 10),
+          month: selectedMonth,
+          label: a.isInstallment ? 'قسط السلفة المقتطع لهذا الشهر' : 'سلفة مقتطعة لهذا الشهر',
+          amount: amountToProcess
+        });
       } else if (a.type === 'سلفة عمل' && a.paymentMethod === 'تصرف على الراتب القادم') {
         advanceAddition += amountToProcess;
       }
@@ -571,7 +580,23 @@ export const calculateSalaries = ({
       socialSecurityCompanyContribution: socialSecurityCompanyContribution || 0,
       totalDeductions: totalDeductions || 0,
       netSalary: netSalary || 0,
-      violationsList: empViolations
+      violationsList: empViolations,
+      salaryDetails: {
+        lateDeduction,
+        unpaidLeaveDeduction,
+        unexcusedAbsenceDeduction,
+        payableLateMinutes,
+        missionMinutes,
+        coveredLateMinutesByDate: Object.fromEntries(coveredLateMinutesByDate),
+        attendance: empAttendance,
+        overtime: overtimeReqs,
+        leaves: empLeaves,
+        advances: advanceDeductionDetails,
+        bonuses: empBonuses,
+        unpaidDates: [...unpaidLeaveDates].sort(),
+        automaticUnpaidDates: [...automaticUnpaidDates].sort(),
+        absenceDates: [...unexcusedAbsenceDates].sort()
+      }
     };
   });
 };

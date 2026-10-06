@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import { getTimedLeaveMinutes, timeToMinutes } from '../../../utils/attendancePolicy';
+import './MonthlyReportsTab.css';
 
 const approved = new Set(['موافق', 'موافق عليه', 'مقبول', 'تمت الموافقة', 'تم التسليم']);
+const rejected = new Set(['مرفوض', 'مرفوضة', 'تم الرفض', 'غير موافق']);
 const overtimeTypes = new Set(['بدل عمل إضافي', 'عمل إضافي']);
 const localDate = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Amman', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const hoursLabel = minutes => Number((minutes / 60).toFixed(2)).toLocaleString('en-US');
@@ -12,6 +14,104 @@ const timeLabel = value => {
   if (minutes == null) return 'غير مسجل';
   const hour = Math.floor(minutes / 60);
   return `${hour % 12 || 12}:${String(minutes % 60).padStart(2, '0')} ${hour >= 12 ? 'م' : 'ص'}`;
+};
+
+const getRejectionReason = (request) => {
+  if (request?.rejectionReason && String(request.rejectionReason).trim()) {
+    return String(request.rejectionReason).trim();
+  }
+  if (request?.rejectReason && String(request.rejectReason).trim()) {
+    return String(request.rejectReason).trim();
+  }
+  const notes = String(request?.notes || '').trim();
+  if (notes) {
+    const match1 = notes.match(/\(سبب الرفض:\s*([^\)]+)\)/i);
+    if (match1 && match1[1]?.trim()) return match1[1].trim();
+
+    const match2 = notes.match(/سبب الرفض[:\s]+([^\n\r]+)/i);
+    if (match2 && match2[1]?.trim()) return match2[1].trim();
+  }
+  return '';
+};
+
+const renderOvertimeStatus = (request) => {
+  const status = String(request?.status || '').trim();
+  if (approved.has(status)) {
+    return (
+      <span
+        style={{
+          display: 'inline-block',
+          color: '#15803d',
+          backgroundColor: '#dcfce7',
+          padding: '2px 8px',
+          borderRadius: '9999px',
+          fontWeight: 700,
+          fontSize: '12px',
+          lineHeight: 1.4
+        }}
+      >
+        نعم
+      </span>
+    );
+  }
+
+  if (rejected.has(status)) {
+    const reason = getRejectionReason(request);
+    return (
+      <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '3px', maxWidth: '100%' }}>
+        <span
+          style={{
+            display: 'inline-block',
+            color: '#b91c1c',
+            backgroundColor: '#fee2e2',
+            padding: '2px 8px',
+            borderRadius: '9999px',
+            fontWeight: 700,
+            fontSize: '12px',
+            lineHeight: 1.4
+          }}
+        >
+          لا
+        </span>
+        {reason ? (
+          <span
+            style={{
+              fontSize: '11px',
+              color: '#991b1b',
+              backgroundColor: '#fef2f2',
+              border: '1px solid #fecaca',
+              padding: '2px 6px',
+              borderRadius: '6px',
+              maxWidth: '180px',
+              wordBreak: 'break-word',
+              lineHeight: 1.3
+            }}
+            title={reason}
+          >
+            السبب: {reason}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
+
+  // Pending approval ('معلق' or awaiting decision)
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        color: '#b45309',
+        backgroundColor: '#fef3c7',
+        padding: '2px 8px',
+        borderRadius: '9999px',
+        fontWeight: 600,
+        fontSize: '11px',
+        lineHeight: 1.4
+      }}
+    >
+      بانتظار الموافقة
+    </span>
+  );
 };
 
 export const MonthlyReportsTab = ({ user }) => {
@@ -61,14 +161,14 @@ export const MonthlyReportsTab = ({ user }) => {
   const covers = (request, date) => request.date ? request.date === date
     : request.startDate && request.startDate <= date && (request.endDate || request.startDate) >= date;
   const days = Array.from({ length: new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate() }, (_, index) => `${month}-${String(index + 1).padStart(2, '0')}`);
-  return <section dir="rtl">
-    <h2 className="section-title">تقرير الدوام — الشهر الحالي</h2>
-    <p className="text-muted mb-4">{user.name} · {month} · الحضور والإجازات والمغادرات والعمل الإضافي</p>
+  return <section dir="rtl" className="employee-attendance-report">
+    <div className="attendance-report-heading"><h2 className="section-title">تقرير الدوام</h2>
+    <span className="attendance-report-month">{new Intl.DateTimeFormat('ar-JO', { month: 'long', year: 'numeric' }).format(new Date(Number(month.slice(0, 4)), Number(month.slice(5)) - 1, 1))}</span></div>
     {error && <div role="alert" className="text-rose-600 mb-4">تعذر تحميل بعض السجلات. البيانات المعروضة قد تكون غير مكتملة.</div>}
     {loading ? <div role="status">جاري تحميل تقارير الشهر...</div> : <div className="table-responsive">
-      <table className="table"><thead><tr>
-        <th style={{ textAlign: 'center' }}>التاريخ</th><th style={{ textAlign: 'center' }}>الدخول والخروج</th>
-        <th style={{ textAlign: 'center' }}>الإجازات والمغادرات المعتمدة</th><th style={{ textAlign: 'center' }}>ساعات العمل الإضافي المقدمة</th><th style={{ textAlign: 'center' }}>الموافقة على العمل الإضافي</th>
+      <table className="table monthly-attendance-table"><thead><tr>
+        <th style={{ textAlign: 'center' }}>التاريخ</th><th style={{ textAlign: 'center' }}>أوقات الدوام</th>
+        <th style={{ textAlign: 'center' }}>العمل الإضافي (ساعة)</th><th style={{ textAlign: 'center' }}>حالة العمل</th>
       </tr></thead><tbody>{days.map(date => {
         const dayRecords = attends.filter(record => record.date === date && !record.isLeave)
           .sort((a, b) => Number(b.source === 'hr_attendance') - Number(a.source === 'hr_attendance') || String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
@@ -78,17 +178,16 @@ export const MonthlyReportsTab = ({ user }) => {
           && String(request.type || '').match(/إجازة|اجازة|مغادرة/));
         const extras = leaves.filter(request => covers(request, date) && overtimeTypes.has(request.type));
         return <tr key={date}>
-          <td dir="ltr" style={{ textAlign: 'center', verticalAlign: 'middle' }}>{date}</td>
-          <td style={{ textAlign: 'center', verticalAlign: 'middle', fontSize: '11px', lineHeight: 1.6, whiteSpace: 'nowrap' }}>
+          <td data-label="التاريخ" style={{ textAlign: 'center', verticalAlign: 'middle' }}><span dir="ltr">{date}</span></td>
+          <td data-label="أوقات الدوام" style={{ textAlign: 'center', verticalAlign: 'middle', fontSize: '11px', lineHeight: 1.6, whiteSpace: 'nowrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
               <span>{entry ? timeLabel(entry.timeIn) : '—'}</span>
               <span style={{ color: '#94a3b8' }}>–</span>
               <span>{exit ? timeLabel(exit.timeOut) : '—'}</span>
             </div>
           </td>
-          <td style={{ minWidth: 180, whiteSpace: 'normal', textAlign: 'center', verticalAlign: 'middle' }}>{dayLeaves.length ? dayLeaves.map(request => <div key={request.id}>{request.type}</div>) : '—'}</td>
-          <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>{extras.length ? extras.map(request => <div key={request.id}>{hoursLabel(getTimedLeaveMinutes(request))}</div>) : '—'}</td>
-          <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>{extras.length ? extras.map(request => <div key={request.id}>{approved.has(request.status) ? 'نعم' : 'لا'}</div>) : '—'}</td>
+          <td data-label="العمل الإضافي (ساعة)" style={{ textAlign: 'center', verticalAlign: 'middle' }}>{extras.length ? extras.map(request => <div key={request.id}>{hoursLabel(getTimedLeaveMinutes(request))}</div>) : '—'}</td>
+          <td data-label="حالة العمل" style={{ textAlign: 'center', verticalAlign: 'middle' }}>{extras.map(request => <div key={request.id} style={{ padding: '2px 0' }}>{renderOvertimeStatus(request)}</div>)}{dayLeaves.map(request => <span className="attendance-leave-badge" key={request.id}>{request.type}</span>)}{!extras.length && !dayLeaves.length && <span className="attendance-empty-badge">—</span>}</td>
         </tr>;
       })}</tbody></table>
     </div>}

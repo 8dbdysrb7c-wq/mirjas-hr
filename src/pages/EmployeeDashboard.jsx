@@ -42,6 +42,8 @@ import { HomeTab } from './employee/tabs/HomeTab';
 import { DailyReportTab } from './employee/tabs/DailyReportTab';
 import { ReportHistoryTab } from './employee/tabs/ReportHistoryTab';
 import { MonthlyReportsTab } from './employee/tabs/MonthlyReportsTab';
+import { MySalarySlipsTab } from './employee/tabs/MySalarySlipsTab';
+import { subscribeMySalarySlips } from '../services/salarySharing';
 import { MissionsTab } from './employee/tabs/MissionsTab';
 import { MissingPunchesTab } from './employee/tabs/MissingPunchesTab';
 import { HRRequestsTab } from './employee/tabs/HRRequestsTab';
@@ -946,6 +948,11 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
   const [missions, setMissions] = useState([]);
   const [globalSettings, setGlobalSettings] = useState({});
   const [myLeaves, setMyLeaves] = useState([]);
+  const [hasSharedSalarySlip, setHasSharedSalarySlip] = useState(false);
+  useEffect(() => {
+    setHasSharedSalarySlip(false);
+    return subscribeMySalarySlips(user.id, records => setHasSharedSalarySlip(records.length > 0), () => setHasSharedSalarySlip(false));
+  }, [user.id]);
   const [myAdvances, setMyAdvances] = useState([]);
   const [missingPunches, setMissingPunches] = useState([]);
   const [repVisits, setRepVisits] = useState([]);
@@ -1979,6 +1986,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       case 'home':
         return (
           <HomeTab
+            hasSharedSalarySlip={hasSharedSalarySlip}
             isMobile={isMobile}
             isFlash={isFlash}
             fetchAddress={fetchAddress}
@@ -2063,6 +2071,9 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
 
       case 'my-monthly-reports':
         return <MonthlyReportsTab user={user} />;
+
+      case 'my-salary-slips':
+        return <MySalarySlipsTab user={user} />;
 
       case 'missions':
         return (

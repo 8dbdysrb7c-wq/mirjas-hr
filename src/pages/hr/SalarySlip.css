@@ -1,0 +1,47 @@
+/* Preserve compact payroll rows instead of the generic mobile table cards. */
+.salary-slip table.salary-slip-table { display: table !important; }
+.salary-slip table.salary-slip-table thead { display: table-header-group !important; }
+.salary-slip table.salary-slip-table tbody { display: table-row-group !important; }
+.salary-slip table.salary-slip-table tfoot { display: table-footer-group !important; }
+.salary-slip table.salary-slip-table tr {
+  display: table-row !important;
+  position: static !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.salary-slip table.salary-slip-table th,
+.salary-slip table.salary-slip-table td {
+  display: table-cell !important;
+  position: static !important;
+  min-height: 0 !important;
+  vertical-align: middle;
+}
+.salary-slip table.salary-slip-table td:first-child { text-align: right !important; }
+.salary-slip table.salary-slip-table td:nth-child(2) { text-align: center !important; }
+.salary-slip table.salary-slip-table td:last-child { text-align: left !important; }
+.salary-slip table.salary-slip-table td::before { display: none !important; }
+@media screen and (max-width: 640px) {
+  .salary-slip { padding: 12px !important; border: 0 !important; background: transparent !important; }
+  .salary-slip-header { display: block !important; border: 0 !important; padding-bottom: 0 !important; }
+  .salary-slip-header h1 { font-size: 24px !important; }
+  .salary-slip-employee {
+    text-align: right !important;
+    padding: 14px;
+    margin-top: 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+  }
+  .salary-slip-employee strong { font-size: 17px; }
+  .salary-slip-sections { flex-direction: column; gap: 12px !important; }
+  .salary-slip-sections > div { flex: none !important; width: 100%; background: white; }
+  .salary-slip table.salary-slip-table th { padding: 13px 10px !important; font-size: 14px !important; }
+  .salary-slip table.salary-slip-table td { padding: 12px 8px !important; font-size: 12px !important; }
+  .salary-slip table.salary-slip-table td:nth-child(2) { padding: 4px 2px !important; width: 30px; }
+  .salary-slip table.salary-slip-table td:last-child { font-size: 14px !important; }
+  .salary-slip-net { font-size: 15px !important; padding: 16px 12px !important; }
+  .salary-slip-net span:last-child { white-space: nowrap; }
+}
