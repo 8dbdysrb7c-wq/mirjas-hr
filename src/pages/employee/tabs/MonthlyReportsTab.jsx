@@ -114,6 +114,55 @@ const renderOvertimeStatus = (request) => {
   );
 };
 
+const renderAttendanceCell = (date, entry, exit, dayLeaves, today) => {
+  const hasPunch = Boolean(entry || exit);
+
+  if (hasPunch) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+          <span>{entry ? timeLabel(entry.timeIn) : '—'}</span>
+          <span style={{ color: '#94a3b8' }}>–</span>
+          <span>{exit ? timeLabel(exit.timeOut) : '—'}</span>
+        </div>
+        {dayLeaves.map(request => (
+          <span className="attendance-leave-badge" key={request.id} style={{ marginTop: '2px' }}>
+            {request.type}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  // Not punched: if on leave (مجاز)
+  if (dayLeaves.length > 0) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+        {dayLeaves.map(request => (
+          <span className="attendance-leave-badge" key={request.id}>
+            {request.type}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  // Not punched and no leave: (مش مداوم)
+  const [y, m, d] = date.split('-').map(Number);
+  const dayOfWeek = new Date(y, m - 1, d).getDay();
+  const isFriday = dayOfWeek === 5;
+
+  if (isFriday) {
+    return <span className="attendance-weekend-badge">عطلة</span>;
+  }
+
+  if (date < today) {
+    return <span className="attendance-absence-badge">غياب</span>;
+  }
+
+  return <span className="attendance-empty-badge">—</span>;
+};
+
 export const MonthlyReportsTab = ({ user }) => {
   const [today, setToday] = useState(localDate);
   const month = today.slice(0, 7);
@@ -168,7 +217,7 @@ export const MonthlyReportsTab = ({ user }) => {
     {loading ? <div role="status">جاري تحميل تقارير الشهر...</div> : <div className="table-responsive">
       <table className="table monthly-attendance-table"><thead><tr>
         <th style={{ textAlign: 'center' }}>التاريخ</th><th style={{ textAlign: 'center' }}>أوقات الدوام</th>
-        <th style={{ textAlign: 'center' }}>العمل الإضافي (ساعة)</th><th style={{ textAlign: 'center' }}>حالة العمل</th>
+        <th style={{ textAlign: 'center' }}>العمل الإضافي (ساعة)</th><th style={{ textAlign: 'center' }}>حالة الاضافي</th>
       </tr></thead><tbody>{days.map(date => {
         const dayRecords = attends.filter(record => record.date === date && !record.isLeave)
           .sort((a, b) => Number(b.source === 'hr_attendance') - Number(a.source === 'hr_attendance') || String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
@@ -178,16 +227,26 @@ export const MonthlyReportsTab = ({ user }) => {
           && String(request.type || '').match(/إجازة|اجازة|مغادرة/));
         const extras = leaves.filter(request => covers(request, date) && overtimeTypes.has(request.type));
         return <tr key={date}>
-          <td data-label="التاريخ" style={{ textAlign: 'center', verticalAlign: 'middle' }}><span dir="ltr">{date}</span></td>
-          <td data-label="أوقات الدوام" style={{ textAlign: 'center', verticalAlign: 'middle', fontSize: '11px', lineHeight: 1.6, whiteSpace: 'nowrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-              <span>{entry ? timeLabel(entry.timeIn) : '—'}</span>
-              <span style={{ color: '#94a3b8' }}>–</span>
-              <span>{exit ? timeLabel(exit.timeOut) : '—'}</span>
-            </div>
+          <td data-label="التاريخ" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+            <span dir="ltr" className="attendance-date-text">{date}</span>
           </td>
-          <td data-label="العمل الإضافي (ساعة)" style={{ textAlign: 'center', verticalAlign: 'middle' }}>{extras.length ? extras.map(request => <div key={request.id}>{hoursLabel(getTimedLeaveMinutes(request))}</div>) : '—'}</td>
-          <td data-label="حالة العمل" style={{ textAlign: 'center', verticalAlign: 'middle' }}>{extras.map(request => <div key={request.id} style={{ padding: '2px 0' }}>{renderOvertimeStatus(request)}</div>)}{dayLeaves.map(request => <span className="attendance-leave-badge" key={request.id}>{request.type}</span>)}{!extras.length && !dayLeaves.length && <span className="attendance-empty-badge">—</span>}</td>
+          <td data-label="أوقات الدوام" style={{ textAlign: 'center', verticalAlign: 'middle', fontSize: '11px', lineHeight: 1.5 }}>
+            {renderAttendanceCell(date, entry, exit, dayLeaves, today)}
+          </td>
+          <td data-label="العمل الإضافي (ساعة)" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+            {extras.length ? extras.map(request => <div key={request.id}>{hoursLabel(getTimedLeaveMinutes(request))}</div>) : '—'}
+          </td>
+          <td data-label="حالة الاضافي" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+            {extras.length ? (
+              extras.map(request => (
+                <div key={request.id} style={{ padding: '2px 0' }}>
+                  {renderOvertimeStatus(request)}
+                </div>
+              ))
+            ) : (
+              <span className="attendance-empty-badge">—</span>
+            )}
+          </td>
         </tr>;
       })}</tbody></table>
     </div>}
