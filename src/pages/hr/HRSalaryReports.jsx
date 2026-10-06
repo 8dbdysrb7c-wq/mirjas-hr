@@ -7,6 +7,8 @@ import { FileText, Printer, Calendar, ChevronDown, ChevronUp, CheckCircle, Searc
 import { getEmployees, getHRViolationsByDateRange, getHRAttendanceByDateRange, getDepartments, getGlobalSettings, getHRLeavesByDateRange, getHRAdvances, getMissingPunchesByDateRange, getHRBonuses, getHRSalaryArchive, getHRAssets, getStock } from '../../store';
 import { calculateSalaries as calculateSalariesLogic } from '../../utils/salaryCalculator';
 import { isActiveEmployee } from '../../utils/employeeStatus';
+import { getTimedLeaveMinutes, timeToMinutes } from '../../utils/attendancePolicy';
+import { distributePreviewAmount } from '../../utils/salaryPreviewAmounts';
 import html2pdf from 'html2pdf.js';
 import HRDateFilter from '../../components/ui/HRDateFilter';
 import Swal from 'sweetalert2';
@@ -359,6 +361,75 @@ const HRSalaryReports = ({ user, isNested }) => {
 
   const salaryData = calculateSalaries();
   const selectedEmployeeData = salaryData.find(e => e.id === selectedEmployeeId);
+  const showSalaryPreview = (kind, title, total) => {
+    const employee = selectedEmployeeData;
+    if (!employee) return;
+    const details = employee.salaryDetails || {};
+    const minuteText = value => Number.isFinite(Number(value)) && value != null
+      ? `${Math.floor(Number(value) / 60)} س ${Number(value) % 60} د` : '—';
+    const attendanceByDate = new Map((details.attendance || []).map(row => [row.date, row]));
+    let rows = [];
+    if (kind === 'violations') rows = (employee.violationsList || []).map(row => {
+      const attendanceRow = attendanceByDate.get(row.date);
+      const recordedMinutes = String(row.reason || row.notes || '').match(/(\d+(?:\.\d+)?)\s*دقيقة/);
+      const minutes = row.minutes ?? row.durationMinutes ?? (recordedMinutes ? Number(recordedMinutes[1]) : (/تأخير/.test(row.type || '') ? attendanceRow?.lateMinutes : null));
+      return { date: row.date, label: row.type, duration: minuteText(minutes), amount: row.deductionAmount };
+    });
+    if (kind === 'attendance' || kind === 'late') rows = (details.attendance || [])
+      .filter(row => kind === 'attendance' || Number(row.lateMinutes) > 0)
+      .map(row => {
+        const start = timeToMinutes(row.timeIn);
+        const end = timeToMinutes(row.timeOut);
+        return { date: row.date, label: `${row.timeIn || '—'} إلى ${row.timeOut || '—'}`,
+          duration: kind === 'late' ? minuteText(row.lateMinutes) : (start != null && end != null ? minuteText((end - start + 1440) % 1440) : '—') };
+      });
+    if (kind === 'late') {
+      rows = (details.attendance || []).filter(row => !(details.unpaidDates || []).includes(row.date))
+        .map(row => ({ date: row.date, label: 'تأخير', minutes: Math.max(0, Number(row.lateMinutes || 0) - Number(details.coveredLateMinutesByDate?.[row.date] || 0)) }))
+        .filter(row => row.minutes > 0);
+      rows.push(...(details.leaves || []).filter(row => ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(row.type) && !(details.automaticUnpaidDates || []).includes(row.date || row.startDate))
+        .map(row => ({ date: row.date || row.startDate, label: row.type, minutes: getTimedLeaveMinutes(row) }))
+        .filter(row => row.minutes > 0));
+      rows = distributePreviewAmount(rows, total, row => row.minutes).map(row => ({ ...row, duration: minuteText(row.minutes) }));
+    }
+    if (kind === 'overtime') rows = (details.overtime || []).map(row => ({
+      date: row.date || row.startDate, label: `${row.startTime || '—'} إلى ${row.endTime || '—'} · ${row.status}`,
+      duration: minuteText(row.rateDetails?.extraMins ?? getTimedLeaveMinutes(row))
+    }));
+    if (kind === 'absence') rows = [
+      ...distributePreviewAmount((details.unpaidDates || []).map(date => ({ date, label: 'إجازة غير مدفوعة', duration: 'يوم' })), employee.unpaidLeaveDeduction || 0),
+      ...distributePreviewAmount((details.absenceDates || []).map(date => ({ date, label: 'غياب', duration: 'يوم' })), employee.unexcusedAbsenceDeduction || 0)
+    ];
+    if (kind === 'advances') rows = (details.advances || []).filter(row => row.month === selectedMonth)
+      .map(row => ({ date: row.date, label: row.label, amount: row.amount }));
+    if (kind === 'bonuses') rows = (details.bonuses || []).map(row => ({ date: row.date, label: row.type || 'مكافأة', amount: row.amount }));
+    if (kind === 'fixed') rows = [{ date: selectedMonth, label: title, amount: total }];
+    rows.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+    MySwal.fire({
+      title,
+      width: 760,
+      showCloseButton: true,
+      confirmButtonText: 'إغلاق',
+      confirmButtonColor: '#0f766e',
+      html: <div dir="rtl" style={{ textAlign: 'right' }}>
+        <div style={{ padding: '12px 16px', background: '#f0fdfa', borderRadius: 12, marginBottom: 16, display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <span>{employee.name} · {selectedMonth}</span>
+          <strong>{formatVal(total, false)} د.أ</strong>
+        </div>
+        <div style={{ maxHeight: '55vh', overflow: 'auto' }}>
+          <table className="table" style={{ width: '100%', fontSize: 13 }}><thead><tr>
+            <th>التاريخ</th><th>التفاصيل</th><th>المدة</th><th>القيمة (د.أ)</th>
+          </tr></thead><tbody>{rows.map((row, index) => <tr key={index}>
+            <td style={{ whiteSpace: 'nowrap' }}>{row.date || '—'}</td><td>{row.label}</td><td>{row.duration || '—'}</td><td>{row.amount == null ? '—' : formatVal(row.amount, false)}</td>
+          </tr>)}</tbody></table>
+          {!rows.length && <p style={{ textAlign: 'center', color: '#64748b', padding: 20 }}>لا تتوفر تفاصيل يومية لهذا البند.</p>}
+        </div>
+        <p style={{ fontSize: 11, color: '#64748b', marginTop: 12 }}>{kind === 'late' ? 'القيم اليومية موزعة حسب مدة التأخير والمغادرة، بعد تطبيق رصيد السماح وقواعد الاحتساب الشهرية. مجموعها يطابق خصم القسيمة.' : 'القيمة في الأعلى هي قيمة البند بالقسيمة بعد تطبيق قواعد الاحتساب.'}</p>
+      </div>
+    });
+  };
+  const previewButton = (kind, title, total) => <button type="button" className="no-print" onClick={() => showSalaryPreview(kind, title, total)}
+    style={{ marginRight: 8, border: '1px solid #99f6e4', borderRadius: 8, background: '#f0fdfa', color: '#0f766e', padding: '3px 8px', fontSize: 11, cursor: 'pointer' }}>معاينة</button>;
 
   const filteredSheetSalaryData = salaryData
     .filter(emp => selectedDepartment === 'all' || emp.department === (departments[selectedDepartment] || selectedDepartment) || emp.department === selectedDepartment)
@@ -1333,37 +1404,24 @@ const HRSalaryReports = ({ user, isNested }) => {
               </div>
             </div>
 
-            {/* Employee Info Cards */}
+            {/* Compact employee identity */}
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: '16px',
-              marginBottom: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexWrap: 'wrap',
+              gap: '6px 12px',
+              marginBottom: '20px',
               background: '#f8fafc',
-              padding: '24px',
-              borderRadius: '16px',
-              border: '1px solid #f1f5f9'
+              padding: '8px 12px',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
+              fontSize: '12px',
+              color: '#475569'
             }}>
-              {[
-                { label: 'الرقم الوظيفي', value: selectedEmployeeData.id },
-                { label: 'اسم الموظف', value: selectedEmployeeData.name },
-                { label: 'المسمى الوظيفي', value: selectedEmployeeData.jobTitle || '-' },
-                { label: 'القسم', value: selectedEmployeeData.department || '-' }
-              ].map((item, i) => (
-                <div key={i} style={{
-                  background: 'white',
-                  padding: '16px',
-                  borderRadius: '12px',
-                  border: '1px solid #e2e8f0',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
-                }}>
-                  <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#1a8d9b' }}></div>
-                    {item.label}
-                  </p>
-                  <p style={{ fontWeight: '900', color: '#0f172a', fontSize: '1.05rem', marginTop: '4px' }}>{item.value}</p>
-                </div>
-              ))}
+              <strong style={{ color: '#0f172a' }}>{selectedEmployeeData.name}</strong>
+              <span dir="ltr">{selectedEmployeeData.employeeId || selectedEmployeeData.id}</span>
+              <span>{selectedEmployeeData.jobTitle || '-'}</span>
             </div>
 
             {/* Financial Breakdown */}
@@ -1380,25 +1438,25 @@ const HRSalaryReports = ({ user, isNested }) => {
                 </div>
                 {selectedEmployeeData.transportAllowanceAddition > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>بدل مواصلات</span>
+                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>بدل مواصلات{previewButton('fixed', 'بدل المواصلات', selectedEmployeeData.transportAllowanceAddition)}</span>
                     <span style={{ fontWeight: 'bold', color: '#0f172a' }}>{formatVal(selectedEmployeeData.transportAllowanceAddition, false)} د.أ</span>
                   </div>
                 )}
                 {selectedEmployeeData.overtimePay > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>بدل إضافي <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>({selectedEmployeeData.totalOvertimeHours.toFixed(1)} ساعة)</span></span>
+                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>بدل إضافي <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>({selectedEmployeeData.totalOvertimeHours.toFixed(1)} ساعة)</span>{previewButton('overtime', 'تفاصيل العمل الإضافي', selectedEmployeeData.overtimePay)}</span>
                     <span style={{ fontWeight: 'bold', color: '#059669' }}>{formatVal(selectedEmployeeData.overtimePay, false)} د.أ</span>
                   </div>
                 )}
                 {selectedEmployeeData.holidayPay > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>تعويض عطل الرسمية</span>
+                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>تعويض عطل الرسمية{previewButton('fixed', 'تعويض العطل الرسمية', selectedEmployeeData.holidayPay)}</span>
                     <span style={{ fontWeight: 'bold', color: '#7e22ce' }}>{formatVal(selectedEmployeeData.holidayPay, false)} د.أ</span>
                   </div>
                 )}
                 {selectedEmployeeData.totalBonusAmount > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>بدلات ومكافآت</span>
+                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>بدلات ومكافآت{previewButton('bonuses', 'تفاصيل البدلات والمكافآت', selectedEmployeeData.totalBonusAmount)}</span>
                     <span style={{ fontWeight: 'bold', color: '#10b981' }}>{formatVal(selectedEmployeeData.totalBonusAmount, false)} د.أ</span>
                   </div>
                 )}
@@ -1425,46 +1483,37 @@ const HRSalaryReports = ({ user, isNested }) => {
                 </h3>
                 {selectedEmployeeData.lateDeduction > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>خصم التأخير والمغادرات</span>
+                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>خصم التأخير والمغادرات{previewButton('late', 'تفاصيل التأخير والمغادرات', selectedEmployeeData.lateDeduction)}</span>
                     <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{formatVal(selectedEmployeeData.lateDeduction, false)} د.أ</span>
                   </div>
                 )}
                 {(selectedEmployeeData.unpaidLeaveDeduction > 0 || selectedEmployeeData.unexcusedAbsenceDeduction > 0) && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>خصم الغياب الشامل (آلي ويدوي)</span>
+                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>خصم الغياب والإجازات{previewButton('absence', 'تفاصيل الغياب والإجازات', (selectedEmployeeData.unpaidLeaveDeduction || 0) + (selectedEmployeeData.unexcusedAbsenceDeduction || 0))}</span>
                     <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{formatVal((selectedEmployeeData.unpaidLeaveDeduction || 0) + (selectedEmployeeData.unexcusedAbsenceDeduction || 0), false)} د.أ</span>
                   </div>
                 )}
                 {Math.round(selectedEmployeeData.violationsList?.reduce((sum, v) => sum + (Number(v.deductionAmount) || 0), 0) || 0) > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>مخالفات يدوية</span>
+                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>مخالفات التأخير والمغادرة المبكرة{previewButton('violations', 'تفاصيل المخالفات', selectedEmployeeData.manualDeductions)}</span>
                     <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{formatVal(selectedEmployeeData.violationsList?.reduce((sum, v) => sum + (Number(v.deductionAmount) || 0), 0) || 0, false)} د.أ</span>
-                  </div>
-                )}
-                {selectedEmployeeData.violationsList?.length > 0 && (
-                  <div style={{ padding: '4px 0', fontSize: '0.75rem' }}>
-                    {selectedEmployeeData.violationsList.map((v, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', marginBottom: '4px', paddingLeft: '8px' }}>
-                        <span>- {v.type} ({v.date?.split('-')[2]})</span>
-                      </div>
-                    ))}
                   </div>
                 )}
                 {(selectedEmployeeData.healthInsuranceAmount || 0) > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-                    <span>التأمين الصحي {selectedEmployeeData.healthInsuranceCompanyContribution > 0 ? '(تتحمله الشركة)' : '(اقتطاع الموظف)'}</span>
+                    <span>التأمين الصحي {selectedEmployeeData.healthInsuranceCompanyContribution > 0 ? '(تتحمله الشركة)' : '(اقتطاع الموظف)'}{previewButton('fixed', 'التأمين الصحي', selectedEmployeeData.healthInsuranceAmount)}</span>
                     <span>{formatVal(selectedEmployeeData.healthInsuranceAmount, false)} د.أ</span>
                   </div>
                 )}
                 {selectedEmployeeData.socialSecurityEmployeeDeduction > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>اقتطاع الضمان الاجتماعي</span>
+                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>اقتطاع الضمان الاجتماعي{previewButton('fixed', 'اقتطاع الضمان الاجتماعي', selectedEmployeeData.socialSecurityEmployeeDeduction)}</span>
                     <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{formatVal(selectedEmployeeData.socialSecurityEmployeeDeduction, false)} د.أ</span>
                   </div>
                 )}
                 {selectedEmployeeData.advanceDeduction > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>سلفة مقتطعة</span>
+                    <span style={{ color: '#475569', fontSize: '0.875rem' }}>سلفة مقتطعة{previewButton('advances', 'تفاصيل السلف', selectedEmployeeData.advanceDeduction)}</span>
                     <span style={{ fontWeight: 'bold', color: '#e11d48' }}>{formatVal(selectedEmployeeData.advanceDeduction, false)} د.أ</span>
                   </div>
                 )}
@@ -1483,27 +1532,6 @@ const HRSalaryReports = ({ user, isNested }) => {
                   {formatVal(selectedEmployeeData.netSalary, false)}
                 </span>
                 <span style={{ fontSize: '1rem', color: '#1a8d9b' }}>د.أ</span>
-              </div>
-            </div>
-
-            {/* Notes Section (Company Contribution) */}
-            {selectedEmployeeData.socialSecurityCompanyContribution > 0 && (
-              <div style={{ marginBottom: '40px', padding: '16px', background: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
-                <p style={{ color: '#1e40af', fontSize: '0.875rem', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontWeight: 'bold' }}>ملاحظة إدارية:</span> مساهمة الشركة في الضمان الاجتماعي عن هذا الشهر تبلغ {selectedEmployeeData.socialSecurityCompanyContribution} د.أ (لا تخصم من راتب الموظف).
-                </p>
-              </div>
-            )}
-
-            {/* Signatures */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '32px', borderTop: '1px solid #e2e8f0' }}>
-              <div style={{ textAlign: 'center', width: '40%' }}>
-                <p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '48px' }}>توقيع الموظف المستلم</p>
-                <div style={{ borderBottom: '1px solid #cbd5e1' }}></div>
-              </div>
-              <div style={{ textAlign: 'center', width: '40%' }}>
-                <p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '48px' }}>اعتماد الإدارة / المحاسبة</p>
-                <div style={{ borderBottom: '1px solid #cbd5e1' }}></div>
               </div>
             </div>
 
