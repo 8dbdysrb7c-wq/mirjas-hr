@@ -494,6 +494,7 @@ export const HomeTab = ({
           }} 
         />
         {/* SUPERVISOR / EXTRA ACCESS BUTTONS */}
+        <DashboardCard isMobile={isMobile} icon={FileText} title="تقرير الدوام" onClick={() => handleTabChange('my-monthly-reports')} />
         {hasPermission(user, 'live') && (
           <DashboardCard isMobile={isMobile} icon={Activity} title="التحكم المباشر" onClick={() => handleTabChange('live')} />
         )}
@@ -539,7 +540,7 @@ export const HomeTab = ({
           <DashboardCard isMobile={isMobile} icon={Users} title="العملاء" onClick={() => handleTabChange('customers')} />
         )}
         {hasPermission(user, 'reports') && (
-          <DashboardCard isMobile={isMobile} icon={FileText} title="التقارير" onClick={() => handleTabChange('reports')} />
+          <DashboardCard isMobile={isMobile} icon={FileText} title="تقارير الإدارة" onClick={() => handleTabChange('reports')} />
         )}
         {hasPermission(user, 'production_tasks') && (
           <DashboardCard isMobile={isMobile} icon={ClipboardCheck} title="مهام الإنتاج" onClick={() => handleTabChange('production-tasks')} />

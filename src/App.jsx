@@ -3,6 +3,7 @@ import { Smartphone, Tablet, RotateCcw, X, Monitor } from 'lucide-react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import EmployeeDashboard from './pages/EmployeeDashboard';
+import { usesAdminDashboard } from './utils/dashboardRouting';
 import AdminDashboard from './pages/AdminDashboard';
 import ErrorBoundary from './components/ErrorBoundary';
 import Swal from 'sweetalert2';
@@ -168,17 +169,17 @@ function App() {
         <Routes>
           <Route path="/" element={
             !currentUser ? <Login onLogin={handleLogin} /> :
-              <Navigate to={isAdmin(currentUser) ? '/admin' : '/employee'} />
+              <Navigate to={usesAdminDashboard(currentUser, isAdmin) ? '/admin' : '/employee'} />
           } />
 
           <Route path="/employee" element={
-            currentUser && !isAdmin(currentUser) ?
+            currentUser && !usesAdminDashboard(currentUser, isAdmin) ?
               <EmployeeDashboard user={currentUser} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /> :
               <Navigate to="/" />
           } />
 
           <Route path="/admin" element={
-            currentUser && isAdmin(currentUser) ?
+            currentUser && usesAdminDashboard(currentUser, isAdmin) ?
               <AdminDashboard user={currentUser} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /> :
               <Navigate to="/" />
           } />

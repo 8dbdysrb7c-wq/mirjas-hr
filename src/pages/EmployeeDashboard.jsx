@@ -41,6 +41,7 @@ import AdminLive from './admin/AdminLive';
 import { HomeTab } from './employee/tabs/HomeTab';
 import { DailyReportTab } from './employee/tabs/DailyReportTab';
 import { ReportHistoryTab } from './employee/tabs/ReportHistoryTab';
+import { MonthlyReportsTab } from './employee/tabs/MonthlyReportsTab';
 import { MissionsTab } from './employee/tabs/MissionsTab';
 import { MissingPunchesTab } from './employee/tabs/MissingPunchesTab';
 import { HRRequestsTab } from './employee/tabs/HRRequestsTab';
@@ -2060,6 +2061,9 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
           />
         );
 
+      case 'my-monthly-reports':
+        return <MonthlyReportsTab user={user} />;
+
       case 'missions':
         return (
           <MissionsTab
@@ -2158,6 +2162,9 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
 
       {/* Mobile Bottom Nav via CSS classes */}
       <div className="modern-bottom-nav no-print lg:hidden overflow-x-auto hide-scrollbar" style={{ justifyContent: 'center', gap: '1rem', paddingLeft: '1rem', paddingRight: '1rem' }}>
+        <div className={`modern-nav-item shrink-0 ${activeTab === 'my-monthly-reports' ? 'active' : ''}`} onClick={() => handleTabChange('my-monthly-reports')}>
+          <FileText size={22} /> <span>تقرير الدوام</span>
+        </div>
         <div className={`modern-nav-item shrink-0 ${activeTab === 'home' ? 'active' : ''}`} onClick={() => handleTabChange('home')}>
           <Home size={22} /> <span>الرئيسية</span>
         </div>
@@ -2231,6 +2238,9 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
             <p className="text-muted text-xs">حساب موظف</p>
           </div>
           <div className="admin-sidebar-grid">
+            <div className={`admin-sidebar-item ${activeTab === 'my-monthly-reports' ? 'active' : ''}`} onClick={() => handleTabChange('my-monthly-reports')}>
+              <FileText size={22} /> <span>تقرير الدوام</span>
+            </div>
             <div className={`admin-sidebar-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => handleTabChange('home')}>
               <Home size={22} /> <span>الرئيسية</span>
             </div>

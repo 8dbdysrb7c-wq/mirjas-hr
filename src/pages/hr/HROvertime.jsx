@@ -519,21 +519,38 @@ const HROvertime = ({ user, refreshCounts }) => {
       return Boolean(name && [leave.employeeName, emp?.name].some(value => String(value || '').trim() === name));
     });
     if (!records.length) return <span className="text-muted text-xs">لا يوجد سجل حضور لهذا اليوم</span>;
-    const displayTime = value => {
+    const formatTimePart = (value) => {
       const minutes = timeToMinutes(value);
-      if (minutes == null) return 'غير مسجل';
+      if (minutes == null) {
+        return <span className="text-slate-400 font-normal">--:--</span>;
+      }
       const hours = Math.floor(minutes / 60);
-      return `${hours % 12 || 12}:${String(minutes % 60).padStart(2, '0')} ${hours >= 12 ? 'م' : 'ص'}`;
+      const period = hours >= 12 ? 'م' : 'ص';
+      const formattedHours = hours % 12 || 12;
+      const formattedMins = String(minutes % 60).padStart(2, '0');
+      return (
+        <span className="inline-flex items-center gap-0.5">
+          <span>{formattedHours}:{formattedMins}</span>
+          <span className="text-[10px] text-slate-500 font-sans">{period}</span>
+        </span>
+      );
     };
-    return <div className="flex flex-col gap-2 text-xs">
-      {records.map((record, index) => <div key={record.id || index}>
-        <div>الدخول: <span dir="ltr" className="font-mono font-semibold">{displayTime(record.timeIn)}</span></div>
-        <div>الخروج: <span dir="ltr" className="font-mono font-semibold">{displayTime(record.timeOut)}</span></div>
-        {record.status && <div className="text-muted">{record.status}</div>}
-        {record.isMissingPunch && <div className="text-emerald-700">ختمة ناقصة معتمدة</div>}
-        {record.notes && <div className="text-muted whitespace-normal max-w-[220px]">{record.notes}</div>}
-      </div>)}
-    </div>;
+
+    return (
+      <div className="flex flex-col gap-1 items-center justify-center">
+        {records.map((record, index) => (
+          <div
+            key={record.id || index}
+            className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 border border-slate-200/80 rounded font-mono text-xs font-semibold text-slate-700 whitespace-nowrap"
+            dir="ltr"
+          >
+            {formatTimePart(record.timeIn)}
+            <span className="text-slate-300 font-sans mx-0.5">-</span>
+            {formatTimePart(record.timeOut)}
+          </div>
+        ))}
+      </div>
+    );
   };
 
   const getPayableOvertimeMinutes = leave => {
