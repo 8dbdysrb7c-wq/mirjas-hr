@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { initializeFirestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 
 // Your web app's Firebase configuration
@@ -13,10 +13,13 @@ const firebaseConfig = {
   measurementId: "G-1D6XHXSKVG"
 };
 
-// Initialize Firebase
+// Initialize Firebase with persistent multi-tab cache to minimize Firestore reads
 const app = initializeApp(firebaseConfig);
 const db = initializeFirestore(app, {
-  ignoreUndefinedProperties: true
+  ignoreUndefinedProperties: true,
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
 });
 const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
 

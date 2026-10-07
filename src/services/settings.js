@@ -568,19 +568,37 @@ export const getDocData = async (collectionName, docId, defaultVal) => {
 export const setDocData = async (collectionName, docId, value) => {
   try {
     await setDoc(doc(db, collectionName, docId), { value });
+    if (collectionName === 'settings' && docId === 'globalSettings') {
+      invalidateGlobalSettingsCache();
+    }
   } catch (error) {
     console.error(`Error in setDocData (${collectionName}/${docId}):`, error);
   }
 };
 
-export const getEmployees = async () => {
+let cachedEmployees = null;
+let cachedEmployeesTimestamp = 0;
+const EMPLOYEES_CACHE_TTL = 3 * 60 * 1000; // 3 minutes TTL
+
+export const invalidateEmployeesCache = () => {
+  cachedEmployees = null;
+  cachedEmployeesTimestamp = 0;
+};
+
+export const getEmployees = async (forceRefresh = false) => {
   try {
+    if (!forceRefresh && cachedEmployees && (Date.now() - cachedEmployeesTimestamp < EMPLOYEES_CACHE_TTL)) {
+      return cachedEmployees;
+    }
     if (FREE_AUTH_ENABLED) {
       const actor = getTrustedProfile();
       if (!actor) return [];
       const source = actor.accessAdmin ? 'employees' : 'employee_directory';
       const snapshot = await getDocs(collection(db, source));
-      return snapshot.docs.map(entry => entry.id === actor.id ? actor : { ...removePasswordFields(entry.data()), id: entry.id });
+      const result = snapshot.docs.map(entry => entry.id === actor.id ? actor : { ...removePasswordFields(entry.data()), id: entry.id });
+      cachedEmployees = result;
+      cachedEmployeesTimestamp = Date.now();
+      return result;
     }
     const querySnapshot = await getDocs(collection(db, 'employees'));
     const employees = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
@@ -588,17 +606,23 @@ export const getEmployees = async () => {
       for (const emp of defaultEmployees) {
         await setDoc(doc(db, 'employees', emp.id), emp);
       }
+      cachedEmployees = defaultEmployees;
+      cachedEmployeesTimestamp = Date.now();
       return defaultEmployees;
     }
+    cachedEmployees = employees;
+    cachedEmployeesTimestamp = Date.now();
     return employees;
   } catch (error) {
     console.error("Error in getEmployees:", error);
+    if (cachedEmployees) return cachedEmployees;
     if (FREE_AUTH_ENABLED) return [];
     return defaultEmployees;
   }
 };
 
 export const saveEmployees = async (employees) => {
+  invalidateEmployeesCache();
   try {
     for (const emp of employees) {
       if (FREE_AUTH_ENABLED) {
@@ -614,6 +638,7 @@ export const saveEmployees = async (employees) => {
 };
 
 export const saveEmployee = async (employee) => {
+  invalidateEmployeesCache();
   try {
     if (FREE_AUTH_ENABLED) {
       const existing = await getDoc(doc(db, 'employees', employee.id));
@@ -636,6 +661,7 @@ export const saveEmployee = async (employee) => {
 };
 
 export const deleteEmployee = async (id) => {
+  invalidateEmployeesCache();
   try {
     const empRef = doc(db, 'employees', id);
     const empSnap = await getDoc(empRef);
@@ -684,7 +710,19 @@ export const saveScoringConfig = async (config) => {
   await setDocData('settings', 'scoringConfig', config);
 };
 
-export const getGlobalSettings = async () => {
+let cachedGlobalSettings = null;
+let cachedGlobalSettingsTimestamp = 0;
+const GLOBAL_SETTINGS_CACHE_TTL = 3 * 60 * 1000; // 3 minutes TTL
+
+export const invalidateGlobalSettingsCache = () => {
+  cachedGlobalSettings = null;
+  cachedGlobalSettingsTimestamp = 0;
+};
+
+export const getGlobalSettings = async (forceRefresh = false) => {
+  if (!forceRefresh && cachedGlobalSettings && (Date.now() - cachedGlobalSettingsTimestamp < GLOBAL_SETTINGS_CACHE_TTL)) {
+    return cachedGlobalSettings;
+  }
   const data = await getDocData('settings', 'globalSettings', defaultGlobalSettings);
   const isVirtualWarehouse = (w) => {
     const s = String(w || '').trim();
@@ -783,14 +821,18 @@ export const getGlobalSettings = async () => {
     });
   }
 
-  return {
+  const result = {
     ...defaultGlobalSettings,
     ...data,
     notificationSettings: normalizeNotificationSettings(data)
   };
+  cachedGlobalSettings = result;
+  cachedGlobalSettingsTimestamp = Date.now();
+  return result;
 };
 
 export const saveGlobalSettings = async (settings) => {
+  invalidateGlobalSettingsCache();
   const isVirtualWarehouse = (w) => {
     const s = String(w || '').trim();
     return s.includes('قيد الخياطة') || s.includes('قيد التحضير') || s.includes('قيد التغليف') || s.includes('قبل الخياطة') || s.includes('استلام التغليف');

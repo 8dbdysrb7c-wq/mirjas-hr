@@ -11,6 +11,8 @@ export const useAttendanceReminders = (isAdminOnline) => {
     let employeesLoadedAt = 0;
     let cachedSettings = null;
     let settingsLoadedAt = 0;
+    let cachedHolidays = null;
+    let holidaysLoadedAt = 0;
     let checking = false;
 
     const checkReminders = async () => {
@@ -45,7 +47,11 @@ export const useAttendanceReminders = (isAdminOnline) => {
         }));
         if (!employees.length) return;
         const todayAttendance = await getHRAttendance(dateStr);
-        const holidays = await getHolidays();
+        if (!cachedHolidays || Date.now() - holidaysLoadedAt >= 600000) {
+          cachedHolidays = await getHolidays();
+          holidaysLoadedAt = Date.now();
+        }
+        const holidays = cachedHolidays || [];
 
         // Get today's active holidays
         const todayHolidays = holidays.filter(h => 

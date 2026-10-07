@@ -476,13 +476,28 @@ export const updateOrderStatus = async (orderId, status) => {
   }
 };
 
-export const getSalesOrders = async () => {
+let cachedSalesOrders = null;
+let cachedSalesOrdersTimestamp = 0;
+const SALES_ORDERS_CACHE_TTL = 30 * 1000; // 30 seconds TTL
+
+export const invalidateSalesOrdersCache = () => {
+  cachedSalesOrders = null;
+  cachedSalesOrdersTimestamp = 0;
+};
+
+export const getSalesOrders = async (forceRefresh = false) => {
   try {
+    if (!forceRefresh && cachedSalesOrders && (Date.now() - cachedSalesOrdersTimestamp < SALES_ORDERS_CACHE_TTL)) {
+      return cachedSalesOrders;
+    }
     const querySnapshot = await getDocs(collection(db, 'sales_orders'));
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    const orders = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    cachedSalesOrders = orders;
+    cachedSalesOrdersTimestamp = Date.now();
+    return orders;
   } catch (error) {
     console.error("Error in getSalesOrders:", error);
-    return [];
+    return cachedSalesOrders || [];
   }
 };
 
@@ -571,6 +586,7 @@ export const subscribeToSalesOrders = (onOrders, onError = console.error, orderL
 
 // Final approval changes workflow metadata only, never item quantities or stock reservations.
 export const approveSalesOrder = async (orderId, approval, allowIncomplete = false) => {
+  invalidateSalesOrdersCache();
   const ref = doc(db, 'sales_orders', orderId);
   return runTransaction(db, async transaction => {
     const snapshot = await transaction.get(ref);
@@ -590,6 +606,7 @@ export const approveSalesOrder = async (orderId, approval, allowIncomplete = fal
 };
 
 export const saveSalesOrder = async (order, { preserveStatus = false } = {}) => {
+  invalidateSalesOrdersCache();
   try {
     let orderToSave = { ...order };
     let isNew = !orderToSave.id;
@@ -756,6 +773,7 @@ export const saveSalesOrder = async (order, { preserveStatus = false } = {}) => 
 saveSalesOrder.lastError = null;
 
 export const deleteSalesOrder = async (id) => {
+  invalidateSalesOrdersCache();
   try {
     const docRef = doc(db, 'sales_orders', id);
     const docSnap = await getDoc(docRef);

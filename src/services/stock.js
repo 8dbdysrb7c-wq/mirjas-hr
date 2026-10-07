@@ -11,13 +11,28 @@ import {
   runTransaction
 } from 'firebase/firestore';
 
-export const getStock = async () => {
+let cachedStock = null;
+let cachedStockTimestamp = 0;
+const STOCK_CACHE_TTL = 60 * 1000; // 60 seconds TTL
+
+export const invalidateStockCache = () => {
+  cachedStock = null;
+  cachedStockTimestamp = 0;
+};
+
+export const getStock = async (forceRefresh = false) => {
   try {
+    if (!forceRefresh && cachedStock && (Date.now() - cachedStockTimestamp < STOCK_CACHE_TTL)) {
+      return cachedStock;
+    }
     const querySnapshot = await getDocs(collection(db, 'stock'));
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    const stock = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    cachedStock = stock;
+    cachedStockTimestamp = Date.now();
+    return stock;
   } catch (error) {
     console.error("Error in getStock:", error);
-    return [];
+    return cachedStock || [];
   }
 };
 
@@ -27,6 +42,7 @@ import { isFinishedGoodsCategory, finishedGoodsNumber, finishedGoodsSequence } f
 import { isSewingConsumablesCategory, sewingConsumablesNumber, sewingConsumablesSequence } from '../utils/sewingConsumablesNumbers';
 
 export const saveStockItem = async (item, options = {}) => {
+  invalidateStockCache();
   try {
     let oldName = null;
     const docRef = item.id ? doc(db, 'stock', item.id) : doc(collection(db, 'stock'));
@@ -215,6 +231,7 @@ export const saveStockItemComponents = async (itemNumber, materials = []) => {
 };
 
 export const deleteStockItem = async (id) => {
+  invalidateStockCache();
   try {
     await deleteDoc(doc(db, 'stock', id));
   } catch (error) {
@@ -223,6 +240,7 @@ export const deleteStockItem = async (id) => {
 };
 
 export const deleteMultipleStockItems = async (ids) => {
+  invalidateStockCache();
   try {
     const promises = ids.map(id => deleteDoc(doc(db, 'stock', id)));
     await Promise.all(promises);
@@ -242,6 +260,7 @@ export const getStockVouchers = async () => {
 };
 
 export const saveStockVoucher = async (voucher) => {
+  invalidateStockCache();
   try {
     let voucherToSave = { ...voucher };
     const existingVoucher = voucherToSave.id

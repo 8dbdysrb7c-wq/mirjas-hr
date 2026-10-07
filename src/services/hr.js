@@ -467,7 +467,7 @@ export const getHRAttendance = async (date = null) => {
   try {
     const q = date
       ? query(collection(db, 'hr_attendance'), where('date', '==', date))
-      : query(collection(db, 'hr_attendance'), orderBy('date', 'desc'));
+      : query(collection(db, 'hr_attendance'), orderBy('date', 'desc'), limit(150));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
@@ -1186,7 +1186,7 @@ export const getHRViolationsByDateRange = async (dateFrom, dateTo) => {
 
 export const getHRLeaves = async () => {
   try {
-    const q = query(collection(db, 'hr_leaves'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'hr_leaves'), orderBy('createdAt', 'desc'), limit(150));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
@@ -1457,7 +1457,7 @@ export const deleteHoliday = async (id) => {
 
 export const getMissingPunches = async () => {
   try {
-    const querySnapshot = await getDocs(collection(db, 'missing_punches'));
+    const querySnapshot = await getDocs(query(collection(db, 'missing_punches'), limit(150)));
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.error("Error fetching missing punches:", error);

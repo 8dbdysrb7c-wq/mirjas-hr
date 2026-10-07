@@ -95,7 +95,7 @@ const AdminLive = ({ user, onBack }) => {
   };
 
   useEffect(() => {
-    return startVisiblePolling(fetchData, 90000);
+    return startVisiblePolling(fetchData, 180000);
   }, []);
 
   const handleUpdateOrderField = async (orderId, field, value) => {
