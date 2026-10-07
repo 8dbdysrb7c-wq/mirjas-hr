@@ -1,0 +1,32 @@
+.salary-preview-popup { border-radius: 16px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+.salary-preview-popup .swal2-title { font-size: 23px; padding: 22px 35px 8px; line-height: 1.5; }
+.salary-preview-popup .salary-preview-content { margin: 14px 18px 0; }
+.salary-preview-summary { align-items: center; font-size: 13px; }
+.salary-preview-summary strong { white-space: nowrap; color: #0f766e; }
+.salary-preview-scroll { border: 1px solid #e2e8f0; border-radius: 10px; width: 100%; min-width: 0; }
+.salary-preview-popup table.salary-preview-table { display: table !important; width: 100% !important; min-width: 0 !important; max-width: 100% !important; border-collapse: separate; border-spacing: 0; table-layout: fixed !important; }
+.salary-preview-popup table.salary-preview-table thead { display: table-header-group !important; }
+.salary-preview-popup table.salary-preview-table tbody { display: table-row-group !important; }
+.salary-preview-popup table.salary-preview-table tr { display: table-row !important; position: static !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+.salary-preview-popup table.salary-preview-table th,
+.salary-preview-popup table.salary-preview-table td { display: table-cell !important; text-align: center !important; vertical-align: middle; padding: 11px 6px !important; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px; overflow-wrap: anywhere; }
+.salary-preview-popup table.salary-preview-table th { background: #eef8fa; color: #164e63; position: sticky; top: 0; z-index: 1; }
+.salary-preview-popup table.salary-preview-table td::before { display: none !important; }
+.salary-preview-popup table.salary-preview-table tbody tr:nth-child(even) { background: #f8fafc; }
+.salary-preview-popup table.salary-preview-table th:nth-child(1) { width: 28%; }
+.salary-preview-popup table.salary-preview-table th:nth-child(2) { width: 32%; }
+.salary-preview-popup table.salary-preview-table th:nth-child(3),
+.salary-preview-popup table.salary-preview-table th:nth-child(4) { width: 20%; }
+.salary-preview-popup .swal2-actions { margin: 16px 0; }
+@media (max-width: 640px) {
+  .salary-preview-popup { width: calc(100vw - 20px) !important; padding-bottom: 4px; }
+  .salary-preview-popup .swal2-title { font-size: 20px; }
+  .salary-preview-popup .salary-preview-content { margin: 10px 8px 0 !important; padding: 0 !important; min-width: 0; }
+  .salary-preview-summary { padding: 10px !important; font-size: 12px; gap: 8px !important; }
+  .salary-preview-popup table.salary-preview-table th,
+  .salary-preview-popup table.salary-preview-table td { font-size: 10px !important; padding: 8px 2px !important; line-height: 1.5; min-width: 0 !important; white-space: normal !important; }
+  .salary-preview-popup table.salary-preview-table th:nth-child(1) { width: 28%; }
+  .salary-preview-popup table.salary-preview-table th:nth-child(2) { width: 30%; }
+  .salary-preview-popup table.salary-preview-table th:nth-child(3),
+  .salary-preview-popup table.salary-preview-table th:nth-child(4) { width: 21%; }
+}

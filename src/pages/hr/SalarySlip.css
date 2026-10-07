@@ -24,6 +24,7 @@
 .salary-slip table.salary-slip-table td:last-child { text-align: left !important; }
 .salary-slip table.salary-slip-table td::before { display: none !important; }
 @media screen and (max-width: 640px) {
+  .employee-salary-page { padding-bottom: calc(140px + env(safe-area-inset-bottom)); width: 100%; min-width: 0; }
   .salary-slip { padding: 12px !important; border: 0 !important; background: transparent !important; }
   .salary-slip-header { display: block !important; border: 0 !important; padding-bottom: 0 !important; }
   .salary-slip-header h1 { font-size: 24px !important; }

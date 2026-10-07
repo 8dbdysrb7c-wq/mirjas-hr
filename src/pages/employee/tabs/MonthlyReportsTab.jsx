@@ -8,7 +8,7 @@ const approved = new Set(['موافق', 'موافق عليه', 'مقبول', 'ت
 const rejected = new Set(['مرفوض', 'مرفوضة', 'تم الرفض', 'غير موافق']);
 const overtimeTypes = new Set(['بدل عمل إضافي', 'عمل إضافي']);
 const localDate = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Amman', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-const hoursLabel = minutes => Number((minutes / 60).toFixed(2)).toLocaleString('en-US');
+const minutesLabel = minutes => Math.round(Number(minutes) || 0).toLocaleString('en-US');
 const timeLabel = value => {
   const minutes = timeToMinutes(value);
   if (minutes == null) return 'غير مسجل';
@@ -153,7 +153,7 @@ const renderAttendanceCell = (date, entry, exit, dayLeaves, today) => {
   const isFriday = dayOfWeek === 5;
 
   if (isFriday) {
-    return <span className="attendance-weekend-badge">عطلة</span>;
+    return <span className="attendance-weekend-badge">يوم الجمعة</span>;
   }
 
   if (date < today) {
@@ -217,7 +217,7 @@ export const MonthlyReportsTab = ({ user }) => {
     {loading ? <div role="status">جاري تحميل تقارير الشهر...</div> : <div className="table-responsive">
       <table className="table monthly-attendance-table"><thead><tr>
         <th style={{ textAlign: 'center' }}>التاريخ</th><th style={{ textAlign: 'center' }}>أوقات الدوام</th>
-        <th style={{ textAlign: 'center' }}>العمل الإضافي (ساعة)</th><th style={{ textAlign: 'center' }}>حالة الاضافي</th>
+        <th style={{ textAlign: 'center' }}>العمل الإضافي<br /><span>بالدقائق</span></th><th style={{ textAlign: 'center' }}>حالة الاضافي</th>
       </tr></thead><tbody>{days.map(date => {
         const dayRecords = attends.filter(record => record.date === date && !record.isLeave)
           .sort((a, b) => Number(b.source === 'hr_attendance') - Number(a.source === 'hr_attendance') || String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
@@ -233,10 +233,10 @@ export const MonthlyReportsTab = ({ user }) => {
           <td data-label="أوقات الدوام" style={{ textAlign: 'center', verticalAlign: 'middle', fontSize: '11px', lineHeight: 1.5 }}>
             {renderAttendanceCell(date, entry, exit, dayLeaves, today)}
           </td>
-          <td data-label="العمل الإضافي (ساعة)" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-            {extras.length ? extras.map(request => <div key={request.id}>{hoursLabel(getTimedLeaveMinutes(request))}</div>) : '—'}
+          <td data-label={'العمل الإضافي\nبالدقائق'} className="attendance-overtime-cell" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+            {extras.length ? extras.map(request => <div className="attendance-date-text" key={request.id}>{minutesLabel(getTimedLeaveMinutes(request))}</div>) : <span className="attendance-date-text">—</span>}
           </td>
-          <td data-label="حالة الاضافي" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+          <td data-label="حالة الاضافي" className="attendance-overtime-status" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
             {extras.length ? (
               extras.map(request => (
                 <div key={request.id} style={{ padding: '2px 0' }}>

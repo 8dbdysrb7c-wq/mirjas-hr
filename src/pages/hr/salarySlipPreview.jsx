@@ -4,6 +4,7 @@ import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import {getTimedLeaveMinutes,timeToMinutes} from '../../utils/attendancePolicy';
 import {distributePreviewAmount} from '../../utils/salaryPreviewAmounts';
+import './salarySlipPreview.css';
 const MySwal=withReactContent(Swal);
 const formatVal = (val, showZeroAsDash = true) => {
   if (val === undefined || val === null || val === '') return '-';
@@ -65,16 +66,17 @@ export const createSalaryPreview = (employee, selectedMonth) => {
     MySwal.fire({
       title,
       width: 760,
+      customClass: { popup: 'salary-preview-popup', htmlContainer: 'salary-preview-content' },
       showCloseButton: true,
       confirmButtonText: 'إغلاق',
       confirmButtonColor: '#0f766e',
       html: <div dir="rtl" style={{ textAlign: 'right' }}>
-        <div style={{ padding: '12px 16px', background: '#f0fdfa', borderRadius: 12, marginBottom: 16, display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+        <div className="salary-preview-summary" style={{ padding: '12px 16px', background: '#f0fdfa', borderRadius: 12, marginBottom: 16, display: 'flex', justifyContent: 'space-between', gap: 12 }}>
           <span>{employee.name} · {selectedMonth}</span>
           <strong>{formatVal(total, false)} د.أ</strong>
         </div>
-        <div style={{ maxHeight: '55vh', overflow: 'auto' }}>
-          <table className="table" style={{ width: '100%', fontSize: 13 }}><thead><tr>
+        <div className="salary-preview-scroll" style={{ maxHeight: '55vh', overflow: 'auto' }}>
+          <table className="modal-table salary-preview-table" style={{ width: '100%', fontSize: 13 }}><thead><tr>
             <th style={{ textAlign: 'center' }}>التاريخ</th><th style={{ textAlign: 'center' }}>التفاصيل</th><th style={{ textAlign: 'center' }}>المدة</th><th style={{ textAlign: 'center' }}>القيمة (د.أ)</th>
           </tr></thead><tbody>{rows.map((row, index) => <tr key={index}>
             <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>{row.date || '—'}</td><td style={{ textAlign: 'center' }}>{row.label}</td><td style={{ textAlign: 'center' }}>{row.duration || '—'}</td><td style={{ textAlign: 'center' }}>{row.amount == null ? '—' : formatVal(row.amount, false)}</td>

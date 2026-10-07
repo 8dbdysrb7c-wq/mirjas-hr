@@ -12,6 +12,7 @@ import { hasPermission } from '../../utils/permissions';
 import MultiColorSelectionModal from '../../components/MultiColorSelectionModal';
 import { buildReservedQuantityMap, getAvailableQuantity } from '../../utils/stockAvailability';
 import './stock-desktop.css';
+import './salesStockWorkflow.css';
 import { isStockVoucherInHistory } from '../../utils/stockVoucherHistory';
 
 const MySwal = withReactContent(Swal);
@@ -22,7 +23,7 @@ const escapeMarkup = value => String(value ?? '')
   .replaceAll('"', '&quot;')
   .replaceAll("'", '&#039;');
 
-const AdminStock = ({ user, notificationTarget }) => {
+const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) => {
   const [stock, setStock] = useState([]);
   const [assets, setAssets] = useState([]);
   const [showLocationsModal, setShowLocationsModal] = useState(false);
@@ -46,7 +47,7 @@ const AdminStock = ({ user, notificationTarget }) => {
   const stockStatusFilterRef = useRef(null);
 
   // States for Vouchers
-  const [activeStockTab, setActiveStockTab] = useState('items'); // 'items' or 'vouchers'
+  const [activeStockTab, setActiveStockTab] = useState(auditRequest?.order?.isProduction ? 'production' : auditRequest ? 'audit' : 'items'); // 'items' or 'vouchers'
   const [vouchers, setVouchers] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -476,7 +477,7 @@ const AdminStock = ({ user, notificationTarget }) => {
           }
         });
 
-        if (needsUpdate && settingsData) {
+        if (needsUpdate && settingsData && !auditRequest) {
           settingsData.stockLocations = currentLocs;
           try {
             await saveGlobalSettings(settingsData);
@@ -795,6 +796,7 @@ const AdminStock = ({ user, notificationTarget }) => {
             await saveSalesOrder({ ...order, stockDeducted: true });
           }
           Swal.fire('تم!', 'تم اعتماد السند وخصم المخزون بنجاح.', 'success');
+          if (auditRequest) setShowAuditModal(false);
           fetchData(); // Refresh stock
         } else {
           Swal.fire('خطأ', 'حدث خطأ أثناء اعتماد السند.', 'error');
@@ -1016,7 +1018,7 @@ const AdminStock = ({ user, notificationTarget }) => {
 
   const handleIgnoreAudit = async (order, scope = 'sales') => {
     if (scope === 'receipt' && (!hasPermission(user, 'stock_production_receipt', 'view') || !hasPermission(user, 'stock_production_receipt', 'add'))) return;
-    MySwal.fire({
+    return MySwal.fire({
       title: 'تجاهل الطلبية؟',
       text: 'هل أنت متأكد أنك تريد تجاهل هذه الطلبية وإخفاءها من هذه القائمة؟',
       icon: 'warning',
@@ -1032,12 +1034,14 @@ const AdminStock = ({ user, notificationTarget }) => {
           delete updatedOrder.isProduction;
           delete updatedOrder.hasDraft;
           delete updatedOrder.draftCreatedBy;
-          if (order.productionType === 'preparation') await savePreparationOrder(updatedOrder);
-          else await saveOrder(updatedOrder);
+          const saved = order.productionType === 'preparation' ? await savePreparationOrder(updatedOrder) : await saveOrder(updatedOrder);
+          if (!saved) { await Swal.fire('تعذر التجاهل', 'لم يتم حفظ التجاهل. حاول مرة أخرى.', 'error'); return; }
         } else {
-          await saveSalesOrder({ ...order, ignoredAudit: true });
+          const saved = await saveSalesOrder({ ...order, ignoredAudit: true });
+          if (!saved) { await Swal.fire('تعذر التجاهل', 'لم يتم حفظ التجاهل. حاول مرة أخرى.', 'error'); return; }
         }
         Swal.fire('تم!', 'تم تجاهل الطلبية وإخفاؤها.', 'success');
+        if (auditRequest) setShowAuditModal(false);
         fetchData();
       }
     });
@@ -3478,8 +3482,25 @@ const AdminStock = ({ user, notificationTarget }) => {
     printWindow.document.close();
   };
 
+  const launchedAuditRef = useRef(false);
+  const openedAuditRef = useRef(false);
+  useEffect(() => {
+    if (!auditRequest || loading || !baseLoadedRef.current || launchedAuditRef.current) return;
+    launchedAuditRef.current = true;
+    handleOpenAudit(auditRequest.order).catch(error => {
+      Swal.fire('تعذر فتح التدقيق', error.message || 'حاول مرة أخرى', 'error');
+      onAuditClose?.();
+    });
+  }, [auditRequest, loading]);
+  useEffect(() => {
+    if (!auditRequest) return;
+    if (showAuditModal) openedAuditRef.current = true;
+    else if (openedAuditRef.current) onAuditClose?.();
+  }, [showAuditModal, auditRequest]);
+
   return (
-    <div className="animate-fade-in pb-10">
+    <div className={`animate-fade-in pb-10 ${auditRequest ? 'sales-stock-audit-only' : ''}`}>
+      {auditRequest && !showAuditModal && <div className="sales-stock-loading" role="status">جاري تحميل شاشة تدقيق المخزون...<button type="button" onClick={onAuditClose} className="btn btn-outline">إلغاء</button></div>}
 
       {/* ===== HEADER ===== */}
       <div className="flex-responsive mb-5 items-center justify-between gap-4">
@@ -5797,6 +5818,8 @@ const AdminStock = ({ user, notificationTarget }) => {
             </div>
 
             <div className="flex gap-4 pt-2">
+              {auditRequest && <button type="button" className="btn btn-outline" onClick={() => handleIgnoreAudit(auditOrder, auditOrder.isProduction ? 'material' : 'sales')}>تجاهل هذه الخطوة</button>}
+              {auditRequest && isAdmin(user) && getDraftForOrder(auditOrder.orderNumber).length > 0 && <button type="button" className="btn btn-outline" onClick={() => handleApproveDraft(auditOrder)}>اعتماد المسودة المحفوظة وخصم المخزون</button>}
               <button onClick={handleConfirmAudit} className="btn flex-2 flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:-translate-y-0.5" style={{ background: 'linear-gradient(135deg, var(--primary), #0f766e)', color: 'white', height: '52px', fontSize: '1.05rem', fontWeight: '900', flex: 2, borderRadius: '14px', border: 'none' }}>
                 <Save size={22} /> {auditOrder.isProduction ? 'اعتماد وصرف المواد' : 'حفظ المسودة لاعتماد الخصم'}
               </button>

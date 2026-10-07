@@ -53,6 +53,7 @@
   letter-spacing: -0.3px;
   direction: ltr;
 }
+.attendance-overtime-status span { font-size: 11px !important; font-weight: 700 !important; }
 
 @media (max-width: 640px) {
   .employee-attendance-report {
@@ -118,9 +119,13 @@
     font-size: 9.5px;
     gap: 2px !important;
   }
+  .employee-attendance-report table.monthly-attendance-table td.attendance-overtime-cell::before {
+    white-space: pre-line;
+  }
   .attendance-date-text {
     font-size: 10px !important;
     white-space: nowrap !important;
     letter-spacing: -0.4px !important;
   }
+  .attendance-overtime-status span { font-size: 10px !important; }
 }
