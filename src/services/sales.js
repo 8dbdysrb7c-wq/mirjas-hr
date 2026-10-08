@@ -149,6 +149,31 @@ export const syncProductionStatusToSalesOrder = async (prodOrPrepOrder, orderTyp
       ? prodOrPrepOrder.items 
       : [{ productName: prodOrPrepOrder.productName, quantity: prodOrPrepOrder.quantity, status: cardStatus }];
 
+    // Fetch linked production and preparation cards for this sales order to support dual-department workflow
+    let linkedProdCards = [];
+    let linkedPrepCards = [];
+    try {
+      const orderNum = salesOrderDoc.orderNumber;
+      if (orderNum) {
+        const [prodSnap, prepSnap] = await Promise.all([
+          getDocs(query(collection(db, 'orders'), where('salesOrderNumber', '==', orderNum))),
+          getDocs(query(collection(db, 'preparation_orders'), where('salesOrderNumber', '==', orderNum)))
+        ]);
+        linkedProdCards = prodSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+        linkedPrepCards = prepSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+      }
+      if (linkedProdCards.length === 0 && salesOrderDoc.id) {
+        const snap = await getDocs(query(collection(db, 'orders'), where('salesOrderId', '==', salesOrderDoc.id)));
+        linkedProdCards = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      }
+      if (linkedPrepCards.length === 0 && salesOrderDoc.id) {
+        const snap = await getDocs(query(collection(db, 'preparation_orders'), where('salesOrderId', '==', salesOrderDoc.id)));
+        linkedPrepCards = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      }
+    } catch (e) {
+      console.warn("Could not fetch linked cards for dual sync:", e);
+    }
+
     let hasChanged = false;
     const updatedSalesItems = salesOrderDoc.items.map(salesItem => {
       const sName = normalize(salesItem.productName);
@@ -161,49 +186,127 @@ export const syncProductionStatusToSalesOrder = async (prodOrPrepOrder, orderTyp
         return salesItem;
       }
 
-      let newStatus = salesItem.itemStatus;
+      // Check if this item is associated with production (sewing)
+      const matchingProdCard = linkedProdCards.find(c =>
+        (Array.isArray(c.items) && c.items.some(ci => {
+          const ciName = normalize(ci.productName);
+          return ciName === sName || ciName.includes(sName) || sName.includes(ciName);
+        })) || normalize(c.productName) === sName
+      );
 
-      if (isPrep) {
-        const isFinished = cardStatus === 'منتهي' || matchedCardItem.status === 'منتهي' || matchedCardItem.status === 'جاهز';
-        const isCancelled = cardStatus === 'ملغي' || matchedCardItem.status === 'ملغي';
+      // Check if this item is associated with preparation
+      const matchingPrepCard = linkedPrepCards.find(c =>
+        (Array.isArray(c.items) && c.items.some(ci => {
+          const ciName = normalize(ci.productName);
+          return ciName === sName || ciName.includes(sName) || sName.includes(ciName);
+        })) || normalize(c.productName) === sName
+      );
 
-        if (isFinished) {
-          newStatus = 'جاهز';
-        } else if (isCancelled) {
-          newStatus = 'ملغي';
-        } else {
-          newStatus = 'قيد التحضير';
-        }
-      } else {
-        const isFinished = cardStatus === 'منتهي' || matchedCardItem.status === 'منتهي' || matchedCardItem.status === 'جاهز';
-        const isCancelled = cardStatus === 'ملغي' || matchedCardItem.status === 'ملغي';
+      const hasProdRequirement = Boolean(
+        salesItem.hasProductionDetails ||
+        salesItem.hasPrepAndProdDetails ||
+        matchingProdCard ||
+        (!isPrep && matchedCardItem)
+      );
 
-        if (isFinished) {
-          newStatus = 'جاهز';
-        } else if (isCancelled) {
-          newStatus = 'ملغي';
-        } else if (matchedCardItem.stageQuantities) {
+      const hasPrepRequirement = Boolean(
+        salesItem.hasPreparationDetails ||
+        salesItem.hasPrepAndProdDetails ||
+        matchingPrepCard ||
+        (isPrep && matchedCardItem)
+      );
+
+      const requiresBoth = hasProdRequirement && hasPrepRequirement;
+
+      // Calculate Production (Sewing & Packaging) status
+      let prodIsFinished = false;
+      let prodIsCancelled = false;
+      let prodInPackaging = false;
+
+      if (!isPrep) {
+        prodIsFinished = cardStatus === 'منتهي' || matchedCardItem.status === 'منتهي' || matchedCardItem.status === 'جاهز';
+        prodIsCancelled = cardStatus === 'ملغي' || matchedCardItem.status === 'ملغي';
+        if (matchedCardItem.stageQuantities) {
           const sq = matchedCardItem.stageQuantities;
           const sewing = Number(sq.sewing || 0);
           const pending = Number(sq.pendingPackaging || 0);
           const pkg = Number(sq.packaging || 0);
           const fin = Number(sq.finished || 0);
           const tot = Number(matchedCardItem.quantity || (sewing + pending + pkg + fin) || 0);
-
           if (tot > 0 && fin >= tot) {
-            newStatus = 'جاهز';
+            prodIsFinished = true;
           } else if (pending > 0 || pkg > 0 || (fin > 0 && sewing === 0)) {
-            newStatus = 'إنتاج قيد التغليف';
-          } else {
-            newStatus = 'إنتاج قيد الخياطة';
+            prodInPackaging = true;
           }
         } else {
           const cItemStatus = matchedCardItem.status || cardStatus;
           if (['مرحلة التغليف', 'بانتظار استلام التغليف', 'تحويل جزئي للتغليف', 'تغليف جزئي', 'تم التحويل إلى قسم التغليف'].includes(cItemStatus)) {
-            newStatus = 'إنتاج قيد التغليف';
-          } else {
-            newStatus = 'إنتاج قيد الخياطة';
+            prodInPackaging = true;
           }
+        }
+      } else if (matchingProdCard) {
+        const pStatus = matchingProdCard.status || '';
+        const pItem = (matchingProdCard.items || []).find(pi => {
+          const piName = normalize(pi.productName);
+          return piName === sName || piName.includes(sName) || sName.includes(piName);
+        });
+        const pItemStatus = pItem?.status || pStatus;
+        prodIsFinished = pStatus === 'منتهي' || pItemStatus === 'منتهي' || pItemStatus === 'جاهز';
+        prodIsCancelled = pStatus === 'ملغي' || pItemStatus === 'ملغي';
+        if (['مرحلة التغليف', 'بانتظار استلام التغليف', 'تحويل جزئي للتغليف', 'تغليف جزئي', 'تم التحويل إلى قسم التغليف'].includes(pItemStatus)) {
+          prodInPackaging = true;
+        }
+      }
+
+      // Calculate Preparation status
+      let prepIsFinished = false;
+      let prepIsCancelled = false;
+
+      if (isPrep) {
+        prepIsFinished = cardStatus === 'منتهي' || matchedCardItem.status === 'منتهي' || matchedCardItem.status === 'جاهز';
+        prepIsCancelled = cardStatus === 'ملغي' || matchedCardItem.status === 'ملغي';
+      } else if (matchingPrepCard) {
+        const prStatus = matchingPrepCard.status || '';
+        const prItem = (matchingPrepCard.items || []).find(pi => {
+          const piName = normalize(pi.productName);
+          return piName === sName || piName.includes(sName) || sName.includes(piName);
+        });
+        const prItemStatus = prItem?.status || prStatus;
+        prepIsFinished = prStatus === 'منتهي' || prItemStatus === 'منتهي' || prItemStatus === 'جاهز';
+        prepIsCancelled = prStatus === 'ملغي' || prItemStatus === 'ملغي';
+      }
+
+      let newStatus = salesItem.itemStatus;
+
+      if (requiresBoth) {
+        if (prodIsCancelled && prepIsCancelled) {
+          newStatus = 'ملغي';
+        } else if (prodIsFinished && prepIsFinished) {
+          newStatus = 'جاهز';
+        } else if (prodIsFinished && !prepIsFinished) {
+          newStatus = 'قيد التحضير';
+        } else if (!prodIsFinished && prepIsFinished) {
+          newStatus = prodInPackaging ? 'إنتاج قيد التغليف' : 'إنتاج قيد الخياطة';
+        } else {
+          newStatus = 'تحضير وإنتاج';
+        }
+      } else if (isPrep) {
+        if (prepIsFinished) {
+          newStatus = 'جاهز';
+        } else if (prepIsCancelled) {
+          newStatus = 'ملغي';
+        } else {
+          newStatus = 'قيد التحضير';
+        }
+      } else {
+        if (prodIsFinished) {
+          newStatus = 'جاهز';
+        } else if (prodIsCancelled) {
+          newStatus = 'ملغي';
+        } else if (prodInPackaging) {
+          newStatus = 'إنتاج قيد التغليف';
+        } else {
+          newStatus = 'إنتاج قيد الخياطة';
         }
       }
 

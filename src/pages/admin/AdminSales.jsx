@@ -2797,13 +2797,16 @@ const AdminSales = ({ user }) => {
       }
       return 'إنتاج قيد التحضير';
     }
-    if (item.itemStatus === 'تحضير وإنتاج') {
+    if (item.itemStatus === 'تحضير وإنتاج' || item.hasPrepAndProdDetails || (item.hasProductionDetails && item.hasPreparationDetails)) {
       const prodStatus = getProductionItemStatus(salesOrder, item);
       const prepStatus = getPreparationItemStatus(salesOrder, item);
-      if (prodStatus && prodStatus !== 'لم يتم التنفيذ' && prepStatus && prepStatus !== 'لم يتم التنفيذ') {
-        return `خياطة: ${prodStatus} | تحضير: ${prepStatus}`;
+      if (prodStatus || prepStatus) {
+        const p1 = prodStatus || (item.itemStatus === 'قيد التحضير' ? 'منتهي' : 'لم يتم التنفيذ');
+        const p2 = prepStatus || (item.itemStatus === 'إنتاج قيد الخياطة' ? 'منتهي' : 'لم يتم التنفيذ');
+        if (p1 === 'منتهي' && p2 === 'منتهي') return 'جاهز';
+        return `خياطة: ${p1} | تحضير: ${p2}`;
       }
-      return 'تحضير وإنتاج';
+      return item.itemStatus || 'تحضير وإنتاج';
     }
     return item.itemStatus || '---';
   };
@@ -5209,7 +5212,7 @@ const AdminSales = ({ user }) => {
                                     {item.hasPreparationDetails ? <Edit2 size={16} strokeWidth={2} /> : <Plus size={16} strokeWidth={2} />}
                                   </button>
                                 )}
-                                {item.itemStatus === 'تحضير وإنتاج' && (isAdmin(user) || user?.level === 'مشرف' || user?.role === 'مشرف' || user?.level === 'supervisor' || user?.role === 'supervisor' || user?.hasProductionAccess || user?.hasPreparationAccess || hasPermission(user, 'production', 'add') || hasPermission(user, 'production', 'edit')) && (
+                                {(item.itemStatus === 'تحضير وإنتاج' || item.hasPrepAndProdDetails) && (isAdmin(user) || user?.level === 'مشرف' || user?.role === 'مشرف' || user?.level === 'supervisor' || user?.role === 'supervisor' || user?.hasProductionAccess || user?.hasPreparationAccess || hasPermission(user, 'production', 'add') || hasPermission(user, 'production', 'edit')) && (
                                   <button
                                     type="button"
                                     className={`${(item.hasPrepAndProdDetails || (item.hasProductionDetails && item.hasPreparationDetails)) ? "icon-btn text-blue-600 hover:bg-blue-50" : "icon-btn bg-blue-600 hover:bg-blue-700 text-white"} ${isItemStatusDisabled(item) ? 'opacity-50 cursor-not-allowed' : ''}`}
