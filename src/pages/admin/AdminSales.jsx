@@ -147,8 +147,8 @@ const AdminSales = ({ user }) => {
         : isIgnored
         ? 'تم تجاهل التدقيق'
         : isLockedByDriver
-        ? '1. تدقيق الخصم (مغلق)'
-        : '1. تدقيق الخصم';
+        ? '3. تدقيق الخصم (مغلق)'
+        : '3. تدقيق الخصم';
 
       return (
         <div className="sales-workflow-cell">
@@ -222,8 +222,8 @@ const AdminSales = ({ user }) => {
             : isIgnored
             ? 'تم تجاهل الصرف'
             : isLockedByDriver
-            ? '2. صرف المواد (مغلق)'
-            : '2. صرف المواد';
+            ? '4. صرف المواد (مغلق)'
+            : '4. صرف المواد';
 
           const cardTitle = isDone
             ? 'تم صرف المواد'
@@ -939,27 +939,27 @@ const AdminSales = ({ user }) => {
     const checklist = [
       {
         step: 1,
-        title: 'تدقيق خصم المخزون',
-        done: stockDone,
-        note: stockDone ? 'تم التدقيق والخصم' : 'بانتظار تدقيق خصم البضاعة الجاهزة'
-      },
-      {
-        step: 2,
-        title: 'صرف مواد الإنتاج والتحضير',
-        done: materialsDone,
-        note: materialsDone ? 'تم صرف المواد أو لا يلزم' : 'بانتظار صرف مواد بطاقات التصنيع'
-      },
-      {
-        step: 3,
         title: 'تحديد طريقة التسليم / السائق',
         done: hasDelivery,
         note: hasDelivery ? 'تم تحديد آلية التسليم' : 'الطلبية لا تزال (بدون سائق)'
       },
       {
-        step: 4,
+        step: 2,
         title: 'إنجاز التوصيل والتسليم',
         done: isDeliveryCompleted,
         note: isDeliveryCompleted ? 'تم إنجاز التوصيل بنجاح' : (hasDelivery ? `حالة التوصيل: (${deliveryStatus || 'بانتظار الاستلام'}) - لم يكتمل` : 'بانتظار تعيين السائق أولاً')
+      },
+      {
+        step: 3,
+        title: 'تدقيق خصم المخزون',
+        done: stockDone,
+        note: stockDone ? 'تم التدقيق والخصم' : 'بانتظار تدقيق خصم البضاعة الجاهزة'
+      },
+      {
+        step: 4,
+        title: 'صرف مواد الإنتاج والتحضير',
+        done: materialsDone,
+        note: materialsDone ? 'تم صرف المواد أو لا يلزم' : 'بانتظار صرف مواد بطاقات التصنيع'
       }
     ];
 
@@ -1111,10 +1111,10 @@ const AdminSales = ({ user }) => {
     // المشرف عماد فقط هو المقيد بالفحص الصارم، بينما الإدارة مستثناة
     if (isImad) {
       const missing = [];
-      if (!workflow.stockDone) missing.push('1. تدقيق خصم المخزون للأصناف الجاهزة');
-      if (!workflow.materialsDone) missing.push('2. صرف مواد الإنتاج والتحضير');
-      if (!hasDelivery) missing.push('3. تحديد السائق أو طريقة التسليم (لا تزال بدون سائق)');
-      else if (!isDeliveryCompleted) missing.push(`4. إتمام التوصيل (حالة التوصيل الحالية: "${missionStatus || 'بانتظار الاستلام'}" ويجب أن تكون "تم الإنجاز")`);
+      if (!hasDelivery) missing.push('1. تحديد السائق أو طريقة التسليم (لا تزال بدون سائق)');
+      else if (!isDeliveryCompleted) missing.push(`2. إتمام التوصيل (حالة التوصيل الحالية: "${missionStatus || 'بانتظار الاستلام'}" ويجب أن تكون "تم الإنجاز")`);
+      if (!workflow.stockDone) missing.push('3. تدقيق خصم المخزون للأصناف الجاهزة');
+      if (!workflow.materialsDone) missing.push('4. صرف مواد الإنتاج والتحضير');
 
       if (missing.length > 0) {
         await MySwal.fire({
