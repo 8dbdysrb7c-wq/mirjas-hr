@@ -112,8 +112,9 @@ const AdminSales = ({ user }) => {
   const [stockAuditRequest, setStockAuditRequest] = useState(null);
   const closeStockAudit = async () => {
     setStockAuditRequest(null);
-    const [prod, prep] = await Promise.all([getOrders(), getPreparationOrders()]);
-    setProductionOrders(prod || []); setPreparationOrders(prep || []);
+    const [prod, prep, sales] = await Promise.all([getOrders(), getPreparationOrders(), getSalesOrders()]);
+    setProductionOrders(prod || []); setPreparationOrders(prep || []); setOrders(sales || []);
+    if (typeof fetchData === 'function') fetchData().catch(() => {});
   };
 
   const handleIgnoreStockAudit = async (order) => {

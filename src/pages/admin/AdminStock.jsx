@@ -24,6 +24,11 @@ const escapeMarkup = value => String(value ?? '')
   .replaceAll("'", '&#039;');
 
 const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) => {
+  const currentUserId = user?.id || user?.employeeId || '';
+  const currentUserName = user?.name || '';
+  const isImad = currentUserId === 'EMP-0025' || currentUserName.includes('عماد');
+  const canDirectAudit = isAdmin(user) || isImad || Boolean(auditRequest);
+
   const [stock, setStock] = useState([]);
   const [assets, setAssets] = useState([]);
   const [showLocationsModal, setShowLocationsModal] = useState(false);
@@ -1364,7 +1369,7 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
       }, 0);
       const nextMisNumber = `MIS-${String(maxMis + 1).padStart(5, '0')} (${auditOrder.orderNumber})`;
 
-      const isDirectApprove = isAdmin(user);
+      const isDirectApprove = canDirectAudit;
 
       for (const [warehouse, wItems] of Object.entries(itemsByWarehouse)) {
         const payload = {
@@ -5819,9 +5824,9 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
 
             <div className="flex gap-4 pt-2">
               {auditRequest && <button type="button" className="btn btn-outline" onClick={() => handleIgnoreAudit(auditOrder, auditOrder.isProduction ? 'material' : 'sales')}>تجاهل هذه الخطوة</button>}
-              {auditRequest && isAdmin(user) && getDraftForOrder(auditOrder.orderNumber).length > 0 && <button type="button" className="btn btn-outline" onClick={() => handleApproveDraft(auditOrder)}>اعتماد المسودة المحفوظة وخصم المخزون</button>}
+              {auditRequest && canDirectAudit && getDraftForOrder(auditOrder.orderNumber).length > 0 && <button type="button" className="btn btn-outline" onClick={() => handleApproveDraft(auditOrder)}>اعتماد المسودة المحفوظة وخصم المخزون</button>}
               <button onClick={handleConfirmAudit} className="btn flex-2 flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:-translate-y-0.5" style={{ background: 'linear-gradient(135deg, var(--primary), #0f766e)', color: 'white', height: '52px', fontSize: '1.05rem', fontWeight: '900', flex: 2, borderRadius: '14px', border: 'none' }}>
-                <Save size={22} /> {auditOrder.isProduction ? 'اعتماد وصرف المواد' : 'حفظ المسودة لاعتماد الخصم'}
+                <Save size={22} /> {auditOrder.isProduction ? 'اعتماد وصرف المواد' : (canDirectAudit ? 'تأكيد تدقيق وخصم المخزون' : 'حفظ المسودة لاعتماد الخصم')}
               </button>
               <button onClick={() => setShowAuditModal(false)} className="btn btn-outline flex-1 transition-all hover:bg-slate-100" style={{ height: '52px', fontSize: '1rem', fontWeight: 'bold', borderRadius: '14px', color: '#475569', borderColor: '#cbd5e1' }}>
                 إلغاء الأمر
