@@ -27,7 +27,7 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
   const currentUserId = user?.id || user?.employeeId || '';
   const currentUserName = user?.name || '';
   const isImad = currentUserId === 'EMP-0025' || currentUserName.includes('عماد');
-  const canDirectAudit = isAdmin(user) || isImad || Boolean(auditRequest);
+  const canDirectAudit = isAdmin(user) || isImad;
 
   const [stock, setStock] = useState([]);
   const [assets, setAssets] = useState([]);
@@ -4162,7 +4162,7 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
         }));
         return (
           <>
-            {totalUnapplied > 0 && isAdmin(user) && (
+            {totalUnapplied > 0 && canDirectAudit && (
               <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 mb-4 flex justify-between items-center flex-wrap gap-3 mt-4" style={{ direction: 'rtl' }}>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-rose-100 text-rose-700 rounded-full flex items-center justify-center flex-shrink-0">
@@ -4189,7 +4189,7 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                 <p className="text-slate-500 text-xs mt-0.5">سجل متابعة خصم الطلبيات من المخزون واعتمادها</p>
               </div>
               <div className="flex items-center gap-3 flex-wrap">
-                {waitingCount > 0 && isAdmin(user) && (
+                {waitingCount > 0 && canDirectAudit && (
                   <button
                     onClick={handleApproveAllWaitingDrafts}
                     className="btn flex items-center gap-1.5 font-bold text-xs text-white shadow-sm hover:opacity-90 transition-all"
@@ -4263,7 +4263,7 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                           vouchers.some(v => v.orderNumber === order.orderNumber && v.status === 'مسودة') ? (
                             <div className="flex flex-col items-center gap-1">
                               <span className="badge bg-rose-100 text-rose-800 font-bold">معلق (لم يخصم فعلياً!)</span>
-                              {isAdmin(user) && (
+                              {canDirectAudit && (
                                 <button
                                   onClick={() => handleFixSingleDeduction(order)}
                                   className="btn text-white text-[11px] mt-1 font-bold"
@@ -4287,7 +4287,7 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                           {order.stockDeducted ? (
                             vouchers.some(v => v.orderNumber === order.orderNumber && v.status === 'مسودة') ? (
                               <span className="text-xs text-rose-500 font-bold px-2 py-1 bg-rose-50 rounded-lg">إصلاح معلق</span>
-                            ) : isAdmin(user) ? (
+                            ) : canDirectAudit ? (
                               <button
                                 className="btn flex items-center justify-center gap-1"
                                 style={{ background: '#dc2626', color: 'white', padding: '0.4rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 'bold' }}
@@ -4323,7 +4323,7 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                               >
                                 <Edit2 size={14} /> معاينة وتعديل
                               </button>
-                              {isAdmin(user) && (
+                              {canDirectAudit && (
                                 <>
                                   <button
                                     className="btn flex items-center justify-center gap-1"
@@ -4724,7 +4724,7 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                             vouchers.some(v => v.orderNumber === order.orderNumber && v.status === 'مسودة') ? (
                               <div className="flex flex-col items-center gap-1">
                                 <span className="badge bg-rose-100 text-rose-800 font-bold mb-1.5" style={{ display: 'inline-block', width: '90%', padding: '6px' }}>معلق (لم يخصم فعلياً!)</span>
-                                {isAdmin(user) && (
+                                {canDirectAudit && (
                                   <button
                                     onClick={() => handleFixSingleDeduction(order)}
                                     className="btn text-white text-[11px] mb-1.5 font-bold"
@@ -4760,7 +4760,7 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                             order.stockDeducted ? (
                               vouchers.some(v => v.orderNumber === order.orderNumber && v.status === 'مسودة') ? (
                                 <span className="text-xs text-rose-500 font-bold px-2 py-1 bg-rose-50 rounded-lg">إصلاح معلق</span>
-                              ) : isAdmin(user) ? (
+                              ) : canDirectAudit ? (
                                 <button
                                   className="btn flex items-center justify-center gap-1"
                                   style={{ background: '#e11d48', color: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', border: 'none' }}
@@ -4781,7 +4781,7 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                                 >
                                   <Edit2 size={13} /> تعديل الصرف
                                 </button>
-                                {isAdmin(user) && (
+                                {canDirectAudit && (
                                   <>
                                     <button
                                       className="btn flex items-center justify-center gap-1"
@@ -4822,7 +4822,7 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                           ) : (
                             /* Product Receipt Section */
                             order.stockReceived ? (
-                              isAdmin(user) ? (
+                              canDirectAudit ? (
                                 <button
                                   className="btn flex items-center justify-center gap-1"
                                   style={{ background: '#be123c', color: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', border: 'none' }}
