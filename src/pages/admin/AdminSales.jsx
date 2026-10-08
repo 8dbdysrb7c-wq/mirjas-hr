@@ -879,24 +879,21 @@ const AdminSales = ({ user }) => {
       });
       if (!saved) throw new Error('تعذر حفظ الإنجاز');
 
-      // المشرف عماد لا يحتاج لموافقة إدارة: إنهاء الطلبية مباشرة عند إنجاز الاستلام/التوصيل
-      if (isImad) {
-        await saveSalesOrder({
-          ...order,
-          status: 'منتهي',
-          deliveryStatus: 'تم الإنجاز',
-          lastActionBy: user?.name || 'عماد',
-          statusUpdateDate: getLocalDateStr(new Date())
-        }, { preserveStatus: true });
+      // تسجيل إنجاز التوصيل فقط، مع إبقاء الطلبية معلقة لإجراء تدقيق المخزون وصرف الإنتاج قبل الموافقة النهائية
+      await saveSalesOrder({
+        ...order,
+        deliveryStatus: 'تم الإنجاز',
+        lastActionBy: user?.name || (isImad ? 'عماد' : 'مشرف'),
+        statusUpdateDate: getLocalDateStr(new Date())
+      }, { preserveStatus: true });
 
-        await addLog({
-          userId: user?.id,
-          userName: user?.name || 'عماد',
-          module: 'طلبيات العملاء',
-          action: 'إنهاء الطلبية',
-          details: `إنهاء وإغلاق الطلبية رقم ${order.orderNumber} مباشرة بواسطة المشرف عماد`
-        });
-      }
+      await addLog({
+        userId: user?.id,
+        userName: user?.name || (isImad ? 'عماد' : 'مشرف'),
+        module: 'طلبيات العملاء',
+        action: 'إنجاز التوصيل',
+        details: `تسجيل إنجاز تسليم الطلبية رقم ${order.orderNumber} وإتاحة تدقيق المخزون وصرف الإنتاج`
+      });
 
       await addLog({ userId: user?.id, userName: user?.name, module: 'التوصيل', action: 'تم الإنجاز', details: 'إنجاز تسليم الطلبية ' + order.orderNumber + ' من قسم الطلبيات' });
       await fetchData();
