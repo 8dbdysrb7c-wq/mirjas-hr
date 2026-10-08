@@ -332,15 +332,64 @@ const AdminSales = ({ user }) => {
         (!targetOrder.orderDate || !v.date || v.date >= targetOrder.orderDate)
       );
       const latestVoucher = validVouchers.length > 0 ? validVouchers[validVouchers.length - 1] : null;
+      const hasVouchers = validVouchers.length > 0;
 
-      const itemsHtml = items.length > 0 ? `
+      const voucherItems = [];
+      if (hasVouchers) {
+        validVouchers.forEach(v => {
+          (v.items || []).forEach(vi => {
+            voucherItems.push({
+              name: vi.name || vi.productName || vi.itemNumber || '-',
+              spec: vi.spec || '',
+              quantity: vi.quantity,
+              unit: vi.unit || 'عدد',
+              warehouse: v.warehouse || 'عام',
+              voucherNumber: v.voucherNumber
+            });
+          });
+        });
+      }
+
+      const itemsHtml = hasVouchers ? `
         <div style="margin-top: 15px; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
           <table style="width: 100%; border-collapse: collapse; text-align: right; font-family: inherit;">
             <thead>
               <tr style="background: #f8fafc; color: #475569; border-bottom: 2px solid #e2e8f0;">
                 <th style="padding: 10px 14px; font-weight: 800; font-size: 0.85rem;">الصنف</th>
-                <th style="padding: 10px 14px; font-weight: 800; font-size: 0.85rem; text-align: center; width: 110px;">الكمية المخصومة</th>
+                <th style="padding: 10px 14px; font-weight: 800; font-size: 0.85rem; text-align: center; width: 110px;">الكمية بالسند</th>
+                <th style="padding: 10px 14px; font-weight: 800; font-size: 0.85rem; text-align: center; width: 110px;">المستودع</th>
                 <th style="padding: 10px 14px; font-weight: 800; font-size: 0.85rem; text-align: center; width: 90px;">الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${voucherItems.map(item => `
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 10px 14px; font-weight: 700; color: #0f172a; font-size: 0.9rem;">
+                    ${item.name}
+                    ${item.spec ? `<span style="display:block; font-size:0.75rem; color:#64748b; font-weight:normal;">${item.spec}</span>` : ''}
+                  </td>
+                  <td style="padding: 10px 14px; text-align: center; font-weight: 800; color: #0284c7; font-size: 1rem;">
+                    ${item.quantity} ${item.unit}
+                  </td>
+                  <td style="padding: 10px 14px; text-align: center; font-size: 0.85rem; color: #475569; font-weight: 600;">
+                    ${item.warehouse}
+                  </td>
+                  <td style="padding: 10px 14px; text-align: center;">
+                    <span style="background: #dcfce7; color: #15803d; font-size: 0.75rem; font-weight: 800; padding: 4px 9px; border-radius: 6px;">مخصوم ✓</span>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : (items.length > 0 ? `
+        <div style="margin-top: 15px; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+          <table style="width: 100%; border-collapse: collapse; text-align: right; font-family: inherit;">
+            <thead>
+              <tr style="background: #f8fafc; color: #475569; border-bottom: 2px solid #e2e8f0;">
+                <th style="padding: 10px 14px; font-weight: 800; font-size: 0.85rem;">الصنف</th>
+                <th style="padding: 10px 14px; font-weight: 800; font-size: 0.85rem; text-align: center; width: 110px;">كمية الطلبية</th>
+                <th style="padding: 10px 14px; font-weight: 800; font-size: 0.85rem; text-align: center; width: 110px;">سند الإخراج</th>
               </tr>
             </thead>
             <tbody>
@@ -354,20 +403,20 @@ const AdminSales = ({ user }) => {
                     ${item.quantity} ${item.unit || 'عدد'}
                   </td>
                   <td style="padding: 10px 14px; text-align: center;">
-                    <span style="background: #dcfce7; color: #15803d; font-size: 0.75rem; font-weight: 800; padding: 4px 9px; border-radius: 6px;">مخصوم ✓</span>
+                    <span style="background: #fef3c7; color: #b45309; font-size: 0.75rem; font-weight: 800; padding: 4px 9px; border-radius: 6px;">لا يوجد سند</span>
                   </td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
         </div>
-      ` : '<p style="text-align: center; color: #64748b; margin-top: 12px; font-weight: bold;">لا توجد أصناف مسجلة لهذه الطلبية.</p>';
+      ` : '<p style="text-align: center; color: #64748b; margin-top: 12px; font-weight: bold;">لا توجد أصناف مسجلة لهذه الطلبية.</p>');
 
       MySwal.fire({
         title: `
           <div style="display: flex; align-items: center; justify-content: center; gap: 8px; color: #059669; font-weight: 800; font-size: 1.2rem;">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-            <span>${isMaterial ? 'تم صرف مواد الإنتاج بنجاح' : 'تم خصم المخزون بنجاح'}</span>
+            <span>${isMaterial ? 'تفاصيل صرف مواد الإنتاج' : 'تفاصيل خصم المخزون'}</span>
           </div>
         `,
         html: `
@@ -382,9 +431,13 @@ const AdminSales = ({ user }) => {
                 <span>المستودع: <strong>${latestVoucher.warehouse || 'عام'}</strong></span>
                 ${latestVoucher.date ? `<span>التاريخ: <strong>${latestVoucher.date}</strong></span>` : ''}
               </div>
-            ` : ''}
-            <div style="color: #15803d; font-weight: bold; font-size: 0.85rem; margin-top: 6px;">
-              ✓ تم تدقيق كافة بنود الطلبية وتثبيت خصم الكميات من المخزون.
+            ` : `
+              <div style="font-size: 0.82rem; color: #b45309; border-top: 1px solid #e2e8f0; padding-top: 6px; margin-top: 6px; font-weight: 600;">
+                تنبيه: تم اعتماد الطلب في المبيعات دون إصدار سند إخراج فعلي من المستودع.
+              </div>
+            `}
+            <div style="color: ${hasVouchers ? '#15803d' : '#475569'}; font-weight: bold; font-size: 0.85rem; margin-top: 6px;">
+              ${hasVouchers ? '✓ تم تدقيق بنود الطلبية وتثبيت خصم الكميات من سندات المستودع.' : 'بيانات بنود الطلبية المسجلة:'}
             </div>
           </div>
           ${itemsHtml}
