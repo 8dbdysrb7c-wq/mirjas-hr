@@ -588,87 +588,108 @@ const AdminSales = ({ user }) => {
           const isDone = Boolean(card.stockDeducted);
           const isIgnored = Boolean(card.ignoredMaterialAudit);
           const isLockedByDriver = !isDone && !isIgnored && !isDelivered;
+          const isPrep = card.productionType === 'preparation' || String(card.orderNumber || '').toUpperCase().startsWith('PREP-');
+          const cardTypeLabel = isPrep ? 'PREP' : 'PRO';
+          const cardOrderNum = card.orderNumber || '';
+
+          const typeBadge = (
+            <span
+              className={`sales-card-type-badge ${isPrep ? 'badge-prep' : 'badge-pro'}`}
+              title={`${isPrep ? 'كرت تحضير' : 'كرت إنتاج خياطة'}: ${cardOrderNum}`}
+            >
+              {cardTypeLabel}
+            </span>
+          );
 
           if (isDone) {
             return (
-              <button
-                key={card.id}
-                type="button"
-                className="sales-merged-step-card is-done"
-                onClick={() => handleShowDeductionDetails(card, true)}
-                title="تم صرف المواد بنجاح - اضغط للاطلاع على السندات"
-              >
-                <div className="merged-card-header">
-                  <Check size={12} strokeWidth={2.8} />
-                  <span className="merged-card-status">تم الصرف</span>
-                </div>
-              </button>
+              <div key={card.id} className="sales-material-step-row">
+                {typeBadge}
+                <button
+                  type="button"
+                  className="sales-merged-step-card is-done sales-material-card"
+                  onClick={() => handleShowDeductionDetails(card, true)}
+                  title={`تم صرف مواد ${isPrep ? 'التحضير' : 'الإنتاج'} (${cardOrderNum}) بنجاح - اضغط للاطلاع`}
+                >
+                  <div className="merged-card-header">
+                    <Check size={12} strokeWidth={2.8} />
+                    <span className="merged-card-status">تم الصرف</span>
+                  </div>
+                </button>
+              </div>
             );
           }
 
           if (isIgnored) {
             return (
-              <button
-                key={card.id}
-                type="button"
-                className="sales-merged-step-card is-ignored"
-                onClick={() => handleUndoIgnoreMaterialAudit(card)}
-                title="تم تجاهل صرف المواد - اضغط للتراجع"
-              >
-                <div className="merged-card-header">
-                  <EyeOff size={11} strokeWidth={2.2} />
-                  <span className="merged-card-status">تم التجاهل</span>
-                </div>
-              </button>
+              <div key={card.id} className="sales-material-step-row">
+                {typeBadge}
+                <button
+                  type="button"
+                  className="sales-merged-step-card is-ignored sales-material-card"
+                  onClick={() => handleUndoIgnoreMaterialAudit(card)}
+                  title={`تم تجاهل صرف مواد ${isPrep ? 'التحضير' : 'الإنتاج'} (${cardOrderNum}) - اضغط للتراجع`}
+                >
+                  <div className="merged-card-header">
+                    <EyeOff size={11} strokeWidth={2.2} />
+                    <span className="merged-card-status">تم التجاهل</span>
+                  </div>
+                </button>
+              </div>
             );
           }
 
           if (isLockedByDriver) {
             return (
-              <button
-                key={card.id}
-                type="button"
-                className="sales-merged-step-card is-locked"
-                onClick={() => {
-                  MySwal.fire({
-                    icon: 'warning',
-                    title: 'صرف المواد مقفل',
-                    text: 'لا يمكن صرف مواد الإنتاج إلا بعد أن يقوم السائق بتسجيل حالة الطلبية (تم الإنجاز).',
-                    confirmButtonText: 'حسناً',
-                    confirmButtonColor: '#0f766e'
-                  });
-                }}
-                title="مغلق: لا يمكن الصرف إلا بعد أن يسجل السائق حالة (تم الإنجاز)"
-              >
-                <div className="merged-card-header">
-                  <Lock size={11} strokeWidth={2.4} />
-                  <span className="merged-card-status">بانتظار السائق</span>
-                </div>
-              </button>
+              <div key={card.id} className="sales-material-step-row">
+                {typeBadge}
+                <button
+                  type="button"
+                  className="sales-merged-step-card is-locked sales-material-card"
+                  onClick={() => {
+                    MySwal.fire({
+                      icon: 'warning',
+                      title: 'صرف المواد مقفل',
+                      text: 'لا يمكن صرف مواد الإنتاج إلا بعد أن يقوم السائق بتسجيل حالة الطلبية (تم الإنجاز).',
+                      confirmButtonText: 'حسناً',
+                      confirmButtonColor: '#0f766e'
+                    });
+                  }}
+                  title={`مغلق: لا يمكن صرف مواد ${isPrep ? 'التحضير' : 'الإنتاج'} (${cardOrderNum}) إلا بعد أن يسجل السائق (تم الإنجاز)`}
+                >
+                  <div className="merged-card-header">
+                    <Lock size={11} strokeWidth={2.4} />
+                    <span className="merged-card-status">بانتظار السائق</span>
+                  </div>
+                </button>
+              </div>
             );
           }
 
           return (
-            <div key={card.id} className="sales-choice-step-card" title="صرف مواد الإنتاج: اختر إما الصرف أو التجاهل">
-              <div className="choice-card-actions">
-                <button
-                  type="button"
-                  className="sales-choice-btn btn-audit"
-                  onClick={() => setStockAuditRequest({ order: card })}
-                  title="صرف مواد أمر الإنتاج/التحضير"
-                >
-                  <CheckSquare size={11} strokeWidth={2.5} />
-                  <span>صرف</span>
-                </button>
-                <button
-                  type="button"
-                  className="sales-choice-btn btn-ignore"
-                  onClick={() => handleIgnoreMaterialAudit(card)}
-                  title="تجاهل صرف المواد لهذا الأمر"
-                >
-                  <EyeOff size={11} strokeWidth={2.2} />
-                  <span>تجاهل</span>
-                </button>
+            <div key={card.id} className="sales-material-step-row">
+              {typeBadge}
+              <div className="sales-choice-step-card sales-material-card" title={`صرف مواد ${isPrep ? 'التحضير' : 'الإنتاج'} (${cardOrderNum}): اختر إما الصرف أو التجاهل`}>
+                <div className="choice-card-actions">
+                  <button
+                    type="button"
+                    className="sales-choice-btn btn-audit"
+                    onClick={() => setStockAuditRequest({ order: card })}
+                    title={`صرف مواد أمر ${isPrep ? 'التحضير' : 'الإنتاج'} (${cardOrderNum})`}
+                  >
+                    <CheckSquare size={11} strokeWidth={2.5} />
+                    <span>صرف</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="sales-choice-btn btn-ignore"
+                    onClick={() => handleIgnoreMaterialAudit(card)}
+                    title={`تجاهل صرف مواد أمر ${isPrep ? 'التحضير' : 'الإنتاج'} (${cardOrderNum})`}
+                  >
+                    <EyeOff size={11} strokeWidth={2.2} />
+                    <span>تجاهل</span>
+                  </button>
+                </div>
               </div>
             </div>
           );

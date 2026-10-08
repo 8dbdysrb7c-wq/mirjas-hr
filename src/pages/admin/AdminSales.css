@@ -485,6 +485,53 @@
   transform: translateY(-1px);
 }
 
+/* Material Release Step: PRO / PREP Badges & Rows */
+.sales-material-step-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  margin: 2px 0;
+}
+
+.sales-card-type-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  line-height: 1;
+  flex-shrink: 0;
+  font-family: inherit;
+  user-select: none;
+  min-width: 36px;
+  text-align: center;
+}
+
+.sales-card-type-badge.badge-pro {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  box-shadow: 0 1px 2px rgba(29, 78, 216, 0.08);
+}
+
+.sales-card-type-badge.badge-prep {
+  background: #f5f3ff;
+  color: #7c3aed;
+  border: 1px solid #ddd6fe;
+  box-shadow: 0 1px 2px rgba(124, 58, 237, 0.08);
+}
+
+.sales-material-card {
+  margin: 0 !important;
+  flex: 1;
+  max-width: 105px;
+}
+
 
 /* Status Tags Above Action Buttons (Legacy fallback) */
 .sales-step-tag {
