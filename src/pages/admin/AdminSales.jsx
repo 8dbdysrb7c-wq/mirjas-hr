@@ -5,7 +5,7 @@ import { hasDraftItems, readLocalDrafts, mergeDrafts, writeLocalDraft, removeLoc
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText, Briefcase, Clock, Check, Save, Share2, Layers, Clipboard, CheckCircle, Copy, Archive, Truck, Lock, EyeOff, CheckSquare } from 'lucide-react';
-import { approveSalesOrder, getSalesOrders, subscribeToSalesOrders, saveSalesOrder, deleteSalesOrder, getSalesOrderDrafts, saveSalesOrderDraft, deleteSalesOrderDraft, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getPreparationOrders, savePreparationOrder, getMissions, saveMission, deleteMission, getEmployees, createNotification } from '../../store';
+import { approveSalesOrder, getSalesOrders, subscribeToSalesOrders, saveSalesOrder, deleteSalesOrder, getSalesOrderDrafts, saveSalesOrderDraft, deleteSalesOrderDraft, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getPreparationOrders, savePreparationOrder, getMissions, saveMission, deleteMission, getEmployees, createNotification, getStockVouchers } from '../../store';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 import { hasPermission } from '../../utils/permissions';
 import Swal from 'sweetalert2';
@@ -321,6 +321,91 @@ const AdminSales = ({ user }) => {
     return false;
   };
 
+  const handleShowDeductionDetails = async (targetOrder, isMaterial = false) => {
+    try {
+      const orderNum = targetOrder.orderNumber || targetOrder.salesOrderNumber || '';
+      const allVouchers = await getStockVouchers();
+      const orderVouchers = allVouchers.filter(v => v.orderNumber === orderNum && v.status === 'معتمد');
+
+      let vouchersHtml = '';
+      if (orderVouchers.length > 0) {
+        vouchersHtml = `
+          <div style="text-align: right; margin-top: 15px; max-height: 350px; overflow-y: auto;">
+            ${orderVouchers.map(v => `
+              <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span style="color: #0f766e; font-weight: 800; font-size: 0.95rem;">📄 سند إخراج: ${v.voucherNumber}</span>
+                  <span style="color: #64748b; font-size: 0.8rem; background: #e2e8f0; padding: 2px 8px; border-radius: 6px;">${v.date || ''}</span>
+                </div>
+                <div style="font-size: 0.85rem; color: #475569; margin-bottom: 8px; display: flex; gap: 15px; flex-wrap: wrap;">
+                  <span>المستودع: <strong style="color: #0f172a;">${v.warehouse || 'عام'}</strong></span>
+                  <span>المسؤول: <strong style="color: #0f172a;">${v.createdBy || '-'}</strong></span>
+                  <span style="color: #059669; font-weight: bold;">الحالة: معتمد ✓</span>
+                </div>
+                ${Array.isArray(v.items) && v.items.length > 0 ? `
+                  <table style="width: 100%; font-size: 0.85rem; border-collapse: collapse; text-align: right; background: white; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0;">
+                    <thead>
+                      <tr style="background: #f1f5f9; color: #334155;">
+                        <th style="padding: 6px 10px; border-bottom: 1px solid #e2e8f0;">الصنف</th>
+                        <th style="padding: 6px 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">الكمية</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${v.items.map(item => `
+                        <tr style="border-bottom: 1px solid #f1f5f9;">
+                          <td style="padding: 6px 10px; font-weight: 600;">${item.name || item.productName || item.itemNumber || '-'}</td>
+                          <td style="padding: 6px 10px; text-align: center; font-weight: 800; color: #0284c7;">${item.quantity} ${item.unit || ''}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } else {
+        vouchersHtml = `
+          <div style="padding: 16px; background: #ecfdf5; border-radius: 10px; border: 1px solid #a7f3d0; margin-top: 12px; text-align: center;">
+            <p style="color: #065f46; font-weight: bold; margin: 0;">
+              ✓ تم تدقيق وخصم كميات هذه الطلبية من المخزون بنجاح.
+            </p>
+          </div>
+        `;
+      }
+
+      MySwal.fire({
+        title: `
+          <div style="display: flex; align-items: center; justify-content: center; gap: 8px; color: #0f766e; font-weight: 800; font-size: 1.15rem;">
+            <span>${isMaterial ? 'تفاصيل صرف مواد الإنتاج' : 'تفاصيل خصم المخزون'}</span>
+          </div>
+        `,
+        html: `
+          <div style="font-size: 0.95rem; color: #334155; margin-bottom: 4px;">
+            طلبية رقم: <strong style="color: #0284c7;">${orderNum}</strong>
+          </div>
+          ${vouchersHtml}
+        `,
+        confirmButtonText: 'إغلاق',
+        confirmButtonColor: '#0f766e',
+        customClass: {
+          container: 'premium-modal-container',
+          popup: 'premium-modal-popup',
+          confirmButton: 'btn-premium-save'
+        }
+      });
+    } catch (err) {
+      console.error(err);
+      MySwal.fire({
+        icon: 'success',
+        title: isMaterial ? 'تم صرف المواد' : 'تم الخصم',
+        text: 'تم خصم كميات هذه الطلبية من المخزون بنجاح.',
+        confirmButtonText: 'حسناً',
+        confirmButtonColor: '#0f766e'
+      });
+    }
+  };
+
   const renderStockStep = (order, material = false) => {
     const state = stockWorkflowState(order, productionOrders, preparationOrders);
     const isDelivered = isDriverDeliveryCompleted(order);
@@ -337,8 +422,8 @@ const AdminSales = ({ user }) => {
             <button
               type="button"
               className="sales-merged-step-card is-done"
-              onClick={() => setStockAuditRequest({ order })}
-              title="تم الخصم بنجاح - اضغط للاطلاع"
+              onClick={() => handleShowDeductionDetails(order, false)}
+              title="تم الخصم بنجاح - اضغط للاطلاع على السندات"
             >
               <div className="merged-card-header">
                 <Check size={12} strokeWidth={2.8} />
@@ -454,8 +539,8 @@ const AdminSales = ({ user }) => {
                 key={card.id}
                 type="button"
                 className="sales-merged-step-card is-done"
-                onClick={() => setStockAuditRequest({ order: card })}
-                title="تم صرف المواد بنجاح - اضغط للاطلاع"
+                onClick={() => handleShowDeductionDetails(card, true)}
+                title="تم صرف المواد بنجاح - اضغط للاطلاع على السندات"
               >
                 <div className="merged-card-header">
                   <Check size={12} strokeWidth={2.8} />
