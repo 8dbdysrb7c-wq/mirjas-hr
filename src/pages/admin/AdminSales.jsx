@@ -5,6 +5,8 @@ import { hasDraftItems, readLocalDrafts, mergeDrafts, writeLocalDraft, removeLoc
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText, Briefcase, Clock, Check, Save, Share2, Layers, Clipboard, CheckCircle, Copy, Archive, Truck, Lock, EyeOff, CheckSquare } from 'lucide-react';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebase';
 import { approveSalesOrder, getSalesOrders, subscribeToSalesOrders, saveSalesOrder, deleteSalesOrder, getSalesOrderDrafts, saveSalesOrderDraft, deleteSalesOrderDraft, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getPreparationOrders, savePreparationOrder, getMissions, saveMission, deleteMission, getEmployees, createNotification, getStockVouchers } from '../../store';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 import { hasPermission } from '../../utils/permissions';
@@ -137,14 +139,18 @@ const AdminSales = ({ user }) => {
 
     if (confirm.isConfirmed) {
       try {
-        await saveSalesOrder({
-          ...order,
+        const updatePayload = {
           ignoredAudit: true,
           ignoredAuditBy: user?.name || (isImad ? 'عماد' : 'مشرف'),
           ignoredAuditAt: new Date().toISOString(),
           lastActionBy: user?.name || (isImad ? 'عماد' : 'مشرف'),
           statusUpdateDate: getLocalDateStr(new Date())
-        }, { preserveStatus: true });
+        };
+
+        await updateDoc(doc(db, 'sales_orders', order.id), updatePayload);
+
+        // Instantly update local state for reactive UI response
+        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...updatePayload } : o));
 
         await addLog({
           userId: user?.id,
@@ -152,9 +158,8 @@ const AdminSales = ({ user }) => {
           module: 'طلبيات العملاء',
           action: 'تجاهل تدقيق الخصم',
           details: `تجاهل تدقيق خصم المخزون للطلبية رقم ${order.orderNumber}`
-        });
+        }).catch(() => {});
 
-        await fetchData();
         MySwal.fire({
           icon: 'success',
           title: 'تم التجاهل',
@@ -163,6 +168,7 @@ const AdminSales = ({ user }) => {
           showConfirmButton: false
         });
       } catch (err) {
+        console.error('Error ignoring stock audit:', err);
         MySwal.fire('خطأ', err.message || 'تعذر حفظ التجاهل', 'error');
       }
     }
@@ -188,14 +194,18 @@ const AdminSales = ({ user }) => {
 
     if (confirm.isConfirmed) {
       try {
-        await saveSalesOrder({
-          ...order,
+        const updatePayload = {
           ignoredAudit: false,
           ignoredAuditBy: null,
           ignoredAuditAt: null,
           lastActionBy: user?.name || (isImad ? 'عماد' : 'مشرف'),
           statusUpdateDate: getLocalDateStr(new Date())
-        }, { preserveStatus: true });
+        };
+
+        await updateDoc(doc(db, 'sales_orders', order.id), updatePayload);
+
+        // Instantly update local state
+        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...updatePayload } : o));
 
         await addLog({
           userId: user?.id,
@@ -203,10 +213,9 @@ const AdminSales = ({ user }) => {
           module: 'طلبيات العملاء',
           action: 'إلغاء تجاهل التدقيق',
           details: `إلغاء تجاهل تدقيق خصم المخزون للطلبية رقم ${order.orderNumber}`
-        });
-
-        await fetchData();
+        }).catch(() => {});
       } catch (err) {
+        console.error('Error undoing ignore stock audit:', err);
         MySwal.fire('خطأ', err.message || 'تعذر إلغاء التجاهل', 'error');
       }
     }
@@ -232,21 +241,22 @@ const AdminSales = ({ user }) => {
 
     if (confirm.isConfirmed) {
       try {
-        const updated = {
-          ...card,
+        const isPrep = card.productionType === 'preparation' || String(card.orderNumber || '').toUpperCase().startsWith('PREP-');
+        const collectionName = isPrep ? 'preparation_orders' : 'orders';
+        const updatePayload = {
           ignoredMaterialAudit: true,
           ignoredMaterialAuditBy: user?.name || (isImad ? 'عماد' : 'مشرف'),
           ignoredMaterialAuditAt: new Date().toISOString()
         };
-        delete updated.isProduction;
-        delete updated.hasDraft;
-        delete updated.draftCreatedBy;
 
-        const saved = card.productionType === 'preparation'
-          ? await savePreparationOrder(updated)
-          : await saveOrder(updated);
+        await updateDoc(doc(db, collectionName, card.id), updatePayload);
 
-        if (!saved) throw new Error('تعذر حفظ التجاهل');
+        // Instantly update local state
+        if (isPrep) {
+          setPreparationOrders(prev => prev.map(p => p.id === card.id ? { ...p, ...updatePayload } : p));
+        } else {
+          setProductionOrders(prev => prev.map(p => p.id === card.id ? { ...p, ...updatePayload } : p));
+        }
 
         await addLog({
           userId: user?.id,
@@ -254,11 +264,19 @@ const AdminSales = ({ user }) => {
           module: 'الإنتاج والتحضير',
           action: 'تجاهل صرف المواد',
           details: `تجاهل صرف المواد للطلب رقم ${card.orderNumber}`
-        });
+        }).catch(() => {});
 
-        await closeStockAudit();
-        await fetchData();
+        setStockAuditRequest(null);
+
+        MySwal.fire({
+          icon: 'success',
+          title: 'تم التجاهل',
+          text: `تم تسجيل تجاهل صرف المواد للطلب رقم ${card.orderNumber}`,
+          timer: 1500,
+          showConfirmButton: false
+        });
       } catch (err) {
+        console.error('Error ignoring material audit:', err);
         MySwal.fire('خطأ', err.message || 'تعذر حفظ التجاهل', 'error');
       }
     }
@@ -284,25 +302,26 @@ const AdminSales = ({ user }) => {
 
     if (confirm.isConfirmed) {
       try {
-        const updated = {
-          ...card,
+        const isPrep = card.productionType === 'preparation' || String(card.orderNumber || '').toUpperCase().startsWith('PREP-');
+        const collectionName = isPrep ? 'preparation_orders' : 'orders';
+        const updatePayload = {
           ignoredMaterialAudit: false,
           ignoredMaterialAuditBy: null,
           ignoredMaterialAuditAt: null
         };
-        delete updated.isProduction;
-        delete updated.hasDraft;
-        delete updated.draftCreatedBy;
 
-        const saved = card.productionType === 'preparation'
-          ? await savePreparationOrder(updated)
-          : await saveOrder(updated);
+        await updateDoc(doc(db, collectionName, card.id), updatePayload);
 
-        if (!saved) throw new Error('تعذر حفظ التراجع');
+        // Instantly update local state
+        if (isPrep) {
+          setPreparationOrders(prev => prev.map(p => p.id === card.id ? { ...p, ...updatePayload } : p));
+        } else {
+          setProductionOrders(prev => prev.map(p => p.id === card.id ? { ...p, ...updatePayload } : p));
+        }
 
-        await closeStockAudit();
-        await fetchData();
+        setStockAuditRequest(null);
       } catch (err) {
+        console.error('Error undoing ignore material audit:', err);
         MySwal.fire('خطأ', err.message || 'تعذر إلغاء التجاهل', 'error');
       }
     }
@@ -496,7 +515,10 @@ const AdminSales = ({ user }) => {
             <button
               type="button"
               className="sales-merged-step-card is-ignored"
-              onClick={() => handleUndoIgnoreStockAudit(order)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleUndoIgnoreStockAudit(order);
+              }}
               title="تم التجاهل - اضغط للتراجع والعودة للتدقيق"
             >
               <div className="merged-card-header">
@@ -514,7 +536,8 @@ const AdminSales = ({ user }) => {
             <button
               type="button"
               className="sales-merged-step-card is-locked"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 MySwal.fire({
                   icon: 'warning',
                   title: 'تدقيق المخزون مقفل',
@@ -542,7 +565,10 @@ const AdminSales = ({ user }) => {
                 <button
                   type="button"
                   className="sales-choice-btn btn-audit"
-                  onClick={() => setStockAuditRequest({ order })}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setStockAuditRequest({ order });
+                  }}
                   title="فتح تدقيق وخصم أصناف البضاعة الجاهزة"
                 >
                   <CheckSquare size={11} strokeWidth={2.5} />
@@ -551,7 +577,10 @@ const AdminSales = ({ user }) => {
                 <button
                   type="button"
                   className="sales-choice-btn btn-ignore"
-                  onClick={() => handleIgnoreStockAudit(order)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleIgnoreStockAudit(order);
+                  }}
                   title="تجاهل تدقيق خصم المخزون وتجاوز هذه الخطوة"
                 >
                   <EyeOff size={11} strokeWidth={2.2} />
@@ -627,7 +656,10 @@ const AdminSales = ({ user }) => {
                 <button
                   type="button"
                   className="sales-merged-step-card is-ignored sales-material-card"
-                  onClick={() => handleUndoIgnoreMaterialAudit(card)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleUndoIgnoreMaterialAudit(card);
+                  }}
                   title={`تم تجاهل صرف مواد ${isPrep ? 'التحضير' : 'الإنتاج'} (${cardOrderNum}) - اضغط للتراجع`}
                 >
                   <div className="merged-card-header">
@@ -646,7 +678,8 @@ const AdminSales = ({ user }) => {
                 <button
                   type="button"
                   className="sales-merged-step-card is-locked sales-material-card"
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     MySwal.fire({
                       icon: 'warning',
                       title: 'صرف المواد مقفل',
@@ -674,7 +707,10 @@ const AdminSales = ({ user }) => {
                   <button
                     type="button"
                     className="sales-choice-btn btn-audit"
-                    onClick={() => setStockAuditRequest({ order: card })}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setStockAuditRequest({ order: card });
+                    }}
                     title={`صرف مواد أمر ${isPrep ? 'التحضير' : 'الإنتاج'} (${cardOrderNum})`}
                   >
                     <CheckSquare size={11} strokeWidth={2.5} />
@@ -683,7 +719,10 @@ const AdminSales = ({ user }) => {
                   <button
                     type="button"
                     className="sales-choice-btn btn-ignore"
-                    onClick={() => handleIgnoreMaterialAudit(card)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleIgnoreMaterialAudit(card);
+                    }}
                     title={`تجاهل صرف مواد أمر ${isPrep ? 'التحضير' : 'الإنتاج'} (${cardOrderNum})`}
                   >
                     <EyeOff size={11} strokeWidth={2.2} />

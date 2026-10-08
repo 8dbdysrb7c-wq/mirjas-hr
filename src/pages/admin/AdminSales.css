@@ -473,16 +473,18 @@
 }
 
 .sales-choice-btn.btn-ignore {
-  background: #ffffff;
-  color: #64748b;
-  border-color: #cbd5e1;
+  background: #fff7ed;
+  color: #c2410c;
+  border-color: #fdba74;
+  box-shadow: 0 1px 2px rgba(194, 65, 12, 0.08);
 }
 
 .sales-choice-btn.btn-ignore:hover {
-  background: #f1f5f9;
-  color: #334155;
-  border-color: #94a3b8;
+  background: #ffedd5;
+  color: #9a3412;
+  border-color: #fb923c;
   transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(194, 65, 12, 0.16);
 }
 
 /* Material Release Step: PRO / PREP Badges & Rows */
