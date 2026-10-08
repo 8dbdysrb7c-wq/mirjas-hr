@@ -1416,9 +1416,7 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
           : `تقديم مسودة خصم لطلبية ${auditOrder.orderNumber}`
       });
 
-      const successTitle = isDirectApprove
-        ? 'تم خصم الكميات وتحديث المخزون بنجاح'
-        : 'تم تقديم مسودة الخصم بنجاح وبانتظار موافقة المدير';
+      const successTitle = 'تم خصم الكميات وتحديث المخزون بنجاح';
 
       Swal.fire({ icon: 'success', title: successTitle, timer: 2000, showConfirmButton: false });
       setShowAuditModal(false);
@@ -3261,18 +3259,9 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
       icon: <AlertTriangle />,
       color: '#8b5cf6',
       bgLight: '#f3e8ff',
-      customBadge: (() => {
-        const pendingCount = ordersToAudit.filter(o => !o.stockDeducted && !o.hasDraft).length;
-        const waitingCount = ordersToAudit.filter(o => o.hasDraft).length;
-        if (waitingCount > 0 && pendingCount === 0) return `${waitingCount} بانتظار الاعتماد`;
-        if (waitingCount > 0 && pendingCount > 0) return `${pendingCount} غير مدققة | ${waitingCount} للاعتماد`;
-        return `${pendingCount} غير مدققة`;
-      })(),
+      customBadge: `${ordersToAudit.filter(o => !o.stockDeducted).length} غير مدققة`,
       onClick: () => {
         setActiveStockTab('audit');
-        const pendingCount = ordersToAudit.filter(o => !o.stockDeducted && !o.hasDraft).length;
-        const waitingCount = ordersToAudit.filter(o => o.hasDraft).length;
-        if (pendingCount === 0 && waitingCount > 0) setAuditFilterStatus('waiting');
       },
       isActive: activeStockTab === 'audit'
     },
@@ -4148,15 +4137,12 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
         const unappliedAudits = ordersToAudit.filter(o => o.stockDeducted && vouchers.some(v => v.orderNumber === o.orderNumber && v.status === 'مسودة'));
         const unappliedProductionAudits = productionOrdersToAudit.filter(o => o.stockDeducted && vouchers.some(v => v.orderNumber === o.orderNumber && v.status === 'مسودة'));
         const totalUnapplied = unappliedAudits.length + unappliedProductionAudits.length;
-        const pendingCount = ordersToAudit.filter(o => !o.stockDeducted && !o.hasDraft).length;
-        const waitingCount = ordersToAudit.filter(o => o.hasDraft).length;
-        const approvedCount = ordersToAudit.filter(o => o.stockDeducted && !o.hasDraft).length;
+        const pendingCount = ordersToAudit.filter(o => !o.stockDeducted).length;
+        const approvedCount = ordersToAudit.filter(o => o.stockDeducted).length;
         const allCount = ordersToAudit.length;
         const currentFilteredOrders = applySort(ordersToAudit.filter(o => {
-          if (auditFilterStatus === 'pending') return !o.stockDeducted && !o.hasDraft;
-          if (auditFilterStatus === 'waiting') return o.hasDraft;
-          if (auditFilterStatus === 'approved') return o.stockDeducted && !o.hasDraft;
-          if (auditFilterStatus === 'issues') return !o.stockDeducted && !o.hasDraft;
+          if (auditFilterStatus === 'pending') return !o.stockDeducted;
+          if (auditFilterStatus === 'approved') return o.stockDeducted;
           if (auditFilterStatus === 'rejected') return false;
           return true;
         }));
@@ -4189,23 +4175,13 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                 <p className="text-slate-500 text-xs mt-0.5">سجل متابعة خصم الطلبيات من المخزون واعتمادها</p>
               </div>
               <div className="flex items-center gap-3 flex-wrap">
-                {waitingCount > 0 && canDirectAudit && (
-                  <button
-                    onClick={handleApproveAllWaitingDrafts}
-                    className="btn flex items-center gap-1.5 font-bold text-xs text-white shadow-sm hover:opacity-90 transition-all"
-                    style={{ background: '#059669', padding: '0.55rem 1.1rem', borderRadius: '10px', border: 'none' }}
-                  >
-                    <CheckCircle2 size={15} /> اعتماد الكل ({waitingCount})
-                  </button>
-                )}
                 <select
                   className="input-field text-sm"
                   style={{ width: 'auto', minWidth: '220px', marginBottom: 0, height: '40px', borderRadius: '12px', padding: '0 1.5rem 0 0.8rem' }}
-                  value={auditFilterStatus === 'issues' ? 'pending' : auditFilterStatus}
+                  value={auditFilterStatus === 'issues' || auditFilterStatus === 'waiting' ? 'pending' : auditFilterStatus}
                   onChange={e => setAuditFilterStatus(e.target.value)}
                 >
                   <option value="all">سجل جميع الطلبات ({allCount})</option>
-                  <option value="waiting">بانتظار موافقة الإدارة ({waitingCount})</option>
                   <option value="pending">طلبات غير مدققة ({pendingCount})</option>
                   <option value="approved">طلبات مدققة ومعتمدة ({approvedCount})</option>
                 </select>
@@ -4276,8 +4252,6 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                           ) : (
                             <span className="badge bg-emerald-100 text-emerald-800 font-bold">تم الخصم والاعتماد</span>
                           )
-                        ) : order.hasDraft ? (
-                          <span className="badge bg-amber-100 text-amber-800 font-bold">بانتظار موافقة المدير</span>
                         ) : (
                           <span className="badge bg-slate-100 text-slate-800 font-bold">بانتظار الخصم</span>
                         )}
@@ -4299,7 +4273,7 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                             ) : (
                               <span className="text-xs text-slate-400 font-bold px-2 py-1 bg-slate-50 rounded-lg">لا يوجد إجراء</span>
                             )
-                          ) : !order.hasDraft ? (
+                          ) : (
                             <div className="flex gap-3 justify-center">
                               <PremiumActionBtn
                                 title="تدقيق وخصم"
@@ -4314,34 +4288,6 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                                 onClick={() => handleIgnoreAudit(order)}
                               />
                             </div>
-                          ) : (
-                            <>
-                              <button
-                                className="btn flex items-center justify-center gap-1"
-                                style={{ background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', padding: '0.4rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 'bold' }}
-                                onClick={() => handleOpenAudit(order)}
-                              >
-                                <Edit2 size={14} /> معاينة وتعديل
-                              </button>
-                              {canDirectAudit && (
-                                <>
-                                  <button
-                                    className="btn flex items-center justify-center gap-1"
-                                    style={{ background: '#059669', color: 'white', padding: '0.4rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 'bold' }}
-                                    onClick={() => handleApproveDraft(order)}
-                                  >
-                                    اعتماد
-                                  </button>
-                                  <button
-                                    className="btn flex items-center justify-center gap-1"
-                                    style={{ background: '#dc2626', color: 'white', padding: '0.4rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 'bold' }}
-                                    onClick={() => handleDeleteDraft(order.orderNumber)}
-                                  >
-                                    <Trash2 size={14} /> حذف
-                                  </button>
-                                </>
-                              )}
-                            </>
                           )}
 
                           <button
@@ -4371,30 +4317,9 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                   {currentFilteredOrders.length === 0 && (
                     <tr>
                       <td colSpan="7" className="text-center p-8">
-                        {auditFilterStatus === 'approved' && waitingCount > 0 ? (
-                          <div className="flex flex-col items-center justify-center gap-2 py-4">
-                            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
-                              <AlertTriangle size={24} />
-                            </div>
-                            <h4 className="font-bold text-slate-800 text-sm">
-                              لا توجد طلبات معتمدة نهائياً، لكن يوجد {waitingCount} طلبية تم تدقيقها وبانتظار موافقة الإدارة!
-                            </h4>
-                            <p className="text-xs text-slate-500 max-w-md">
-                              تم تدقيق هذه الطلبيات كـ "مسودات" من قِبل المشرف، وتتطلب اعتماد الإدارة ليتم خصمها من المستودع واعتبارها معتمدة نهائياً.
-                            </p>
-                            <button
-                              onClick={() => setAuditFilterStatus('waiting')}
-                              className="btn btn-primary text-xs mt-2 font-bold px-4 py-2"
-                              style={{ borderRadius: '8px' }}
-                            >
-                              عرض الطلبات بانتظار الاعتماد ({waitingCount})
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="text-muted italic py-6">
-                            لا توجد طلبيات تطابق الفلتر المحدد
-                          </div>
-                        )}
+                        <div className="text-muted italic py-6">
+                          لا توجد طلبيات تطابق الفلتر المحدد
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -4737,8 +4662,6 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                             ) : (
                               <div className="badge bg-emerald-100 text-emerald-800 font-bold mb-1.5" style={{ display: 'inline-block', width: '90%', padding: '6px' }}>تم صرف المواد</div>
                             )
-                          ) : order.hasDraft ? (
-                            <span className="badge bg-amber-100 text-amber-800 font-bold" style={{ display: 'inline-block', width: '90%', padding: '6px' }}>بانتظار موافقة المدير</span>
                           ) : (
                             <span className="badge bg-slate-100 text-slate-800 font-bold" style={{ display: 'inline-block', width: '90%', padding: '6px' }}>بانتظار الصرف</span>
                           )
@@ -4772,35 +4695,6 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                               ) : (
                                 <span className="text-[11px] text-slate-400 font-bold px-2 py-1 bg-slate-50 rounded-lg">تم الصرف</span>
                               )
-                            ) : order.hasDraft ? (
-                              <div className="flex items-center gap-1">
-                                <button
-                                  className="btn flex items-center justify-center gap-1"
-                                  style={{ background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold' }}
-                                  onClick={() => handleOpenAudit(order)}
-                                >
-                                  <Edit2 size={13} /> تعديل الصرف
-                                </button>
-                                {canDirectAudit && (
-                                  <>
-                                    <button
-                                      className="btn flex items-center justify-center gap-1"
-                                      style={{ background: '#059669', color: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', border: 'none' }}
-                                      onClick={() => handleApproveDraft(order)}
-                                    >
-                                      اعتماد الصرف
-                                    </button>
-                                    <button
-                                      className="btn flex items-center justify-center gap-1"
-                                      style={{ background: '#dc2626', color: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold', border: 'none' }}
-                                      onClick={() => handleDeleteDraft(order.orderNumber)}
-                                      title="حذف مسودة الصرف"
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
                             ) : (
                               <>
                                 <PremiumActionBtn
@@ -4809,14 +4703,12 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
                                   icon={<Upload size={14} />}
                                   onClick={() => handleOpenAudit(order)}
                                 />
-                                {!order.hasDraft && (
-                                  <PremiumActionBtn
-                                    title="تجاهل"
-                                    variant="ignore"
-                                    icon={<X size={14} strokeWidth={3} />}
-                                    onClick={() => handleIgnoreAudit(order, 'material')}
-                                  />
-                                )}
+                                <PremiumActionBtn
+                                  title="تجاهل"
+                                  variant="ignore"
+                                  icon={<X size={14} strokeWidth={3} />}
+                                  onClick={() => handleIgnoreAudit(order, 'material')}
+                                />
                               </>
                             )
                           ) : (
@@ -5824,9 +5716,8 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
 
             <div className="flex gap-4 pt-2">
               {auditRequest && <button type="button" className="btn btn-outline" onClick={() => handleIgnoreAudit(auditOrder, auditOrder.isProduction ? 'material' : 'sales')}>تجاهل هذه الخطوة</button>}
-              {auditRequest && canDirectAudit && getDraftForOrder(auditOrder.orderNumber).length > 0 && <button type="button" className="btn btn-outline" onClick={() => handleApproveDraft(auditOrder)}>اعتماد المسودة المحفوظة وخصم المخزون</button>}
               <button onClick={handleConfirmAudit} className="btn flex-2 flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:-translate-y-0.5" style={{ background: 'linear-gradient(135deg, var(--primary), #0f766e)', color: 'white', height: '52px', fontSize: '1.05rem', fontWeight: '900', flex: 2, borderRadius: '14px', border: 'none' }}>
-                <Save size={22} /> {auditOrder.isProduction ? 'اعتماد وصرف المواد' : (canDirectAudit ? 'تأكيد تدقيق وخصم المخزون' : 'حفظ المسودة لاعتماد الخصم')}
+                <Save size={22} /> {auditOrder.isProduction ? 'اعتماد وصرف المواد' : 'تأكيد تدقيق وخصم المخزون'}
               </button>
               <button onClick={() => setShowAuditModal(false)} className="btn btn-outline flex-1 transition-all hover:bg-slate-100" style={{ height: '52px', fontSize: '1rem', fontWeight: 'bold', borderRadius: '14px', color: '#475569', borderColor: '#cbd5e1' }}>
                 إلغاء الأمر
