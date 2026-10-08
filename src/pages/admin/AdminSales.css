@@ -388,6 +388,31 @@
   min-height: 34px;
 }
 
+/* 5. Locked State (Waiting for Driver to complete delivery) */
+.sales-merged-step-card.is-locked {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.sales-merged-step-card.is-locked:hover {
+  transform: none;
+  box-shadow: none;
+  background: #f1f5f9;
+}
+
+.sales-merged-step-card.is-locked .merged-card-header {
+  color: #64748b;
+}
+
+.sales-merged-step-card.is-locked .merged-card-action {
+  color: #94a3b8;
+  text-decoration: none;
+}
+
+
 /* Status Tags Above Action Buttons (Legacy fallback) */
 .sales-step-tag {
   display: inline-flex;

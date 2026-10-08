@@ -4,7 +4,7 @@ import { stockWorkflowState } from '../../utils/salesStockWorkflow';
 import { hasDraftItems, readLocalDrafts, mergeDrafts, writeLocalDraft, removeLocalDraft } from '../../utils/salesDrafts';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal, flushSync } from 'react-dom';
-import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText, Briefcase, Clock, Check, Save, Share2, Layers, Clipboard, CheckCircle, Copy, Archive, Truck } from 'lucide-react';
+import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText, Briefcase, Clock, Check, Save, Share2, Layers, Clipboard, CheckCircle, Copy, Archive, Truck, Lock } from 'lucide-react';
 import { approveSalesOrder, getSalesOrders, subscribeToSalesOrders, saveSalesOrder, deleteSalesOrder, getSalesOrderDrafts, saveSalesOrderDraft, deleteSalesOrderDraft, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getPreparationOrders, savePreparationOrder, getMissions, saveMission, deleteMission, getEmployees, createNotification } from '../../store';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 import { hasPermission } from '../../utils/permissions';
@@ -97,30 +97,86 @@ const AdminSales = ({ user }) => {
     const [prod, prep] = await Promise.all([getOrders(), getPreparationOrders()]);
     setProductionOrders(prod || []); setPreparationOrders(prep || []);
   };
+  const isDriverDeliveryCompleted = (order) => {
+    if (!order) return false;
+    const cleanNum = String(order.orderNumber || '').trim();
+    const linkedMission = (missions || []).find(m =>
+      m.type === 'تسليم طلبية' &&
+      String(m.salesOrderNumber || '').trim() === cleanNum
+    );
+    const deliveryStatus = String(linkedMission?.status || order.deliveryStatus || '').trim();
+    if (deliveryStatus === 'تم الإنجاز' || deliveryStatus === 'تم الانجاز') return true;
+    if (order.status === 'تم التوصيل' || order.status === 'تم التسليم' || order.status === 'منتهي') return true;
+    return false;
+  };
+
   const renderStockStep = (order, material = false) => {
     const state = stockWorkflowState(order, productionOrders, preparationOrders);
+    const isDelivered = isDriverDeliveryCompleted(order);
+
     if (!material) {
       const isDone = Boolean(order.stockDeducted);
       const isIgnored = Boolean(order.ignoredAudit);
-      const isPending = !isDone && !isIgnored && Boolean(state.stockLabel && state.stockLabel.includes('بانتظار'));
+      const isLockedByDriver = !isDone && !isIgnored && !isDelivered;
+      const isPending = !isDone && !isIgnored && !isLockedByDriver && Boolean(state.stockLabel && state.stockLabel.includes('بانتظار'));
       
-      const cardStateClass = isDone ? 'is-done' : isIgnored ? 'is-ignored' : isPending ? 'is-actionable' : 'is-empty';
+      const cardStateClass = isDone
+        ? 'is-done'
+        : isIgnored
+        ? 'is-ignored'
+        : isLockedByDriver
+        ? 'is-locked'
+        : isPending
+        ? 'is-actionable'
+        : 'is-empty';
+
+      const cardDisabled = state.stockDone || isLockedByDriver;
+      const cardTitle = isDone
+        ? 'تم التدقيق والخصم'
+        : isIgnored
+        ? 'تم تجاهل التدقيق'
+        : isLockedByDriver
+        ? 'مغلق: لا يمكن التدقيق إلا بعد أن يسجل السائق حالة (تم الإنجاز)'
+        : state.stockDone
+        ? state.stockLabel
+        : 'تدقيق خصم المخزون';
+
+      const statusText = isLockedByDriver ? 'بانتظار إنجاز السائق' : state.stockLabel;
+      const actionText = isDone
+        ? 'تم التدقيق والخصم'
+        : isIgnored
+        ? 'تم تجاهل التدقيق'
+        : isLockedByDriver
+        ? '1. تدقيق الخصم (مغلق)'
+        : '1. تدقيق الخصم';
 
       return (
         <div className="sales-workflow-cell">
           <button
             type="button"
             className={`sales-merged-step-card ${cardStateClass}`}
-            disabled={state.stockDone}
-            onClick={() => setStockAuditRequest({ order })}
-            title={state.stockDone ? state.stockLabel : 'تدقيق خصم المخزون'}
+            disabled={cardDisabled}
+            onClick={() => {
+              if (isLockedByDriver) {
+                MySwal.fire({
+                  icon: 'warning',
+                  title: 'تدقيق المخزون مقفل',
+                  text: 'لا يمكن تدقيق خصم المخزون إلا بعد أن يقوم السائق بتسجيل حالة الطلبية (تم الإنجاز).',
+                  confirmButtonText: 'حسناً',
+                  confirmButtonColor: '#0f766e'
+                });
+                return;
+              }
+              setStockAuditRequest({ order });
+            }}
+            title={cardTitle}
           >
             <div className="merged-card-header">
-              {isDone ? <Check size={12} strokeWidth={2.8} /> : null}
-              <span className="merged-card-status">{state.stockLabel}</span>
+              {isDone ? <Check size={12} strokeWidth={2.8} /> : isLockedByDriver ? <Lock size={11} strokeWidth={2.4} /> : null}
+              <span className="merged-card-status">{statusText}</span>
             </div>
             <div className="merged-card-action">
-              <span>{isDone ? 'تم التدقيق والخصم' : isIgnored ? 'تم تجاهل التدقيق' : '1. تدقيق الخصم'}</span>
+              <span>{actionText}</span>
             </div>
           </button>
         </div>
@@ -142,25 +198,68 @@ const AdminSales = ({ user }) => {
         {state.cards.map(card => {
           const isDone = Boolean(card.stockDeducted);
           const isIgnored = Boolean(card.ignoredMaterialAudit);
-          const isPending = !isDone && !isIgnored;
-          const cardStateClass = isDone ? 'is-done' : isIgnored ? 'is-ignored' : 'is-actionable';
-          const statusText = isIgnored ? 'تم التجاهل' : isDone ? 'تم الصرف' : 'بانتظار الصرف';
+          const isLockedByDriver = !isDone && !isIgnored && !isDelivered;
+
+          const cardStateClass = isDone
+            ? 'is-done'
+            : isIgnored
+            ? 'is-ignored'
+            : isLockedByDriver
+            ? 'is-locked'
+            : 'is-actionable';
+
+          const cardDisabled = isDone || isIgnored || isLockedByDriver;
+          const statusText = isDone
+            ? 'تم الصرف'
+            : isIgnored
+            ? 'تم التجاهل'
+            : isLockedByDriver
+            ? 'بانتظار إنجاز السائق'
+            : 'بانتظار الصرف';
+
+          const actionText = isDone
+            ? 'تم صرف المواد'
+            : isIgnored
+            ? 'تم تجاهل الصرف'
+            : isLockedByDriver
+            ? '2. صرف المواد (مغلق)'
+            : '2. صرف المواد';
+
+          const cardTitle = isDone
+            ? 'تم صرف المواد'
+            : isIgnored
+            ? 'تم تجاهل الصرف'
+            : isLockedByDriver
+            ? 'مغلق: لا يمكن الصرف إلا بعد أن يسجل السائق حالة (تم الإنجاز)'
+            : 'صرف مواد الإنتاج';
 
           return (
             <button
               key={card.id}
               type="button"
               className={`sales-merged-step-card ${cardStateClass}`}
-              disabled={isDone || isIgnored}
-              onClick={() => setStockAuditRequest({ order: card })}
-              title={isDone ? 'تم صرف المواد' : isIgnored ? 'تم تجاهل الصرف' : 'صرف مواد الإنتاج'}
+              disabled={cardDisabled}
+              onClick={() => {
+                if (isLockedByDriver) {
+                  MySwal.fire({
+                    icon: 'warning',
+                    title: 'صرف المواد مقفل',
+                    text: 'لا يمكن صرف مواد الإنتاج إلا بعد أن يقوم السائق بتسجيل حالة الطلبية (تم الإنجاز).',
+                    confirmButtonText: 'حسناً',
+                    confirmButtonColor: '#0f766e'
+                  });
+                  return;
+                }
+                setStockAuditRequest({ order: card });
+              }}
+              title={cardTitle}
             >
               <div className="merged-card-header">
-                {isDone ? <Check size={12} strokeWidth={2.8} /> : null}
+                {isDone ? <Check size={12} strokeWidth={2.8} /> : isLockedByDriver ? <Lock size={11} strokeWidth={2.4} /> : null}
                 <span className="merged-card-status">{card.orderNumber} · {statusText}</span>
               </div>
               <div className="merged-card-action">
-                <span>{isDone ? 'تم صرف المواد' : isIgnored ? 'تم تجاهل الصرف' : '2. صرف المواد'}</span>
+                <span>{actionText}</span>
               </div>
             </button>
           );
