@@ -337,14 +337,11 @@ const AdminSales = ({ user }) => {
               type="button"
               className="sales-merged-step-card is-done"
               onClick={() => setStockAuditRequest({ order })}
-              title="تم التدقيق والخصم بنجاح - اضغط لعرض التفاصيل"
+              title="تم الخصم بنجاح - اضغط للاطلاع"
             >
               <div className="merged-card-header">
                 <Check size={12} strokeWidth={2.8} />
                 <span className="merged-card-status">تم الخصم</span>
-              </div>
-              <div className="merged-card-action">
-                <span>3. خصم المخزون</span>
               </div>
             </button>
           </div>
@@ -358,14 +355,11 @@ const AdminSales = ({ user }) => {
               type="button"
               className="sales-merged-step-card is-ignored"
               onClick={() => handleUndoIgnoreStockAudit(order)}
-              title="تم تجاهل تدقيق الخصم - اضغط للتراجع والعودة للتدقيق"
+              title="تم التجاهل - اضغط للتراجع والعودة للتدقيق"
             >
               <div className="merged-card-header">
                 <EyeOff size={11} strokeWidth={2.2} />
                 <span className="merged-card-status">تم التجاهل</span>
-              </div>
-              <div className="merged-card-action">
-                <span style={{ fontSize: '10.5px', textDecoration: 'underline' }}>تراجع للتدقيق</span>
               </div>
             </button>
           </div>
@@ -393,9 +387,6 @@ const AdminSales = ({ user }) => {
                 <Lock size={11} strokeWidth={2.4} />
                 <span className="merged-card-status">بانتظار السائق</span>
               </div>
-              <div className="merged-card-action">
-                <span>3. تدقيق الخصم</span>
-              </div>
             </button>
           </div>
         );
@@ -404,10 +395,7 @@ const AdminSales = ({ user }) => {
       if (!state.stockDone && isActionable) {
         return (
           <div className="sales-workflow-cell">
-            <div className="sales-choice-step-card" title="3. خصم المخزون: اختر إما التدقيق أو التجاهل">
-              <div className="choice-card-header">
-                <span>3. تدقيق الخصم</span>
-              </div>
+            <div className="sales-choice-step-card" title="خصم المخزون: اختر إما التدقيق أو التجاهل">
               <div className="choice-card-actions">
                 <button
                   type="button"
@@ -422,7 +410,7 @@ const AdminSales = ({ user }) => {
                   type="button"
                   className="sales-choice-btn btn-ignore"
                   onClick={() => handleIgnoreStockAudit(order)}
-                  title="تجاهل وتجاوز تدقيق خصم المخزون لهذه الطلبية"
+                  title="تجاهل تدقيق خصم المخزون وتجاوز هذه الخطوة"
                 >
                   <EyeOff size={11} strokeWidth={2.2} />
                   <span>تجاهل</span>
@@ -436,7 +424,7 @@ const AdminSales = ({ user }) => {
       return (
         <div className="sales-workflow-cell">
           <div className="sales-merged-step-card is-empty" title="لا يوجد خصم بضاعة جاهزة لهذه الطلبية">
-            <span className="merged-card-empty-text">لا يوجد خصم جاهز</span>
+            <span className="merged-card-empty-text">لا يوجد خصم</span>
           </div>
         </div>
       );
@@ -446,7 +434,7 @@ const AdminSales = ({ user }) => {
       return (
         <div className="sales-workflow-cell">
           <div className="sales-merged-step-card is-empty" title="لا يوجد صرف إنتاج لهذه الطلبية">
-            <span className="merged-card-empty-text">لا يوجد صرف إنتاج</span>
+            <span className="merged-card-empty-text">لا يوجد صرف</span>
           </div>
         </div>
       );
@@ -470,10 +458,7 @@ const AdminSales = ({ user }) => {
               >
                 <div className="merged-card-header">
                   <Check size={12} strokeWidth={2.8} />
-                  <span className="merged-card-status">{card.orderNumber} · تم الصرف</span>
-                </div>
-                <div className="merged-card-action">
-                  <span>4. صرف المواد</span>
+                  <span className="merged-card-status">تم الصرف</span>
                 </div>
               </button>
             );
@@ -490,10 +475,7 @@ const AdminSales = ({ user }) => {
               >
                 <div className="merged-card-header">
                   <EyeOff size={11} strokeWidth={2.2} />
-                  <span className="merged-card-status">{card.orderNumber} · تم التجاهل</span>
-                </div>
-                <div className="merged-card-action">
-                  <span style={{ fontSize: '10.5px', textDecoration: 'underline' }}>تراجع للصرف</span>
+                  <span className="merged-card-status">تم التجاهل</span>
                 </div>
               </button>
             );
@@ -518,20 +500,14 @@ const AdminSales = ({ user }) => {
               >
                 <div className="merged-card-header">
                   <Lock size={11} strokeWidth={2.4} />
-                  <span className="merged-card-status">{card.orderNumber} · بانتظار السائق</span>
-                </div>
-                <div className="merged-card-action">
-                  <span>4. صرف المواد</span>
+                  <span className="merged-card-status">بانتظار السائق</span>
                 </div>
               </button>
             );
           }
 
           return (
-            <div key={card.id} className="sales-choice-step-card" title={`صرف مواد أمر الإنتاج ${card.orderNumber}`}>
-              <div className="choice-card-header">
-                <span>4. صرف {card.orderNumber}</span>
-              </div>
+            <div key={card.id} className="sales-choice-step-card" title="صرف مواد الإنتاج: اختر إما الصرف أو التجاهل">
               <div className="choice-card-actions">
                 <button
                   type="button"

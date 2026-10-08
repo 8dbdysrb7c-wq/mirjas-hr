@@ -289,14 +289,14 @@
 /* Unified Merged Step Card (Tag + Button Combined in One Box) */
 .sales-merged-step-card {
   width: 120px;
+  min-height: 28px;
   box-sizing: border-box;
-  border-radius: 9px;
-  padding: 4px 6px;
+  border-radius: 8px;
+  padding: 5px 8px;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 4px;
   text-align: center;
   transition: all 0.18s ease;
   cursor: pointer;
@@ -309,21 +309,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  font-size: 9.5px;
+  gap: 4px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1.2;
   white-space: nowrap;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .sales-merged-step-card .merged-card-action {
-  font-size: 11.5px;
-  font-weight: 800;
-  line-height: 1.3;
-  white-space: nowrap;
+  display: none;
 }
 
 .sales-merged-step-card .merged-card-empty-text {
@@ -342,31 +337,27 @@
 .sales-merged-step-card.is-actionable:hover {
   background: #fef3c7;
   border-color: #d97706;
-  transform: translateY(-1.5px);
+  transform: translateY(-1px);
   box-shadow: 0 3px 6px rgba(217, 119, 6, 0.22);
-}
-
-.sales-merged-step-card.is-actionable .merged-card-action {
-  color: #d97706;
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 
 /* 2. Done State (Success) */
 .sales-merged-step-card.is-done {
   background: #ecfdf5;
   border: 1.5px solid #a7f3d0;
-  color: #059669;
-  cursor: default;
-  opacity: 0.95;
+  color: #047857;
+  cursor: pointer;
+}
+
+.sales-merged-step-card.is-done:hover {
+  background: #d1fae5;
+  border-color: #6ee7b7;
 }
 
 .sales-merged-step-card.is-done .merged-card-header {
   color: #047857;
-}
-
-.sales-merged-step-card.is-done .merged-card-action {
-  color: #065f46;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 /* 3. Ignored State */
@@ -374,8 +365,18 @@
   background: #f8fafc;
   border: 1px solid #cbd5e1;
   color: #64748b;
-  cursor: default;
-  opacity: 0.8;
+  cursor: pointer;
+}
+
+.sales-merged-step-card.is-ignored:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.sales-merged-step-card.is-ignored .merged-card-header {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 /* 4. Empty State (No action needed / Disabled) */
@@ -384,8 +385,9 @@
   border: 1px dashed #cbd5e1;
   color: #94a3b8;
   cursor: default;
-  opacity: 0.75;
-  min-height: 34px;
+  opacity: 0.8;
+  font-size: 10.5px;
+  font-weight: 600;
 }
 
 /* 5. Locked State (Waiting for Driver to complete delivery) */
@@ -394,7 +396,7 @@
   border: 1px solid #cbd5e1;
   color: #64748b;
   cursor: not-allowed;
-  opacity: 0.75;
+  opacity: 0.85;
 }
 
 .sales-merged-step-card.is-locked:hover {
@@ -405,25 +407,20 @@
 
 .sales-merged-step-card.is-locked .merged-card-header {
   color: #64748b;
-}
-
-.sales-merged-step-card.is-locked .merged-card-action {
-  color: #94a3b8;
-  text-decoration: none;
+  font-size: 10.5px;
+  font-weight: 700;
 }
 
 /* 6. Choice Card (خيارين: تدقيق أو تجاهل) */
 .sales-choice-step-card {
-  width: 124px;
+  width: 120px;
+  min-height: 28px;
   box-sizing: border-box;
-  border-radius: 9px;
-  padding: 4px 5px;
+  border-radius: 8px;
+  padding: 3px;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  text-align: center;
   background: #fffbeb;
   border: 1.5px solid #f59e0b;
   box-shadow: 0 1px 3px rgba(245, 158, 11, 0.12);
@@ -437,22 +434,11 @@
   box-shadow: 0 2px 5px rgba(217, 119, 6, 0.18);
 }
 
-.sales-choice-step-card .choice-card-header {
-  font-size: 10px;
-  font-weight: 800;
-  color: #b45309;
-  line-height: 1.2;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-
 .sales-choice-step-card .choice-card-actions {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   width: 100%;
 }
 
@@ -462,9 +448,9 @@
   align-items: center;
   justify-content: center;
   gap: 3px;
-  padding: 3px 4px;
-  font-size: 10.5px;
-  font-weight: 700;
+  padding: 4px 5px;
+  font-size: 11px;
+  font-weight: 800;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
