@@ -180,12 +180,17 @@ const persistMission = async (ref, mission, validateAssignment = false) => {
       throw new Error('لا يمكن تحديد سائق أو طريقة تسليم أو إنجاز التسليم حتى تكون جميع أصناف الطلبية بحالة جاهز');
     }
     for (const order of orders.docs) {
-      batch.set(order.ref, {
+      const orderData = order.data();
+      const updates = {
         deliveryMethod: mission.deliveryMethod || (mission.assignedEmployeeId ? 'employee' : 'unassigned'),
         deliveryDriverId: mission.assignedEmployeeId || '', deliveryDriverName: mission.assignedEmployeeName || '',
         deliveryStatus: mission.status || 'بانتظار الاستلام',
         deliveryCompletedAt: mission.status === 'تم الإنجاز' ? mission.completedAt || new Date().toISOString() : null
-      }, { merge: true });
+      };
+      if (mission.status === 'تم الإنجاز' && orderData.status !== 'منتهي') {
+        updates.status = 'تم التسليم للتوصيل';
+      }
+      batch.set(order.ref, updates, { merge: true });
     }
   }
   await batch.commit();

@@ -1218,9 +1218,10 @@ const AdminSales = ({ user }) => {
       });
       if (!saved) throw new Error('تعذر حفظ الإنجاز');
 
-      // تسجيل إنجاز التوصيل فقط، مع إبقاء الطلبية معلقة لإجراء تدقيق المخزون وصرف الإنتاج قبل الموافقة النهائية
+      // تحويل حالة الطلبية إلى "تم التسليم للتوصيل" وتسجيل إنجاز التوصيل
       await saveSalesOrder({
         ...order,
+        status: 'تم التسليم للتوصيل',
         deliveryStatus: 'تم الإنجاز',
         lastActionBy: user?.name || (isImad ? 'عماد' : 'مشرف'),
         statusUpdateDate: getLocalDateStr(new Date())
