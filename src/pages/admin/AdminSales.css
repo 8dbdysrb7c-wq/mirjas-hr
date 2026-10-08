@@ -412,6 +412,93 @@
   text-decoration: none;
 }
 
+/* 6. Choice Card (خيارين: تدقيق أو تجاهل) */
+.sales-choice-step-card {
+  width: 124px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  padding: 4px 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  text-align: center;
+  background: #fffbeb;
+  border: 1.5px solid #f59e0b;
+  box-shadow: 0 1px 3px rgba(245, 158, 11, 0.12);
+  transition: all 0.18s ease;
+  margin: 2px 0;
+}
+
+.sales-choice-step-card:hover {
+  background: #fef3c7;
+  border-color: #d97706;
+  box-shadow: 0 2px 5px rgba(217, 119, 6, 0.18);
+}
+
+.sales-choice-step-card .choice-card-header {
+  font-size: 10px;
+  font-weight: 800;
+  color: #b45309;
+  line-height: 1.2;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.sales-choice-step-card .choice-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.sales-choice-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 3px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.sales-choice-btn.btn-audit {
+  background: #0f766e;
+  color: #ffffff;
+  border-color: #0f766e;
+  box-shadow: 0 1px 2px rgba(15, 118, 110, 0.2);
+}
+
+.sales-choice-btn.btn-audit:hover {
+  background: #0d655e;
+  border-color: #0d655e;
+  transform: translateY(-1px);
+}
+
+.sales-choice-btn.btn-ignore {
+  background: #ffffff;
+  color: #64748b;
+  border-color: #cbd5e1;
+}
+
+.sales-choice-btn.btn-ignore:hover {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+}
+
 
 /* Status Tags Above Action Buttons (Legacy fallback) */
 .sales-step-tag {

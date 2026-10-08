@@ -4,7 +4,7 @@ import { stockWorkflowState } from '../../utils/salesStockWorkflow';
 import { hasDraftItems, readLocalDrafts, mergeDrafts, writeLocalDraft, removeLocalDraft } from '../../utils/salesDrafts';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal, flushSync } from 'react-dom';
-import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText, Briefcase, Clock, Check, Save, Share2, Layers, Clipboard, CheckCircle, Copy, Archive, Truck, Lock } from 'lucide-react';
+import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText, Briefcase, Clock, Check, Save, Share2, Layers, Clipboard, CheckCircle, Copy, Archive, Truck, Lock, EyeOff, CheckSquare } from 'lucide-react';
 import { approveSalesOrder, getSalesOrders, subscribeToSalesOrders, saveSalesOrder, deleteSalesOrder, getSalesOrderDrafts, saveSalesOrderDraft, deleteSalesOrderDraft, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getPreparationOrders, savePreparationOrder, getMissions, saveMission, deleteMission, getEmployees, createNotification } from '../../store';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 import { hasPermission } from '../../utils/permissions';
@@ -91,12 +91,222 @@ const getFirstAndLastName = (fullName) => {
 };
 
 const AdminSales = ({ user }) => {
+  const currentUserId = user?.id || user?.employeeId || '';
+  const currentUserName = user?.name || '';
+  const userDept = String(user?.department || '').trim();
+  const isImad = currentUserId === 'EMP-0025' || currentUserName.includes('عماد');
+  const isManager = isAdmin(user) ||
+    ['admin', 'إدارة', 'الادارة', 'الإدارة', 'مدير'].includes(user?.level) ||
+    ['إدارة', 'الادارة', 'الإدارة'].includes(userDept) ||
+    user?.role === 'admin' ||
+    user?.role === 'مدير' ||
+    user?.name === 'المدير العام' ||
+    user?.name === 'المدير' ||
+    Boolean(user?.accessAdmin) ||
+    hasPermission(user, 'orders', 'final_approve');
+
+  const canApproveOrders = isAdmin(user) || hasPermission(user, 'orders', 'final_approve');
+  const canCompleteDelivery = isAdmin(user) || hasPermission(user, 'orders', 'complete_delivery');
+  const canAssignDelivery = isAdmin(user) || hasPermission(user, 'orders', 'assign_delivery');
+
   const [stockAuditRequest, setStockAuditRequest] = useState(null);
   const closeStockAudit = async () => {
     setStockAuditRequest(null);
     const [prod, prep] = await Promise.all([getOrders(), getPreparationOrders()]);
     setProductionOrders(prod || []); setPreparationOrders(prep || []);
   };
+
+  const handleIgnoreStockAudit = async (order) => {
+    const confirm = await MySwal.fire({
+      icon: 'question',
+      title: 'تجاهل تدقيق الخصم',
+      text: `هل تؤكد تجاهل تدقيق خصم المخزون للطلبية رقم ${order.orderNumber}؟ سيتم تجاوز الخصم واعتبار الخطوة مكتملة.`,
+      showCancelButton: true,
+      confirmButtonText: 'نعم، تجاهل التدقيق',
+      cancelButtonText: 'إلغاء',
+      confirmButtonColor: '#d97706',
+      cancelButtonColor: '#64748b',
+      customClass: {
+        container: 'premium-modal-container',
+        popup: 'premium-modal-popup',
+        confirmButton: 'btn-premium-save',
+        cancelButton: 'btn-premium-cancel'
+      }
+    });
+
+    if (confirm.isConfirmed) {
+      try {
+        await saveSalesOrder({
+          ...order,
+          ignoredAudit: true,
+          ignoredAuditBy: user?.name || (isImad ? 'عماد' : 'مشرف'),
+          ignoredAuditAt: new Date().toISOString(),
+          lastActionBy: user?.name || (isImad ? 'عماد' : 'مشرف'),
+          statusUpdateDate: getLocalDateStr(new Date())
+        }, { preserveStatus: true });
+
+        await addLog({
+          userId: user?.id,
+          userName: user?.name || (isImad ? 'عماد' : 'مشرف'),
+          module: 'طلبيات العملاء',
+          action: 'تجاهل تدقيق الخصم',
+          details: `تجاهل تدقيق خصم المخزون للطلبية رقم ${order.orderNumber}`
+        });
+
+        await fetchData();
+        MySwal.fire({
+          icon: 'success',
+          title: 'تم التجاهل',
+          text: `تم تسجيل تجاهل تدقيق الخصم للطلبية رقم ${order.orderNumber}`,
+          timer: 1500,
+          showConfirmButton: false
+        });
+      } catch (err) {
+        MySwal.fire('خطأ', err.message || 'تعذر حفظ التجاهل', 'error');
+      }
+    }
+  };
+
+  const handleUndoIgnoreStockAudit = async (order) => {
+    const confirm = await MySwal.fire({
+      icon: 'question',
+      title: 'إلغاء التجاهل',
+      text: `هل تريد إلغاء التجاهل للطلبية رقم ${order.orderNumber} وإعادتها للتدقيق؟`,
+      showCancelButton: true,
+      confirmButtonText: 'نعم، إعادة للتدقيق',
+      cancelButtonText: 'إبقاء التجاهل',
+      confirmButtonColor: '#0f766e',
+      cancelButtonColor: '#64748b',
+      customClass: {
+        container: 'premium-modal-container',
+        popup: 'premium-modal-popup',
+        confirmButton: 'btn-premium-save',
+        cancelButton: 'btn-premium-cancel'
+      }
+    });
+
+    if (confirm.isConfirmed) {
+      try {
+        await saveSalesOrder({
+          ...order,
+          ignoredAudit: false,
+          ignoredAuditBy: null,
+          ignoredAuditAt: null,
+          lastActionBy: user?.name || (isImad ? 'عماد' : 'مشرف'),
+          statusUpdateDate: getLocalDateStr(new Date())
+        }, { preserveStatus: true });
+
+        await addLog({
+          userId: user?.id,
+          userName: user?.name || (isImad ? 'عماد' : 'مشرف'),
+          module: 'طلبيات العملاء',
+          action: 'إلغاء تجاهل التدقيق',
+          details: `إلغاء تجاهل تدقيق خصم المخزون للطلبية رقم ${order.orderNumber}`
+        });
+
+        await fetchData();
+      } catch (err) {
+        MySwal.fire('خطأ', err.message || 'تعذر إلغاء التجاهل', 'error');
+      }
+    }
+  };
+
+  const handleIgnoreMaterialAudit = async (card) => {
+    const confirm = await MySwal.fire({
+      icon: 'question',
+      title: 'تجاهل صرف المواد',
+      text: `هل تؤكد تجاهل صرف المواد للطلب رقم ${card.orderNumber}؟ سيتم تجاوز الصرف واعتبار الخطوة مكتملة.`,
+      showCancelButton: true,
+      confirmButtonText: 'نعم، تجاهل الصرف',
+      cancelButtonText: 'إلغاء',
+      confirmButtonColor: '#d97706',
+      cancelButtonColor: '#64748b',
+      customClass: {
+        container: 'premium-modal-container',
+        popup: 'premium-modal-popup',
+        confirmButton: 'btn-premium-save',
+        cancelButton: 'btn-premium-cancel'
+      }
+    });
+
+    if (confirm.isConfirmed) {
+      try {
+        const updated = {
+          ...card,
+          ignoredMaterialAudit: true,
+          ignoredMaterialAuditBy: user?.name || (isImad ? 'عماد' : 'مشرف'),
+          ignoredMaterialAuditAt: new Date().toISOString()
+        };
+        delete updated.isProduction;
+        delete updated.hasDraft;
+        delete updated.draftCreatedBy;
+
+        const saved = card.productionType === 'preparation'
+          ? await savePreparationOrder(updated)
+          : await saveOrder(updated);
+
+        if (!saved) throw new Error('تعذر حفظ التجاهل');
+
+        await addLog({
+          userId: user?.id,
+          userName: user?.name || (isImad ? 'عماد' : 'مشرف'),
+          module: 'الإنتاج والتحضير',
+          action: 'تجاهل صرف المواد',
+          details: `تجاهل صرف المواد للطلب رقم ${card.orderNumber}`
+        });
+
+        await closeStockAudit();
+        await fetchData();
+      } catch (err) {
+        MySwal.fire('خطأ', err.message || 'تعذر حفظ التجاهل', 'error');
+      }
+    }
+  };
+
+  const handleUndoIgnoreMaterialAudit = async (card) => {
+    const confirm = await MySwal.fire({
+      icon: 'question',
+      title: 'إلغاء التجاهل',
+      text: `هل تريد إلغاء التجاهل للطلب رقم ${card.orderNumber} وإعادته لصرف المواد؟`,
+      showCancelButton: true,
+      confirmButtonText: 'نعم، إلغاء التجاهل',
+      cancelButtonText: 'إبقاء التجاهل',
+      confirmButtonColor: '#0f766e',
+      cancelButtonColor: '#64748b',
+      customClass: {
+        container: 'premium-modal-container',
+        popup: 'premium-modal-popup',
+        confirmButton: 'btn-premium-save',
+        cancelButton: 'btn-premium-cancel'
+      }
+    });
+
+    if (confirm.isConfirmed) {
+      try {
+        const updated = {
+          ...card,
+          ignoredMaterialAudit: false,
+          ignoredMaterialAuditBy: null,
+          ignoredMaterialAuditAt: null
+        };
+        delete updated.isProduction;
+        delete updated.hasDraft;
+        delete updated.draftCreatedBy;
+
+        const saved = card.productionType === 'preparation'
+          ? await savePreparationOrder(updated)
+          : await saveOrder(updated);
+
+        if (!saved) throw new Error('تعذر حفظ التراجع');
+
+        await closeStockAudit();
+        await fetchData();
+      } catch (err) {
+        MySwal.fire('خطأ', err.message || 'تعذر إلغاء التجاهل', 'error');
+      }
+    }
+  };
+
   const isDriverDeliveryCompleted = (order) => {
     if (!order) return false;
     const cleanNum = String(order.orderNumber || '').trim();
@@ -118,46 +328,57 @@ const AdminSales = ({ user }) => {
       const isDone = Boolean(order.stockDeducted);
       const isIgnored = Boolean(order.ignoredAudit);
       const isLockedByDriver = !isDone && !isIgnored && !isDelivered;
-      const isPending = !isDone && !isIgnored && !isLockedByDriver && Boolean(state.stockLabel && state.stockLabel.includes('بانتظار'));
-      
-      const cardStateClass = isDone
-        ? 'is-done'
-        : isIgnored
-        ? 'is-ignored'
-        : isLockedByDriver
-        ? 'is-locked'
-        : isPending
-        ? 'is-actionable'
-        : 'is-empty';
+      const isActionable = !isDone && !isIgnored && !isLockedByDriver && Boolean(state.stockLabel && state.stockLabel.includes('بانتظار'));
 
-      const cardDisabled = state.stockDone || isLockedByDriver;
-      const cardTitle = isDone
-        ? 'تم التدقيق والخصم'
-        : isIgnored
-        ? 'تم تجاهل التدقيق'
-        : isLockedByDriver
-        ? 'مغلق: لا يمكن التدقيق إلا بعد أن يسجل السائق حالة (تم الإنجاز)'
-        : state.stockDone
-        ? state.stockLabel
-        : 'تدقيق خصم المخزون';
+      if (isDone) {
+        return (
+          <div className="sales-workflow-cell">
+            <button
+              type="button"
+              className="sales-merged-step-card is-done"
+              onClick={() => setStockAuditRequest({ order })}
+              title="تم التدقيق والخصم بنجاح - اضغط لعرض التفاصيل"
+            >
+              <div className="merged-card-header">
+                <Check size={12} strokeWidth={2.8} />
+                <span className="merged-card-status">تم الخصم</span>
+              </div>
+              <div className="merged-card-action">
+                <span>3. خصم المخزون</span>
+              </div>
+            </button>
+          </div>
+        );
+      }
 
-      const statusText = isLockedByDriver ? 'بانتظار إنجاز السائق' : state.stockLabel;
-      const actionText = isDone
-        ? 'تم التدقيق والخصم'
-        : isIgnored
-        ? 'تم تجاهل التدقيق'
-        : isLockedByDriver
-        ? '3. تدقيق الخصم (مغلق)'
-        : '3. تدقيق الخصم';
+      if (isIgnored) {
+        return (
+          <div className="sales-workflow-cell">
+            <button
+              type="button"
+              className="sales-merged-step-card is-ignored"
+              onClick={() => handleUndoIgnoreStockAudit(order)}
+              title="تم تجاهل تدقيق الخصم - اضغط للتراجع والعودة للتدقيق"
+            >
+              <div className="merged-card-header">
+                <EyeOff size={11} strokeWidth={2.2} />
+                <span className="merged-card-status">تم التجاهل</span>
+              </div>
+              <div className="merged-card-action">
+                <span style={{ fontSize: '10.5px', textDecoration: 'underline' }}>تراجع للتدقيق</span>
+              </div>
+            </button>
+          </div>
+        );
+      }
 
-      return (
-        <div className="sales-workflow-cell">
-          <button
-            type="button"
-            className={`sales-merged-step-card ${cardStateClass}`}
-            disabled={cardDisabled}
-            onClick={() => {
-              if (isLockedByDriver) {
+      if (isLockedByDriver) {
+        return (
+          <div className="sales-workflow-cell">
+            <button
+              type="button"
+              className="sales-merged-step-card is-locked"
+              onClick={() => {
                 MySwal.fire({
                   icon: 'warning',
                   title: 'تدقيق المخزون مقفل',
@@ -165,20 +386,58 @@ const AdminSales = ({ user }) => {
                   confirmButtonText: 'حسناً',
                   confirmButtonColor: '#0f766e'
                 });
-                return;
-              }
-              setStockAuditRequest({ order });
-            }}
-            title={cardTitle}
-          >
-            <div className="merged-card-header">
-              {isDone ? <Check size={12} strokeWidth={2.8} /> : isLockedByDriver ? <Lock size={11} strokeWidth={2.4} /> : null}
-              <span className="merged-card-status">{statusText}</span>
+              }}
+              title="مغلق: لا يمكن التدقيق إلا بعد أن يسجل السائق حالة (تم الإنجاز)"
+            >
+              <div className="merged-card-header">
+                <Lock size={11} strokeWidth={2.4} />
+                <span className="merged-card-status">بانتظار السائق</span>
+              </div>
+              <div className="merged-card-action">
+                <span>3. تدقيق الخصم</span>
+              </div>
+            </button>
+          </div>
+        );
+      }
+
+      if (!state.stockDone && isActionable) {
+        return (
+          <div className="sales-workflow-cell">
+            <div className="sales-choice-step-card" title="3. خصم المخزون: اختر إما التدقيق أو التجاهل">
+              <div className="choice-card-header">
+                <span>3. تدقيق الخصم</span>
+              </div>
+              <div className="choice-card-actions">
+                <button
+                  type="button"
+                  className="sales-choice-btn btn-audit"
+                  onClick={() => setStockAuditRequest({ order })}
+                  title="فتح تدقيق وخصم أصناف البضاعة الجاهزة"
+                >
+                  <CheckSquare size={11} strokeWidth={2.5} />
+                  <span>تدقيق</span>
+                </button>
+                <button
+                  type="button"
+                  className="sales-choice-btn btn-ignore"
+                  onClick={() => handleIgnoreStockAudit(order)}
+                  title="تجاهل وتجاوز تدقيق خصم المخزون لهذه الطلبية"
+                >
+                  <EyeOff size={11} strokeWidth={2.2} />
+                  <span>تجاهل</span>
+                </button>
+              </div>
             </div>
-            <div className="merged-card-action">
-              <span>{actionText}</span>
-            </div>
-          </button>
+          </div>
+        );
+      }
+
+      return (
+        <div className="sales-workflow-cell">
+          <div className="sales-merged-step-card is-empty" title="لا يوجد خصم بضاعة جاهزة لهذه الطلبية">
+            <span className="merged-card-empty-text">لا يوجد خصم جاهز</span>
+          </div>
         </div>
       );
     }
@@ -200,47 +459,53 @@ const AdminSales = ({ user }) => {
           const isIgnored = Boolean(card.ignoredMaterialAudit);
           const isLockedByDriver = !isDone && !isIgnored && !isDelivered;
 
-          const cardStateClass = isDone
-            ? 'is-done'
-            : isIgnored
-            ? 'is-ignored'
-            : isLockedByDriver
-            ? 'is-locked'
-            : 'is-actionable';
+          if (isDone) {
+            return (
+              <button
+                key={card.id}
+                type="button"
+                className="sales-merged-step-card is-done"
+                onClick={() => setStockAuditRequest({ order: card })}
+                title="تم صرف المواد بنجاح - اضغط للاطلاع"
+              >
+                <div className="merged-card-header">
+                  <Check size={12} strokeWidth={2.8} />
+                  <span className="merged-card-status">{card.orderNumber} · تم الصرف</span>
+                </div>
+                <div className="merged-card-action">
+                  <span>4. صرف المواد</span>
+                </div>
+              </button>
+            );
+          }
 
-          const cardDisabled = isDone || isIgnored || isLockedByDriver;
-          const statusText = isDone
-            ? 'تم الصرف'
-            : isIgnored
-            ? 'تم التجاهل'
-            : isLockedByDriver
-            ? 'بانتظار إنجاز السائق'
-            : 'بانتظار الصرف';
+          if (isIgnored) {
+            return (
+              <button
+                key={card.id}
+                type="button"
+                className="sales-merged-step-card is-ignored"
+                onClick={() => handleUndoIgnoreMaterialAudit(card)}
+                title="تم تجاهل صرف المواد - اضغط للتراجع"
+              >
+                <div className="merged-card-header">
+                  <EyeOff size={11} strokeWidth={2.2} />
+                  <span className="merged-card-status">{card.orderNumber} · تم التجاهل</span>
+                </div>
+                <div className="merged-card-action">
+                  <span style={{ fontSize: '10.5px', textDecoration: 'underline' }}>تراجع للصرف</span>
+                </div>
+              </button>
+            );
+          }
 
-          const actionText = isDone
-            ? 'تم صرف المواد'
-            : isIgnored
-            ? 'تم تجاهل الصرف'
-            : isLockedByDriver
-            ? '4. صرف المواد (مغلق)'
-            : '4. صرف المواد';
-
-          const cardTitle = isDone
-            ? 'تم صرف المواد'
-            : isIgnored
-            ? 'تم تجاهل الصرف'
-            : isLockedByDriver
-            ? 'مغلق: لا يمكن الصرف إلا بعد أن يسجل السائق حالة (تم الإنجاز)'
-            : 'صرف مواد الإنتاج';
-
-          return (
-            <button
-              key={card.id}
-              type="button"
-              className={`sales-merged-step-card ${cardStateClass}`}
-              disabled={cardDisabled}
-              onClick={() => {
-                if (isLockedByDriver) {
+          if (isLockedByDriver) {
+            return (
+              <button
+                key={card.id}
+                type="button"
+                className="sales-merged-step-card is-locked"
+                onClick={() => {
                   MySwal.fire({
                     icon: 'warning',
                     title: 'صرف المواد مقفل',
@@ -248,42 +513,51 @@ const AdminSales = ({ user }) => {
                     confirmButtonText: 'حسناً',
                     confirmButtonColor: '#0f766e'
                   });
-                  return;
-                }
-                setStockAuditRequest({ order: card });
-              }}
-              title={cardTitle}
-            >
-              <div className="merged-card-header">
-                {isDone ? <Check size={12} strokeWidth={2.8} /> : isLockedByDriver ? <Lock size={11} strokeWidth={2.4} /> : null}
-                <span className="merged-card-status">{card.orderNumber} · {statusText}</span>
+                }}
+                title="مغلق: لا يمكن الصرف إلا بعد أن يسجل السائق حالة (تم الإنجاز)"
+              >
+                <div className="merged-card-header">
+                  <Lock size={11} strokeWidth={2.4} />
+                  <span className="merged-card-status">{card.orderNumber} · بانتظار السائق</span>
+                </div>
+                <div className="merged-card-action">
+                  <span>4. صرف المواد</span>
+                </div>
+              </button>
+            );
+          }
+
+          return (
+            <div key={card.id} className="sales-choice-step-card" title={`صرف مواد أمر الإنتاج ${card.orderNumber}`}>
+              <div className="choice-card-header">
+                <span>4. صرف {card.orderNumber}</span>
               </div>
-              <div className="merged-card-action">
-                <span>{actionText}</span>
+              <div className="choice-card-actions">
+                <button
+                  type="button"
+                  className="sales-choice-btn btn-audit"
+                  onClick={() => setStockAuditRequest({ order: card })}
+                  title="صرف مواد أمر الإنتاج/التحضير"
+                >
+                  <CheckSquare size={11} strokeWidth={2.5} />
+                  <span>صرف</span>
+                </button>
+                <button
+                  type="button"
+                  className="sales-choice-btn btn-ignore"
+                  onClick={() => handleIgnoreMaterialAudit(card)}
+                  title="تجاهل صرف المواد لهذا الأمر"
+                >
+                  <EyeOff size={11} strokeWidth={2.2} />
+                  <span>تجاهل</span>
+                </button>
               </div>
-            </button>
+            </div>
           );
         })}
       </div>
     );
   };
-  const currentUserId = user?.id || user?.employeeId || '';
-  const currentUserName = user?.name || '';
-  const userDept = String(user?.department || '').trim();
-  const isImad = currentUserId === 'EMP-0025' || currentUserName.includes('عماد');
-  const isManager = isAdmin(user) ||
-    ['admin', 'إدارة', 'الادارة', 'الإدارة', 'مدير'].includes(user?.level) ||
-    ['إدارة', 'الادارة', 'الإدارة'].includes(userDept) ||
-    user?.role === 'admin' ||
-    user?.role === 'مدير' ||
-    user?.name === 'المدير العام' ||
-    user?.name === 'المدير' ||
-    Boolean(user?.accessAdmin) ||
-    hasPermission(user, 'orders', 'final_approve');
-
-  const canApproveOrders = isAdmin(user) || hasPermission(user, 'orders', 'final_approve');
-  const canCompleteDelivery = isAdmin(user) || hasPermission(user, 'orders', 'complete_delivery');
-  const canAssignDelivery = isAdmin(user) || hasPermission(user, 'orders', 'assign_delivery');
 
   const [orders, setOrders] = useState([]);
   const [orderLimit, setOrderLimit] = useState(50);
