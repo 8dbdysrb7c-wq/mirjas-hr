@@ -324,67 +324,70 @@ const AdminSales = ({ user }) => {
   const handleShowDeductionDetails = async (targetOrder, isMaterial = false) => {
     try {
       const orderNum = targetOrder.orderNumber || targetOrder.salesOrderNumber || '';
+      const items = targetOrder.items || [];
       const allVouchers = await getStockVouchers();
-      const orderVouchers = allVouchers.filter(v => v.orderNumber === orderNum && v.status === 'معتمد');
+      const validVouchers = allVouchers.filter(v =>
+        v.orderNumber === orderNum &&
+        v.status === 'معتمد' &&
+        (!targetOrder.orderDate || !v.date || v.date >= targetOrder.orderDate)
+      );
+      const latestVoucher = validVouchers.length > 0 ? validVouchers[validVouchers.length - 1] : null;
 
-      let vouchersHtml = '';
-      if (orderVouchers.length > 0) {
-        vouchersHtml = `
-          <div style="text-align: right; margin-top: 15px; max-height: 350px; overflow-y: auto;">
-            ${orderVouchers.map(v => `
-              <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                  <span style="color: #0f766e; font-weight: 800; font-size: 0.95rem;">📄 سند إخراج: ${v.voucherNumber}</span>
-                  <span style="color: #64748b; font-size: 0.8rem; background: #e2e8f0; padding: 2px 8px; border-radius: 6px;">${v.date || ''}</span>
-                </div>
-                <div style="font-size: 0.85rem; color: #475569; margin-bottom: 8px; display: flex; gap: 15px; flex-wrap: wrap;">
-                  <span>المستودع: <strong style="color: #0f172a;">${v.warehouse || 'عام'}</strong></span>
-                  <span>المسؤول: <strong style="color: #0f172a;">${v.createdBy || '-'}</strong></span>
-                  <span style="color: #059669; font-weight: bold;">الحالة: معتمد ✓</span>
-                </div>
-                ${Array.isArray(v.items) && v.items.length > 0 ? `
-                  <table style="width: 100%; font-size: 0.85rem; border-collapse: collapse; text-align: right; background: white; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0;">
-                    <thead>
-                      <tr style="background: #f1f5f9; color: #334155;">
-                        <th style="padding: 6px 10px; border-bottom: 1px solid #e2e8f0;">الصنف</th>
-                        <th style="padding: 6px 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">الكمية</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${v.items.map(item => `
-                        <tr style="border-bottom: 1px solid #f1f5f9;">
-                          <td style="padding: 6px 10px; font-weight: 600;">${item.name || item.productName || item.itemNumber || '-'}</td>
-                          <td style="padding: 6px 10px; text-align: center; font-weight: 800; color: #0284c7;">${item.quantity} ${item.unit || ''}</td>
-                        </tr>
-                      `).join('')}
-                    </tbody>
-                  </table>
-                ` : ''}
-              </div>
-            `).join('')}
-          </div>
-        `;
-      } else {
-        vouchersHtml = `
-          <div style="padding: 16px; background: #ecfdf5; border-radius: 10px; border: 1px solid #a7f3d0; margin-top: 12px; text-align: center;">
-            <p style="color: #065f46; font-weight: bold; margin: 0;">
-              ✓ تم تدقيق وخصم كميات هذه الطلبية من المخزون بنجاح.
-            </p>
-          </div>
-        `;
-      }
+      const itemsHtml = items.length > 0 ? `
+        <div style="margin-top: 15px; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+          <table style="width: 100%; border-collapse: collapse; text-align: right; font-family: inherit;">
+            <thead>
+              <tr style="background: #f8fafc; color: #475569; border-bottom: 2px solid #e2e8f0;">
+                <th style="padding: 10px 14px; font-weight: 800; font-size: 0.85rem;">الصنف</th>
+                <th style="padding: 10px 14px; font-weight: 800; font-size: 0.85rem; text-align: center; width: 110px;">الكمية المخصومة</th>
+                <th style="padding: 10px 14px; font-weight: 800; font-size: 0.85rem; text-align: center; width: 90px;">الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map(item => `
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 10px 14px; font-weight: 700; color: #0f172a; font-size: 0.9rem;">
+                    ${item.productName || item.name || '-'}
+                    ${item.colorModel || item.spec ? `<span style="display:block; font-size:0.75rem; color:#64748b; font-weight:normal;">${item.colorModel || item.spec}</span>` : ''}
+                  </td>
+                  <td style="padding: 10px 14px; text-align: center; font-weight: 800; color: #0284c7; font-size: 1rem;">
+                    ${item.quantity} ${item.unit || 'عدد'}
+                  </td>
+                  <td style="padding: 10px 14px; text-align: center;">
+                    <span style="background: #dcfce7; color: #15803d; font-size: 0.75rem; font-weight: 800; padding: 4px 9px; border-radius: 6px;">مخصوم ✓</span>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : '<p style="text-align: center; color: #64748b; margin-top: 12px; font-weight: bold;">لا توجد أصناف مسجلة لهذه الطلبية.</p>';
 
       MySwal.fire({
         title: `
-          <div style="display: flex; align-items: center; justify-content: center; gap: 8px; color: #0f766e; font-weight: 800; font-size: 1.15rem;">
-            <span>${isMaterial ? 'تفاصيل صرف مواد الإنتاج' : 'تفاصيل خصم المخزون'}</span>
+          <div style="display: flex; align-items: center; justify-content: center; gap: 8px; color: #059669; font-weight: 800; font-size: 1.2rem;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            <span>${isMaterial ? 'تم صرف مواد الإنتاج بنجاح' : 'تم خصم المخزون بنجاح'}</span>
           </div>
         `,
         html: `
-          <div style="font-size: 0.95rem; color: #334155; margin-bottom: 4px;">
-            طلبية رقم: <strong style="color: #0284c7;">${orderNum}</strong>
+          <div style="text-align: right; background: #f8fafc; padding: 12px 16px; border-radius: 12px; border: 1px solid #e2e8f0; margin-top: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
+              <span style="font-size: 0.95rem; color: #334155;">طلبية رقم: <strong style="color: #0284c7;">${orderNum}</strong></span>
+              ${targetOrder.customerName ? `<span style="font-size: 0.9rem; color: #334155;">العميل: <strong style="color: #0f172a;">${targetOrder.customerName}</strong></span>` : ''}
+            </div>
+            ${latestVoucher ? `
+              <div style="font-size: 0.85rem; color: #475569; display: flex; gap: 12px; flex-wrap: wrap; border-top: 1px solid #e2e8f0; padding-top: 6px; margin-top: 6px;">
+                <span>سند الإخراج: <strong style="color: #0f766e;">${latestVoucher.voucherNumber}</strong></span>
+                <span>المستودع: <strong>${latestVoucher.warehouse || 'عام'}</strong></span>
+                ${latestVoucher.date ? `<span>التاريخ: <strong>${latestVoucher.date}</strong></span>` : ''}
+              </div>
+            ` : ''}
+            <div style="color: #15803d; font-weight: bold; font-size: 0.85rem; margin-top: 6px;">
+              ✓ تم تدقيق كافة بنود الطلبية وتثبيت خصم الكميات من المخزون.
+            </div>
           </div>
-          ${vouchersHtml}
+          ${itemsHtml}
         `,
         confirmButtonText: 'إغلاق',
         confirmButtonColor: '#0f766e',
