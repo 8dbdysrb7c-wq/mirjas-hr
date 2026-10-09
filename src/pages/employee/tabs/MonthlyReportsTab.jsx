@@ -524,10 +524,8 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
       {/* Centered Unified Capsule Heading */}
       <div className="attendance-report-heading-centered">
         <div className="attendance-unified-capsule">
-          <Calendar size={17} className="capsule-icon" />
-          <h2 className="unified-capsule-title">تقرير الدوام</h2>
-          <span className="unified-capsule-divider">•</span>
-          <span className="unified-capsule-month">شهر <bdi dir="ltr">{currentMonthLabel}</bdi></span>
+          <span className="unified-capsule-title">تقرير الدوام</span>
+          <span className="unified-capsule-month">شهر {parseInt((selectedMonth || '2026-10').split('-')[1], 10)} - {(selectedMonth || '2026-10').split('-')[0]}</span>
         </div>
       </div>
 
@@ -549,40 +547,34 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
               <thead>
                 <tr>
                   <th className="th-date col-date" style={{ width: isManagementOrSupervisor ? '16%' : '14%' }}>
-                    <div className="th-stacked">
-                      <Calendar size={15} />
+                    <div className="th-cell-text">
                       <span>التاريخ</span>
-                      <span className="th-year-sub">{selectedMonth ? selectedMonth.split('-')[0] : '2026'}</span>
+                      <span className="th-year-sub">{(selectedMonth || '2026-10').split('-')[0]}</span>
                     </div>
                   </th>
                   <th className="th-norm col-punches" style={{ width: isManagementOrSupervisor ? '30%' : '26%' }}>
-                    <div className="th-stacked">
-                      <Clock size={15} className="th-icon-navy" />
+                    <div className="th-cell-text">
                       <span>أوقات الدوام</span>
                     </div>
                   </th>
                   <th className="th-norm col-late" style={{ width: isManagementOrSupervisor ? '18%' : '15%' }}>
-                    <div className="th-stacked">
-                      <AlertTriangle size={15} className="th-icon-red" />
+                    <div className="th-cell-text">
                       <span>التأخير</span>
                     </div>
                   </th>
                   <th className="th-norm col-report" style={{ width: isManagementOrSupervisor ? '18%' : '15%' }}>
-                    <div className="th-stacked">
-                      <FileText size={15} className="th-icon-green" />
+                    <div className="th-cell-text">
                       <span>تقرير العمل</span>
                     </div>
                   </th>
                   <th className="th-norm col-overtime" style={{ width: isManagementOrSupervisor ? '18%' : '15%' }}>
-                    <div className="th-stacked">
-                      <History size={15} className="th-icon-green" />
+                    <div className="th-cell-text">
                       <span>الإضافي</span>
                     </div>
                   </th>
                   {!isManagementOrSupervisor && (
                     <th className="th-norm col-eval" style={{ width: '15%' }}>
-                      <div className="th-stacked">
-                        <Star size={15} className="th-icon-amber" />
+                      <div className="th-cell-text">
                         <span>التقييم</span>
                       </div>
                     </th>
