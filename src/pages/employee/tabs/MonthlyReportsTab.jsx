@@ -8,6 +8,9 @@ import {
 } from 'lucide-react';
 import { db } from '../../../firebase';
 import { getTimedLeaveMinutes, timeToMinutes } from '../../../utils/attendancePolicy';
+import { getEmployees } from '../../../store';
+import { getDirectReports } from '../../../utils/supervisorHierarchy';
+import { isActiveEmployee } from '../../../utils/employeeStatus';
 import './MonthlyReportsTab.css';
 
 const approved = new Set(['موافق', 'موافق عليه', 'مقبول', 'تمت الموافقة', 'تم التسليم']);
@@ -23,6 +26,8 @@ const localDate = () =>
   }).format(new Date());
 
 const minutesLabel = minutes => Math.round(Number(minutes) || 0).toLocaleString('en-US');
+
+const normEmpId = (id) => String(id || '').toUpperCase().replace(/^EMP-0*/i, '').trim();
 
 const timeLabel = value => {
   const minutes = timeToMinutes(value);
@@ -117,10 +122,21 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
 
   const [sources, setSources] = useState({});
   const [supervisorReports, setSupervisorReports] = useState([]);
+  const [employeesList, setEmployeesList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedDayDetails, setSelectedDayDetails] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    getEmployees()
+      .then(emps => {
+        if (mounted && emps) setEmployeesList(emps);
+      })
+      .catch(err => console.error('Failed to load employees in MonthlyReportsTab:', err));
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setToday(localDate()), 60000);
@@ -242,13 +258,19 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
   const userShiftStart = user?.shiftStart || '08:00';
   const shiftStartMinutes = timeToMinutes(userShiftStart) || 480;
 
-  const isManagementOrSupervisor = useMemo(() => {
+  const isImad = useMemo(() => {
+    const uId = normEmpId(user?.id);
+    const uEmpId = normEmpId(user?.employeeId);
+    const name = String(user?.name || '');
+    return uId === '25' || uEmpId === '25' || name.includes('عماد');
+  }, [user]);
+
+  const isAdmin = useMemo(() => {
     const rawRole = String(user?.role || '').toLowerCase();
     const rawLevel = String(user?.level || '').toLowerCase();
-    const rawType = String(user?.userType || '').toLowerCase();
     const name = String(user?.name || '').toLowerCase();
 
-    const isAdmin =
+    return (
       rawRole === 'admin' ||
       rawLevel === 'admin' ||
       rawLevel === 'إدارة' ||
@@ -259,9 +281,18 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
       name.includes('المدير العام') ||
       name.includes('مشهور') ||
       name.includes('أنس') ||
-      name.includes('انس');
+      name.includes('انس')
+    );
+  }, [user]);
 
-    const isSupervisor =
+  const isSupervisor = useMemo(() => {
+    const rawRole = String(user?.role || '').toLowerCase();
+    const rawLevel = String(user?.level || '').toLowerCase();
+    const rawType = String(user?.userType || '').toLowerCase();
+    const name = String(user?.name || '').toLowerCase();
+
+    return (
+      isImad ||
       rawLevel === 'supervisor' ||
       rawLevel === 'مشرف' ||
       rawLevel === 'مشرف قسم' ||
@@ -271,9 +302,35 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
       rawType === 'مشرف قسم' ||
       rawType === 'مشرف' ||
       Boolean(user?.permissions?.isSupervisor) ||
-      name.includes('مشرف');
+      Boolean(user?.permissions?.supervisor_reports) ||
+      Boolean(user?.permissions?.reports_supervisors) ||
+      name.includes('مشرف')
+    );
+  }, [user, isImad]);
 
+  const isManagementOrSupervisor = useMemo(() => {
     return isAdmin || isSupervisor;
+  }, [isAdmin, isSupervisor]);
+
+  const subordinateIds = useMemo(() => {
+    if (!employeesList.length || !user) return [];
+    const directReports = getDirectReports(user, employeesList).filter(isActiveEmployee);
+    return directReports.flatMap(e => [String(e.id || '').trim(), String(e.employeeId || '').trim()]).filter(Boolean);
+  }, [user, employeesList]);
+
+  const isOwnSupervisorReport = useMemo(() => {
+    return (sr) => {
+      if (!sr || !user) return false;
+      const sId = normEmpId(sr.supervisorId);
+      const uId = normEmpId(user.id);
+      const uEmpId = normEmpId(user.employeeId);
+      const sName = String(sr.supervisorName || '').trim();
+      const uName = String(user.name || '').trim();
+      return (
+        (sId && (sId === uId || sId === uEmpId)) ||
+        (sName && uName && sName === uName)
+      );
+    };
   }, [user]);
 
   // Process day data
@@ -355,40 +412,127 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
         }
       }
 
-      // 5. Daily Work Report evaluation
-      const matchedReports = dailyReports.filter(r => r.date === date);
-      const dayReport = matchedReports[0] || null;
-
-      let isReportSubmitted = false;
-      if (dayReport) {
-        const notesStr = String(dayReport.notes || '');
-        const isSupervisorPlaceholder =
-          dayReport.finalRating === 'لم يقدم تقرير' ||
-          dayReport.supervisorRating === 'لم يقدم تقرير' ||
-          notesStr.includes('لعدم تقديمه التقرير اليومي') ||
-          notesStr.includes('تم تسجيل الموظف غائبًا من قبل المشرف');
-
-        if (!isSupervisorPlaceholder) {
-          isReportSubmitted = true;
-        }
-      }
-
+      // 5. Daily Work Report / Supervisors Evaluation & Approval logic
       let reportStatus = { status: 'none', label: '—' };
-      if (isReportSubmitted) {
-        reportStatus = {
-          status: 'submitted',
-          label: 'نعم',
-          report: dayReport
-        };
-      } else {
-        if (isManagementOrSupervisor) {
-          reportStatus = { status: 'not_required', label: '—' };
+
+      if (isImad) {
+        // --- للمشرف عماد: إظهار نعم أو لا في حال قام بالموافقة على تقارير المشرفين أم لا ---
+        const otherSupReports = supervisorReports.filter(sr => sr.date === date && !isOwnSupervisorReport(sr));
+
+        let targetSupReports = otherSupReports;
+        if (subordinateIds.length > 0) {
+          const subFiltered = otherSupReports.filter(sr =>
+            subordinateIds.includes(String(sr.supervisorId || '').trim())
+          );
+          if (subFiltered.length > 0) {
+            targetSupReports = subFiltered;
+          }
+        }
+
+        const approvedReports = targetSupReports.filter(sr => sr.status === 'معتمد');
+        const pendingReports = targetSupReports.filter(sr => !sr.status || sr.status === 'قيد المراجعة');
+        const hasApproved = targetSupReports.length > 0 && approvedReports.length > 0 && pendingReports.length === 0;
+
+        if (hasApproved) {
+          reportStatus = {
+            status: 'submitted',
+            label: 'نعم',
+            tooltip: `تمت الموافقة على تقارير المشرفين بنجاح (${approvedReports.length} من أصل ${targetSupReports.length})`,
+            approvedCount: approvedReports.length,
+            totalCount: targetSupReports.length,
+            reports: targetSupReports
+          };
         } else if (isFuture) {
           reportStatus = { status: 'future', label: '—' };
-        } else if (isFriday || officialLeaves.length > 0) {
+        } else if ((isFriday && !hasPunch) || officialLeaves.length > 0) {
           reportStatus = { status: 'weekend_or_leave', label: '—' };
         } else {
-          reportStatus = { status: 'missing', label: 'لا' };
+          const tooltipMsg = targetSupReports.length > 0
+            ? `لم تتم الموافقة على كافة تقارير المشرفين (${approvedReports.length} معتمد من ${targetSupReports.length})`
+            : 'لم يتم اعتماد تقارير المشرفين لهذا اليوم';
+          reportStatus = {
+            status: 'missing',
+            label: 'لا',
+            tooltip: tooltipMsg,
+            approvedCount: approvedReports.length,
+            totalCount: targetSupReports.length,
+            reports: targetSupReports
+          };
+        }
+      } else if (isSupervisor) {
+        // --- لباقي المشرفين: إظهار نعم أو لا في حال قام بتقييم الموظفين أم لا ---
+        const supReportForDay = supervisorReports.find(sr => sr.date === date && isOwnSupervisorReport(sr));
+        const evals = Array.isArray(supReportForDay?.employeeEvaluations)
+          ? supReportForDay.employeeEvaluations
+          : [];
+        const validEvals = evals.filter(e => {
+          if (!e) return false;
+          const hasRating = Boolean(e.rating && String(e.rating).trim() && e.rating !== 'لم يقيم');
+          const hasScore = e.scorePercentage != null && String(e.scorePercentage).trim() !== '';
+          const hasReason = Boolean(e.reason && String(e.reason).trim());
+          return hasRating || hasScore || hasReason;
+        });
+        const hasEvaluated = validEvals.length > 0;
+
+        if (hasEvaluated) {
+          reportStatus = {
+            status: 'submitted',
+            label: 'نعم',
+            tooltip: `تم تقييم ${validEvals.length} موظف لهذا اليوم`,
+            evaluationsCount: validEvals.length,
+            evaluations: validEvals,
+            supReport: supReportForDay
+          };
+        } else if (isFuture) {
+          reportStatus = { status: 'future', label: '—' };
+        } else if ((isFriday && !hasPunch) || officialLeaves.length > 0) {
+          reportStatus = { status: 'weekend_or_leave', label: '—' };
+        } else {
+          reportStatus = {
+            status: 'missing',
+            label: 'لا',
+            tooltip: 'لم يقم المشرف بتقييم الموظفين لهذا اليوم',
+            evaluationsCount: 0,
+            evaluations: [],
+            supReport: supReportForDay
+          };
+        }
+      } else {
+        // --- للموظف العادي: تقديم تقرير العمل اليومي ---
+        const matchedReports = dailyReports.filter(r => r.date === date);
+        const dayReport = matchedReports[0] || null;
+
+        let isReportSubmitted = false;
+        if (dayReport) {
+          const notesStr = String(dayReport.notes || '');
+          const isSupervisorPlaceholder =
+            dayReport.finalRating === 'لم يقدم تقرير' ||
+            dayReport.supervisorRating === 'لم يقدم تقرير' ||
+            notesStr.includes('لعدم تقديمه التقرير اليومي') ||
+            notesStr.includes('تم تسجيل الموظف غائبًا من قبل المشرف');
+
+          if (!isSupervisorPlaceholder) {
+            isReportSubmitted = true;
+          }
+        }
+
+        if (isReportSubmitted) {
+          reportStatus = {
+            status: 'submitted',
+            label: 'نعم',
+            tooltip: 'تم تقديم التقرير بنجاح',
+            report: dayReport
+          };
+        } else {
+          if (isAdmin) {
+            reportStatus = { status: 'not_required', label: '—' };
+          } else if (isFuture) {
+            reportStatus = { status: 'future', label: '—' };
+          } else if ((isFriday && !hasPunch) || officialLeaves.length > 0) {
+            reportStatus = { status: 'weekend_or_leave', label: '—' };
+          } else {
+            reportStatus = { status: 'missing', label: 'لا', tooltip: 'لم يتم تقديم تقرير العمل اليومي' };
+          }
         }
       }
 
@@ -510,7 +654,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
         supervisorEval
       };
     });
-  }, [daysInMonth, attends, leaves, dailyReports, supervisorReports, shiftStartMinutes, today, user]);
+  }, [daysInMonth, attends, leaves, dailyReports, supervisorReports, shiftStartMinutes, today, user, isImad, isSupervisor, isAdmin, subordinateIds, isOwnSupervisorReport]);
 
   // Open Details Modal
   const handleOpenDayModal = (day) => {
@@ -562,7 +706,11 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                       <span>التأخير</span>
                     </div>
                   </th>
-                  <th className="th-norm col-report" style={{ width: isManagementOrSupervisor ? '18%' : '15%' }}>
+                  <th
+                    className="th-norm col-report"
+                    style={{ width: isManagementOrSupervisor ? '18%' : '15%' }}
+                    title={isImad ? 'الموافقة على تقارير المشرفين' : isSupervisor ? 'تقييم الموظفين اليومي' : 'تقرير العمل اليومي'}
+                  >
                     <div className="th-cell-text">
                       <span>تقرير العمل</span>
                     </div>
@@ -665,16 +813,22 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                               type="button"
                               className="pill-ref-report-yes"
                               onClick={() => handleOpenDayModal(day)}
-                              title="تم تقديم التقرير بنجاح - اضغط لعرض المهام"
+                              title={day.reportStatus.tooltip || "تم بنجاح - اضغط لعرض التفاصيل"}
                             >
                               <span>نعم</span>
                               <FileText size={13} />
                             </button>
                           ) : day.reportStatus.status === 'missing' ? (
-                            <span className="pill-ref-report-no" title="لم يتم تقديم تقرير العمل اليومي">
+                            <button
+                              type="button"
+                              className="pill-ref-report-no"
+                              onClick={() => handleOpenDayModal(day)}
+                              title={day.reportStatus.tooltip || "غير مكتمل - اضغط لعرض التفاصيل"}
+                              style={{ border: 'none', cursor: 'pointer' }}
+                            >
                               <span>لا</span>
                               <FileText size={13} />
-                            </span>
+                            </button>
                           ) : (
                             <span className="ref-dash">-</span>
                           )}
@@ -858,70 +1012,207 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
               <div className="detail-section-card report-highlight">
                 <div className="detail-section-title">
                   <FileText size={16} className="text-teal-700" />
-                  <span>تقرير العمل اليومي</span>
+                  <span>
+                    {isImad
+                      ? 'اعتماد تقارير المشرفين'
+                      : isSupervisor
+                      ? 'تقييم الموظفين اليومي'
+                      : 'تقرير العمل اليومي'}
+                  </span>
                 </div>
 
-                {selectedDayDetails.reportStatus.status === 'submitted' && selectedDayDetails.dayReport ? (
-                  <div>
-                    <div className="detail-grid">
-                      <div className="detail-item">
-                        <span className="detail-item-label">حالة التقديم</span>
-                        <span className="detail-item-val" style={{ color: '#166534' }}>
-                          ✓ تم التقديم
-                        </span>
+                {isImad ? (
+                  /* Imad: Supervisor Reports Approval Details */
+                  selectedDayDetails.reportStatus.status === 'submitted' ? (
+                    <div>
+                      <div className="detail-grid">
+                        <div className="detail-item">
+                          <span className="detail-item-label">حالة الاعتماد</span>
+                          <span className="detail-item-val" style={{ color: '#166534', fontWeight: 800 }}>
+                            ✓ تمت الموافقة على كافة تقارير المشرفين
+                          </span>
+                        </div>
+                        <div className="detail-item">
+                          <span className="detail-item-label">التقارير المعتمدة</span>
+                          <span className="detail-item-val">
+                            {selectedDayDetails.reportStatus.approvedCount} من أصل {selectedDayDetails.reportStatus.totalCount}
+                          </span>
+                        </div>
                       </div>
-                      <div className="detail-item">
-                        <span className="detail-item-label">عدد المهام</span>
-                        <span className="detail-item-val">
-                          {(selectedDayDetails.dayReport.tasks || []).length} مهمة
-                        </span>
-                      </div>
-                      <div className="detail-item">
-                        <span className="detail-item-label">القسم</span>
-                        <span className="detail-item-val">
-                          {selectedDayDetails.dayReport.department || '—'}
-                        </span>
-                      </div>
-                    </div>
 
-                    {/* Tasks mini table */}
-                    {Array.isArray(selectedDayDetails.dayReport.tasks) && selectedDayDetails.dayReport.tasks.length > 0 && (
-                      <div style={{ marginTop: '12px', overflowX: 'auto' }}>
-                        <table className="tasks-mini-table">
-                          <thead>
-                            <tr>
-                              <th>الصنف / المهمة</th>
-                              <th>العملية</th>
-                              <th>العدد</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {selectedDayDetails.dayReport.tasks.map((task, idx) => (
-                              <tr key={idx}>
-                                <td>{task.name || task.title || '—'}</td>
-                                <td>{task.operation || '—'}</td>
-                                <td style={{ fontWeight: 800 }}>{task.count || task.qty || '—'}</td>
+                      {Array.isArray(selectedDayDetails.reportStatus.reports) && selectedDayDetails.reportStatus.reports.length > 0 && (
+                        <div style={{ marginTop: '12px', overflowX: 'auto' }}>
+                          <table className="tasks-mini-table">
+                            <thead>
+                              <tr>
+                                <th>المشرف</th>
+                                <th>تقييم الموظفين</th>
+                                <th>الحالة</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody>
+                              {selectedDayDetails.reportStatus.reports.map((rep, idx) => (
+                                <tr key={idx}>
+                                  <td>{rep.supervisorName || rep.supervisorId || '—'}</td>
+                                  <td>تم تقييم {rep.employeeEvaluations?.length || 0} موظف</td>
+                                  <td>
+                                    <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, backgroundColor: rep.status === 'معتمد' ? '#dcfce7' : '#fef3c7', color: rep.status === 'معتمد' ? '#15803d' : '#b45309' }}>
+                                      {rep.status || 'قيد المراجعة'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ textAlign: 'center', padding: '12px', color: '#991b1b', background: '#fef2f2', borderRadius: '12px', fontWeight: 700, fontSize: '0.85rem' }}>
+                        {selectedDayDetails.reportStatus.totalCount > 0
+                          ? `لم تتم الموافقة على جميع تقارير المشرفين لهذا اليوم (معتمد: ${selectedDayDetails.reportStatus.approvedCount || 0} من ${selectedDayDetails.reportStatus.totalCount}).`
+                          : 'لم يتم اعتماد تقارير المشرفين لهذا اليوم.'}
                       </div>
-                    )}
 
-                    {selectedDayDetails.dayReport.notes && (
-                      <div style={{ marginTop: '10px', fontSize: '0.82rem', color: '#475569', background: '#ffffff', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                        <strong>ملاحظات الموظف:</strong> {selectedDayDetails.dayReport.notes}
+                      {Array.isArray(selectedDayDetails.reportStatus.reports) && selectedDayDetails.reportStatus.reports.length > 0 && (
+                        <div style={{ marginTop: '12px', overflowX: 'auto' }}>
+                          <table className="tasks-mini-table">
+                            <thead>
+                              <tr>
+                                <th>المشرف</th>
+                                <th>تقييم الموظفين</th>
+                                <th>الحالة</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedDayDetails.reportStatus.reports.map((rep, idx) => (
+                                <tr key={idx}>
+                                  <td>{rep.supervisorName || rep.supervisorId || '—'}</td>
+                                  <td>تم تقييم {rep.employeeEvaluations?.length || 0} موظف</td>
+                                  <td>
+                                    <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, backgroundColor: rep.status === 'معتمد' ? '#dcfce7' : '#fef3c7', color: rep.status === 'معتمد' ? '#15803d' : '#b45309' }}>
+                                      {rep.status || 'قيد المراجعة'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )
+                ) : isSupervisor ? (
+                  /* Other Supervisors: Employee Evaluations Details */
+                  selectedDayDetails.reportStatus.status === 'submitted' ? (
+                    <div>
+                      <div className="detail-grid">
+                        <div className="detail-item">
+                          <span className="detail-item-label">حالة التقييم</span>
+                          <span className="detail-item-val" style={{ color: '#166534', fontWeight: 800 }}>
+                            ✓ تم تقييم الموظفين
+                          </span>
+                        </div>
+                        <div className="detail-item">
+                          <span className="detail-item-label">عدد الموظفين المقيمين</span>
+                          <span className="detail-item-val">
+                            {selectedDayDetails.reportStatus.evaluationsCount || 0} موظف
+                          </span>
+                        </div>
                       </div>
-                    )}
-                  </div>
+
+                      {Array.isArray(selectedDayDetails.reportStatus.evaluations) && selectedDayDetails.reportStatus.evaluations.length > 0 && (
+                        <div style={{ marginTop: '12px', overflowX: 'auto' }}>
+                          <table className="tasks-mini-table">
+                            <thead>
+                              <tr>
+                                <th>الموظف</th>
+                                <th>التقييم</th>
+                                <th>النسبة %</th>
+                                <th>الملاحظات</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedDayDetails.reportStatus.evaluations.map((ev, idx) => (
+                                <tr key={idx}>
+                                  <td>{ev.employeeName || ev.employeeId || '—'}</td>
+                                  <td style={{ fontWeight: 800 }}>{ev.rating || '—'}</td>
+                                  <td dir="ltr">{ev.scorePercentage ? `${ev.scorePercentage}%` : '—'}</td>
+                                  <td style={{ fontSize: '0.8rem', color: '#475569' }}>{ev.reason || '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '12px', color: '#991b1b', background: '#fef2f2', borderRadius: '12px', fontWeight: 700, fontSize: '0.85rem' }}>
+                      لم يقم المشرف بتقييم الموظفين لهذا اليوم.
+                    </div>
+                  )
                 ) : (
-                  <div style={{ textAlign: 'center', padding: '12px', color: isManagementOrSupervisor ? '#64748b' : '#991b1b', background: isManagementOrSupervisor ? '#f8fafc' : '#fef2f2', borderRadius: '12px', fontWeight: 700, fontSize: '0.85rem' }}>
-                    {isManagementOrSupervisor
-                      ? 'غير مطلوب تقديم تقرير عمل يومي (الكادر الإشرافي والإداري).'
-                      : selectedDayDetails.reportStatus.label === '— غير مطلوب'
-                      ? 'لا يُطلب تقديم تقرير عمل في أيام العطلات والإجازات الرسمية.'
-                      : 'لم يتم تقديم تقرير العمل اليومي لهذا اليوم.'}
-                  </div>
+                  /* Regular Employee: Daily Work Report Details */
+                  selectedDayDetails.reportStatus.status === 'submitted' && selectedDayDetails.dayReport ? (
+                    <div>
+                      <div className="detail-grid">
+                        <div className="detail-item">
+                          <span className="detail-item-label">حالة التقديم</span>
+                          <span className="detail-item-val" style={{ color: '#166534' }}>
+                            ✓ تم التقديم
+                          </span>
+                        </div>
+                        <div className="detail-item">
+                          <span className="detail-item-label">عدد المهام</span>
+                          <span className="detail-item-val">
+                            {(selectedDayDetails.dayReport.tasks || []).length} مهمة
+                          </span>
+                        </div>
+                        <div className="detail-item">
+                          <span className="detail-item-label">القسم</span>
+                          <span className="detail-item-val">
+                            {selectedDayDetails.dayReport.department || '—'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {Array.isArray(selectedDayDetails.dayReport.tasks) && selectedDayDetails.dayReport.tasks.length > 0 && (
+                        <div style={{ marginTop: '12px', overflowX: 'auto' }}>
+                          <table className="tasks-mini-table">
+                            <thead>
+                              <tr>
+                                <th>الصنف / المهمة</th>
+                                <th>العملية</th>
+                                <th>العدد</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedDayDetails.dayReport.tasks.map((task, idx) => (
+                                <tr key={idx}>
+                                  <td>{task.name || task.title || '—'}</td>
+                                  <td>{task.operation || '—'}</td>
+                                  <td style={{ fontWeight: 800 }}>{task.count || task.qty || '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {selectedDayDetails.dayReport.notes && (
+                        <div style={{ marginTop: '10px', fontSize: '0.82rem', color: '#475569', background: '#ffffff', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                          <strong>ملاحظات الموظف:</strong> {selectedDayDetails.dayReport.notes}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '12px', color: '#991b1b', background: '#fef2f2', borderRadius: '12px', fontWeight: 700, fontSize: '0.85rem' }}>
+                      {selectedDayDetails.reportStatus.label === '—'
+                        ? 'لا يُطلب تقديم تقرير عمل في أيام العطلات والإجازات الرسمية أو الأيام المستقبلية.'
+                        : 'لم يتم تقديم تقرير العمل اليومي لهذا اليوم.'}
+                    </div>
+                  )
                 )}
               </div>
             </div>
