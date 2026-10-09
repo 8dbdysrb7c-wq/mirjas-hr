@@ -536,44 +536,47 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
       ) : (
         /* Table View (Desktop & Mobile) */
         <div className="attendance-table-card">
+          <div className="mobile-table-scroll-hint">
+            <span>اسحب الجدول أفقياً لعرض باقي التفاصيل ↔</span>
+          </div>
           <div className="attendance-table-container">
-            <table className="table monthly-attendance-table">
+            <table className="table monthly-attendance-table modal-table">
               <thead>
                 <tr>
-                  <th style={{ width: isManagementOrSupervisor ? '18%' : '14%', textAlign: 'center', verticalAlign: 'middle' }}>
+                  <th style={{ width: isManagementOrSupervisor ? '20%' : '15%', minWidth: '95px', textAlign: 'center', verticalAlign: 'middle' }}>
                     <div className="th-content">
-                      <Calendar size={14} />
+                      <Calendar size={13} />
                       <span>التاريخ</span>
                     </div>
                   </th>
-                  <th style={{ width: isManagementOrSupervisor ? '21%' : '17%', textAlign: 'center', verticalAlign: 'middle' }}>
+                  <th style={{ width: isManagementOrSupervisor ? '24%' : '20%', minWidth: '125px', textAlign: 'center', verticalAlign: 'middle' }}>
                     <div className="th-content">
-                      <Clock size={14} />
+                      <Clock size={13} />
                       <span>أوقات الدوام</span>
                     </div>
                   </th>
-                  <th style={{ width: isManagementOrSupervisor ? '22%' : '18%', textAlign: 'center', verticalAlign: 'middle' }}>
+                  <th style={{ width: isManagementOrSupervisor ? '20%' : '17%', minWidth: '95px', textAlign: 'center', verticalAlign: 'middle' }}>
                     <div className="th-content">
-                      <CheckCircle2 size={14} />
+                      <CheckCircle2 size={13} />
                       <span>الالتزام والتأخير</span>
                     </div>
                   </th>
-                  <th style={{ width: isManagementOrSupervisor ? '22%' : '18%', textAlign: 'center', verticalAlign: 'middle' }}>
+                  <th style={{ width: isManagementOrSupervisor ? '18%' : '16%', minWidth: '85px', textAlign: 'center', verticalAlign: 'middle' }}>
                     <div className="th-content">
-                      <FileText size={14} />
+                      <FileText size={13} />
                       <span>تقرير العمل اليومي</span>
                     </div>
                   </th>
-                  <th style={{ width: isManagementOrSupervisor ? '17%' : '14%', textAlign: 'center', verticalAlign: 'middle' }}>
+                  <th style={{ width: isManagementOrSupervisor ? '18%' : '15%', minWidth: '80px', textAlign: 'center', verticalAlign: 'middle' }}>
                     <div className="th-content">
-                      <Sparkles size={14} />
+                      <Sparkles size={13} />
                       <span>العمل الإضافي</span>
                     </div>
                   </th>
                   {!isManagementOrSupervisor && (
-                    <th style={{ width: '19%', textAlign: 'center', verticalAlign: 'middle' }}>
+                    <th style={{ width: '17%', minWidth: '85px', textAlign: 'center', verticalAlign: 'middle' }}>
                       <div className="th-content">
-                        <Award size={14} />
+                        <Award size={13} />
                         <span>التقييم</span>
                       </div>
                     </th>
