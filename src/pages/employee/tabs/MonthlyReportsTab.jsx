@@ -623,7 +623,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                   {/* Supervisor / Employee Rating - hidden for supervisors */}
                   {!isManagementOrSupervisor && (
                     <div className="mobile-metric-box" style={{ textAlign: 'center', alignItems: 'center' }}>
-                      <span className="mobile-metric-label">تقييم الموظف</span>
+                      <span className="mobile-metric-label">التقييم</span>
                       <div className="mobile-metric-value" style={{ justifyContent: 'center' }}>
                         {day.supervisorEval.status === 'evaluated' ? (
                           <span
@@ -676,9 +676,9 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                   <th style={{ width: isManagementOrSupervisor ? '21%' : '17%', textAlign: 'center', verticalAlign: 'middle' }}>أوقات الدوام</th>
                   <th style={{ width: isManagementOrSupervisor ? '22%' : '18%', textAlign: 'center', verticalAlign: 'middle' }}>الالتزام والتأخير</th>
                   <th style={{ width: isManagementOrSupervisor ? '22%' : '18%', textAlign: 'center', verticalAlign: 'middle' }}>تقرير العمل اليومي</th>
-                  <th style={{ width: isManagementOrSupervisor ? '17%' : '14%', textAlign: 'center', verticalAlign: 'middle' }}>الاضافي</th>
+                  <th style={{ width: isManagementOrSupervisor ? '17%' : '14%', textAlign: 'center', verticalAlign: 'middle' }}>العمل الإضافي</th>
                   {!isManagementOrSupervisor && (
-                    <th style={{ width: '19%', textAlign: 'center', verticalAlign: 'middle' }}>تقييم الموظف</th>
+                    <th style={{ width: '19%', textAlign: 'center', verticalAlign: 'middle' }}>التقييم</th>
                   )}
                 </tr>
               </thead>
@@ -919,7 +919,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                 <div className="detail-section-card eval-highlight">
                   <div className="detail-section-title">
                     <Award size={16} className="text-emerald-700" />
-                    <span>تقييم الموظف</span>
+                    <span>التقييم</span>
                   </div>
 
                   {selectedDayDetails.supervisorEval.status === 'evaluated' ? (
