@@ -570,7 +570,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                   <th className="th-norm" style={{ width: isManagementOrSupervisor ? '18%' : '16%', minWidth: '90px' }}>
                     <div className="th-stacked">
                       <History size={17} className="th-icon-green" />
-                      <span>العمل الإضافي</span>
+                      <span>الإضافي</span>
                     </div>
                   </th>
                   {!isManagementOrSupervisor && (
