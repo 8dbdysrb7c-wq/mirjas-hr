@@ -138,6 +138,15 @@ table.monthly-attendance-table.modal-table thead tr {
 .th-icon-green { color: #10b981 !important; }
 .th-icon-amber { color: #f59e0b !important; }
 
+.th-year-sub {
+  font-size: 0.67rem !important;
+  font-weight: 750 !important;
+  color: #7dd3fc !important;
+  line-height: 1 !important;
+  letter-spacing: 0.2px !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+}
+
 /* TBODY */
 .attendance-table-card table.monthly-attendance-table tbody,
 table.monthly-attendance-table.modal-table tbody {
@@ -731,6 +740,10 @@ table.monthly-attendance-table.modal-table td::before {
     height: 13px !important;
   }
 
+  .th-year-sub {
+    font-size: 0.58rem !important;
+  }
+
   .attendance-table-card table.monthly-attendance-table td,
   table.monthly-attendance-table.modal-table td {
     padding: 8px 1px !important;
@@ -741,7 +754,8 @@ table.monthly-attendance-table.modal-table td::before {
   }
 
   .cell-date-num {
-    font-size: 0.62rem;
+    font-size: 0.68rem;
+    font-weight: 800;
   }
 
   .time-split-wrap {

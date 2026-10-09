@@ -281,6 +281,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
     return daysInMonth.map(date => {
       const dayName = getDayName(date);
       const [y, m, d] = date.split('-').map(Number);
+      const shortDate = `${d}-${m}`;
       const dayOfWeek = new Date(y, m - 1, d).getDay();
       const isFriday = dayOfWeek === 5;
       const isFuture = date > today;
@@ -490,6 +491,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
 
       return {
         date,
+        shortDate,
         dayName,
         isFriday,
         isFuture,
@@ -540,13 +542,14 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
             <table className="table monthly-attendance-table modal-table">
               <thead>
                 <tr>
-                  <th className="th-date col-date" style={{ width: isManagementOrSupervisor ? '19%' : '16%' }}>
+                  <th className="th-date col-date" style={{ width: isManagementOrSupervisor ? '16%' : '14%' }}>
                     <div className="th-stacked">
                       <Calendar size={15} />
                       <span>التاريخ</span>
+                      <span className="th-year-sub">{selectedMonth ? selectedMonth.split('-')[0] : '2026'}</span>
                     </div>
                   </th>
-                  <th className="th-norm col-punches" style={{ width: isManagementOrSupervisor ? '27%' : '24%' }}>
+                  <th className="th-norm col-punches" style={{ width: isManagementOrSupervisor ? '30%' : '26%' }}>
                     <div className="th-stacked">
                       <Clock size={15} className="th-icon-navy" />
                       <span>أوقات الدوام</span>
@@ -591,7 +594,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                       <td className="td-date">
                         <div className="cell-date-wrap">
                           <span className="cell-day-name">{day.dayName}</span>
-                          <span className="cell-date-num">{day.date}</span>
+                          <span className="cell-date-num" dir="ltr">{day.shortDate}</span>
                         </div>
                       </td>
 
