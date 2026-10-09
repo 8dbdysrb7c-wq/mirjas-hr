@@ -1,15 +1,15 @@
-/* MonthlyReportsTab.css - Ultra-Clean Executive Theme */
+/* MonthlyReportsTab.css - Faithful Recreation of Executive Reference Theme */
 
 .employee-attendance-report {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   width: 100%;
   animation: fadeInReport 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes fadeInReport {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -19,12 +19,12 @@
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 4px;
+  gap: 10px;
+  margin-bottom: 2px;
 }
 
 .attendance-report-heading h2 {
-  font-size: 1.35rem;
+  font-size: 1.3rem;
   font-weight: 850;
   color: #0f172a;
   letter-spacing: -0.01em;
@@ -32,12 +32,12 @@
 }
 
 .attendance-report-month {
-  padding: 6px 16px;
+  padding: 5px 14px;
   border: 1.5px solid #99f6e4;
   border-radius: 9999px;
   color: #0f766e;
   font-weight: 850;
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   background: linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%);
   box-shadow: 0 2px 8px rgba(15, 118, 110, 0.08);
   display: inline-flex;
@@ -45,14 +45,13 @@
   gap: 6px;
 }
 
-/* Table Card Container - Executive Frame */
+/* Table Card Container - Rounded Clean Box */
 .attendance-table-card {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
+  border: 1px solid #dce8f0;
+  border-radius: 18px;
   overflow: hidden;
-  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.05), 0 0 0 1px rgba(241, 245, 249, 0.8);
-  transition: box-shadow 0.2s ease;
+  box-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.05);
   position: relative;
 }
 
@@ -64,7 +63,7 @@
   background: linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%);
   color: #0f766e;
   border-bottom: 1px solid #99f6e4;
-  padding: 6px 12px;
+  padding: 5px 12px;
   font-size: 0.72rem;
   font-weight: 800;
   text-align: center;
@@ -79,7 +78,7 @@
 }
 
 .attendance-table-container::-webkit-scrollbar {
-  height: 6px;
+  height: 5px;
 }
 
 .attendance-table-container::-webkit-scrollbar-thumb {
@@ -88,24 +87,23 @@
 }
 
 /* =========================================================
-   ABSOLUTE TABLE ENFORCEMENT - NEVER COLLAPSE ON ANY DEVICE
+   EXACT TABLE FORMAT - ABSOLUTE ENFORCEMENT ON ALL DEVICES
    ========================================================= */
 .attendance-table-card table.monthly-attendance-table,
 table.monthly-attendance-table.modal-table {
   display: table !important;
   width: 100% !important;
   min-width: 580px !important;
-  border-collapse: separate !important;
-  border-spacing: 0 !important;
+  border-collapse: collapse !important;
   text-align: center !important;
-  font-size: 0.85rem !important;
   margin: 0 !important;
+  background: #ffffff !important;
 }
 
+/* THEAD */
 .attendance-table-card table.monthly-attendance-table thead,
 table.monthly-attendance-table.modal-table thead {
   display: table-header-group !important;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
   position: sticky !important;
   top: 0 !important;
   z-index: 10 !important;
@@ -124,34 +122,47 @@ table.monthly-attendance-table.modal-table thead tr {
   padding: 0 !important;
 }
 
-.attendance-table-card table.monthly-attendance-table thead th,
-table.monthly-attendance-table.modal-table thead th {
+/* Distinctive Dark Petrol Blue Header for Date Column */
+.th-date {
   display: table-cell !important;
-  color: #334155 !important;
-  font-weight: 850 !important;
-  font-size: 0.81rem !important;
-  padding: 13px 8px !important;
-  border: none !important;
-  border-bottom: 2px solid #e2e8f0 !important;
-  white-space: nowrap !important;
+  background: #034b6e !important;
+  color: #ffffff !important;
+  border-top-right-radius: 16px;
+  padding: 12px 6px !important;
   vertical-align: middle !important;
   text-align: center !important;
-  background: #f8fafc !important;
+  white-space: nowrap !important;
 }
 
-.th-content {
-  display: inline-flex !important;
+/* Frosted Light Blue Header for Other Columns */
+.th-norm {
+  display: table-cell !important;
+  background: #eef6fa !important;
+  color: #034b6e !important;
+  border-bottom: 2px solid #dcebf4 !important;
+  border-left: 1px solid #e2edf3 !important;
+  padding: 12px 6px !important;
+  vertical-align: middle !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+}
+
+.th-stacked {
+  display: flex !important;
+  flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 6px !important;
-  color: #334155 !important;
+  gap: 4px !important;
+  font-size: 0.81rem !important;
+  font-weight: 850 !important;
 }
 
-.th-content svg {
-  color: #0d9488 !important;
-  stroke-width: 2.2 !important;
-}
+.th-icon-navy { color: #034b6e !important; }
+.th-icon-red { color: #ef4444 !important; }
+.th-icon-green { color: #10b981 !important; }
+.th-icon-amber { color: #f59e0b !important; }
 
+/* TBODY */
 .attendance-table-card table.monthly-attendance-table tbody,
 table.monthly-attendance-table.modal-table tbody {
   display: table-row-group !important;
@@ -160,18 +171,23 @@ table.monthly-attendance-table.modal-table tbody {
 .attendance-table-card table.monthly-attendance-table tbody tr,
 table.monthly-attendance-table.modal-table tbody tr {
   display: table-row !important;
-  background-color: #ffffff !important;
   border: none !important;
+  border-bottom: 1px solid #edf2f7 !important;
   border-radius: 0 !important;
   margin: 0 !important;
   padding: 0 !important;
   box-shadow: none !important;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transition: background-color 0.15s ease !important;
 }
 
 .attendance-table-card table.monthly-attendance-table tbody tr:nth-child(even),
 table.monthly-attendance-table.modal-table tbody tr:nth-child(even) {
-  background-color: #fafbfc !important;
+  background-color: #f8fafc !important;
+}
+
+.attendance-table-card table.monthly-attendance-table tbody tr:nth-child(odd),
+table.monthly-attendance-table.modal-table tbody tr:nth-child(odd) {
+  background-color: #ffffff !important;
 }
 
 .attendance-table-card table.monthly-attendance-table tbody tr:hover,
@@ -184,21 +200,14 @@ table.monthly-attendance-table.modal-table tbody tr.row-today {
   background: linear-gradient(90deg, #f0fdf4 0%, #fafdfa 100%) !important;
 }
 
-.attendance-table-card table.monthly-attendance-table tbody tr.row-today td:first-child,
-table.monthly-attendance-table.modal-table tbody tr.row-today td:first-child {
-  border-right: 4px solid #16a34a !important;
-}
-
 .attendance-table-card table.monthly-attendance-table td,
 table.monthly-attendance-table.modal-table td {
   display: table-cell !important;
-  padding: 11px 6px !important;
-  padding-right: 6px !important;
   vertical-align: middle !important;
   text-align: center !important;
-  color: #1e293b !important;
-  border: none !important;
-  border-bottom: 1px solid #f1f5f9 !important;
+  padding: 12px 6px !important;
+  border-left: 1px solid #edf2f7 !important;
+  border-bottom: 1px solid #edf2f7 !important;
   position: static !important;
   min-height: auto !important;
 }
@@ -209,310 +218,309 @@ table.monthly-attendance-table.modal-table td::before {
   content: none !important;
 }
 
-/* Date Cell - Calendar Style Chip */
-.date-cell-wrap {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center !important;
-  justify-content: center !important;
-  text-align: center !important;
-  padding: 5px 10px;
-  border-radius: 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  min-width: 90px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
-  margin: 0 auto;
-}
+/* =========================================================
+   CELL SPECIFIC STYLES MATCHING REFERENCE
+   ========================================================= */
 
-.monthly-attendance-table tbody tr:hover .date-cell-wrap {
-  background: #ffffff;
-  border-color: #cbd5e1;
-  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.06);
-  transform: translateY(-1px);
-}
-
-.date-cell-wrap.is-today {
-  background: #ffffff;
-  border-color: #86efac;
-  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.12);
-}
-
-.date-day-name {
-  font-size: 0.72rem;
-  font-weight: 800;
-  color: #0f766e;
-  line-height: 1.2;
-  margin-bottom: 1px;
-}
-
-.attendance-date-text {
-  font-size: 0.81rem;
-  font-weight: 800;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  color: #0f172a;
-  direction: ltr;
-  display: inline-block;
-  line-height: 1.3;
-}
-
-.today-indicator {
-  margin-top: 2px;
-  font-size: 0.63rem;
-  font-weight: 850;
-  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
-  color: #ffffff;
-  padding: 1px 7px;
-  border-radius: 9999px;
-  box-shadow: 0 2px 5px rgba(22, 163, 74, 0.3);
-  text-align: center;
-}
-
-/* Punch Times - Capsule Chip */
-.attendance-times-wrapper {
+/* 1. Date Cell */
+.cell-date-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  margin: 0 auto;
+  gap: 1px;
 }
 
-.time-chip {
+.cell-day-name {
+  font-size: 0.88rem;
+  font-weight: 850;
+  color: #0284c7;
+  line-height: 1.2;
+}
+
+.cell-date-num {
+  font-size: 0.77rem;
+  font-weight: 700;
+  color: #334155;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  line-height: 1.2;
+}
+
+/* 2. Punches Cell */
+.time-split-wrap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 4px 12px;
-  border-radius: 9999px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+  gap: 8px;
   direction: rtl;
-  font-size: 0.79rem;
-  font-weight: 800;
-  transition: all 0.2s ease;
+}
+
+.time-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 48px;
+}
+
+.time-sub {
+  font-size: 0.67rem;
+  color: #64748b;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.time-val {
+  font-size: 0.82rem;
+  color: #0f172a;
+  font-weight: 850;
+  font-feature-settings: 'tnum';
+  line-height: 1.2;
   white-space: nowrap;
 }
 
-.monthly-attendance-table tbody tr:hover .time-chip {
-  background: #ffffff;
-  border-color: #cbd5e1;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+.time-line {
+  width: 1px;
+  height: 24px;
+  background: #cbd5e1;
 }
 
-.time-chip .time-entry {
-  color: #0f172a;
-  font-feature-settings: 'tnum';
+.time-dash {
+  color: #94a3b8;
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
-.time-chip .time-divider {
-  color: #cbd5e1;
-  font-weight: 300;
-  font-size: 0.72rem;
+/* 3. Lateness Badges */
+.pill-ref-ontime {
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  background: #e6f9f0;
+  color: #10b981;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
 }
 
-.time-chip .time-exit {
-  color: #475569;
-  font-feature-settings: 'tnum';
+.pill-ref-late {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 3px 12px;
+  border-radius: 9999px;
+  background: #fee2e2;
+  color: #ef4444;
+  font-weight: 850;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  margin: 0 auto;
 }
 
-/* Pill Badges System - Harmonized Modern Tokens */
-.status-pill {
+.pill-ref-late-excused {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
   padding: 3px 10px;
-  min-height: 27px;
   border-radius: 9999px;
-  font-size: 0.76rem;
+  background: #fffbeb;
+  color: #d97706;
+  font-weight: 800;
+  font-size: 0.77rem;
+  white-space: nowrap;
+  margin: 0 auto;
+}
+
+.pill-ref-weekend {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-weight: 750;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  margin: 0 auto;
+}
+
+/* 4. Daily Report Badges */
+.pill-ref-report-yes {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 14px;
+  border-radius: 9999px;
+  background: #e6f9f0;
+  color: #059669;
+  border: none;
+  font-weight: 850;
+  font-size: 0.82rem;
+  cursor: pointer;
+  margin: 0 auto;
+  transition: all 0.15s ease;
+}
+
+.pill-ref-report-yes:hover {
+  background: #cbf5df;
+  transform: translateY(-1px);
+}
+
+.pill-ref-report-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 14px;
+  border-radius: 9999px;
+  background: #fee2e2;
+  color: #ef4444;
+  font-weight: 850;
+  font-size: 0.82rem;
+  margin: 0 auto;
+}
+
+/* 5. Overtime Badges */
+.pill-ref-overtime-box {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: #e6f9f0;
+  color: #059669;
   font-weight: 850;
   line-height: 1.2;
-  white-space: nowrap;
-  max-width: 100%;
   margin: 0 auto;
-  text-align: center;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Attendance & Lateness Badges */
-.pill-on-time {
-  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-  color: #047857;
-  border: 1.5px solid #a7f3d0;
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.12);
-  min-width: 36px;
-  padding: 3px 7px;
+.ot-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 0.77rem;
 }
 
-.pill-late {
-  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-  color: #b91c1c;
-  border: 1.5px solid #fecaca;
-  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.12);
-  min-width: 48px;
+.ot-bot-row {
+  font-size: 0.78rem;
+  font-feature-settings: 'tnum';
+  direction: rtl;
 }
 
-.pill-late-excused {
-  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+.pill-ref-overtime-rejected {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: #fee2e2;
+  color: #ef4444;
+  font-weight: 800;
+  font-size: 0.75rem;
+}
+
+/* 6. Evaluation Badges */
+.pill-ref-eval-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 14px;
+  border-radius: 9999px;
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  font-weight: 850;
+  font-size: 0.84rem;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+  margin: 0 auto;
+  direction: ltr;
+  transition: all 0.15s ease;
+}
+
+.pill-ref-eval-score:hover {
+  background: #0369a1;
+  transform: translateY(-1px);
+}
+
+.pill-ref-eval-pending {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 14px;
+  border-radius: 9999px;
+  background: #fef3c7;
   color: #b45309;
-  border: 1.5px solid #fde68a;
-  min-width: 50px;
+  font-weight: 850;
+  font-size: 0.82rem;
+  margin: 0 auto;
 }
 
-.attendance-leave-badge {
+.ref-dash {
+  color: #94a3b8;
+  font-weight: 700;
+  font-size: 1rem;
+  display: inline-block;
+}
+
+.cell-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ref-badge-leave {
   background: #ecfeff;
   color: #0e7490;
   border: 1px solid #a5f3fc;
   padding: 3px 8px;
   border-radius: 9999px;
-  font-size: 0.71rem;
+  font-size: 0.72rem;
   font-weight: 800;
-  text-align: center;
-  display: inline-block;
-  white-space: nowrap;
 }
 
-.attendance-weekend-badge {
-  background: #f1f5f9;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
-  padding: 3px 8px;
-  border-radius: 9999px;
-  font-size: 0.71rem;
-  font-weight: 750;
-  text-align: center;
-  display: inline-block;
-  white-space: nowrap;
-}
-
-.attendance-absence-badge {
+.ref-badge-absence {
   background: #fee2e2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
+  color: #ef4444;
   padding: 3px 8px;
   border-radius: 9999px;
-  font-size: 0.71rem;
+  font-size: 0.72rem;
   font-weight: 800;
-  text-align: center;
-  display: inline-block;
-  white-space: nowrap;
 }
 
-.attendance-empty-badge {
-  color: #cbd5e1;
-  font-weight: 700;
-  font-size: 0.85rem;
-  text-align: center;
-}
-
-/* Daily Report Badges (نعم / لا) */
-.pill-report-yes {
-  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-  color: #065f46;
-  border: 1.5px solid #a7f3d0;
-  box-shadow: 0 2px 5px rgba(16, 185, 129, 0.12);
-  min-width: 48px;
-  cursor: pointer;
-}
-
-.pill-report-yes:hover {
-  background: #a7f3d0;
-  border-color: #6ee7b7;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.22);
-}
-
-.pill-report-no {
-  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-  color: #b91c1c;
-  border: 1.5px solid #fecaca;
-  min-width: 48px;
-}
-
-/* Supervisor Evaluation Score & Pending Badges */
-.pill-eval-pending {
-  background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
-  color: #854d0e;
-  border: 1.5px solid #fef08a;
-  min-width: 50px;
-  box-shadow: 0 2px 5px rgba(234, 179, 8, 0.12);
-}
-
-.pill-eval-score {
-  cursor: pointer;
-  border: none;
-  min-width: 52px;
-  padding: 4px 10px;
-  font-weight: 850;
-  direction: ltr;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-}
-
-.pill-eval-score:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
-}
-
-.pill-eval-excellent {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-  color: #ffffff;
-  border: 1px solid #047857;
-  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25);
-}
-
-.pill-eval-good {
-  background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
-  color: #ffffff;
-  border: 1px solid #0f766e;
-  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.25);
-}
-
-.pill-eval-acceptable {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: #ffffff;
-  border: 1px solid #d97706;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
-}
-
-.pill-eval-bad {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: #ffffff;
-  border: 1px solid #dc2626;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
-}
-
-/* Supervisor Note Action Pill */
 .sup-note-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   background: #ffffff;
   border: 1px solid #cbd5e1;
   color: #475569;
   border-radius: 9999px;
-  padding: 2px 8px;
-  font-size: 0.68rem;
+  padding: 1px 7px;
+  font-size: 0.67rem;
   font-weight: 750;
   cursor: pointer;
   margin: 2px auto 0;
   transition: all 0.15s ease;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
-  text-align: center;
 }
 
 .sup-note-btn:hover {
-  background: #0f766e;
+  background: #0284c7;
   color: #ffffff;
-  border-color: #0f766e;
-  transform: translateY(-0.5px);
+  border-color: #0284c7;
 }
 
-/* Day Detail Modal Styling */
+/* Modal styles preserved */
 .day-modal-overlay {
   position: fixed;
   inset: 0;
@@ -683,7 +691,7 @@ table.monthly-attendance-table.modal-table td::before {
   text-align: center;
 }
 
-/* Mobile View Adjustments - Table Optimization */
+/* Mobile Media Query */
 @media (max-width: 768px) {
   .attendance-report-heading {
     display: flex;
@@ -706,76 +714,59 @@ table.monthly-attendance-table.modal-table td::before {
     display: flex;
   }
 
-  /* Table Card on Mobile */
   .attendance-table-card {
-    border-radius: 16px;
-    box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.05);
+    border-radius: 14px;
   }
 
   .attendance-table-card table.monthly-attendance-table,
   table.monthly-attendance-table.modal-table {
-    min-width: 540px !important;
-    font-size: 0.78rem !important;
+    min-width: 530px !important;
   }
 
-  .attendance-table-card table.monthly-attendance-table thead th,
-  table.monthly-attendance-table.modal-table thead th {
-    padding: 10px 6px !important;
+  .th-stacked {
     font-size: 0.74rem !important;
-  }
-
-  .th-content {
-    gap: 4px !important;
+    gap: 3px !important;
   }
 
   .attendance-table-card table.monthly-attendance-table td,
   table.monthly-attendance-table.modal-table td {
-    padding: 9px 5px !important;
-    padding-right: 5px !important;
+    padding: 10px 4px !important;
   }
 
-  .date-cell-wrap {
-    min-width: 80px;
-    padding: 3px 6px;
-    border-radius: 10px;
+  .cell-day-name {
+    font-size: 0.82rem;
   }
 
-  .date-day-name {
-    font-size: 0.67rem;
+  .cell-date-num {
+    font-size: 0.72rem;
   }
 
-  .attendance-date-text {
+  .time-sub {
+    font-size: 0.63rem;
+  }
+
+  .time-val {
     font-size: 0.76rem;
   }
 
-  .today-indicator {
-    font-size: 0.6rem;
-    padding: 1px 5px;
+  .pill-ref-report-yes,
+  .pill-ref-report-no {
+    padding: 3px 10px;
+    font-size: 0.75rem;
   }
 
-  .time-chip {
+  .pill-ref-late {
     padding: 3px 8px;
-    gap: 5px;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
 
-  .status-pill {
-    padding: 2px 7px;
-    min-height: 25px;
-    font-size: 0.72rem;
+  .pill-ref-eval-score {
+    padding: 4px 10px;
+    font-size: 0.78rem;
   }
 
-  .pill-on-time {
-    min-width: 32px;
-    padding: 2px 5px;
-  }
-
-  .pill-late,
-  .pill-late-excused,
-  .pill-report-yes,
-  .pill-report-no,
-  .pill-eval-pending,
-  .pill-eval-score {
-    min-width: 42px;
+  .pill-ref-eval-pending {
+    padding: 3px 10px;
+    font-size: 0.75rem;
   }
 }

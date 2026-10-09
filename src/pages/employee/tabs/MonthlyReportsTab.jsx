@@ -4,7 +4,7 @@ import {
   Calendar, Clock, CheckCircle2, AlertTriangle, FileText, 
   Award, MessageSquare, ChevronRight, ChevronLeft, 
   HelpCircle, Check, X, ShieldAlert,
-  CalendarCheck, Eye, Sparkles
+  CalendarCheck, Eye, Sparkles, Star, History
 } from 'lucide-react';
 import { db } from '../../../firebase';
 import { getTimedLeaveMinutes, timeToMinutes } from '../../../utils/attendancePolicy';
@@ -543,40 +543,40 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
             <table className="table monthly-attendance-table modal-table">
               <thead>
                 <tr>
-                  <th style={{ width: isManagementOrSupervisor ? '20%' : '15%', minWidth: '95px', textAlign: 'center', verticalAlign: 'middle' }}>
-                    <div className="th-content">
-                      <Calendar size={13} />
+                  <th className="th-date" style={{ width: isManagementOrSupervisor ? '20%' : '15%', minWidth: '95px' }}>
+                    <div className="th-stacked">
+                      <Calendar size={18} />
                       <span>التاريخ</span>
                     </div>
                   </th>
-                  <th style={{ width: isManagementOrSupervisor ? '24%' : '20%', minWidth: '125px', textAlign: 'center', verticalAlign: 'middle' }}>
-                    <div className="th-content">
-                      <Clock size={13} />
+                  <th className="th-norm" style={{ width: isManagementOrSupervisor ? '24%' : '21%', minWidth: '135px' }}>
+                    <div className="th-stacked">
+                      <Clock size={17} className="th-icon-navy" />
                       <span>أوقات الدوام</span>
                     </div>
                   </th>
-                  <th style={{ width: isManagementOrSupervisor ? '20%' : '17%', minWidth: '95px', textAlign: 'center', verticalAlign: 'middle' }}>
-                    <div className="th-content">
-                      <CheckCircle2 size={13} />
-                      <span>الالتزام والتأخير</span>
+                  <th className="th-norm" style={{ width: isManagementOrSupervisor ? '19%' : '16%', minWidth: '90px' }}>
+                    <div className="th-stacked">
+                      <AlertTriangle size={17} className="th-icon-red" />
+                      <span>التأخير</span>
                     </div>
                   </th>
-                  <th style={{ width: isManagementOrSupervisor ? '18%' : '16%', minWidth: '85px', textAlign: 'center', verticalAlign: 'middle' }}>
-                    <div className="th-content">
-                      <FileText size={13} />
+                  <th className="th-norm" style={{ width: isManagementOrSupervisor ? '19%' : '16%', minWidth: '95px' }}>
+                    <div className="th-stacked">
+                      <FileText size={17} className="th-icon-green" />
                       <span>تقرير العمل اليومي</span>
                     </div>
                   </th>
-                  <th style={{ width: isManagementOrSupervisor ? '18%' : '15%', minWidth: '80px', textAlign: 'center', verticalAlign: 'middle' }}>
-                    <div className="th-content">
-                      <Sparkles size={13} />
+                  <th className="th-norm" style={{ width: isManagementOrSupervisor ? '18%' : '16%', minWidth: '90px' }}>
+                    <div className="th-stacked">
+                      <History size={17} className="th-icon-green" />
                       <span>العمل الإضافي</span>
                     </div>
                   </th>
                   {!isManagementOrSupervisor && (
-                    <th style={{ width: '17%', minWidth: '85px', textAlign: 'center', verticalAlign: 'middle' }}>
-                      <div className="th-content">
-                        <Award size={13} />
+                    <th className="th-norm" style={{ width: '16%', minWidth: '85px' }}>
+                      <div className="th-stacked">
+                        <Star size={17} className="th-icon-amber" />
                         <span>التقييم</span>
                       </div>
                     </th>
@@ -590,137 +590,133 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                       key={day.date}
                       className={`${day.isToday ? 'row-today' : ''} ${day.isFriday ? 'row-weekend' : ''}`}
                     >
-                      {/* Date & Day */}
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div className={`date-cell-wrap ${day.isToday ? 'is-today' : ''}`}>
-                          <span className="date-day-name">{day.dayName}</span>
-                          <span className="attendance-date-text">{day.date}</span>
-                          {day.isToday && <span className="today-indicator">اليوم</span>}
+                      {/* 1. Date & Day */}
+                      <td className="td-date">
+                        <div className="cell-date-wrap">
+                          <span className="cell-day-name">{day.dayName}</span>
+                          <span className="cell-date-num">{day.date}</span>
                         </div>
                       </td>
 
-                      {/* Attendance Times */}
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                      {/* 2. Attendance Times */}
+                      <td className="td-punches">
                         {day.hasPunch ? (
-                          <div className="attendance-times-wrapper">
-                            <div className="time-chip" dir="rtl">
-                              <span className="time-entry">{day.entry ? timeLabel(day.entry.timeIn) : '—'}</span>
-                              <span className="time-divider">|</span>
-                              <span className="time-exit">{day.exit ? timeLabel(day.exit.timeOut) : '—'}</span>
+                          <div className="time-split-wrap" dir="rtl">
+                            <div className="time-col">
+                              <span className="time-sub">الدخول</span>
+                              <span className="time-val">{day.entry ? timeLabel(day.entry.timeIn) : '—'}</span>
                             </div>
-                            {day.dayLeaves.map(request => (
-                              <span className="attendance-leave-badge" key={request.id}>
-                                {request.type}
-                              </span>
-                            ))}
+                            <div className="time-line"></div>
+                            <div className="time-col">
+                              <span className="time-sub">الخروج</span>
+                              <span className="time-val">{day.exit ? timeLabel(day.exit.timeOut) : '—'}</span>
+                            </div>
                           </div>
                         ) : day.dayLeaves.length > 0 ? (
-                          <div className="attendance-times-wrapper">
-                            {day.dayLeaves.map(request => (
-                              <span className="attendance-leave-badge" key={request.id}>
-                                {request.type}
-                              </span>
-                            ))}
-                          </div>
+                          <span className="ref-badge-leave">{day.dayLeaves[0].type}</span>
                         ) : day.isFriday ? (
-                          <div style={{ display: 'flex', justifyContent: 'center' }}>
-                            <span className="attendance-weekend-badge">عطلة الجمعة</span>
+                          <div className="time-split-wrap empty">
+                            <div className="time-col"><span className="time-dash">-</span></div>
+                            <div className="time-line"></div>
+                            <div className="time-col"><span className="time-dash">-</span></div>
                           </div>
                         ) : day.date < today ? (
-                          <div style={{ display: 'flex', justifyContent: 'center' }}>
-                            <span className="attendance-absence-badge">غياب</span>
-                          </div>
+                          <span className="ref-badge-absence">غياب</span>
                         ) : (
-                          <span className="attendance-empty-badge">—</span>
+                          <span className="ref-dash">-</span>
                         )}
                       </td>
 
-                      {/* Lateness Status */}
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {/* 3. Lateness Status */}
+                      <td className="td-late">
+                        <div className="cell-center">
                           {day.lateStatus.type === 'on_time' ? (
-                            <span className="status-pill pill-on-time" title="في الوقت المحدد - منضبط">
+                            <span className="pill-ref-ontime" title="في الوقت المحدد">
                               <CheckCircle2 size={16} />
                             </span>
                           ) : day.lateStatus.type === 'late' ? (
-                            <span
-                              className="status-pill pill-late"
-                              title={`تأخر بمقدار ${day.lateStatus.minutes} دقيقة عن موعد بدء الدوام (${userShiftStart})`}
-                            >
+                            <span className="pill-ref-late" title={`تأخر ${day.lateStatus.minutes} دقيقة عن موعد بدء الدوام (${userShiftStart})`}>
                               <AlertTriangle size={14} />
-                              <span>{day.lateStatus.minutes}د</span>
+                              <span>{day.lateStatus.minutes} د</span>
                             </span>
                           ) : day.lateStatus.type === 'late_excused' ? (
-                            <span
-                              className="status-pill pill-late-excused"
-                              title="تأخر مع إذن تأخير مسبق معتمد"
-                            >
+                            <span className="pill-ref-late-excused" title="تأخر مع إذن تأخير مسبق">
                               <Clock size={13} />
-                              <span>{day.lateStatus.minutes}د (إذن)</span>
+                              <span>{day.lateStatus.minutes} د</span>
+                            </span>
+                          ) : day.lateStatus.type === 'weekend' ? (
+                            <span className="pill-ref-weekend">
+                              <Clock size={12} />
+                              <span>عطلة</span>
                             </span>
                           ) : day.lateStatus.type === 'leave' ? (
-                            <span className="attendance-leave-badge">{day.lateStatus.label}</span>
-                          ) : day.lateStatus.type === 'weekend' ? (
-                            <span className="attendance-weekend-badge">عطلة</span>
+                            <span className="ref-badge-leave">{day.lateStatus.label}</span>
                           ) : day.lateStatus.type === 'absence' ? (
-                            <span className="attendance-absence-badge">غياب</span>
+                            <span className="ref-badge-absence">غياب</span>
                           ) : (
-                            <span className="attendance-empty-badge">—</span>
+                            <span className="ref-dash">-</span>
                           )}
                         </div>
                       </td>
 
-                      {/* Daily Work Report */}
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {/* 4. Daily Work Report */}
+                      <td className="td-report">
+                        <div className="cell-center">
                           {day.reportStatus.status === 'submitted' ? (
                             <button
                               type="button"
-                              className="status-pill pill-report-yes"
+                              className="pill-ref-report-yes"
                               onClick={() => handleOpenDayModal(day)}
                               title="تم تقديم التقرير بنجاح - اضغط لعرض المهام"
                             >
-                              نعم
+                              <span>نعم</span>
+                              <FileText size={13} />
                             </button>
                           ) : day.reportStatus.status === 'missing' ? (
-                            <span className="status-pill pill-report-no" title="لم يتم تقديم تقرير العمل اليومي">
-                              لا
+                            <span className="pill-ref-report-no" title="لم يتم تقديم تقرير العمل اليومي">
+                              <span>لا</span>
+                              <FileText size={13} />
                             </span>
                           ) : (
-                            <span className="attendance-empty-badge">—</span>
+                            <span className="ref-dash">-</span>
                           )}
                         </div>
                       </td>
 
-                      {/* Overtime */}
-                      <td className="attendance-overtime-cell" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                          {day.extras.length > 0 ? (
-                            day.extras.map(req => <div key={req.id} style={{ display: 'flex', justifyContent: 'center' }}>{renderOvertimeStatus(req)}</div>)
+                      {/* 5. Overtime */}
+                      <td className="td-overtime">
+                        <div className="cell-center">
+                          {day.extras.length > 0 && approved.has(String(day.extras[0]?.status || '').trim()) ? (
+                            <div className="pill-ref-overtime-box">
+                              <div className="ot-top-row">
+                                <span>نعم</span>
+                                <CheckCircle2 size={12} />
+                              </div>
+                              <div className="ot-bot-row">
+                                <span>{minutesLabel(Number(day.extras[0].rateDetails?.extraMins ?? getTimedLeaveMinutes(day.extras[0])) || 0)} د</span>
+                              </div>
+                            </div>
+                          ) : day.extras.length > 0 && rejected.has(String(day.extras[0]?.status || '').trim()) ? (
+                            <div className="pill-ref-overtime-rejected">
+                              <span>لا</span>
+                              <X size={12} />
+                            </div>
                           ) : (
-                            <span className="attendance-empty-badge">—</span>
+                            <span className="ref-dash">-</span>
                           )}
                         </div>
                       </td>
 
-                      {/* Employee Evaluation (replaces details column - not shown for supervisors) */}
+                      {/* 6. Employee Evaluation */}
                       {!isManagementOrSupervisor && (
-                        <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
+                        <td className="td-eval">
+                          <div className="cell-center" style={{ flexDirection: 'column', gap: '3px' }}>
                             {day.supervisorEval.status === 'evaluated' ? (
                               <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                                 <button
                                   type="button"
                                   onClick={() => handleOpenDayModal(day)}
-                                  className={`status-pill pill-eval-score ${
-                                    day.supervisorEval.rating === 'ممتاز'
-                                      ? 'pill-eval-excellent'
-                                      : day.supervisorEval.rating === 'جيد'
-                                      ? 'pill-eval-good'
-                                      : day.supervisorEval.rating === 'مقبول'
-                                      ? 'pill-eval-acceptable'
-                                      : 'pill-eval-bad'
-                                  }`}
+                                  className="pill-ref-eval-score"
                                   title="اضغط لعرض تفاصيل التقييم وملاحظات المشرف"
                                 >
                                   {day.supervisorEval.scoreText}
@@ -732,17 +728,17 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                                     onClick={() => handleOpenDayModal(day)}
                                     title={day.supervisorEval.reason}
                                   >
-                                    <MessageSquare size={11} />
-                                    <span>ملاحظة المشرف</span>
+                                    <MessageSquare size={10} />
+                                    <span>ملاحظة</span>
                                   </button>
                                 ) : null}
                               </div>
                             ) : day.supervisorEval.status === 'pending' ? (
-                              <span className="status-pill pill-eval-pending" title="تقييم معلق - بانتظار تقييم واعتماد المشرف">
+                              <span className="pill-ref-eval-pending" title="تقييم معلق - بانتظار تقييم واعتماد المشرف">
                                 معلق
                               </span>
                             ) : (
-                              <span className="attendance-empty-badge">—</span>
+                              <span className="ref-dash">-</span>
                             )}
                           </div>
                         </td>
