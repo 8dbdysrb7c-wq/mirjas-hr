@@ -413,6 +413,9 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
       }
 
       // 5. Daily Work Report / Supervisors Evaluation & Approval logic
+      const matchedReports = dailyReports.filter(r => r.date === date);
+      const dayReport = matchedReports[0] || null;
+
       let reportStatus = { status: 'none', label: '—' };
 
       if (isImad) {
@@ -499,9 +502,6 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
         }
       } else {
         // --- للموظف العادي: تقديم تقرير العمل اليومي ---
-        const matchedReports = dailyReports.filter(r => r.date === date);
-        const dayReport = matchedReports[0] || null;
-
         let isReportSubmitted = false;
         if (dayReport) {
           const notesStr = String(dayReport.notes || '');
