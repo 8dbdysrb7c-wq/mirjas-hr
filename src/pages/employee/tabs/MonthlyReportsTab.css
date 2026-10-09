@@ -637,94 +637,109 @@
   text-align: center;
 }
 
-/* Mobile View Adjustments */
+/* Mobile View Adjustments - Table Optimization */
 @media (max-width: 768px) {
   .attendance-report-heading {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .mobile-days-container {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .mobile-day-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 18px;
-    padding: 15px;
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    transition: transform 0.15s ease;
-  }
-
-  .mobile-day-card.is-today {
-    border: 1.5px solid #22c55e;
-    background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
-    box-shadow: 0 4px 14px rgba(34, 197, 94, 0.12);
-  }
-
-  .mobile-day-card-header {
-    display: flex;
+    flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid #f1f5f9;
-    padding-bottom: 8px;
-  }
-
-  .mobile-day-date {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .mobile-day-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
 
-  .mobile-metric-box {
-    background: #f8fafc;
-    border-radius: 12px;
-    padding: 8px 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    text-align: center;
-    align-items: center;
-    border: 1px solid #f1f5f9;
+  .attendance-report-heading h2 {
+    font-size: 1.15rem;
   }
 
-  .mobile-metric-label {
-    font-size: 0.7rem;
-    font-weight: 750;
-    color: #64748b;
-    text-align: center;
+  .attendance-report-month {
+    padding: 5px 14px;
+    font-size: 0.82rem;
   }
 
-  .mobile-metric-value {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
+  /* Table Card on Mobile */
+  .attendance-table-card {
+    border-radius: 16px;
+    box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.05);
+  }
+
+  .attendance-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  .attendance-table-container::-webkit-scrollbar {
+    height: 5px;
+  }
+
+  .attendance-table-container::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+  }
+
+  /* Enforce min-width so table columns maintain elegance and never get crushed */
+  .table.monthly-attendance-table {
+    min-width: 580px;
+    font-size: 0.8rem;
+  }
+
+  .monthly-attendance-table thead th,
+  .monthly-attendance-table th {
+    padding: 11px 8px;
+    font-size: 0.77rem;
+  }
+
+  .th-content {
+    gap: 5px;
+  }
+
+  .monthly-attendance-table td {
+    padding: 10px 6px;
+  }
+
+  .date-cell-wrap {
+    min-width: 84px;
+    padding: 4px 8px;
+    border-radius: 10px;
+  }
+
+  .date-day-name {
+    font-size: 0.68rem;
+  }
+
+  .attendance-date-text {
+    font-size: 0.78rem;
+  }
+
+  .today-indicator {
+    font-size: 0.62rem;
+    padding: 1px 6px;
+  }
+
+  .time-chip {
+    padding: 4px 10px;
+    gap: 6px;
+    font-size: 0.75rem;
+  }
+
+  .status-pill {
+    padding: 3px 8px;
     min-height: 26px;
-    text-align: center;
+    font-size: 0.74rem;
   }
 
-  .mobile-sup-evaluation-banner {
-    background: linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%);
-    border: 1px solid #99f6e4;
-    border-radius: 12px;
-    padding: 9px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    text-align: center;
+  .pill-on-time {
+    min-width: 34px;
+    padding: 3px 6px;
+  }
+
+  .pill-late,
+  .pill-late-excused,
+  .pill-report-yes,
+  .pill-report-no,
+  .pill-eval-pending,
+  .pill-eval-score {
+    min-width: 44px;
   }
 }
