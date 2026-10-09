@@ -536,47 +536,44 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
       ) : (
         /* Table View (Desktop & Mobile) */
         <div className="attendance-table-card">
-          <div className="mobile-table-scroll-hint">
-            <span>اسحب الجدول أفقياً لعرض باقي التفاصيل ↔</span>
-          </div>
           <div className="attendance-table-container">
             <table className="table monthly-attendance-table modal-table">
               <thead>
                 <tr>
-                  <th className="th-date" style={{ width: isManagementOrSupervisor ? '20%' : '15%', minWidth: '95px' }}>
+                  <th className="th-date col-date" style={{ width: isManagementOrSupervisor ? '19%' : '16%' }}>
                     <div className="th-stacked">
-                      <Calendar size={18} />
+                      <Calendar size={15} />
                       <span>التاريخ</span>
                     </div>
                   </th>
-                  <th className="th-norm" style={{ width: isManagementOrSupervisor ? '24%' : '21%', minWidth: '135px' }}>
+                  <th className="th-norm col-punches" style={{ width: isManagementOrSupervisor ? '27%' : '24%' }}>
                     <div className="th-stacked">
-                      <Clock size={17} className="th-icon-navy" />
+                      <Clock size={15} className="th-icon-navy" />
                       <span>أوقات الدوام</span>
                     </div>
                   </th>
-                  <th className="th-norm" style={{ width: isManagementOrSupervisor ? '19%' : '16%', minWidth: '90px' }}>
+                  <th className="th-norm col-late" style={{ width: isManagementOrSupervisor ? '18%' : '15%' }}>
                     <div className="th-stacked">
-                      <AlertTriangle size={17} className="th-icon-red" />
+                      <AlertTriangle size={15} className="th-icon-red" />
                       <span>التأخير</span>
                     </div>
                   </th>
-                  <th className="th-norm" style={{ width: isManagementOrSupervisor ? '19%' : '16%', minWidth: '95px' }}>
+                  <th className="th-norm col-report" style={{ width: isManagementOrSupervisor ? '18%' : '15%' }}>
                     <div className="th-stacked">
-                      <FileText size={17} className="th-icon-green" />
-                      <span>تقرير العمل اليومي</span>
+                      <FileText size={15} className="th-icon-green" />
+                      <span>تقرير العمل</span>
                     </div>
                   </th>
-                  <th className="th-norm" style={{ width: isManagementOrSupervisor ? '18%' : '16%', minWidth: '90px' }}>
+                  <th className="th-norm col-overtime" style={{ width: isManagementOrSupervisor ? '18%' : '15%' }}>
                     <div className="th-stacked">
-                      <History size={17} className="th-icon-green" />
+                      <History size={15} className="th-icon-green" />
                       <span>الإضافي</span>
                     </div>
                   </th>
                   {!isManagementOrSupervisor && (
-                    <th className="th-norm" style={{ width: '16%', minWidth: '85px' }}>
+                    <th className="th-norm col-eval" style={{ width: '15%' }}>
                       <div className="th-stacked">
-                        <Star size={17} className="th-icon-amber" />
+                        <Star size={15} className="th-icon-amber" />
                         <span>التقييم</span>
                       </div>
                     </th>

@@ -3,7 +3,7 @@
 .employee-attendance-report {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
   animation: fadeInReport 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -24,7 +24,7 @@
 }
 
 .attendance-report-heading h2 {
-  font-size: 1.3rem;
+  font-size: 1.25rem;
   font-weight: 850;
   color: #0f172a;
   letter-spacing: -0.01em;
@@ -32,12 +32,12 @@
 }
 
 .attendance-report-month {
-  padding: 5px 14px;
+  padding: 4px 12px;
   border: 1.5px solid #99f6e4;
   border-radius: 9999px;
   color: #0f766e;
   font-weight: 850;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   background: linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%);
   box-shadow: 0 2px 8px rgba(15, 118, 110, 0.08);
   display: inline-flex;
@@ -49,41 +49,17 @@
 .attendance-table-card {
   background: #ffffff;
   border: 1px solid #dce8f0;
-  border-radius: 18px;
+  border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.05);
   position: relative;
-}
-
-.mobile-table-scroll-hint {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%);
-  color: #0f766e;
-  border-bottom: 1px solid #99f6e4;
-  padding: 5px 12px;
-  font-size: 0.72rem;
-  font-weight: 800;
-  text-align: center;
+  width: 100%;
 }
 
 .attendance-table-container {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
-}
-
-.attendance-table-container::-webkit-scrollbar {
-  height: 5px;
-}
-
-.attendance-table-container::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 9999px;
 }
 
 /* =========================================================
@@ -93,11 +69,11 @@
 table.monthly-attendance-table.modal-table {
   display: table !important;
   width: 100% !important;
-  min-width: 580px !important;
   border-collapse: collapse !important;
   text-align: center !important;
   margin: 0 !important;
   background: #ffffff !important;
+  table-layout: fixed !important;
 }
 
 /* THEAD */
@@ -127,8 +103,8 @@ table.monthly-attendance-table.modal-table thead tr {
   display: table-cell !important;
   background: #034b6e !important;
   color: #ffffff !important;
-  border-top-right-radius: 16px;
-  padding: 12px 6px !important;
+  border-top-right-radius: 14px;
+  padding: 10px 4px !important;
   vertical-align: middle !important;
   text-align: center !important;
   white-space: nowrap !important;
@@ -141,7 +117,7 @@ table.monthly-attendance-table.modal-table thead tr {
   color: #034b6e !important;
   border-bottom: 2px solid #dcebf4 !important;
   border-left: 1px solid #e2edf3 !important;
-  padding: 12px 6px !important;
+  padding: 10px 4px !important;
   vertical-align: middle !important;
   text-align: center !important;
   white-space: nowrap !important;
@@ -152,8 +128,8 @@ table.monthly-attendance-table.modal-table thead tr {
   flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 4px !important;
-  font-size: 0.81rem !important;
+  gap: 3px !important;
+  font-size: 0.78rem !important;
   font-weight: 850 !important;
 }
 
@@ -205,7 +181,7 @@ table.monthly-attendance-table.modal-table td {
   display: table-cell !important;
   vertical-align: middle !important;
   text-align: center !important;
-  padding: 12px 6px !important;
+  padding: 9px 4px !important;
   border-left: 1px solid #edf2f7 !important;
   border-bottom: 1px solid #edf2f7 !important;
   position: static !important;
@@ -232,18 +208,20 @@ table.monthly-attendance-table.modal-table td::before {
 }
 
 .cell-day-name {
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-weight: 850;
   color: #0284c7;
-  line-height: 1.2;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .cell-date-num {
-  font-size: 0.77rem;
+  font-size: 0.72rem;
   font-weight: 700;
   color: #334155;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  line-height: 1.2;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 /* 2. Punches Cell */
@@ -251,8 +229,9 @@ table.monthly-attendance-table.modal-table td::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 5px;
   direction: rtl;
+  width: 100%;
 }
 
 .time-col {
@@ -260,41 +239,44 @@ table.monthly-attendance-table.modal-table td::before {
   flex-direction: column;
   align-items: center;
   gap: 1px;
-  min-width: 48px;
+  flex: 1;
 }
 
 .time-sub {
-  font-size: 0.67rem;
+  font-size: 0.62rem;
   color: #64748b;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .time-val {
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   color: #0f172a;
   font-weight: 850;
   font-feature-settings: 'tnum';
-  line-height: 1.2;
+  line-height: 1.1;
   white-space: nowrap;
+  letter-spacing: -0.2px;
 }
 
 .time-line {
   width: 1px;
-  height: 24px;
+  height: 20px;
   background: #cbd5e1;
+  flex-shrink: 0;
 }
 
 .time-dash {
   color: #94a3b8;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-weight: 700;
 }
 
 /* 3. Lateness Badges */
 .pill-ref-ontime {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   border-radius: 9999px;
   background: #e6f9f0;
   color: #10b981;
@@ -308,13 +290,13 @@ table.monthly-attendance-table.modal-table td::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 3px 12px;
+  gap: 3px;
+  padding: 3px 8px;
   border-radius: 9999px;
   background: #fee2e2;
   color: #ef4444;
   font-weight: 850;
-  font-size: 0.8rem;
+  font-size: 0.74rem;
   white-space: nowrap;
   margin: 0 auto;
 }
@@ -323,13 +305,13 @@ table.monthly-attendance-table.modal-table td::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 3px 10px;
+  gap: 3px;
+  padding: 3px 6px;
   border-radius: 9999px;
   background: #fffbeb;
   color: #d97706;
   font-weight: 800;
-  font-size: 0.77rem;
+  font-size: 0.72rem;
   white-space: nowrap;
   margin: 0 auto;
 }
@@ -338,13 +320,13 @@ table.monthly-attendance-table.modal-table td::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 3px 10px;
+  gap: 3px;
+  padding: 3px 7px;
   border-radius: 9999px;
   background: #f1f5f9;
   color: #64748b;
   font-weight: 750;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   white-space: nowrap;
   margin: 0 auto;
 }
@@ -354,36 +336,37 @@ table.monthly-attendance-table.modal-table td::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 4px 14px;
+  gap: 3px;
+  padding: 3px 9px;
   border-radius: 9999px;
   background: #e6f9f0;
   color: #059669;
   border: none;
   font-weight: 850;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   cursor: pointer;
   margin: 0 auto;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .pill-ref-report-yes:hover {
   background: #cbf5df;
-  transform: translateY(-1px);
 }
 
 .pill-ref-report-no {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 4px 14px;
+  gap: 3px;
+  padding: 3px 9px;
   border-radius: 9999px;
   background: #fee2e2;
   color: #ef4444;
   font-weight: 850;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   margin: 0 auto;
+  white-space: nowrap;
 }
 
 /* 5. Overtime Badges */
@@ -392,12 +375,12 @@ table.monthly-attendance-table.modal-table td::before {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3px 10px;
-  border-radius: 12px;
+  padding: 2px 7px;
+  border-radius: 10px;
   background: #e6f9f0;
   color: #059669;
   font-weight: 850;
-  line-height: 1.2;
+  line-height: 1.15;
   margin: 0 auto;
 }
 
@@ -405,27 +388,29 @@ table.monthly-attendance-table.modal-table td::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  font-size: 0.77rem;
+  gap: 2px;
+  font-size: 0.72rem;
+  white-space: nowrap;
 }
 
 .ot-bot-row {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-feature-settings: 'tnum';
   direction: rtl;
+  white-space: nowrap;
 }
 
 .pill-ref-overtime-rejected {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 2px 8px;
+  gap: 2px;
+  padding: 2px 6px;
   border-radius: 9999px;
   background: #fee2e2;
   color: #ef4444;
   font-weight: 800;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
 }
 
 /* 6. Evaluation Badges */
@@ -433,42 +418,43 @@ table.monthly-attendance-table.modal-table td::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 5px 14px;
+  padding: 3px 10px;
   border-radius: 9999px;
   background: #0284c7;
   color: #ffffff;
   border: none;
   font-weight: 850;
-  font-size: 0.84rem;
+  font-size: 0.78rem;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+  box-shadow: 0 1px 4px rgba(2, 132, 199, 0.25);
   margin: 0 auto;
   direction: ltr;
+  white-space: nowrap;
   transition: all 0.15s ease;
 }
 
 .pill-ref-eval-score:hover {
   background: #0369a1;
-  transform: translateY(-1px);
 }
 
 .pill-ref-eval-pending {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 14px;
+  padding: 3px 9px;
   border-radius: 9999px;
   background: #fef3c7;
   color: #b45309;
   font-weight: 850;
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   margin: 0 auto;
+  white-space: nowrap;
 }
 
 .ref-dash {
   color: #94a3b8;
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 0.95rem;
   display: inline-block;
 }
 
@@ -482,32 +468,34 @@ table.monthly-attendance-table.modal-table td::before {
   background: #ecfeff;
   color: #0e7490;
   border: 1px solid #a5f3fc;
-  padding: 3px 8px;
+  padding: 2px 6px;
   border-radius: 9999px;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .ref-badge-absence {
   background: #fee2e2;
   color: #ef4444;
-  padding: 3px 8px;
+  padding: 2px 6px;
   border-radius: 9999px;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .sup-note-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   background: #ffffff;
   border: 1px solid #cbd5e1;
   color: #475569;
   border-radius: 9999px;
-  padding: 1px 7px;
-  font-size: 0.67rem;
+  padding: 1px 5px;
+  font-size: 0.62rem;
   font-weight: 750;
   cursor: pointer;
   margin: 2px auto 0;
@@ -691,82 +679,158 @@ table.monthly-attendance-table.modal-table td::before {
   text-align: center;
 }
 
-/* Mobile Media Query */
+/* =========================================================
+   MOBILE RESPONSIVENESS - ZERO HORIZONTAL SCROLL REQUIRED
+   ========================================================= */
 @media (max-width: 768px) {
   .attendance-report-heading {
     display: flex;
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
 
   .attendance-report-heading h2 {
-    font-size: 1.15rem;
+    font-size: 1.1rem;
   }
 
   .attendance-report-month {
-    padding: 4px 12px;
-    font-size: 0.8rem;
-  }
-
-  .mobile-table-scroll-hint {
-    display: flex;
+    padding: 3px 10px;
+    font-size: 0.78rem;
   }
 
   .attendance-table-card {
-    border-radius: 14px;
+    border-radius: 12px;
+    margin: 0 -4px;
+    width: calc(100% + 8px);
+  }
+
+  .attendance-table-container {
+    overflow-x: hidden;
   }
 
   .attendance-table-card table.monthly-attendance-table,
   table.monthly-attendance-table.modal-table {
-    min-width: 530px !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    table-layout: fixed !important;
+  }
+
+  .th-date, .th-norm {
+    padding: 7px 1px !important;
   }
 
   .th-stacked {
-    font-size: 0.74rem !important;
-    gap: 3px !important;
+    font-size: 0.65rem !important;
+    gap: 2px !important;
+  }
+
+  .th-stacked svg {
+    width: 13px !important;
+    height: 13px !important;
   }
 
   .attendance-table-card table.monthly-attendance-table td,
   table.monthly-attendance-table.modal-table td {
-    padding: 10px 4px !important;
+    padding: 8px 1px !important;
   }
 
   .cell-day-name {
-    font-size: 0.82rem;
-  }
-
-  .cell-date-num {
     font-size: 0.72rem;
   }
 
+  .cell-date-num {
+    font-size: 0.62rem;
+  }
+
+  .time-split-wrap {
+    gap: 2px;
+  }
+
   .time-sub {
-    font-size: 0.63rem;
+    font-size: 0.54rem;
   }
 
   .time-val {
-    font-size: 0.76rem;
+    font-size: 0.66rem;
+    letter-spacing: -0.3px;
+  }
+
+  .time-line {
+    height: 17px;
+  }
+
+  .pill-ref-ontime {
+    width: 22px;
+    height: 22px;
+  }
+
+  .pill-ref-ontime svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .pill-ref-late {
+    padding: 2px 4px;
+    font-size: 0.64rem;
+    gap: 2px;
+  }
+
+  .pill-ref-late svg {
+    width: 11px;
+    height: 11px;
+  }
+
+  .pill-ref-late-excused {
+    padding: 2px 3px;
+    font-size: 0.6rem;
+  }
+
+  .pill-ref-weekend {
+    padding: 2px 4px;
+    font-size: 0.62rem;
+    gap: 2px;
   }
 
   .pill-ref-report-yes,
   .pill-ref-report-no {
-    padding: 3px 10px;
-    font-size: 0.75rem;
+    padding: 2px 4px;
+    font-size: 0.65rem;
+    gap: 2px;
   }
 
-  .pill-ref-late {
-    padding: 3px 8px;
-    font-size: 0.75rem;
+  .pill-ref-report-yes svg,
+  .pill-ref-report-no svg {
+    width: 11px;
+    height: 11px;
+  }
+
+  .pill-ref-overtime-box {
+    padding: 2px 2px;
+  }
+
+  .ot-top-row {
+    font-size: 0.62rem;
+    gap: 1px;
+  }
+
+  .ot-top-row svg {
+    width: 11px;
+    height: 11px;
+  }
+
+  .ot-bot-row {
+    font-size: 0.62rem;
   }
 
   .pill-ref-eval-score {
-    padding: 4px 10px;
-    font-size: 0.78rem;
+    padding: 2px 5px;
+    font-size: 0.68rem;
   }
 
   .pill-ref-eval-pending {
-    padding: 3px 10px;
-    font-size: 0.75rem;
+    padding: 2px 4px;
+    font-size: 0.63rem;
   }
 }
