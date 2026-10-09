@@ -2070,7 +2070,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         );
 
       case 'my-monthly-reports':
-        return <MonthlyReportsTab user={user} />;
+        return <MonthlyReportsTab user={user} handleViewReportDetails={handleViewReportDetails} isMobile={isMobile} />;
 
       case 'my-salary-slips':
         return <MySalarySlipsTab user={user} />;

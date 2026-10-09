@@ -1049,6 +1049,10 @@ const AdminSupervisorReports = ({ user }) => {
       width: 'min(980px, 96vw)',
       didOpen: popup => {
         popup.querySelector('[data-close-supervisor-report]')?.addEventListener('click', () => MySwal.close());
+        const body = popup.querySelector('[data-supervisor-report-scroll]');
+        popup.querySelectorAll('[data-report-scroll]').forEach(button => button.addEventListener('click', () => {
+          body?.scrollBy({ top: Number(button.dataset.reportScroll) * body.clientHeight * 0.75, behavior: 'smooth' });
+        }));
         window.printSupervisorReport = () => window.print();
       },
       html: `
@@ -1081,8 +1085,15 @@ const AdminSupervisorReports = ({ user }) => {
             </button>
           </div>
 
+          <div class="no-print" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 20px; background: #f0fdfa; border-bottom: 1px solid #ccfbf1; flex-shrink: 0; font-size: 13px;">
+            <strong style="color: #0f766e;">تقييمات الموظفين: ${(report.employeeEvaluations || []).length} موظف — مرّر لعرض البقية</strong>
+            <div style="display: flex; gap: 6px;">
+              <button type="button" data-report-scroll="-1" style="border: 1px solid #99f6e4; border-radius: 7px; background: white; padding: 5px 10px; cursor: pointer;">↑ أعلى</button>
+              <button type="button" data-report-scroll="1" style="border: 1px solid #99f6e4; border-radius: 7px; background: white; padding: 5px 10px; cursor: pointer;">↓ بقية الموظفين</button>
+            </div>
+          </div>
           <!-- Body (Scrollable) -->
-          <div style="flex: 1; overflow-y: auto; padding: 1.5rem; background-color: #f8fafc;">
+          <div data-supervisor-report-scroll style="flex: 1 1 0; min-height: 0; overflow-y: scroll; overscroll-behavior: contain; scrollbar-width: auto; scrollbar-color: #0f766e #e2e8f0; padding: 1.5rem; background-color: #f8fafc; -webkit-overflow-scrolling: touch;">
             
             <!-- الدوام Card -->
             <div style="background: #ffffff; border-radius: 18px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
