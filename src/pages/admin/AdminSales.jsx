@@ -5,7 +5,7 @@ import { hasDraftItems, readLocalDrafts, mergeDrafts, writeLocalDraft, removeLoc
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { ShoppingCart, Plus, Search, Trash2, Package, Printer, X, User, UserPlus, Edit2, Eye, Phone, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Calendar, Activity, FileText, Briefcase, Clock, Check, Save, Share2, Layers, Clipboard, CheckCircle, Copy, Archive, Truck, Lock, EyeOff, CheckSquare } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { approveSalesOrder, getSalesOrders, subscribeToSalesOrders, saveSalesOrder, deleteSalesOrder, getSalesOrderDrafts, saveSalesOrderDraft, deleteSalesOrderDraft, getCustomers, saveCustomer, getGlobalSettings, saveGlobalSettings, isAdmin, canPerformAction, addLog, getStock, saveStockItem, getOrders, saveOrder, getPreparationOrders, savePreparationOrder, getMissions, saveMission, deleteMission, getEmployees, createNotification, getStockVouchers } from '../../store';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
@@ -1537,11 +1537,13 @@ const AdminSales = ({ user }) => {
       return;
     }
 
-    const [latestSales, latestProduction, latestPreparation, latestMissions] = await Promise.all([
-      getSalesOrders(), getOrders(), getPreparationOrders(), getMissions()
-    ]);
-    const latestOrder = latestSales.find(row => row.id === order.id) || order;
+    const orderSnap = await getDoc(doc(db, 'sales_orders', order.id)).catch(() => null);
+    const latestOrder = orderSnap?.exists() ? { ...orderSnap.data(), id: order.id } : (orders.find(row => row.id === order.id) || order);
     if (!latestOrder) { await MySwal.fire('تعذر التحقق', 'تعذر قراءة الطلبية. حاول مرة أخرى.', 'error'); return; }
+
+    const latestProduction = productionOrders;
+    const latestPreparation = preparationOrders;
+    const latestMissions = missions;
 
     const workflow = stockWorkflowState(latestOrder, latestProduction, latestPreparation);
     const assignedId = getDeliverySelection(latestOrder);
@@ -1607,26 +1609,39 @@ const AdminSales = ({ user }) => {
     });
 
     if (confirm.isConfirmed) {
+      const actorName = user?.name || (isManagementExempt ? 'المدير' : 'عماد');
+      const todayStr = getLocalDateStr(new Date());
+
       try {
         await approveSalesOrder(latestOrder.id, {
           userId: user?.id || user?.employeeId || '',
-          userName: user?.name || (isManagementExempt ? 'المدير' : 'عماد'),
-          date: getLocalDateStr(new Date())
+          userName: actorName,
+          date: todayStr
         }, isManagementExempt);
       } catch (error) {
         await MySwal.fire('تعذر حفظ الموافقة النهائية', error.message || 'يرجى إعادة المحاولة', 'error');
         return;
       }
 
+      // Immediately update local state
+      setOrders(prev => prev.map(o => o.id === latestOrder.id ? {
+        ...o,
+        status: 'منتهي',
+        managerApprovedAt: new Date().toISOString(),
+        managerApprovedBy: actorName,
+        lastActionBy: actorName,
+        statusUpdateDate: todayStr
+      } : o));
+
       await addLog({
-        userName: user?.name || (isManagementExempt ? 'المدير' : 'عماد'),
+        userName: actorName,
         userId: user?.id,
         module: 'طلبيات العملاء',
         action: 'موافقة وإغلاق',
         details: isManagementExempt
           ? `موافقة الإدارة على إنهاء الطلبية رقم ${latestOrder.orderNumber} باعتماد المدير`
           : `اعتماد وإنهاء الطلبية رقم ${latestOrder.orderNumber} بموافقة المشرف عماد بعد استيفاء الشروط`
-      });
+      }).catch(() => {});
 
       Swal.fire({
         icon: 'success',
@@ -1635,8 +1650,6 @@ const AdminSales = ({ user }) => {
         timer: 2000,
         showConfirmButton: false
       });
-
-      await fetchData();
     }
   };
 
