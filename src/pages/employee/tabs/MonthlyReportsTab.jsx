@@ -672,7 +672,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
             <table className="table monthly-attendance-table">
               <thead>
                 <tr>
-                  <th style={{ width: isManagementOrSupervisor ? '18%' : '14%', textAlign: 'center', verticalAlign: 'middle' }}>التاريخ واليوم</th>
+                  <th style={{ width: isManagementOrSupervisor ? '18%' : '14%', textAlign: 'center', verticalAlign: 'middle' }}>التاريخ</th>
                   <th style={{ width: isManagementOrSupervisor ? '21%' : '17%', textAlign: 'center', verticalAlign: 'middle' }}>أوقات الدوام</th>
                   <th style={{ width: isManagementOrSupervisor ? '22%' : '18%', textAlign: 'center', verticalAlign: 'middle' }}>الالتزام والتأخير</th>
                   <th style={{ width: isManagementOrSupervisor ? '22%' : '18%', textAlign: 'center', verticalAlign: 'middle' }}>تقرير العمل اليومي</th>
