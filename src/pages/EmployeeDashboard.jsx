@@ -2344,14 +2344,14 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         {/* Content Area */}
         <div className="admin-content">
           {activeTab !== 'home' && (
-            <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '12px 18px', borderRadius: 16, border: '1px solid #e2e8f0', marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <div className="no-print employee-top-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '10px 14px', borderRadius: 16, border: '1px solid #e2e8f0', marginBottom: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', gap: 10, flexWrap: 'wrap' }}>
               <button 
                 type="button" 
-                className="btn btn-outline" 
+                className="employee-back-btn"
                 onClick={() => handleTabChange('home')}
-                style={{ fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                style={{ fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', background: 'linear-gradient(135deg, #f0fdfa 0%, #e0f2fe 100%)', color: '#034b6e', border: '1px solid #bae6fd', borderRadius: 9999, padding: '6px 14px', fontSize: '0.85rem', boxShadow: '0 1px 2px rgba(2, 132, 199, 0.08)', transition: 'all 0.15s ease' }}
               >
-                <ArrowRight size={18} /> العودة للشاشة الرئيسية
+                <ArrowRight size={18} /> عودة
               </button>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>
                 {user.name} ({user.id})

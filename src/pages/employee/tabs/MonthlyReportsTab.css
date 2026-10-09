@@ -13,7 +13,58 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Heading with Current Month Badge */
+/* Centered Unified Capsule Heading */
+.attendance-report-heading-centered {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin: 4px 0 10px 0;
+}
+
+.attendance-unified-capsule {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #f0fdfa 0%, #e0f2fe 100%);
+  border: 1.5px solid #bae6fd;
+  border-radius: 9999px;
+  padding: 6px 18px;
+  box-shadow: 0 2px 8px rgba(3, 75, 110, 0.07);
+}
+
+.capsule-icon {
+  color: #0284c7;
+}
+
+.unified-capsule-title {
+  font-size: 1.1rem;
+  font-weight: 850;
+  color: #034b6e;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.unified-capsule-divider {
+  color: #38bdf8;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.unified-capsule-month {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #0369a1;
+  background: #ffffff;
+  padding: 3px 12px;
+  border-radius: 9999px;
+  border: 1px solid #e0f2fe;
+  line-height: 1.2;
+}
+
+/* Fallback Heading */
 .attendance-report-heading {
   display: flex;
   justify-content: space-between;
@@ -692,6 +743,24 @@ table.monthly-attendance-table.modal-table td::before {
    MOBILE RESPONSIVENESS - ZERO HORIZONTAL SCROLL REQUIRED
    ========================================================= */
 @media (max-width: 768px) {
+  .attendance-report-heading-centered {
+    margin: 2px 0 8px 0;
+  }
+
+  .attendance-unified-capsule {
+    padding: 5px 14px;
+    gap: 6px;
+  }
+
+  .unified-capsule-title {
+    font-size: 0.96rem;
+  }
+
+  .unified-capsule-month {
+    font-size: 0.78rem;
+    padding: 2px 9px;
+  }
+
   .attendance-report-heading {
     display: flex;
     flex-direction: row;

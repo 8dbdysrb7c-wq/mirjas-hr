@@ -385,6 +385,8 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
           reportStatus = { status: 'not_required', label: '—' };
         } else if (isFuture) {
           reportStatus = { status: 'future', label: '—' };
+        } else if (isFriday || officialLeaves.length > 0) {
+          reportStatus = { status: 'weekend_or_leave', label: '—' };
         } else {
           reportStatus = { status: 'missing', label: 'لا' };
         }
@@ -519,10 +521,14 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
 
   return (
     <section dir="rtl" className="employee-attendance-report">
-      {/* Heading */}
-      <div className="attendance-report-heading">
-        <h2 className="section-title">تقرير الدوام</h2>
-        <span className="attendance-report-month">شهر <bdi dir="ltr">{currentMonthLabel}</bdi></span>
+      {/* Centered Unified Capsule Heading */}
+      <div className="attendance-report-heading-centered">
+        <div className="attendance-unified-capsule">
+          <Calendar size={17} className="capsule-icon" />
+          <h2 className="unified-capsule-title">تقرير الدوام</h2>
+          <span className="unified-capsule-divider">•</span>
+          <span className="unified-capsule-month">شهر <bdi dir="ltr">{currentMonthLabel}</bdi></span>
+        </div>
       </div>
 
       {error && (
