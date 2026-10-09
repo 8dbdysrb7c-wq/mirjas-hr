@@ -513,16 +513,14 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
     setSelectedDayDetails(day);
   };
 
-  const currentMonthArabic = new Intl.DateTimeFormat('ar-JO', { month: 'long', year: 'numeric' }).format(
-    new Date(Number(selectedMonth.slice(0, 4)), Number(selectedMonth.slice(5)) - 1, 1)
-  );
+  const currentMonthLabel = selectedMonth.slice(5) + '-' + selectedMonth.slice(0, 4);
 
   return (
     <section dir="rtl" className="employee-attendance-report">
       {/* Heading */}
       <div className="attendance-report-heading">
         <h2 className="section-title">تقرير الدوام</h2>
-        <span className="attendance-report-month">شهر {currentMonthArabic}</span>
+        <span className="attendance-report-month">شهر <bdi dir="ltr">{currentMonthLabel}</bdi></span>
       </div>
 
       {error && (
@@ -533,7 +531,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '40px', color: '#64748b', fontWeight: 700 }}>
-          جاري تحميل بيانات الدوام والتقييمات لشهر {currentMonthArabic}...
+          جاري تحميل بيانات الدوام والتقييمات لشهر {currentMonthLabel}...
         </div>
       ) : isMobile ? (
         /* Mobile Cards View */
@@ -672,13 +670,43 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
             <table className="table monthly-attendance-table">
               <thead>
                 <tr>
-                  <th style={{ width: isManagementOrSupervisor ? '18%' : '14%', textAlign: 'center', verticalAlign: 'middle' }}>التاريخ</th>
-                  <th style={{ width: isManagementOrSupervisor ? '21%' : '17%', textAlign: 'center', verticalAlign: 'middle' }}>أوقات الدوام</th>
-                  <th style={{ width: isManagementOrSupervisor ? '22%' : '18%', textAlign: 'center', verticalAlign: 'middle' }}>الالتزام والتأخير</th>
-                  <th style={{ width: isManagementOrSupervisor ? '22%' : '18%', textAlign: 'center', verticalAlign: 'middle' }}>تقرير العمل اليومي</th>
-                  <th style={{ width: isManagementOrSupervisor ? '17%' : '14%', textAlign: 'center', verticalAlign: 'middle' }}>العمل الإضافي</th>
+                  <th style={{ width: isManagementOrSupervisor ? '18%' : '14%', textAlign: 'center', verticalAlign: 'middle' }}>
+                    <div className="th-content">
+                      <Calendar size={14} />
+                      <span>التاريخ</span>
+                    </div>
+                  </th>
+                  <th style={{ width: isManagementOrSupervisor ? '21%' : '17%', textAlign: 'center', verticalAlign: 'middle' }}>
+                    <div className="th-content">
+                      <Clock size={14} />
+                      <span>أوقات الدوام</span>
+                    </div>
+                  </th>
+                  <th style={{ width: isManagementOrSupervisor ? '22%' : '18%', textAlign: 'center', verticalAlign: 'middle' }}>
+                    <div className="th-content">
+                      <CheckCircle2 size={14} />
+                      <span>الالتزام والتأخير</span>
+                    </div>
+                  </th>
+                  <th style={{ width: isManagementOrSupervisor ? '22%' : '18%', textAlign: 'center', verticalAlign: 'middle' }}>
+                    <div className="th-content">
+                      <FileText size={14} />
+                      <span>تقرير العمل اليومي</span>
+                    </div>
+                  </th>
+                  <th style={{ width: isManagementOrSupervisor ? '17%' : '14%', textAlign: 'center', verticalAlign: 'middle' }}>
+                    <div className="th-content">
+                      <Sparkles size={14} />
+                      <span>العمل الإضافي</span>
+                    </div>
+                  </th>
                   {!isManagementOrSupervisor && (
-                    <th style={{ width: '19%', textAlign: 'center', verticalAlign: 'middle' }}>التقييم</th>
+                    <th style={{ width: '19%', textAlign: 'center', verticalAlign: 'middle' }}>
+                      <div className="th-content">
+                        <Award size={14} />
+                        <span>التقييم</span>
+                      </div>
+                    </th>
                   )}
                 </tr>
               </thead>
@@ -691,10 +719,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                     >
                       {/* Date & Day */}
                       <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div
-                          className="date-cell-wrap"
-                          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}
-                        >
+                        <div className={`date-cell-wrap ${day.isToday ? 'is-today' : ''}`}>
                           <span className="date-day-name">{day.dayName}</span>
                           <span className="attendance-date-text">{day.date}</span>
                           {day.isToday && <span className="today-indicator">اليوم</span>}
@@ -704,11 +729,11 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                       {/* Attendance Times */}
                       <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
                         {day.hasPunch ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px', margin: '0 auto' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontWeight: 800, fontSize: '11.5px', direction: 'rtl' }}>
-                              <span>{day.entry ? timeLabel(day.entry.timeIn) : '—'}</span>
-                              <span style={{ color: '#cbd5e1' }}>|</span>
-                              <span>{day.exit ? timeLabel(day.exit.timeOut) : '—'}</span>
+                          <div className="attendance-times-wrapper">
+                            <div className="time-chip" dir="rtl">
+                              <span className="time-entry">{day.entry ? timeLabel(day.entry.timeIn) : '—'}</span>
+                              <span className="time-divider">|</span>
+                              <span className="time-exit">{day.exit ? timeLabel(day.exit.timeOut) : '—'}</span>
                             </div>
                             {day.dayLeaves.map(request => (
                               <span className="attendance-leave-badge" key={request.id}>
@@ -717,7 +742,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                             ))}
                           </div>
                         ) : day.dayLeaves.length > 0 ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px', margin: '0 auto' }}>
+                          <div className="attendance-times-wrapper">
                             {day.dayLeaves.map(request => (
                               <span className="attendance-leave-badge" key={request.id}>
                                 {request.type}
@@ -741,14 +766,13 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                       <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           {day.lateStatus.type === 'on_time' ? (
-                            <span className="status-pill pill-on-time" title="في الوقت المحدد - منضبط" style={{ minWidth: '38px', padding: '3px 8px', justifyContent: 'center' }}>
+                            <span className="status-pill pill-on-time" title="في الوقت المحدد - منضبط">
                               <CheckCircle2 size={16} />
                             </span>
                           ) : day.lateStatus.type === 'late' ? (
                             <span
                               className="status-pill pill-late"
                               title={`تأخر بمقدار ${day.lateStatus.minutes} دقيقة عن موعد بدء الدوام (${userShiftStart})`}
-                              style={{ minWidth: '46px', padding: '3px 8px', justifyContent: 'center', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                             >
                               <AlertTriangle size={14} />
                               <span>{day.lateStatus.minutes}د</span>
@@ -757,7 +781,6 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                             <span
                               className="status-pill pill-late-excused"
                               title="تأخر مع إذن تأخير مسبق معتمد"
-                              style={{ minWidth: '46px', padding: '3px 8px', justifyContent: 'center', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                             >
                               <Clock size={13} />
                               <span>{day.lateStatus.minutes}د (إذن)</span>
@@ -783,7 +806,6 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                               className="status-pill pill-report-yes"
                               onClick={() => handleOpenDayModal(day)}
                               title="تم تقديم التقرير بنجاح - اضغط لعرض المهام"
-                              style={{ margin: '0 auto', cursor: 'pointer' }}
                             >
                               نعم
                             </button>
@@ -811,13 +833,13 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                       {/* Employee Evaluation (replaces details column - not shown for supervisors) */}
                       {!isManagementOrSupervisor && (
                         <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
                             {day.supervisorEval.status === 'evaluated' ? (
                               <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                                 <button
                                   type="button"
                                   onClick={() => handleOpenDayModal(day)}
-                                  className={`status-pill ${
+                                  className={`status-pill pill-eval-score ${
                                     day.supervisorEval.rating === 'ممتاز'
                                       ? 'pill-eval-excellent'
                                       : day.supervisorEval.rating === 'جيد'
@@ -826,7 +848,6 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                                       ? 'pill-eval-acceptable'
                                       : 'pill-eval-bad'
                                   }`}
-                                  style={{ cursor: 'pointer', border: 'none', minWidth: '48px', justifyContent: 'center', fontWeight: 800, direction: 'ltr' }}
                                   title="اضغط لعرض تفاصيل التقييم وملاحظات المشرف"
                                 >
                                   {day.supervisorEval.scoreText}
@@ -837,9 +858,9 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                                     className="sup-note-btn"
                                     onClick={() => handleOpenDayModal(day)}
                                     title={day.supervisorEval.reason}
-                                    style={{ margin: '4px auto 0' }}
                                   >
-                                    <MessageSquare size={11} /> ملاحظة المشرف
+                                    <MessageSquare size={11} />
+                                    <span>ملاحظة المشرف</span>
                                   </button>
                                 ) : null}
                               </div>

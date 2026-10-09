@@ -53,9 +53,7 @@ export const HomeTab = ({
   pendingMissionsCount,
   pendingDeliveryMissionsCount,
   pendingStockAuditsCount,
-  setShowPetitionModal,
-  todayEvaluatedReport,
-  handleViewReportDetails
+  setShowPetitionModal
 }) => {
   const [showManualActionModal, setShowManualActionModal] = React.useState(false);
   const [manualActionOverride, setManualActionOverride] = React.useState(null);
@@ -375,21 +373,6 @@ export const HomeTab = ({
         </div>
       </div>
 
-      {todayEvaluatedReport && (
-        <div style={{ marginBottom: '1.25rem', padding: isMobile ? '14px' : '18px 20px', borderRadius: '16px', border: '1px solid #c4b5fd', background: 'linear-gradient(135deg, #faf5ff 0%, #f5f3ff 100%)', boxShadow: '0 4px 14px rgba(124,58,237,.08)', direction: 'rtl', display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', gap: '12px' }}>
-          <div>
-            <div style={{ color: '#6d28d9', fontSize: '12px', fontWeight: 900, marginBottom: '5px' }}>آخر تقييم للمشرف · {todayEvaluatedReport.date}</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
-              <strong style={{ color: '#1e293b', fontSize: '20px' }}>{todayEvaluatedReport.supervisorRating}</strong>
-              <span dir="ltr" style={{ color: '#7c3aed', fontSize: '18px', fontWeight: 900 }}>{Math.round(Number(todayEvaluatedReport.finalScore || 0))}%</span>
-            </div>
-            {todayEvaluatedReport.supervisorReason && <div style={{ color: '#64748b', fontSize: '12px', fontWeight: 700, marginTop: '6px' }}>ملاحظة المشرف: {todayEvaluatedReport.supervisorReason}</div>}
-          </div>
-          <button type="button" onClick={() => handleViewReportDetails?.(todayEvaluatedReport)} style={{ height: '38px', border: '1px solid #8b5cf6', borderRadius: '10px', background: '#fff', color: '#6d28d9', padding: '0 16px', fontWeight: 900, cursor: 'pointer' }}>عرض التفاصيل</button>
-        </div>
-      )}
-
-      
       {/* تقديم طلب - Action Buttons */}
       <div className="section-title mt-6 mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
