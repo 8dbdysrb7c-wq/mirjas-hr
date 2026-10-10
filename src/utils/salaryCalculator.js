@@ -195,6 +195,7 @@ export const calculateSalaries = ({
       }
     });
     empLeaves.forEach(leave => {
+      if (leave.deductFromVacationBalance) return;
       if (isLongApprovedDeparture(leave)) {
         automaticUnpaidDates.add(leave.date || leave.startDate);
       }
@@ -204,6 +205,7 @@ export const calculateSalaries = ({
     let missionMinutes = 0;
     
     empLeaves.forEach(leave => {
+      if (leave.deductFromVacationBalance) return;
       if (leave.type === 'مغادرة خاصة' || leave.type === 'مغادرة عمل' || leave.type === 'مغادرة الدخان') {
         const leaveDate = leave.date || leave.startDate;
         if (automaticUnpaidDates.has(leaveDate)) return;

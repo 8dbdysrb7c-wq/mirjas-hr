@@ -168,7 +168,16 @@ export const HRRequestsTab = ({
               ) : (
                 filteredRequests.map((req, idx) => (
                   <TableRow key={req.id || idx} className="hover:bg-slate-50 transition-colors">
-                    <TableCell className="px-4 py-3 font-bold text-slate-800">{req.type}</TableCell>
+                    <TableCell className="px-4 py-3 font-bold text-slate-800">
+                      <div>{req.type}</div>
+                      {req.originalReq?.deductFromVacationBalance && (
+                        <div className="mt-1">
+                          <span className="inline-block text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-semibold">
+                            خصم من الإجازات ({req.originalReq.vacationDaysDeducted || 0} يوم)
+                          </span>
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="px-4 py-3 text-slate-600 font-medium" dir="ltr" style={{ textAlign: 'right' }}>{req.date}</TableCell>
                     <TableCell className="px-4 py-3 text-slate-500" style={{ maxWidth: '250px' }}>
                       <div className="font-medium text-slate-700">{req.details}</div>

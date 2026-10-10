@@ -167,6 +167,10 @@ const HRLeaves = ({ user, refreshCounts }) => {
         extraHtml += `<div style="text-align: right; margin-bottom: 15px; font-size: 15px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">`;
         extraHtml += `<div style="color: #059669; font-weight: bold; margin-bottom: 8px;">📌 الرصيد المتبقي للإجازات السنوية: ${vacBal} يوم</div>`;
 
+        if (leave.deductFromVacationBalance) {
+          extraHtml += `<div style="color: #059669; font-weight: bold; font-size: 14px; margin-bottom: 6px;">🌴 الطلب يشمل خصم ${leave.vacationDaysDeducted || 0} يوم من رصيد الإجازات السنوية (بدون خصم مالي)</div>`;
+        }
+
         if (leave.type === 'إجازة غير مدفوعة' && targetMonth) {
           const unpaidCount = leaves.filter(l =>
             String(l.employeeId) === String(leave.employeeId) &&
@@ -254,6 +258,13 @@ const HRLeaves = ({ user, refreshCounts }) => {
               }
             }
           }
+        } else if (leave.deductFromVacationBalance && Number(leave.vacationDaysDeducted) > 0) {
+          const empToUpdate = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim());
+          if (empToUpdate) {
+            const days = Number(leave.vacationDaysDeducted);
+            empToUpdate.vacationBalance = Math.max(0, parseFloat(((empToUpdate.vacationBalance || 0) - days).toFixed(2)));
+            await saveEmployee(empToUpdate);
+          }
         }
       } else if ((newStatus === 'مرفوض' || newStatus === 'معلق') && leave.status === 'موافق') {
         const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'إذن تأخير', 'خروج مبكر', 'مغادرة الدخان'].includes(leave.type);
@@ -284,6 +295,13 @@ const HRLeaves = ({ user, refreshCounts }) => {
                 await saveEmployee(empToUpdate);
               }
             }
+          }
+        } else if (leave.deductFromVacationBalance && Number(leave.vacationDaysDeducted) > 0) {
+          const empToUpdate = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim());
+          if (empToUpdate) {
+            const days = Number(leave.vacationDaysDeducted);
+            empToUpdate.vacationBalance = parseFloat(((empToUpdate.vacationBalance || 0) + days).toFixed(2));
+            await saveEmployee(empToUpdate);
           }
         }
       }
@@ -612,7 +630,15 @@ const HRLeaves = ({ user, refreshCounts }) => {
         durationStr = `${days} ${days === 1 ? 'يوم' : days === 2 ? 'يومان' : 'أيام'}`;
       }
     } else if (['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(l.type)) {
-      if (l.startTime && l.endTime) {
+      if (l.deductFromVacationBalance) {
+        cost = 0;
+        if (l.startTime && l.endTime) {
+          const [sh, sm] = l.startTime.split(':').map(Number);
+          const [eh, em] = l.endTime.split(':').map(Number);
+          const mins = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+          durationStr = `${Math.floor(mins / 60)}س ${mins % 60}د (خصم ${l.vacationDaysDeducted || 0} يوم إجازة)`;
+        }
+      } else if (l.startTime && l.endTime) {
         const [sh, sm] = l.startTime.split(':').map(Number);
         const [eh, em] = l.endTime.split(':').map(Number);
         const mins = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
@@ -636,7 +662,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
       totalUnpaidDays += res.days || 0;
       totalUnpaidCost += res.cost;
     } else if (['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(l.type)) {
-      if (l.startTime && l.endTime) {
+      if (!l.deductFromVacationBalance && l.startTime && l.endTime) {
         const [sh, sm] = l.startTime.split(':').map(Number);
         const [eh, em] = l.endTime.split(':').map(Number);
         totalDepartureMins += Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
@@ -865,6 +891,13 @@ const HRLeaves = ({ user, refreshCounts }) => {
                     </td>
                     <td className="p-5 text-sm text-slate-800 font-bold text-center">
                       {leave.type}
+                      {leave.deductFromVacationBalance && (
+                        <div className="mt-1">
+                          <span className="inline-block text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-semibold">
+                            خصم من الإجازات ({leave.vacationDaysDeducted || 0} يوم)
+                          </span>
+                        </div>
+                      )}
                     </td>
 
                     <td className="p-5 text-muted text-sm text-center">
@@ -901,6 +934,14 @@ const HRLeaves = ({ user, refreshCounts }) => {
 
                     <td className="p-5 text-sm font-bold text-center">
                       {(() => {
+                        if (leave.deductFromVacationBalance) {
+                          return (
+                            <div className="flex flex-col items-center justify-center">
+                              <span className="text-emerald-700 text-xs font-bold">مغطى برصيد الإجازات</span>
+                              <span className="text-[11px] text-slate-500 mt-0.5">بدون خصم مالي</span>
+                            </div>
+                          );
+                        }
                         const res = getLeaveCost(leave, emp);
                         if (res.cost > 0) {
                           return (

@@ -44,6 +44,7 @@ export const getTimedLeaveMinutes = leave => {
 export const isPolicyEffective = date => String(date || '') >= UNPAID_ABSENCE_POLICY_START_DATE;
 
 export const isLongApprovedDeparture = leave => {
+  if (leave?.deductFromVacationBalance) return false;
   const approved = ['موافق', 'موافق عليه', 'مقبول', 'تمت الموافقة', 'تم التسليم'].includes(leave?.status);
   const departure = ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(leave?.type);
   const date = leave?.date || leave?.startDate;
