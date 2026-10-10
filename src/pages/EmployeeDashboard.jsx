@@ -1930,12 +1930,12 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         }
 
         if (leaveFormData.type === 'مغادرة خاصة' && leaveFormData.deductFromVacationBalance) {
-          const shiftDurationMins = Math.max(60, shiftEndMins - shiftStartMins);
-          const vacationDaysDeducted = parseFloat((diffMins / shiftDurationMins).toFixed(2));
-          if (calculatedVacationBalance <= 0) {
-            MySwal.fire('مرفوض', 'لا يمكن تقديم الطلب مع خصم من رصيد الإجازات السنوية لعدم توفر رصيد متاح لتاريخ اليوم.', 'error');
+          if (!allowedLeaveTypes.includes('إجازة سنوية') || calculatedVacationBalance <= 0) {
+            MySwal.fire('مرفوض', 'لا يمكن تقديم الطلب مع خصم من رصيد الإجازات السنوية لعدم إتاحة الإجازات السنوية لك أو عدم توفر رصيد متاح.', 'error');
             return;
           }
+          const shiftDurationMins = Math.max(60, shiftEndMins - shiftStartMins);
+          const vacationDaysDeducted = parseFloat((diffMins / shiftDurationMins).toFixed(2));
           if (vacationDaysDeducted > calculatedVacationBalance) {
             MySwal.fire(
               'مرفوض',
@@ -1970,7 +1970,12 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
     isRequestSubmittingRef.current = true;
     setIsRequestSubmitting(true);
     try {
-      const isDeductFromVacation = Boolean(leaveFormData.type === 'مغادرة خاصة' && leaveFormData.deductFromVacationBalance);
+      const isDeductFromVacation = Boolean(
+        leaveFormData.type === 'مغادرة خاصة' &&
+        leaveFormData.deductFromVacationBalance &&
+        allowedLeaveTypes.includes('إجازة سنوية') &&
+        calculatedVacationBalance > 0
+      );
       let calculatedDeductedDays = 0;
       if (isDeductFromVacation && isDept) {
         let shiftStart = user.shiftStart || '08:00';
@@ -2679,7 +2684,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
                 {leaveFormData.type === 'مغادرة خاصة' && !leaveFormData.deductFromVacationBalance && (
                   <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl mb-4 text-sm flex gap-2 items-center">
                     <Info size={16} className="text-amber-600 shrink-0" />
-                    ملاحظة: المغادرة الخاصة سوف تُخصم من راتبك القادم (إلا إذا اخترت خصمها من رصيد الإجازات السنوية).
+                    ملاحظة: المغادرة الخاصة سوف تُخصم من راتبك القادم.
                   </div>
                 )}
                 {leaveFormData.type === 'بدل عمل إضافي' && (
@@ -2728,7 +2733,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
                       </div>
                     </div>
 
-                    {leaveFormData.type === 'مغادرة خاصة' && (
+                    {leaveFormData.type === 'مغادرة خاصة' && allowedLeaveTypes.includes('إجازة سنوية') && calculatedVacationBalance > 0 && (
                       <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                         <label className="flex items-center gap-3 cursor-pointer select-none">
                           <input
