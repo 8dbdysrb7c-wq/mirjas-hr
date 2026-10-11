@@ -1250,8 +1250,8 @@ export const saveHRLeave = async (leave, userContext = null) => {
     const docRef = leave.id ? doc(db, 'hr_leaves', leave.id) : doc(collection(db, 'hr_leaves'));
     const data = { ...leave, updatedAt: new Date().toISOString() };
     if (duplicateAuthorized) {
-      data.duplicateAuthorizedById = userContext.id || '';
-      data.duplicateAuthorizedByName = userContext.name || '';
+      data.duplicateAuthorizedById = userContext?.id || '';
+      data.duplicateAuthorizedByName = userContext?.name || '';
       data.duplicateAuthorizedAt = data.updatedAt;
     }
     if (!leave.id) data.createdAt = new Date().toISOString();
@@ -1259,48 +1259,52 @@ export const saveHRLeave = async (leave, userContext = null) => {
 
     // An approved departure longer than three hours is an unpaid day from the
     // policy effective date, regardless of time worked after the official shift.
+    const leaveDate = data.date || data.startDate;
+    const leaveEmpId = String(data.employeeId || '').trim();
+
     if (isLongApprovedDeparture(data)) {
-      const leaveDate = data.date || data.startDate;
-      const attendanceQuery = query(
-        collection(db, 'hr_attendance'),
-        where('employeeId', '==', data.employeeId),
-        where('date', '==', leaveDate)
-      );
-      const attendanceSnap = await getDocs(attendanceQuery);
-      const batch = writeBatch(db);
-      attendanceSnap.docs.forEach(attendanceDoc => {
-        batch.set(attendanceDoc.ref, {
-          status: 'إجازة غير مدفوعة',
-          notes: 'إجازة غير مدفوعة آلياً لأن مدة المغادرة المعتمدة تجاوزت 3 ساعات',
-          automaticUnpaidLeave: true,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      });
-      if (!attendanceSnap.empty) await batch.commit();
-    } else if (data.keepAsDepartureOnly || data.calculationMode === 'departure_only') {
-      // Revert automatic unpaid leave if previously set
-      const leaveDate = data.date || data.startDate;
-      const attendanceQuery = query(
-        collection(db, 'hr_attendance'),
-        where('employeeId', '==', data.employeeId),
-        where('date', '==', leaveDate)
-      );
-      const attendanceSnap = await getDocs(attendanceQuery);
-      const batch = writeBatch(db);
-      let hasChanges = false;
-      attendanceSnap.docs.forEach(attendanceDoc => {
-        const attData = attendanceDoc.data();
-        if (attData.automaticUnpaidLeave) {
-          hasChanges = true;
+      if (leaveEmpId && leaveDate) {
+        const attendanceQuery = query(
+          collection(db, 'hr_attendance'),
+          where('employeeId', '==', leaveEmpId),
+          where('date', '==', leaveDate)
+        );
+        const attendanceSnap = await getDocs(attendanceQuery);
+        const batch = writeBatch(db);
+        attendanceSnap.docs.forEach(attendanceDoc => {
           batch.set(attendanceDoc.ref, {
-            status: attData.timeIn ? 'حاضر' : 'لم يسجل دخول',
-            notes: (attData.notes || '').replace(/إجازة غير مدفوعة آلياً لأن مدة المغادرة المعتمدة تجاوزت 3 ساعات/g, '').trim(),
-            automaticUnpaidLeave: false,
+            status: 'إجازة غير مدفوعة',
+            notes: 'إجازة غير مدفوعة آلياً لأن مدة المغادرة المعتمدة تجاوزت 3 ساعات',
+            automaticUnpaidLeave: true,
             updatedAt: new Date().toISOString()
           }, { merge: true });
-        }
-      });
-      if (hasChanges) await batch.commit();
+        });
+        if (!attendanceSnap.empty) await batch.commit();
+      }
+    } else if (data.keepAsDepartureOnly || data.calculationMode === 'departure_only') {
+      // Revert automatic unpaid leave if previously set
+      if (leaveEmpId && leaveDate) {
+        const attendanceQuery = query(
+          collection(db, 'hr_attendance'),
+          where('employeeId', '==', leaveEmpId),
+          where('date', '==', leaveDate)
+        );
+        const attendanceSnap = await getDocs(attendanceQuery);
+        const batch = writeBatch(db);
+        attendanceSnap.docs.forEach(attendanceDoc => {
+          const attData = attendanceDoc.data();
+          if (attData.automaticUnpaidLeave) {
+            hasChanges = true;
+            batch.set(attendanceDoc.ref, {
+              status: attData.timeIn ? 'حاضر' : 'لم يسجل دخول',
+              notes: (attData.notes || '').replace(/إجازة غير مدفوعة آلياً لأن مدة المغادرة المعتمدة تجاوزت 3 ساعات/g, '').trim(),
+              automaticUnpaidLeave: false,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          }
+        });
+        if (hasChanges) await batch.commit();
+      }
     }
 
     // Send WhatsApp notifications

@@ -682,7 +682,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
   useEffect(() => {
     const fetchSettingsAndAttendance = async () => {
       try {
-        const [settings, emps] = await Promise.all([getGlobalSettings(), getEmployees()]);
+        const [settings, emps] = await Promise.all([getGlobalSettings(), getEmployees(true)]);
         setGlobalSettings(settings);
         setEmployees(emps);
         setGpsSettings({
@@ -1996,12 +1996,15 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         calculatedDeductedDays = parseFloat((diffMins / shiftDurationMins).toFixed(2));
       }
 
+      const empId = String(user?.id || user?.employeeId || '').trim();
+      const empName = String(user?.name || '').trim();
+
       await saveHRLeave({
         ...leaveFormData,
         deductFromVacationBalance: isDeductFromVacation,
         vacationDaysDeducted: isDeductFromVacation ? calculatedDeductedDays : 0,
-        employeeId: user.id,
-        employeeName: user.name,
+        employeeId: empId,
+        employeeName: empName,
         department: (() => {
           const d = String(user.department || departments[userRoles[0]] || 'غير محدد').trim();
           const lower = d.toLowerCase();
@@ -2030,11 +2033,11 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
 
       await createNotification({
         settingKey,
-        targetEmployeeId: user.id,
+        targetEmployeeId: empId,
         moduleKey: 'hr',
         moduleLabel: 'الموارد البشرية',
         title: 'طلب جديد: ' + leaveFormData.type + (isDeductFromVacation ? ' (خصم من رصيد الإجازات)' : ''),
-        message: `الموظف: ${user.name}\n${isDeductFromVacation ? `خصم من الإجازات: ${calculatedDeductedDays} يوم\n` : ''}الملاحظات: ${leaveFormData.notes || 'لا يوجد'}`,
+        message: `الموظف: ${empName}\n${isDeductFromVacation ? `خصم من الإجازات: ${calculatedDeductedDays} يوم\n` : ''}الملاحظات: ${leaveFormData.notes || 'لا يوجد'}`,
         target: { tab: 'hr_requests' }
       });
 
@@ -2053,11 +2056,11 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         deductFromVacationBalance: false,
         vacationDaysDeducted: 0
       });
-      const updatedLeaves = await getHRLeavesForUser(user.id, user.name);
+      const updatedLeaves = await getHRLeavesForUser(empId, empName);
       setMyLeaves(updatedLeaves);
     } catch (error) {
-      console.error(error);
-      MySwal.fire('خطأ', 'حدث خطأ أثناء إرسال الطلب', 'error');
+      console.error('Leave submission error:', error);
+      MySwal.fire('خطأ', error?.message || 'حدث خطأ أثناء إرسال الطلب', 'error');
     } finally {
       isRequestSubmittingRef.current = false;
       setIsRequestSubmitting(false);
