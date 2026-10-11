@@ -360,6 +360,13 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
       const officialLeaves = dayLeaves.filter(l => String(l.type || '').match(/إجازة|اجازة/));
       const hasLatePermission = dayLeaves.some(l => l.type === 'إذن تأخير' || String(l.type || '').includes('تأخير'));
 
+      const departures = dayLeaves.filter(l =>
+        ['مغادرة خاصة', 'مغادرة عمل', 'خروج مبكر', 'إذن تأخير', 'مغادرة الدخان'].includes(l.type) ||
+        Boolean(l.startTime && l.endTime && !overtimeTypes.has(l.type) && !String(l.type || '').match(/إجازة|اجازة/))
+      );
+      const totalDepartureMinutes = departures.reduce((sum, dep) => sum + getTimedLeaveMinutes(dep), 0);
+      const isVacationDeducted = departures.some(dep => dep.deductFromVacationBalance);
+
       // 3. Overtime
       const extras = leaves.filter(request => covers(request, date) && overtimeTypes.has(request.type));
       const approvedExtras = extras.filter(request => approved.has(String(request.status || '').trim()));
@@ -646,6 +653,9 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
         entry,
         exit,
         dayLeaves,
+        departures,
+        totalDepartureMinutes,
+        isVacationDeducted,
         extras,
         approvedExtras,
         lateStatus,
@@ -747,19 +757,75 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                       {/* 2. Attendance Times */}
                       <td className="td-punches">
                         {day.hasPunch ? (
-                          <div className="time-split-wrap" dir="rtl">
-                            <div className="time-col">
-                              <span className="time-sub">الدخول</span>
-                              <span className="time-val">{day.entry ? timeLabel(day.entry.timeIn) : '—'}</span>
+                          <div className="attendance-cell-stacked">
+                            <div className="time-split-wrap" dir="rtl">
+                              <div className="time-col">
+                                <span className="time-sub">الدخول</span>
+                                <span className="time-val">{day.entry ? timeLabel(day.entry.timeIn) : '—'}</span>
+                              </div>
+                              <div className="time-line"></div>
+                              <div className="time-col">
+                                <span className="time-sub">الخروج</span>
+                                <span className="time-val">{day.exit ? timeLabel(day.exit.timeOut) : '—'}</span>
+                              </div>
                             </div>
-                            <div className="time-line"></div>
-                            <div className="time-col">
-                              <span className="time-sub">الخروج</span>
-                              <span className="time-val">{day.exit ? timeLabel(day.exit.timeOut) : '—'}</span>
-                            </div>
+
+                            {day.departures && day.departures.length > 0 && (
+                              <div className="departure-block-wrap" dir="rtl">
+                                <div className="departure-divider">
+                                  <span className="dep-divider-line"></span>
+                                  <span className="dep-divider-text">
+                                    مغادرة {day.totalDepartureMinutes > 0 ? `(${day.totalDepartureMinutes} د)` : ''}
+                                    {day.isVacationDeducted && <span className="dep-vac-icon" title="مخصومة من رصيد الإجازات السنوية">🌴</span>}
+                                  </span>
+                                  <span className="dep-divider-line"></span>
+                                </div>
+                                {day.departures.map((dep, dIdx) => (
+                                  <div key={dep.id || dIdx} className="time-split-wrap departure-times" dir="rtl">
+                                    <div className="time-col">
+                                      <span className="time-sub dep-sub">من</span>
+                                      <span className="time-val dep-val">{dep.startTime ? timeLabel(dep.startTime) : '—'}</span>
+                                    </div>
+                                    <div className="time-line dep-line"></div>
+                                    <div className="time-col">
+                                      <span className="time-sub dep-sub">إلى</span>
+                                      <span className="time-val dep-val">{dep.endTime ? timeLabel(dep.endTime) : '—'}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ) : day.dayLeaves.length > 0 ? (
-                          <span className="ref-badge-leave">{day.dayLeaves[0].type}</span>
+                          <div className="attendance-cell-stacked">
+                            {day.departures && day.departures.length > 0 ? (
+                              <div className="departure-block-wrap" dir="rtl" style={{ marginTop: 0 }}>
+                                <div className="departure-divider">
+                                  <span className="dep-divider-line"></span>
+                                  <span className="dep-divider-text">
+                                    مغادرة {day.totalDepartureMinutes > 0 ? `(${day.totalDepartureMinutes} د)` : ''}
+                                    {day.isVacationDeducted && <span className="dep-vac-icon" title="مخصومة من رصيد الإجازات السنوية">🌴</span>}
+                                  </span>
+                                  <span className="dep-divider-line"></span>
+                                </div>
+                                {day.departures.map((dep, dIdx) => (
+                                  <div key={dep.id || dIdx} className="time-split-wrap departure-times" dir="rtl">
+                                    <div className="time-col">
+                                      <span className="time-sub dep-sub">من</span>
+                                      <span className="time-val dep-val">{dep.startTime ? timeLabel(dep.startTime) : '—'}</span>
+                                    </div>
+                                    <div className="time-line dep-line"></div>
+                                    <div className="time-col">
+                                      <span className="time-sub dep-sub">إلى</span>
+                                      <span className="time-val dep-val">{dep.endTime ? timeLabel(dep.endTime) : '—'}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="ref-badge-leave">{day.dayLeaves[0].type}</span>
+                            )}
+                          </div>
                         ) : day.isFriday ? (
                           <div className="time-split-wrap empty">
                             <div className="time-col"><span className="time-dash">-</span></div>
@@ -953,6 +1019,27 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                       {selectedDayDetails.lateStatus.label}
                     </span>
                   </div>
+                  {selectedDayDetails.departures && selectedDayDetails.departures.length > 0 && (
+                    <>
+                      <div className="detail-item">
+                        <span className="detail-item-label">توقيت المغادرة</span>
+                        <span className="detail-item-val" style={{ color: '#c2410c', fontWeight: 800 }}>
+                          من {timeLabel(selectedDayDetails.departures[0].startTime)} إلى {timeLabel(selectedDayDetails.departures[0].endTime)}
+                        </span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="detail-item-label">مدة المغادرة</span>
+                        <span className="detail-item-val" style={{ color: '#ea580c', fontWeight: 800 }}>
+                          {selectedDayDetails.totalDepartureMinutes} دقيقة
+                          {selectedDayDetails.isVacationDeducted && (
+                            <span className="text-[11px] text-emerald-700 font-bold block mt-0.5">
+                              (مخصومة من رصيد الإجازات السنوية 🌴)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 

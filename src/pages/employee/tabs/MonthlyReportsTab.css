@@ -926,3 +926,98 @@ table.monthly-attendance-table.modal-table td::before {
     font-size: 0.63rem;
   }
 }
+
+/* =========================================================
+   STACKED ATTENDANCE & DEPARTURE CELL STYLES
+   ========================================================= */
+.attendance-cell-stacked {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 2px !important;
+  width: 100% !important;
+}
+
+.departure-block-wrap {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  margin-top: 3px !important;
+}
+
+.departure-divider {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 96% !important;
+  margin: 2px 0 3px 0 !important;
+  gap: 4px !important;
+}
+
+.dep-divider-line {
+  flex: 1 !important;
+  height: 1.5px !important;
+  background: linear-gradient(90deg, rgba(251, 146, 60, 0.2) 0%, rgba(234, 88, 12, 0.6) 50%, rgba(251, 146, 60, 0.2) 100%) !important;
+  border-radius: 2px !important;
+}
+
+.dep-divider-text {
+  font-size: 0.65rem !important;
+  font-weight: 850 !important;
+  color: #c2410c !important;
+  white-space: nowrap !important;
+  padding: 1px 6px !important;
+  background: #fff7ed !important;
+  border: 1px solid #fed7aa !important;
+  border-radius: 9999px !important;
+  line-height: 1.2 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+  box-shadow: 0 1px 2px rgba(234, 88, 12, 0.05) !important;
+}
+
+.dep-vac-icon {
+  font-size: 0.72rem !important;
+  line-height: 1 !important;
+}
+
+.time-split-wrap.departure-times {
+  background: #fffaf5 !important;
+  border: 1px dashed #fdba74 !important;
+  border-radius: 6px !important;
+  padding: 2px 3px !important;
+  width: 96% !important;
+  box-sizing: border-box !important;
+  transition: all 0.2s ease !important;
+}
+
+.time-split-wrap.departure-times:hover {
+  background: #fff7ed !important;
+  border-color: #f97316 !important;
+}
+
+.time-sub.dep-sub {
+  color: #ea580c !important;
+  font-size: 0.58rem !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+}
+
+.time-val.dep-val {
+  color: #9a3412 !important;
+  font-size: 0.72rem !important;
+  font-weight: 850 !important;
+  line-height: 1.1 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+}
+
+.time-line.dep-line {
+  background-color: #fed7aa !important;
+  height: 18px !important;
+  width: 1px !important;
+}
+
