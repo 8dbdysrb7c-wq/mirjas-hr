@@ -170,7 +170,7 @@ export const HRRequestsTab = ({
                   <TableRow key={req.id || idx} className="hover:bg-slate-50 transition-colors">
                     <TableCell className="px-4 py-3 font-bold text-slate-800">
                       <div>{req.type}</div>
-                      {req.originalReq?.deductFromVacationBalance && (
+                      {(req.originalReq?.deductFromVacationBalance || req.originalReq?.calculationMode === 'deduct_vacation') && (
                         <div className="mt-1">
                           <span className="inline-block text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-semibold">
                             خصم من الإجازات ({req.originalReq.vacationDaysDeducted || 0} يوم)

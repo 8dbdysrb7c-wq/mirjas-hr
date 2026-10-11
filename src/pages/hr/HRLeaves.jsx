@@ -179,9 +179,25 @@ const HRLeaves = ({ user, refreshCounts }) => {
 
       if (calculationMode === 'departure_only') {
         keepAsDepartureOnly = true;
+      } else if (calculationMode === 'deduct_vacation') {
+        keepAsDepartureOnly = false;
+        const empToCalc = employees.find(e => String(e.id || '').trim() === String(formData.employeeId || '').trim());
+        let shiftStart = empToCalc?.shiftStart || '08:00';
+        let shiftEnd = empToCalc?.shiftEnd || '16:00';
+        const [shiftStartH, shiftStartM] = shiftStart.split(':').map(Number);
+        const [shiftEndH, shiftEndM] = shiftEnd.split(':').map(Number);
+        const shiftDurationMins = Math.max(60, (shiftEndH * 60 + shiftEndM) - (shiftStartH * 60 + shiftStartM));
+        const [sHours, sMins] = formData.startTime.split(':').map(Number);
+        const [eHours, eMins] = formData.endTime.split(':').map(Number);
+        let diffMins = (eHours * 60 + eMins) - (sHours * 60 + sMins);
+        if (diffMins < 0) diffMins += 1440;
+        formData.vacationDaysDeducted = parseFloat((diffMins / shiftDurationMins).toFixed(2));
+        formData.deductFromVacationBalance = true;
       } else {
         keepAsDepartureOnly = false;
         calculationMode = 'unpaid_leave';
+        formData.deductFromVacationBalance = false;
+        formData.vacationDaysDeducted = 0;
       }
     } else {
       if (!formData.startDate || !formData.endDate) {
@@ -218,38 +234,63 @@ const HRLeaves = ({ user, refreshCounts }) => {
       return;
     }
     let actionReason = '';
-    let selectedCalculationMode = leave.calculationMode || (leave.keepAsDepartureOnly ? 'departure_only' : 'unpaid_leave');
+    let selectedCalculationMode = leave.calculationMode || (leave.deductFromVacationBalance ? 'deduct_vacation' : (leave.keepAsDepartureOnly ? 'departure_only' : 'unpaid_leave'));
+
+    const emp = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim());
+    const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(leave.type);
+    const deptMins = isDept ? getTimedLeaveMinutes(leave) : 0;
+
+    let shiftStart = emp?.shiftStart || '08:00';
+    let shiftEnd = emp?.shiftEnd || '16:00';
+    const [shiftStartH, shiftStartM] = shiftStart.split(':').map(Number);
+    const [shiftEndH, shiftEndM] = shiftEnd.split(':').map(Number);
+    const shiftDurationMins = Math.max(60, (shiftEndH * 60 + shiftEndM) - (shiftStartH * 60 + shiftStartM));
+    const calculatedVacDays = parseFloat((deptMins / shiftDurationMins).toFixed(2));
+    const vacDaysToUse = Number(leave.vacationDaysDeducted) > 0 ? Number(leave.vacationDaysDeducted) : calculatedVacDays;
 
     if (newStatus === 'موافق' || newStatus === 'مرفوض') {
       let extraHtml = '';
       if (newStatus === 'موافق') {
-        const emp = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim());
         const vacBal = emp?.vacationBalance !== undefined ? emp.vacationBalance : 'غير محدد';
-        const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(leave.type);
         const targetDate = leave.date || leave.startDate;
         const targetMonth = targetDate ? targetDate.substring(0, 7) : '';
-        const deptMins = isDept ? getTimedLeaveMinutes(leave) : 0;
 
         extraHtml += `<div style="text-align: right; margin-bottom: 15px; font-size: 15px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">`;
         extraHtml += `<div style="color: #059669; font-weight: bold; margin-bottom: 8px;">📌 الرصيد المتبقي للإجازات السنوية: ${vacBal} يوم</div>`;
 
         if (leave.deductFromVacationBalance) {
-          extraHtml += `<div style="color: #059669; font-weight: bold; font-size: 14px; margin-bottom: 6px;">🌴 الطلب يشمل خصم ${leave.vacationDaysDeducted || 0} يوم من رصيد الإجازات السنوية (بدون خصم مالي)</div>`;
+          extraHtml += `<div style="color: #059669; font-weight: bold; font-size: 14px; margin-bottom: 6px;">🌴 الطلب يشمل خصم ${vacDaysToUse} يوم من رصيد الإجازات السنوية (بدون خصم مالي)</div>`;
         }
 
-        if (isDept && deptMins > 180 && !leave.deductFromVacationBalance) {
+        if (isDept && deptMins > 180) {
           extraHtml += `<div style="background: #fffbeb; border: 1px solid #fde68a; padding: 10px; border-radius: 8px; margin-bottom: 10px; color: #92400e; font-size: 13px;">
             ⚠️ <b>تنبيه مدة المغادرة (${deptMins} دقيقة / ${Math.floor(deptMins / 60)} ساعة و ${deptMins % 60} دقيقة):</b><br/>
             تتجاوز المغادرة 3 ساعات، يرجى اختيار آلية الاحتساب:
           </div>`;
-          extraHtml += `<div style="background: #ffffff; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; margin-bottom: 10px; text-align: right;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: bold; color: #1e293b; margin-bottom: 6px;">
-              <input type="radio" name="swalCalcMode" value="unpaid_leave" ${(!leave.keepAsDepartureOnly && leave.calculationMode !== 'departure_only') ? 'checked' : ''} />
+          extraHtml += `<div style="background: #ffffff; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; margin-bottom: 10px; text-align: right; display: flex; flex-direction: column; gap: 8px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: bold; color: #1e293b;">
+              <input type="radio" name="swalCalcMode" value="unpaid_leave" ${(!leave.keepAsDepartureOnly && leave.calculationMode !== 'departure_only' && !leave.deductFromVacationBalance && leave.calculationMode !== 'deduct_vacation') ? 'checked' : ''} />
               احتساب كإجازة غير مدفوعة (سياسة النظام للمغادرة أكثر من 3 ساعات)
             </label>
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: bold; color: #0284c7;">
               <input type="radio" name="swalCalcMode" value="departure_only" ${(leave.keepAsDepartureOnly || leave.calculationMode === 'departure_only') ? 'checked' : ''} />
               اعتبارها مغادرة فقط وتخصم كمغادرة (عدم التحويل لإجازة غير مدفوعة)
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: bold; color: #059669;">
+              <input type="radio" name="swalCalcMode" value="deduct_vacation" ${(leave.deductFromVacationBalance || leave.calculationMode === 'deduct_vacation') ? 'checked' : ''} />
+              خصم مدة المغادرة من رصيد الإجازات السنوية (${vacDaysToUse} يوم من الرصيد المتاح ${vacBal} يوم)
+            </label>
+          </div>`;
+        } else if (isDept && deptMins > 0) {
+          extraHtml += `<div style="background: #ffffff; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; margin-bottom: 10px; text-align: right; display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 12px; font-weight: bold; color: #475569;">آلية احتساب المغادرة:</div>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: bold; color: #0284c7;">
+              <input type="radio" name="swalCalcMode" value="departure_only" ${(!leave.deductFromVacationBalance && leave.calculationMode !== 'deduct_vacation') ? 'checked' : ''} />
+              اعتبارها مغادرة عادية (حسب سياسة المغادرات)
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: bold; color: #059669;">
+              <input type="radio" name="swalCalcMode" value="deduct_vacation" ${(leave.deductFromVacationBalance || leave.calculationMode === 'deduct_vacation') ? 'checked' : ''} />
+              خصم من رصيد الإجازات السنوية (${vacDaysToUse} يوم من الرصيد المتاح ${vacBal} يوم)
             </label>
           </div>`;
         }
@@ -304,6 +345,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
     try {
       const reasonLabel = newStatus === 'موافق' ? 'ملاحظات الإدارة' : 'سبب الرفض';
       const updatedNotes = (newStatus === 'موافق' || newStatus === 'مرفوض') && actionReason ? `${leave.notes || ''}\n(${reasonLabel}: ${actionReason})` : leave.notes;
+      const isDeductVacation = isDept && selectedCalculationMode === 'deduct_vacation';
       const keepAsDepartureOnly = selectedCalculationMode === 'departure_only';
 
       await saveHRLeave({
@@ -312,22 +354,27 @@ const HRLeaves = ({ user, refreshCounts }) => {
         notes: updatedNotes,
         calculationMode: selectedCalculationMode,
         keepAsDepartureOnly,
+        deductFromVacationBalance: isDeductVacation ? true : (selectedCalculationMode === 'unpaid_leave' || selectedCalculationMode === 'departure_only' ? false : !!leave.deductFromVacationBalance),
+        vacationDaysDeducted: isDeductVacation ? vacDaysToUse : (selectedCalculationMode === 'unpaid_leave' || selectedCalculationMode === 'departure_only' ? 0 : (leave.vacationDaysDeducted || 0)),
         ...(newStatus === 'مرفوض' ? { rejectionReason: actionReason } : {})
       }, user);
 
       if (newStatus === 'موافق') {
-        const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(leave.type);
         const dateToSave = leave.date || leave.startDate;
 
-        await saveHRAttendance({
-          employeeId: leave.employeeId,
-          employeeName: leave.employeeName,
-          date: dateToSave,
-          type: leave.type,
-          time: isDept ? `${leave.startTime} - ${leave.endTime}` : 'يوم كامل',
-          notes: `طلب معتمد (${leave.type}): ${leave.notes || 'بدون ملاحظات'}`,
-          isLeave: true
-        });
+        try {
+          await saveHRAttendance({
+            employeeId: leave.employeeId,
+            employeeName: leave.employeeName,
+            date: dateToSave,
+            type: leave.type,
+            time: isDept ? `${leave.startTime} - ${leave.endTime}` : 'يوم كامل',
+            notes: `طلب معتمد (${leave.type})${isDeductVacation ? ` (مخصوم ${vacDaysToUse} يوم من الإجازات السنوية)` : ''}: ${leave.notes || 'بدون ملاحظات'}`,
+            isLeave: true
+          });
+        } catch (attErr) {
+          console.error("Error saving attendance record:", attErr);
+        }
 
         // Deduct from balance
         if (!isDept) {
@@ -356,11 +403,11 @@ const HRLeaves = ({ user, refreshCounts }) => {
               }
             }
           }
-        } else if (leave.deductFromVacationBalance && Number(leave.vacationDaysDeducted) > 0) {
+        } else if (isDeductVacation && vacDaysToUse > 0) {
           const empToUpdate = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim());
           if (empToUpdate) {
-            const days = Number(leave.vacationDaysDeducted);
-            empToUpdate.vacationBalance = Math.max(0, parseFloat(((empToUpdate.vacationBalance || 0) - days).toFixed(2)));
+            const currentBal = Number(empToUpdate.vacationBalance || 0);
+            empToUpdate.vacationBalance = Math.max(0, parseFloat((currentBal - vacDaysToUse).toFixed(2)));
             await saveEmployee(empToUpdate);
           }
         }
@@ -394,7 +441,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
               }
             }
           }
-        } else if (leave.deductFromVacationBalance && Number(leave.vacationDaysDeducted) > 0) {
+        } else if ((leave.deductFromVacationBalance || leave.calculationMode === 'deduct_vacation') && Number(leave.vacationDaysDeducted) > 0) {
           const empToUpdate = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim());
           if (empToUpdate) {
             const days = Number(leave.vacationDaysDeducted);
@@ -405,33 +452,37 @@ const HRLeaves = ({ user, refreshCounts }) => {
       }
 
       if (newStatus === 'موافق' || newStatus === 'مرفوض') {
-        const globalSettings = await getGlobalSettings();
-        const settingKey = ['مغادرة خاصة', 'مغادرة عمل', 'خروج مبكر', 'مغادرة الدخان'].includes(leave.type) ? 'earlyLeave' : 'leaves';
-        const modSettings = globalSettings?.notifications?.[settingKey] || {};
+        try {
+          const globalSettings = await getGlobalSettings();
+          const settingKey = ['مغادرة خاصة', 'مغادرة عمل', 'خروج مبكر', 'مغادرة الدخان'].includes(leave.type) ? 'earlyLeave' : 'leaves';
+          const modSettings = globalSettings?.notifications?.[settingKey] || {};
 
-        if (modSettings.whatsapp) {
-          try {
-            const emp = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim() || String(e.name || '').trim() === String(leave.employeeName || '').trim());
-            if (emp && emp.phone) {
-              const actionText = newStatus === 'موافق' ? 'الموافقة على' : 'رفض';
-              let msg = `مرحباً ${emp.name}،\nتم ${actionText} ${leave.type} الخاصة بك.`;
-              if (actionReason) msg += `\nالملاحظات: ${actionReason}`;
-              msg += `\n-- الإدارة`;
-              await sendWhatsAppNotification(emp.phone, msg, 'leave_requests');
-            }
-          } catch (err) { console.error('WhatsApp Error:', err); }
+          if (modSettings.whatsapp) {
+            try {
+              const emp = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim() || String(e.name || '').trim() === String(leave.employeeName || '').trim());
+              if (emp && emp.phone) {
+                const actionText = newStatus === 'موافق' ? 'الموافقة على' : 'رفض';
+                let msg = `مرحباً ${emp.name}،\nتم ${actionText} ${leave.type} الخاصة بك.`;
+                if (actionReason) msg += `\nالملاحظات: ${actionReason}`;
+                msg += `\n-- الإدارة`;
+                await sendWhatsAppNotification(emp.phone, msg, 'leave_requests');
+              }
+            } catch (err) { console.error('WhatsApp Error:', err); }
+          }
+
+          await createNotification({
+            settingKey,
+            targetEmployeeId: leave.employeeId,
+            moduleKey: 'hr',
+            moduleLabel: 'الموارد البشرية',
+            title: newStatus === 'موافق' ? 'تمت الموافقة على طلبك' : 'تم رفض طلبك',
+            message: `تم ${newStatus === 'موافق' ? 'قبول' : 'رفض'} طلب ${leave.type} الخاص بك.${newStatus === 'مرفوض' && actionReason ? `\nالسبب: ${actionReason}` : ''}`,
+            target: { tab: 'leaves' },
+            skipWhatsApp: true
+          });
+        } catch (notifErr) {
+          console.error('Notification Error:', notifErr);
         }
-
-        await createNotification({
-          settingKey,
-          targetEmployeeId: leave.employeeId,
-          moduleKey: 'hr',
-          moduleLabel: 'الموارد البشرية',
-          title: newStatus === 'موافق' ? 'تمت الموافقة على طلبك' : 'تم رفض طلبك',
-          message: `تم ${newStatus === 'موافق' ? 'قبول' : 'رفض'} طلب ${leave.type} الخاص بك.${newStatus === 'مرفوض' && actionReason ? `\nالسبب: ${actionReason}` : ''}`,
-          target: { tab: 'leaves' },
-          skipWhatsApp: true
-        });
       }
 
       setLeaves(prev => prev.filter(l => l.id !== leave.id));
@@ -440,7 +491,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
       Swal.fire('نجاح', `تم ${newStatus === 'موافق' ? 'قبول' : (newStatus === 'مرفوض' ? 'رفض' : 'تحديث')} الطلب بنجاح`, 'success');
     } catch (error) {
       console.error(error);
-      Swal.fire('خطأ', 'حدث خطأ أثناء تحديث حالة الطلب', 'error');
+      Swal.fire('خطأ', error?.message || 'حدث خطأ أثناء تحديث حالة الطلب', 'error');
     }
   };
 
@@ -728,7 +779,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
         durationStr = `${days} ${days === 1 ? 'يوم' : days === 2 ? 'يومان' : 'أيام'}`;
       }
     } else if (['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(l.type)) {
-      if (l.deductFromVacationBalance) {
+      if (l.deductFromVacationBalance || l.calculationMode === 'deduct_vacation') {
         cost = 0;
         if (l.startTime && l.endTime) {
           const [sh, sm] = l.startTime.split(':').map(Number);
@@ -760,7 +811,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
       totalUnpaidDays += res.days || 0;
       totalUnpaidCost += res.cost;
     } else if (['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(l.type)) {
-      if (!l.deductFromVacationBalance && l.startTime && l.endTime) {
+      if (!l.deductFromVacationBalance && l.calculationMode !== 'deduct_vacation' && l.startTime && l.endTime) {
         const [sh, sm] = l.startTime.split(':').map(Number);
         const [eh, em] = l.endTime.split(':').map(Number);
         totalDepartureMins += Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
@@ -986,7 +1037,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
                     </td>
                     <td className="p-5 text-sm text-slate-800 font-bold text-center">
                       {leave.type}
-                      {leave.deductFromVacationBalance && (
+                      {(leave.deductFromVacationBalance || leave.calculationMode === 'deduct_vacation') && (
                         <div className="mt-1">
                           <span className="inline-block text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-semibold">
                             خصم من الإجازات ({leave.vacationDaysDeducted || 0} يوم)
@@ -996,7 +1047,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
                       {(() => {
                         const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(leave.type);
                         const mins = isDept ? getTimedLeaveMinutes(leave) : 0;
-                        if (isDept && mins > 180 && !leave.deductFromVacationBalance) {
+                        if (isDept && mins > 180 && !leave.deductFromVacationBalance && leave.calculationMode !== 'deduct_vacation') {
                           if (leave.keepAsDepartureOnly || leave.calculationMode === 'departure_only') {
                             return (
                               <div className="mt-1">
@@ -1229,8 +1280,8 @@ const HRLeaves = ({ user, refreshCounts }) => {
                                       type="radio"
                                       name="calcModeModal"
                                       value="unpaid_leave"
-                                      checked={formData.calculationMode !== 'departure_only' && !formData.keepAsDepartureOnly}
-                                      onChange={() => setFormData({ ...formData, calculationMode: 'unpaid_leave', keepAsDepartureOnly: false })}
+                                      checked={formData.calculationMode !== 'departure_only' && !formData.keepAsDepartureOnly && formData.calculationMode !== 'deduct_vacation' && !formData.deductFromVacationBalance}
+                                      onChange={() => setFormData({ ...formData, calculationMode: 'unpaid_leave', keepAsDepartureOnly: false, deductFromVacationBalance: false, vacationDaysDeducted: 0 })}
                                     />
                                     <span>احتساب كإجازة غير مدفوعة (تطبيق سياسة النظام للمغادرة أكثر من 3 ساعات)</span>
                                   </label>
@@ -1239,10 +1290,20 @@ const HRLeaves = ({ user, refreshCounts }) => {
                                       type="radio"
                                       name="calcModeModal"
                                       value="departure_only"
-                                      checked={formData.calculationMode === 'departure_only' || formData.keepAsDepartureOnly}
-                                      onChange={() => setFormData({ ...formData, calculationMode: 'departure_only', keepAsDepartureOnly: true })}
+                                      checked={(formData.calculationMode === 'departure_only' || formData.keepAsDepartureOnly) && !formData.deductFromVacationBalance}
+                                      onChange={() => setFormData({ ...formData, calculationMode: 'departure_only', keepAsDepartureOnly: true, deductFromVacationBalance: false, vacationDaysDeducted: 0 })}
                                     />
                                     <span>اعتبارها مغادرة فقط وتخصم منه كمغادرة (عدم التحويل لإجازة غير مدفوعة)</span>
+                                  </label>
+                                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700', color: '#059669' }}>
+                                    <input
+                                      type="radio"
+                                      name="calcModeModal"
+                                      value="deduct_vacation"
+                                      checked={formData.calculationMode === 'deduct_vacation' || formData.deductFromVacationBalance}
+                                      onChange={() => setFormData({ ...formData, calculationMode: 'deduct_vacation', keepAsDepartureOnly: false, deductFromVacationBalance: true })}
+                                    />
+                                    <span>خصم مدة المغادرة من رصيد الإجازات السنوية للموظف</span>
                                   </label>
                                 </div>
                               </div>

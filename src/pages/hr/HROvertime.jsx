@@ -1,3 +1,4 @@
+import { resolveOvertimeAttendance } from '../../utils/overtimeAttendance';
 import { isActiveEmployee } from '../../utils/employeeStatus';
 import { isAdmin } from '../../services/settings';
 import React, { useState, useEffect, useRef } from 'react';
@@ -83,37 +84,8 @@ const HROvertime = ({ user, refreshCounts }) => {
       let shiftStart = emp?.shiftStart || '08:00';
       let shiftEnd = emp?.shiftEnd || '16:00';
       
-      const allAtts = attList.filter(a => {
-        const aEmpId = String(a.employeeId || '');
-        const aUserId = String(a.userId || '');
-        const aName = String(a.employeeName || '').trim();
+      attendanceData = resolveOvertimeAttendance(attList, leave, emp);
 
-        const lEmpId = String(leave.employeeId || '');
-        const lName = String(leave.employeeName || '').trim();
-
-        const empId = emp ? String(emp.employeeId || '') : '';
-        const empDocId = emp ? String(emp.id || '') : '';
-        const empName = emp ? String(emp.name || '').trim() : '';
-
-        const matchId = (aEmpId && (aEmpId === lEmpId || aEmpId === empId || aEmpId === empDocId)) || 
-                        (aUserId && (aUserId === lEmpId || aUserId === empId || aUserId === empDocId));
-        
-        const matchName = (aName && aName !== '' && (aName === lName || aName === empName));
-
-        return (matchId || matchName) && a.date === leave.date;
-      });
-      
-      if (allAtts.length > 1) {
-        const merged = { ...allAtts[0] };
-        allAtts.forEach(a => {
-          if ((!merged.timeIn || merged.timeIn === '--:--') && a.timeIn && a.timeIn !== '--:--') merged.timeIn = a.timeIn;
-          if ((!merged.timeOut || merged.timeOut === '--:--') && a.timeOut && a.timeOut !== '--:--') merged.timeOut = a.timeOut;
-        });
-        attendanceData = merged;
-      } else {
-        attendanceData = allAtts[0] || null;
-      }
-      
       try {
         const settings = await getGlobalSettings();
         if (emp?.workShiftName && settings.workShifts) {
@@ -161,10 +133,7 @@ const HROvertime = ({ user, refreshCounts }) => {
         lateMins = Math.min(defMins, Math.max(0, timeToMinutes(attendanceData.timeIn) - timeToMinutes(shiftStart)));
         earlyMins = defMins - lateMins;
       } else {
-        const lDate = new Date(leave.date);
-        if (lDate.getDay() !== 5) { // Assuming Friday is weekend
-           defMins = shiftMins; // full day deficit
-        }
+        throw new Error('ختمات الدخول والخروج غير مكتملة؛ لا يمكن اعتماد احتساب الإضافي قبل استكمالها.');
       }
     } catch (err) {
       console.error(err);
@@ -520,30 +489,9 @@ const HROvertime = ({ user, refreshCounts }) => {
     const attendance = attendanceByDate[date];
     if (!attendance) return <span className="text-muted text-xs">جاري تحميل الحضور...</span>;
     if (attendance.error) return <span className="text-rose-600 text-xs">تعذر تحميل سجل الحضور</span>;
-    const ids = [leave.employeeId, emp?.id, emp?.employeeId].filter(Boolean).map(id => String(id).trim());
-    const records = attendance.records.filter(record => {
-      if (record.date !== date) return false;
-      const recordIds = [record.employeeId, record.userId].filter(Boolean).map(id => String(id).trim());
-      if (recordIds.length) return recordIds.some(id => ids.includes(id));
-      const name = String(record.employeeName || '').trim();
-      return Boolean(name && [leave.employeeName, emp?.name].some(value => String(value || '').trim() === name));
-    });
-    if (!records.length) return <span className="text-muted text-xs">لا يوجد سجل حضور لهذا اليوم</span>;
-
-    // Deduplicate and merge records for the same employee/day
-    const mergedRecords = [];
-    records.forEach(rec => {
-      const existing = mergedRecords.find(m => 
-        (m.timeIn && rec.timeIn && m.timeIn === rec.timeIn) ||
-        (m.timeOut && rec.timeOut && m.timeOut === rec.timeOut)
-      );
-      if (existing) {
-        if (!existing.timeIn && rec.timeIn) existing.timeIn = rec.timeIn;
-        if (!existing.timeOut && rec.timeOut) existing.timeOut = rec.timeOut;
-      } else {
-        mergedRecords.push({ ...rec });
-      }
-    });
+    const record = resolveOvertimeAttendance(attendance.records, leave, emp);
+    if (!record) return <span className="text-muted text-xs">لا يوجد سجل حضور لهذا اليوم</span>;
+    const mergedRecords = [record];
 
     const formatTimePart = (value) => {
       const minutes = timeToMinutes(value);
@@ -580,11 +528,9 @@ const HROvertime = ({ user, refreshCounts }) => {
     const requested = getTimedLeaveMinutes(leave);
     const emp = employees.find(employee => [employee.id, employee.employeeId].some(id =>
       id && String(id).trim() === String(leave.employeeId || '').trim()));
-    const ids = [leave.employeeId, emp?.id, emp?.employeeId].filter(Boolean).map(String);
     const records = attendanceByDate[leave.date || leave.startDate]?.records;
     if (!records) return requested;
-    const attendance = records.find(record => !record.isLeave && record.status !== 'محذوف'
-      && [record.employeeId, record.userId].some(id => id && ids.includes(String(id))));
+    const attendance = resolveOvertimeAttendance(records, leave, emp);
     if (!attendance || timeToMinutes(attendance.timeIn) == null || timeToMinutes(attendance.timeOut) == null) return requested;
     const shift = globalShiftForEmployee(emp);
     const dayName = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'][new Date(leave.date || leave.startDate).getDay()];

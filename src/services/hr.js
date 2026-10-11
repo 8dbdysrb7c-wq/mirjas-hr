@@ -456,15 +456,30 @@ export const syncToHRAttendance = async (userId, userName, date, timeIn, timeOut
   }
 };
 
+const overtimeAttendanceSources = ['hr_attendance', 'attendance_logs', 'employee_reports', 'supervisor_reports'];
+const readAttendanceSnapshot = (snapshot, source) => snapshot.docs.map(record => ({ ...record.data(), id: record.id, attendanceSource: source }));
+
 export const subscribeToHRAttendanceForDate = (date, callback, onError) => {
-  const attendanceQuery = query(collection(db, 'hr_attendance'), where('date', '==', date));
-  return onSnapshot(attendanceQuery, snapshot => {
-    callback(snapshot.docs.map(record => ({ ...record.data(), id: record.id })));
-  }, onError);
+  const snapshots = new Map();
+  let active = true;
+  let failed = false;
+  const unsubscribe = overtimeAttendanceSources.map(source => onSnapshot(
+    query(collection(db, source), where('date', '==', date)),
+    snapshot => {
+      snapshots.set(source, readAttendanceSnapshot(snapshot, source));
+      if (active && !failed && snapshots.size === overtimeAttendanceSources.length) callback([...snapshots.values()].flat());
+    }, error => { failed = true; if (active) onError?.(error); }
+  ));
+  return () => { active = false; unsubscribe.forEach(stop => stop()); };
 };
 
 export const getHRAttendance = async (date = null) => {
   try {
+    if (date) {
+      const snapshots = await Promise.all(overtimeAttendanceSources.map(async source =>
+        readAttendanceSnapshot(await getDocs(query(collection(db, source), where('date', '==', date))), source)));
+      return snapshots.flat();
+    }
     const q = date
       ? query(collection(db, 'hr_attendance'), where('date', '==', date))
       : query(collection(db, 'hr_attendance'), orderBy('date', 'desc'), limit(150));
@@ -1281,7 +1296,7 @@ export const saveHRLeave = async (leave, userContext = null) => {
         });
         if (!attendanceSnap.empty) await batch.commit();
       }
-    } else if (data.keepAsDepartureOnly || data.calculationMode === 'departure_only') {
+    } else if (data.keepAsDepartureOnly || data.calculationMode === 'departure_only' || data.deductFromVacationBalance || data.calculationMode === 'deduct_vacation') {
       // Revert automatic unpaid leave if previously set
       if (leaveEmpId && leaveDate) {
         const attendanceQuery = query(
@@ -1290,6 +1305,7 @@ export const saveHRLeave = async (leave, userContext = null) => {
           where('date', '==', leaveDate)
         );
         const attendanceSnap = await getDocs(attendanceQuery);
+        let hasChanges = false;
         const batch = writeBatch(db);
         attendanceSnap.docs.forEach(attendanceDoc => {
           const attData = attendanceDoc.data();
