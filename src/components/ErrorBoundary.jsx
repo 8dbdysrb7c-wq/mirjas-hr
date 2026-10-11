@@ -15,7 +15,17 @@ export class ErrorBoundary extends React.Component {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
   }
 
-  handleReload = () => {
+  handleReload = async () => {
+    try {
+      if (typeof window !== 'undefined' && window.indexedDB?.databases) {
+        const dbs = await window.indexedDB.databases();
+        for (const dbInfo of dbs) {
+          if (dbInfo.name && dbInfo.name.startsWith('firestore/')) {
+            try { window.indexedDB.deleteDatabase(dbInfo.name); } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
     window.location.reload();
   };
 

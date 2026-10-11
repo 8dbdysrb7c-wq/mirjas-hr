@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { 
   Calendar, Clock, CheckCircle2, AlertTriangle, FileText, 
   Award, MessageSquare, ChevronRight, ChevronLeft, 
   HelpCircle, Check, X, ShieldAlert,
-  CalendarCheck, Eye, Sparkles, Star, History
+  CalendarCheck, Eye, Sparkles, Star, History, RotateCcw
 } from 'lucide-react';
 import { db } from '../../../firebase';
 import { getTimedLeaveMinutes, timeToMinutes } from '../../../utils/attendancePolicy';
@@ -127,6 +127,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
   const [error, setError] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedDayDetails, setSelectedDayDetails] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -144,11 +145,17 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
   }, []);
 
   useEffect(() => {
+    let live = true;
     setSources({});
     setLoading(true);
     setError(false);
 
     const ids = [...new Set([user?.id, user?.employeeId].filter(Boolean).map(String))];
+    if (!ids.length) {
+      setLoading(false);
+      return;
+    }
+
     const requests = ids.flatMap(id => [
       ['hr_attendance', 'employeeId', id],
       ['hr_attendance', 'userId', id],
@@ -160,72 +167,66 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
       ['reports', 'employeeId', id]
     ]);
 
-    let live = true;
-    const finished = new Set();
-    const complete = key => {
-      finished.add(key);
-      if (finished.size >= requests.length) setLoading(false);
+    const runFetch = async () => {
+      try {
+        const results = await Promise.allSettled(
+          requests.map(async ([name, field, id]) => {
+            const snap = await getDocs(query(collection(db, name), where(field, '==', id)));
+            return snap.docs
+              .map(record => ({ ...record.data(), id: record.id, source: name }))
+              .filter(record => !['محذوف', 'deleted'].includes(record.status))
+              .filter(record => {
+                if (name === 'hr_leaves') {
+                  return (
+                    record.date?.startsWith(selectedMonth) ||
+                    (record.startDate &&
+                      record.startDate <= `${selectedMonth}-31` &&
+                      (record.endDate || record.startDate) >= `${selectedMonth}-01`)
+                  );
+                }
+                return record.date?.startsWith(selectedMonth);
+              });
+          })
+        );
+
+        if (!live) return;
+        const newSources = {};
+        results.forEach((res, index) => {
+          if (res.status === 'fulfilled') {
+            newSources[index] = res.value;
+          }
+        });
+        setSources(newSources);
+
+        if (isImad) {
+          try {
+            const supSnap = await getDocs(query(
+              collection(db, 'supervisor_reports'),
+              where('date', '>=', `${selectedMonth}-01`),
+              where('date', '<=', `${selectedMonth}-31`)
+            ));
+            if (live) {
+              setSupervisorReports(supSnap.docs.map(d => ({ ...d.data(), id: d.id })));
+            }
+          } catch (supErr) {
+            console.error('Failed to load supervisor_reports for employee month:', supErr);
+          }
+        }
+      } catch (err) {
+        if (!live) return;
+        console.error('Failed to fetch monthly report records:', err);
+        setError(true);
+      } finally {
+        if (live) setLoading(false);
+      }
     };
 
-    if (!requests.length) {
-      setLoading(false);
-      return;
-    }
-
-    const unsubscribes = requests.map(([name, field, id], index) =>
-      onSnapshot(
-        query(collection(db, name), where(field, '==', id)),
-        snapshot => {
-          if (!live) return;
-          const records = snapshot.docs
-            .map(record => ({ ...record.data(), id: record.id, source: name }))
-            .filter(record => !['محذوف', 'deleted'].includes(record.status))
-            .filter(record => {
-              if (name === 'hr_leaves') {
-                return (
-                  record.date?.startsWith(selectedMonth) ||
-                  (record.startDate &&
-                    record.startDate <= `${selectedMonth}-31` &&
-                    (record.endDate || record.startDate) >= `${selectedMonth}-01`)
-                );
-              }
-              return record.date?.startsWith(selectedMonth);
-            });
-          setSources(previous => ({ ...previous, [index]: records }));
-          complete(index);
-        },
-        failure => {
-          if (!live) return;
-          console.error(`Personal monthly report subscription failed for ${name}:`, failure);
-          setError(true);
-          complete(index);
-        }
-      )
-    );
-
-    // Also listen to supervisor_reports for that month to capture evaluations
-    const supQ = query(
-      collection(db, 'supervisor_reports'),
-      where('date', '>=', `${selectedMonth}-01`),
-      where('date', '<=', `${selectedMonth}-31`)
-    );
-    const supUnsub = onSnapshot(
-      supQ,
-      snap => {
-        if (!live) return;
-        setSupervisorReports(snap.docs.map(d => ({ ...d.data(), id: d.id })));
-      },
-      err => {
-        console.error('Failed to load supervisor_reports for employee month:', err);
-      }
-    );
+    runFetch();
 
     return () => {
       live = false;
-      unsubscribes.forEach(stop => stop());
-      supUnsub();
     };
-  }, [userId, employeeId, selectedMonth]);
+  }, [userId, employeeId, selectedMonth, refreshKey, isImad]);
 
   // Aggregate loaded records
   const allRecords = useMemo(() => {
@@ -365,7 +366,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
         Boolean(l.startTime && l.endTime && !overtimeTypes.has(l.type) && !String(l.type || '').match(/إجازة|اجازة/))
       );
       const totalDepartureMinutes = departures.reduce((sum, dep) => sum + getTimedLeaveMinutes(dep), 0);
-      const isVacationDeducted = departures.some(dep => dep.deductFromVacationBalance);
+      const isVacationDeducted = departures.some(dep => dep.deductFromVacationBalance || dep.calculationMode === 'deduct_vacation');
 
       // 3. Overtime
       const extras = leaves.filter(request => covers(request, date) && overtimeTypes.has(request.type));
@@ -680,6 +681,14 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
         <div className="attendance-unified-capsule">
           <span className="unified-capsule-title">تقرير الدوام</span>
           <span className="unified-capsule-month">شهر {parseInt((selectedMonth || '2026-10').split('-')[1], 10)} - {(selectedMonth || '2026-10').split('-')[0]}</span>
+          <button
+            type="button"
+            onClick={() => setRefreshKey(k => k + 1)}
+            title="تحديث تقرير الدوام"
+            className="text-slate-400 hover:text-[#0f766e] transition-colors p-1 rounded-full mr-1 cursor-pointer"
+          >
+            <RotateCcw size={14} className={loading ? 'animate-spin' : ''} />
+          </button>
         </div>
       </div>
 
