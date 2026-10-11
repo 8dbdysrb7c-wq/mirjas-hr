@@ -775,7 +775,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                                 <div className="departure-divider">
                                   <span className="dep-divider-line"></span>
                                   <span className="dep-divider-text">
-                                    مغادرة {day.totalDepartureMinutes > 0 ? `(${day.totalDepartureMinutes} د)` : ''}
+                                    مغادرة
                                     {day.isVacationDeducted && <span className="dep-vac-icon" title="مخصومة من رصيد الإجازات السنوية">🌴</span>}
                                   </span>
                                   <span className="dep-divider-line"></span>
@@ -803,7 +803,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
                                 <div className="departure-divider">
                                   <span className="dep-divider-line"></span>
                                   <span className="dep-divider-text">
-                                    مغادرة {day.totalDepartureMinutes > 0 ? `(${day.totalDepartureMinutes} د)` : ''}
+                                    مغادرة
                                     {day.isVacationDeducted && <span className="dep-vac-icon" title="مخصومة من رصيد الإجازات السنوية">🌴</span>}
                                   </span>
                                   <span className="dep-divider-line"></span>
