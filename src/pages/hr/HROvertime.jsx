@@ -103,7 +103,16 @@ const HROvertime = ({ user, refreshCounts }) => {
         return (matchId || matchName) && a.date === leave.date;
       });
       
-      attendanceData = allAtts.find(a => a.timeIn && a.timeIn !== '--:--' && a.timeIn !== '') || allAtts[0];
+      if (allAtts.length > 1) {
+        const merged = { ...allAtts[0] };
+        allAtts.forEach(a => {
+          if ((!merged.timeIn || merged.timeIn === '--:--') && a.timeIn && a.timeIn !== '--:--') merged.timeIn = a.timeIn;
+          if ((!merged.timeOut || merged.timeOut === '--:--') && a.timeOut && a.timeOut !== '--:--') merged.timeOut = a.timeOut;
+        });
+        attendanceData = merged;
+      } else {
+        attendanceData = allAtts[0] || null;
+      }
       
       try {
         const settings = await getGlobalSettings();
@@ -520,6 +529,22 @@ const HROvertime = ({ user, refreshCounts }) => {
       return Boolean(name && [leave.employeeName, emp?.name].some(value => String(value || '').trim() === name));
     });
     if (!records.length) return <span className="text-muted text-xs">لا يوجد سجل حضور لهذا اليوم</span>;
+
+    // Deduplicate and merge records for the same employee/day
+    const mergedRecords = [];
+    records.forEach(rec => {
+      const existing = mergedRecords.find(m => 
+        (m.timeIn && rec.timeIn && m.timeIn === rec.timeIn) ||
+        (m.timeOut && rec.timeOut && m.timeOut === rec.timeOut)
+      );
+      if (existing) {
+        if (!existing.timeIn && rec.timeIn) existing.timeIn = rec.timeIn;
+        if (!existing.timeOut && rec.timeOut) existing.timeOut = rec.timeOut;
+      } else {
+        mergedRecords.push({ ...rec });
+      }
+    });
+
     const formatTimePart = (value) => {
       const minutes = timeToMinutes(value);
       if (minutes == null) return '--:--';
@@ -532,7 +557,7 @@ const HROvertime = ({ user, refreshCounts }) => {
 
     return (
       <div className="flex flex-col gap-1 items-center justify-center">
-        {records.map((record, index) => (
+        {mergedRecords.map((record, index) => (
           <div
             key={record.id || index}
             className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-50 border border-slate-200/80 rounded font-mono text-xs font-semibold text-slate-700 whitespace-nowrap"
