@@ -45,6 +45,7 @@ export const isPolicyEffective = date => String(date || '') >= UNPAID_ABSENCE_PO
 
 export const isLongApprovedDeparture = leave => {
   if (leave?.deductFromVacationBalance) return false;
+  if (leave?.keepAsDepartureOnly === true || leave?.calculationMode === 'departure_only' || leave?.treatAsLeave === false) return false;
   const approved = ['موافق', 'موافق عليه', 'مقبول', 'تمت الموافقة', 'تم التسليم'].includes(leave?.status);
   const departure = ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(leave?.type);
   const date = leave?.date || leave?.startDate;

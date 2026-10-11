@@ -1277,6 +1277,30 @@ export const saveHRLeave = async (leave, userContext = null) => {
         }, { merge: true });
       });
       if (!attendanceSnap.empty) await batch.commit();
+    } else if (data.keepAsDepartureOnly || data.calculationMode === 'departure_only') {
+      // Revert automatic unpaid leave if previously set
+      const leaveDate = data.date || data.startDate;
+      const attendanceQuery = query(
+        collection(db, 'hr_attendance'),
+        where('employeeId', '==', data.employeeId),
+        where('date', '==', leaveDate)
+      );
+      const attendanceSnap = await getDocs(attendanceQuery);
+      const batch = writeBatch(db);
+      let hasChanges = false;
+      attendanceSnap.docs.forEach(attendanceDoc => {
+        const attData = attendanceDoc.data();
+        if (attData.automaticUnpaidLeave) {
+          hasChanges = true;
+          batch.set(attendanceDoc.ref, {
+            status: attData.timeIn ? 'حاضر' : 'لم يسجل دخول',
+            notes: (attData.notes || '').replace(/إجازة غير مدفوعة آلياً لأن مدة المغادرة المعتمدة تجاوزت 3 ساعات/g, '').trim(),
+            automaticUnpaidLeave: false,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        }
+      });
+      if (hasChanges) await batch.commit();
     }
 
     // Send WhatsApp notifications

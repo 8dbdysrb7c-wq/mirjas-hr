@@ -1,6 +1,6 @@
 import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, Clock, XCircle, FileText, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Undo2, Trash2, Eye, ChevronDown, ChevronUp, User } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, FileText, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Undo2, Trash2, Eye, ChevronDown, ChevronUp, User, Edit2 } from 'lucide-react';
 import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
@@ -9,6 +9,8 @@ import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
 import HRDateFilter from '../../components/ui/HRDateFilter';
 import { hasPermission } from '../../utils/permissions';
+import { isAdmin } from '../../services/settings';
+import { getTimedLeaveMinutes, MAX_PARTIAL_ABSENCE_MINUTES } from '../../utils/attendancePolicy';
 
 const getLocalDateStr = (d) => {
   const offset = d.getTimezoneOffset();
@@ -17,7 +19,7 @@ const getLocalDateStr = (d) => {
 
 const HRLeaves = ({ user, refreshCounts }) => {
   const canAdd = hasPermission(user, 'hr_leaves', 'add') || hasPermission(user, 'hr_leaves', 'create');
-  const canEdit = hasPermission(user, 'hr_leaves', 'edit');
+  const canEdit = hasPermission(user, 'hr_leaves', 'edit') || isAdmin(user);
   const canApprove = hasPermission(user, 'hr_leaves', 'approve');
   const canDelete = hasPermission(user, 'hr_leaves', 'delete');
 
@@ -93,6 +95,54 @@ const HRLeaves = ({ user, refreshCounts }) => {
 
   useEffect(() => { fetchData(); }, [dateMode, selectedMonth, selectedDate, startDate, endDate]);
 
+  const handleAddNew = () => {
+    if (!canAdd && !canEdit) {
+      Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لإضافة أو تعديل الطلبات.', 'warning');
+      return;
+    }
+    setFormData({
+      employeeId: '',
+      type: 'إجازة سنوية',
+      startDate: '',
+      endDate: '',
+      date: '',
+      startTime: '',
+      endTime: '',
+      notes: '',
+      status: 'معلق',
+      deductFromVacationBalance: false,
+      vacationDaysDeducted: 0,
+      calculationMode: 'unpaid_leave',
+      keepAsDepartureOnly: false
+    });
+    setShowModal(true);
+  };
+
+  const handleEdit = (leave) => {
+    if (!canEdit && !isAdmin(user)) {
+      Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لتعديل الطلبات.', 'warning');
+      return;
+    }
+    setFormData({
+      ...leave,
+      id: leave.id,
+      employeeId: leave.employeeId,
+      type: leave.type,
+      startDate: leave.startDate || '',
+      endDate: leave.endDate || '',
+      date: leave.date || leave.startDate || '',
+      startTime: leave.startTime || '',
+      endTime: leave.endTime || '',
+      notes: leave.notes || '',
+      status: leave.status || 'معلق',
+      deductFromVacationBalance: !!leave.deductFromVacationBalance,
+      vacationDaysDeducted: leave.vacationDaysDeducted || 0,
+      calculationMode: leave.calculationMode || (leave.keepAsDepartureOnly ? 'departure_only' : 'unpaid_leave'),
+      keepAsDepartureOnly: !!leave.keepAsDepartureOnly
+    });
+    setShowModal(true);
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     if (!canAdd && !canEdit) {
@@ -104,6 +154,9 @@ const HRLeaves = ({ user, refreshCounts }) => {
       return;
     }
     const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(formData.type);
+    let keepAsDepartureOnly = !!formData.keepAsDepartureOnly;
+    let calculationMode = formData.calculationMode || (keepAsDepartureOnly ? 'departure_only' : 'unpaid_leave');
+
     if (isDept) {
       if (!formData.date || !formData.startTime || !formData.endTime) {
         Swal.fire('تنبيه', 'يرجى تحديد تاريخ ووقت البداية والنهاية', 'warning');
@@ -116,11 +169,19 @@ const HRLeaves = ({ user, refreshCounts }) => {
 
       const [sHours, sMins] = formData.startTime.split(':').map(Number);
       const [eHours, eMins] = formData.endTime.split(':').map(Number);
-      const diffMins = (eHours * 60 + eMins) - (sHours * 60 + sMins);
+      let diffMins = (eHours * 60 + eMins) - (sHours * 60 + sMins);
+      if (diffMins < 0) diffMins += 1440;
 
-      if (diffMins > 240) {
-        Swal.fire('خطأ', 'يوجد مشكلة بالوقت المدخل', 'error');
+      if (diffMins > 720) {
+        Swal.fire('خطأ', 'مدة المغادرة لا يمكن أن تتجاوز 12 ساعة في اليوم الواحد', 'error');
         return;
+      }
+
+      if (calculationMode === 'departure_only') {
+        keepAsDepartureOnly = true;
+      } else {
+        keepAsDepartureOnly = false;
+        calculationMode = 'unpaid_leave';
       }
     } else {
       if (!formData.startDate || !formData.endDate) {
@@ -141,10 +202,12 @@ const HRLeaves = ({ user, refreshCounts }) => {
     await saveHRLeave({
       ...formData,
       employeeName: emp.name,
-      department: emp.department || 'غير محدد'
-    });
+      department: emp.department || 'غير محدد',
+      keepAsDepartureOnly,
+      calculationMode
+    }, user);
 
-    Swal.fire('نجاح', 'تم تسجيل الطلب بنجاح', 'success');
+    Swal.fire('نجاح', formData.id ? 'تم تعديل الطلب بنجاح' : 'تم تسجيل الطلب بنجاح', 'success');
     setShowModal(false);
     fetchData();
   };
@@ -155,6 +218,8 @@ const HRLeaves = ({ user, refreshCounts }) => {
       return;
     }
     let actionReason = '';
+    let selectedCalculationMode = leave.calculationMode || (leave.keepAsDepartureOnly ? 'departure_only' : 'unpaid_leave');
+
     if (newStatus === 'موافق' || newStatus === 'مرفوض') {
       let extraHtml = '';
       if (newStatus === 'موافق') {
@@ -163,12 +228,30 @@ const HRLeaves = ({ user, refreshCounts }) => {
         const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(leave.type);
         const targetDate = leave.date || leave.startDate;
         const targetMonth = targetDate ? targetDate.substring(0, 7) : '';
+        const deptMins = isDept ? getTimedLeaveMinutes(leave) : 0;
 
         extraHtml += `<div style="text-align: right; margin-bottom: 15px; font-size: 15px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">`;
         extraHtml += `<div style="color: #059669; font-weight: bold; margin-bottom: 8px;">📌 الرصيد المتبقي للإجازات السنوية: ${vacBal} يوم</div>`;
 
         if (leave.deductFromVacationBalance) {
           extraHtml += `<div style="color: #059669; font-weight: bold; font-size: 14px; margin-bottom: 6px;">🌴 الطلب يشمل خصم ${leave.vacationDaysDeducted || 0} يوم من رصيد الإجازات السنوية (بدون خصم مالي)</div>`;
+        }
+
+        if (isDept && deptMins > 180 && !leave.deductFromVacationBalance) {
+          extraHtml += `<div style="background: #fffbeb; border: 1px solid #fde68a; padding: 10px; border-radius: 8px; margin-bottom: 10px; color: #92400e; font-size: 13px;">
+            ⚠️ <b>تنبيه مدة المغادرة (${deptMins} دقيقة / ${Math.floor(deptMins / 60)} ساعة و ${deptMins % 60} دقيقة):</b><br/>
+            تتجاوز المغادرة 3 ساعات، يرجى اختيار آلية الاحتساب:
+          </div>`;
+          extraHtml += `<div style="background: #ffffff; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; margin-bottom: 10px; text-align: right;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: bold; color: #1e293b; margin-bottom: 6px;">
+              <input type="radio" name="swalCalcMode" value="unpaid_leave" ${(!leave.keepAsDepartureOnly && leave.calculationMode !== 'departure_only') ? 'checked' : ''} />
+              احتساب كإجازة غير مدفوعة (سياسة النظام للمغادرة أكثر من 3 ساعات)
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: bold; color: #0284c7;">
+              <input type="radio" name="swalCalcMode" value="departure_only" ${(leave.keepAsDepartureOnly || leave.calculationMode === 'departure_only') ? 'checked' : ''} />
+              اعتبارها مغادرة فقط وتخصم كمغادرة (عدم التحويل لإجازة غير مدفوعة)
+            </label>
+          </div>`;
         }
 
         if (leave.type === 'إجازة غير مدفوعة' && targetMonth) {
@@ -198,10 +281,21 @@ const HRLeaves = ({ user, refreshCounts }) => {
         inputPlaceholder: newStatus === 'موافق' ? 'ملاحظات الموافقة (اختياري)...' : 'اكتب سبب الرفض هنا ليظهر للموظف... (اختياري)',
         showCancelButton: true,
         confirmButtonText: newStatus === 'موافق' ? 'تأكيد الموافقة' : 'تأكيد الرفض',
-        cancelButtonText: 'إلغاء'
+        cancelButtonText: 'إلغاء',
+        preConfirm: () => {
+          const notes = Swal.getInput()?.value || '';
+          const radio = document.querySelector('input[name="swalCalcMode"]:checked');
+          return {
+            notes,
+            calcMode: radio ? radio.value : null
+          };
+        }
       });
       if (isDismissed) return;
-      actionReason = value || '';
+      actionReason = (typeof value === 'object' ? value?.notes : value) || '';
+      if (typeof value === 'object' && value?.calcMode) {
+        selectedCalculationMode = value.calcMode;
+      }
     }
 
     Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false });
@@ -210,12 +304,16 @@ const HRLeaves = ({ user, refreshCounts }) => {
     try {
       const reasonLabel = newStatus === 'موافق' ? 'ملاحظات الإدارة' : 'سبب الرفض';
       const updatedNotes = (newStatus === 'موافق' || newStatus === 'مرفوض') && actionReason ? `${leave.notes || ''}\n(${reasonLabel}: ${actionReason})` : leave.notes;
+      const keepAsDepartureOnly = selectedCalculationMode === 'departure_only';
+
       await saveHRLeave({
         ...leave,
         status: newStatus,
         notes: updatedNotes,
+        calculationMode: selectedCalculationMode,
+        keepAsDepartureOnly,
         ...(newStatus === 'مرفوض' ? { rejectionReason: actionReason } : {})
-      });
+      }, user);
 
       if (newStatus === 'موافق') {
         const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(leave.type);
@@ -775,10 +873,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
             </select>
             {canAdd && (
               <button
-                onClick={() => {
-                  setFormData({ employeeId: '', type: 'إجازة سنوية', startDate: '', endDate: '', notes: '', status: 'معلق' });
-                  setShowModal(true);
-                }}
+                onClick={handleAddNew}
                 className="premium-add-btn flex items-center gap-2 whitespace-nowrap h-[42px]"
               >
                 <Plus size={18} /> تقديم طلب جديد
@@ -898,6 +993,30 @@ const HRLeaves = ({ user, refreshCounts }) => {
                           </span>
                         </div>
                       )}
+                      {(() => {
+                        const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(leave.type);
+                        const mins = isDept ? getTimedLeaveMinutes(leave) : 0;
+                        if (isDept && mins > 180 && !leave.deductFromVacationBalance) {
+                          if (leave.keepAsDepartureOnly || leave.calculationMode === 'departure_only') {
+                            return (
+                              <div className="mt-1">
+                                <span className="inline-block text-[11px] bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5 rounded-full font-semibold" title="مستثناة من التحويل لإجازة وتخصم كمغادرة فقط">
+                                  مغادرة فقط (تخصم كمغادرة)
+                                </span>
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <div className="mt-1">
+                                <span className="inline-block text-[11px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-semibold" title="تعتبر إجازة غير مدفوعة لتجاوزها 3 ساعات">
+                                  إجازة غير مدفوعة (&gt; 3 س)
+                                </span>
+                              </div>
+                            );
+                          }
+                        }
+                        return null;
+                      })()}
                     </td>
 
                     <td className="p-5 text-muted text-sm text-center">
@@ -967,6 +1086,11 @@ const HRLeaves = ({ user, refreshCounts }) => {
                         <button onClick={() => handlePreviewLeave(leave)} className="flex items-center justify-center transition-all hover:scale-105" style={{ color: '#0ea5e9', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '14px', width: '36px', height: '36px' }} title="معاينة الطلب">
                           <Eye size={18} strokeWidth={2} />
                         </button>
+                        {canEdit && (
+                          <button onClick={() => handleEdit(leave)} className="flex items-center justify-center transition-all hover:scale-105" style={{ color: '#6366f1', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: '14px', width: '36px', height: '36px' }} title="تعديل الطلب">
+                            <Edit2 size={16} strokeWidth={2} />
+                          </button>
+                        )}
                         {canApprove && (
                           leave.status === 'معلق' ? (
                             <>
@@ -1012,7 +1136,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
           <div className="modal-overlay" style={{ zIndex: 10500 }}>
             <div className="modal-content" style={{ maxWidth: '600px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
               <div className="flex justify-between items-center p-5 border-b border-gray-100 shrink-0">
-                <h3 className="font-bold text-lg text-slate-800">تقديم طلب إجازة / مغادرة</h3>
+                <h3 className="font-bold text-lg text-slate-800">{formData.id ? 'تعديل طلب إجازة / مغادرة' : 'تقديم طلب إجازة / مغادرة'}</h3>
                 <button type="button" onClick={() => setShowModal(false)} className="icon-btn hover:bg-gray-100 rounded-full p-2 transition-colors">
                   <X size={20} className="text-gray-500" />
                 </button>
@@ -1069,6 +1193,63 @@ const HRLeaves = ({ user, refreshCounts }) => {
                           <input type="time" value={formData.endTime} onChange={e => setFormData({ ...formData, endTime: e.target.value })} className="input-field" required />
                         </div>
                       </div>
+
+                      {/* Departure Duration & Calculation Mode Options */}
+                      {(() => {
+                        if (!formData.startTime || !formData.endTime) return null;
+                        const [sh, sm] = formData.startTime.split(':').map(Number);
+                        const [eh, em] = formData.endTime.split(':').map(Number);
+                        if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return null;
+                        let diffM = (eh * 60 + em) - (sh * 60 + sm);
+                        if (diffM < 0) diffM += 1440;
+                        if (diffM <= 0) return null;
+
+                        const isOverThreeHours = diffM > 180;
+                        return (
+                          <div style={{ background: isOverThreeHours ? '#fffbeb' : '#f8fafc', border: `1px solid ${isOverThreeHours ? '#fde68a' : '#e2e8f0'}`, borderRadius: '10px', padding: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isOverThreeHours ? '8px' : '0' }}>
+                              <span style={{ fontSize: '13px', fontWeight: 'bold', color: isOverThreeHours ? '#92400e' : '#334155' }}>
+                                ⏱️ مدة المغادرة: {diffM} دقيقة ({Math.floor(diffM / 60)} ساعة و {diffM % 60} دقيقة)
+                              </span>
+                              {isOverThreeHours && (
+                                <span style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fcd34d', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', padding: '2px 8px' }}>
+                                  تجاوزت 3 ساعات
+                                </span>
+                              )}
+                            </div>
+
+                            {isOverThreeHours && (
+                              <div style={{ borderTop: '1px solid #fef08a', paddingTop: '8px', marginTop: '6px' }}>
+                                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#78350f', marginBottom: '6px' }}>
+                                  طريقة احتساب المغادرة (سياسة النظام / الرواتب):
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '600', color: '#1e293b' }}>
+                                    <input
+                                      type="radio"
+                                      name="calcModeModal"
+                                      value="unpaid_leave"
+                                      checked={formData.calculationMode !== 'departure_only' && !formData.keepAsDepartureOnly}
+                                      onChange={() => setFormData({ ...formData, calculationMode: 'unpaid_leave', keepAsDepartureOnly: false })}
+                                    />
+                                    <span>احتساب كإجازة غير مدفوعة (تطبيق سياسة النظام للمغادرة أكثر من 3 ساعات)</span>
+                                  </label>
+                                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700', color: '#0369a1' }}>
+                                    <input
+                                      type="radio"
+                                      name="calcModeModal"
+                                      value="departure_only"
+                                      checked={formData.calculationMode === 'departure_only' || formData.keepAsDepartureOnly}
+                                      onChange={() => setFormData({ ...formData, calculationMode: 'departure_only', keepAsDepartureOnly: true })}
+                                    />
+                                    <span>اعتبارها مغادرة فقط وتخصم منه كمغادرة (عدم التحويل لإجازة غير مدفوعة)</span>
+                                  </label>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -1095,6 +1276,21 @@ const HRLeaves = ({ user, refreshCounts }) => {
                     </div>
                   )}
 
+                  {canApprove && formData.id && (
+                    <div className="input-group">
+                      <label>حالة الطلب</label>
+                      <select
+                        value={formData.status}
+                        onChange={e => setFormData({ ...formData, status: e.target.value })}
+                        className="input-field font-bold"
+                      >
+                        <option value="معلق">معلق</option>
+                        <option value="موافق">موافق</option>
+                        <option value="مرفوض">مرفوض</option>
+                      </select>
+                    </div>
+                  )}
+
                   <div className="input-group">
                     <label>ملاحظات / السبب</label>
                     <textarea rows={2} value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} className="input-field"></textarea>
@@ -1102,7 +1298,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
                 </div>
                 <div style={{ padding: '1.25rem', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', flexShrink: 0, backgroundColor: '#fff', borderBottomLeftRadius: '0.5rem', borderBottomRightRadius: '0.5rem' }}>
                   <button type="button" onClick={() => setShowModal(false)} className="btn btn-outline">إلغاء</button>
-                  <button type="submit" className="btn btn-primary">حفظ الطلب</button>
+                  <button type="submit" className="btn btn-primary">{formData.id ? 'تحديث الطلب' : 'حفظ الطلب'}</button>
                 </div>
               </form>
             </div>

@@ -1,7 +1,7 @@
 import { isActiveEmployee } from '../../utils/employeeStatus';
 import { isAdmin } from '../../services/settings';
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle, Clock, XCircle, Calendar, Plus, X, ArrowUpDown, ArrowUp, ArrowDown, Check, Undo2, Trash2, Eye, ChevronDown, ChevronUp, User, Bell } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, Calendar, Plus, X, ArrowUpDown, ArrowUp, ArrowDown, Check, Undo2, Trash2, Eye, ChevronDown, ChevronUp, User, Bell, Edit2 } from 'lucide-react';
 import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
@@ -20,6 +20,7 @@ const getLocalDateStr = (d) => {
 
 const HROvertime = ({ user, refreshCounts }) => {
   const canAdd = hasPermission(user, 'hr_overtime', 'add') || hasPermission(user, 'hr_overtime', 'create');
+  const canEdit = hasPermission(user, 'hr_overtime', 'edit') || isAdmin(user) || canAdd;
   const canApprove = hasPermission(user, 'hr_overtime', 'approve');
   const canDelete = hasPermission(user, 'hr_overtime', 'delete');
 
@@ -573,10 +574,48 @@ const HROvertime = ({ user, refreshCounts }) => {
     return { shiftStart: shift?.startTime || emp?.shiftStart || '08:00', shiftEnd: shift?.endTime || emp?.shiftEnd || '16:00' };
   };
 
+  const handleAddNew = () => {
+    if (!canAdd && !canEdit) {
+      Swal.fire('غير مصرح', 'ليس لديك صلاحية لإضافة طلب عمل إضافي.', 'warning');
+      return;
+    }
+    setFormData({
+      employeeId: '',
+      type: 'بدل عمل إضافي',
+      date: getLocalDateStr(new Date()),
+      startTime: '',
+      endTime: '',
+      rate: '1:1.25',
+      notes: '',
+      status: 'معلق'
+    });
+    setShowModal(true);
+  };
+
+  const handleEdit = (leave) => {
+    if (!canEdit && !isAdmin(user)) {
+      Swal.fire('غير مصرح', 'ليس لديك صلاحية لتعديل طلبات العمل الإضافي.', 'warning');
+      return;
+    }
+    setFormData({
+      ...leave,
+      id: leave.id,
+      employeeId: leave.employeeId,
+      type: leave.type || 'بدل عمل إضافي',
+      date: leave.date || leave.startDate || '',
+      startTime: leave.startTime || '',
+      endTime: leave.endTime || '',
+      rate: leave.rate || '1:1.25',
+      notes: leave.notes || '',
+      status: leave.status || 'معلق'
+    });
+    setShowModal(true);
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!canAdd) {
-      Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لإضافة طلبات عمل إضافي.', 'warning');
+    if (!canAdd && !canEdit) {
+      Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لإضافة أو تعديل طلبات العمل الإضافي.', 'warning');
       return;
     }
     if (isSavingRef.current) return;
@@ -616,6 +655,7 @@ const HROvertime = ({ user, refreshCounts }) => {
 
     // Give immediate feedback for another request on the same day.
     const isDuplicate = leaves.some(l => {
+      if (formData.id && l.id === formData.id) return false;
       if (l.status === 'مرفوض') return false;
       if (String(l.employeeId || '').trim() !== String(formData.employeeId || '').trim()) return false;
       if (l.type !== 'بدل عمل إضافي' && l.type !== 'عمل إضافي') return false;
@@ -662,7 +702,7 @@ const HROvertime = ({ user, refreshCounts }) => {
         department: emp.department || 'غير محدد'
       }, user);
       
-      Swal.fire('نجاح', 'تم تسجيل الطلب بنجاح', 'success');
+      Swal.fire('نجاح', formData.id ? 'تم تعديل الطلب بنجاح' : 'تم تسجيل الطلب بنجاح', 'success');
       setShowModal(false);
       fetchData();
     } catch (error) {
@@ -954,10 +994,7 @@ const HROvertime = ({ user, refreshCounts }) => {
           </select>
           {canAdd && (
             <button 
-              onClick={() => {
-                setFormData({ employeeId: '', type: 'بدل عمل إضافي', date: '', startTime: '', endTime: '', rate: '1:1', notes: '', status: 'معلق' });
-                setShowModal(true);
-              }}
+              onClick={handleAddNew}
               className="premium-add-btn flex items-center gap-2 whitespace-nowrap"
             >
               <Plus size={18} /> تقديم طلب جديد
@@ -1118,6 +1155,11 @@ const HROvertime = ({ user, refreshCounts }) => {
                     <button onClick={() => handlePreviewOvertime(leave)} className="icon-btn" style={{ color: '#0ea5e9', background: '#f0f9ff', borderColor: '#bae6fd' }} title="معاينة الطلب">
                       <Eye size={18} strokeWidth={2} />
                     </button>
+                    {canEdit && (
+                      <button onClick={() => handleEdit(leave)} className="icon-btn" style={{ color: '#6366f1', background: '#eef2ff', borderColor: '#c7d2fe' }} title="تعديل الطلب">
+                        <Edit2 size={16} />
+                      </button>
+                    )}
                     <button onClick={() => promptEmployeeAlert({ employeeId: leave.employeeId, employeeName: leave.employeeName, source: 'العمل الإضافي', sourceReference: `${leave.date || leave.startDate || ''}`, suggestedMessage: `طلب العمل الإضافي الخاص بك بتاريخ ${leave.date || leave.startDate || 'غير محدد'} حالته: ${leave.status || 'معلق'}.\nالمدة المستحقة: ${getOvertimeDuration(leave)}.${getOvertimeReason(leave) ? `\nالسبب: ${getOvertimeReason(leave)}` : ''}`, user })} className="icon-btn" style={{ color: '#c2410c', background: '#fff7ed', borderColor: '#fdba74' }} title="إرسال تنبيه للموظف">
                       <Bell size={17} />
                     </button>
@@ -1155,12 +1197,12 @@ const HROvertime = ({ user, refreshCounts }) => {
       </div>
       </div>
 
-      {/* Add Modal */}
+      {/* Add / Edit Modal */}
       {showModal && (
         <div className="modal-overlay" style={{ zIndex: 10500 }}>
           <div className="modal-content" style={{ maxWidth: '600px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div className="flex justify-between items-center p-5 border-b border-gray-100 shrink-0">
-              <h3 className="font-bold text-lg text-slate-800">تقديم طلب بدل عمل إضافي</h3>
+              <h3 className="font-bold text-lg text-slate-800">{formData.id ? 'تعديل طلب بدل عمل إضافي' : 'تقديم طلب بدل عمل إضافي'}</h3>
               <button type="button" onClick={() => setShowModal(false)} className="icon-btn hover:bg-gray-100 rounded-full p-2 transition-colors">
                 <X size={20} className="text-gray-500" />
               </button>
@@ -1206,6 +1248,18 @@ const HROvertime = ({ user, refreshCounts }) => {
                     </div>
                   </div>
                 </div>
+
+                {canApprove && formData.id && (
+                  <div className="input-group">
+                    <label>حالة الطلب</label>
+                    <select value={formData.status} onChange={e=>setFormData({...formData, status: e.target.value})} className="input-field font-bold">
+                      <option value="معلق">معلق</option>
+                      <option value="موافق">موافق</option>
+                      <option value="مرفوض">مرفوض</option>
+                    </select>
+                  </div>
+                )}
+
                 <div className="input-group">
                   <label>ملاحظات / السبب</label>
                   <textarea rows={2} value={formData.notes} onChange={e=>setFormData({...formData, notes: e.target.value})} className="input-field"></textarea>
@@ -1213,7 +1267,7 @@ const HROvertime = ({ user, refreshCounts }) => {
               </div>
               <div style={{ padding: '1.25rem', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', flexShrink: 0, backgroundColor: '#fff', borderBottomLeftRadius: '0.5rem', borderBottomRightRadius: '0.5rem' }}>
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-outline">إلغاء</button>
-                <button type="submit" disabled={isSaving} className="btn btn-primary">{isSaving ? 'جاري الحفظ...' : 'حفظ الطلب'}</button>
+                <button type="submit" disabled={isSaving} className="btn btn-primary">{isSaving ? 'جاري الحفظ...' : (formData.id ? 'تحديث الطلب' : 'حفظ الطلب')}</button>
               </div>
             </form>
           </div>

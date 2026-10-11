@@ -181,9 +181,19 @@ export const calculateSalaries = ({
       return false;
     });
 
+    const departureOnlyDates = new Set();
+    empLeaves.forEach(leave => {
+      const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(leave?.type);
+      const isApproved = approvedStatuses.includes(leave?.status);
+      if (isDept && isApproved && (leave?.keepAsDepartureOnly || leave?.calculationMode === 'departure_only')) {
+        departureOnlyDates.add(leave.date || leave.startDate);
+      }
+    });
+
     const automaticUnpaidDates = new Set();
     empAttendance.forEach(attendanceRow => {
       if (!isPolicyEffective(attendanceRow.date)) return;
+      if (departureOnlyDates.has(attendanceRow.date)) return;
       const officialAbsenceMinutes = getOfficialAbsenceMinutes({
         timeIn: attendanceRow.timeIn,
         timeOut: attendanceRow.timeOut,
