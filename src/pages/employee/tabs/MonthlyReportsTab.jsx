@@ -129,6 +129,13 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
   const [selectedDayDetails, setSelectedDayDetails] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const isImad = useMemo(() => {
+    const uId = normEmpId(user?.id);
+    const uEmpId = normEmpId(user?.employeeId);
+    const name = String(user?.name || '');
+    return uId === '25' || uEmpId === '25' || name.includes('عماد');
+  }, [user]);
+
   useEffect(() => {
     let mounted = true;
     getEmployees()
@@ -259,12 +266,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
   const userShiftStart = user?.shiftStart || '08:00';
   const shiftStartMinutes = timeToMinutes(userShiftStart) || 480;
 
-  const isImad = useMemo(() => {
-    const uId = normEmpId(user?.id);
-    const uEmpId = normEmpId(user?.employeeId);
-    const name = String(user?.name || '');
-    return uId === '25' || uEmpId === '25' || name.includes('عماد');
-  }, [user]);
+
 
   const isAdmin = useMemo(() => {
     const rawRole = String(user?.role || '').toLowerCase();

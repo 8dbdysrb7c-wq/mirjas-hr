@@ -1,3 +1,4 @@
+import { getOvertimeAttendanceForDate } from '../../services/hr';
 import { resolveOvertimeAttendance } from '../../utils/overtimeAttendance';
 import { isActiveEmployee } from '../../utils/employeeStatus';
 import { isAdmin } from '../../services/settings';
@@ -7,7 +8,7 @@ import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
-import { getEmployees, getHRLeaves, getHRLeavesByDateRange, saveHRLeave, deleteHRLeave, getGlobalSettings, getHRAttendance, subscribeToHRAttendanceForDate } from '../../store';
+import { getEmployees, getHRLeaves, getHRLeavesByDateRange, saveHRLeave, deleteHRLeave, getGlobalSettings, subscribeToHRAttendanceForDate, saveHRAttendance } from '../../store';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
 import HRDateFilter from '../../components/ui/HRDateFilter';
@@ -55,7 +56,7 @@ const HROvertime = ({ user, refreshCounts }) => {
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
 
-  const openSmartApproval = async (leave) => {
+  const openSmartApproval = async (leave, displayedEmployee) => {
     if (!canApprove) {
       Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لاعتماد العمل الإضافي.', 'warning');
       return;
@@ -79,12 +80,18 @@ const HROvertime = ({ user, refreshCounts }) => {
     let earlyMins = 0;
     try {
       const targetDate = leave.date || leave.startDate;
-      const attList = await getHRAttendance(targetDate);
-      const emp = employees.find(e => String(e.id) === String(leave.employeeId) || String(e.employeeId) === String(leave.employeeId));
+      const emp = displayedEmployee || employees.find(e => String(e.id) === String(leave.employeeId) || String(e.employeeId) === String(leave.employeeId));
+      // Audit exactly the same employee and live punches displayed in the request row.
+      const liveAttendance = attendanceByDate[targetDate];
+      attendanceData = !liveAttendance?.error && liveAttendance?.records
+        ? resolveOvertimeAttendance(liveAttendance.records, leave, emp) : null;
+      if (!attendanceData || timeToMinutes(attendanceData.timeIn) == null || timeToMinutes(attendanceData.timeOut) == null) {
+        attendanceData = resolveOvertimeAttendance(await getOvertimeAttendanceForDate(targetDate), leave, emp);
+      }
       let shiftStart = emp?.shiftStart || '08:00';
       let shiftEnd = emp?.shiftEnd || '16:00';
       
-      attendanceData = resolveOvertimeAttendance(attList, leave, emp);
+
 
       try {
         const settings = await getGlobalSettings();
@@ -95,50 +102,98 @@ const HROvertime = ({ user, refreshCounts }) => {
       } catch(e) {}
       
       reqMins = getTimedLeaveMinutes(leave);
-      const [ssh, ssm] = shiftStart.split(':').map(Number);
-      const [seh, sem] = shiftEnd.split(':').map(Number);
-      const shiftMins = (seh * 60 + sem) - (ssh * 60 + ssm);
-
-      if (attendanceData && attendanceData.timeIn && attendanceData.timeOut && attendanceData.timeOut !== '--:--') {
-        const parseTimeWithAMPM = (tStr) => {
-          if (!tStr) return { h: 0, m: 0 };
-          const cleaned = tStr.replace(/[^\d:]/g, '').trim();
-          let [h, m] = cleaned.split(':').map(Number);
-          
-          if (tStr.includes('م') || tStr.toLowerCase().includes('pm')) {
-            if (h < 12) h += 12;
-          } else if (tStr.includes('ص') || tStr.toLowerCase().includes('am')) {
-            if (h === 12) h = 0;
-          }
-          return { h: h || 0, m: m || 0 };
-        };
-        const { h: ah, m: am } = parseTimeWithAMPM(attendanceData.timeIn);
-        const { h: oh, m: om } = parseTimeWithAMPM(attendanceData.timeOut);
-        
-        // Calculate late arrival
-        const actualStartMins = (ah || 0) * 60 + (am || 0);
-        const shiftStartMins = ssh * 60 + ssm;
-        if (actualStartMins > shiftStartMins) {
-           lateMins = actualStartMins - shiftStartMins;
-        }
-
-        // Calculate early departure
-        const actualEndMins = (oh || 0) * 60 + (om || 0);
-        const shiftEndMins = seh * 60 + sem;
-        if (actualEndMins < shiftEndMins) {
-           earlyMins = shiftEndMins - actualEndMins;
-        }
-        
+      if (attendanceData && timeToMinutes(attendanceData.timeIn) != null && timeToMinutes(attendanceData.timeOut) != null) {
         defMins = getOfficialAbsenceMinutes({ timeIn: attendanceData.timeIn, timeOut: attendanceData.timeOut, shiftStart, shiftEnd });
         lateMins = Math.min(defMins, Math.max(0, timeToMinutes(attendanceData.timeIn) - timeToMinutes(shiftStart)));
         earlyMins = defMins - lateMins;
       } else {
-        throw new Error('ختمات الدخول والخروج غير مكتملة؛ لا يمكن اعتماد احتساب الإضافي قبل استكمالها.');
+        setSmartModal(previous => ({ ...previous, show: false, loading: false }));
+
+        const hasTimeIn = attendanceData && timeToMinutes(attendanceData.timeIn) != null;
+        const defaultPunchIn = hasTimeIn ? attendanceData.timeIn : (shiftStart || '08:00');
+        const defaultPunchOut = (attendanceData && timeToMinutes(attendanceData.timeOut) != null)
+          ? attendanceData.timeOut
+          : (leave.endTime || shiftEnd || '17:00');
+
+        const { value: formValues, isDenied, isDismissed } = await Swal.fire({
+          title: 'ختمات الدوام غير مكتملة',
+          html: `
+            <div style="text-align: right; font-size: 0.93rem; line-height: 1.6; color: #334155;">
+              <p style="margin-bottom: 8px;">
+                لم يكتمل تسجيل الدخول أو الخروج للموظف <strong>${leave.employeeName || emp?.name || ''}</strong> بتاريخ <strong>${targetDate}</strong>.
+              </p>
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 0.88rem;">
+                <div>دخول فعلي: <strong dir="ltr">${attendanceData?.timeIn || 'غير مسجل (--:--)'}</strong></div>
+                <div>خروج فعلي: <strong dir="ltr">${attendanceData?.timeOut || 'غير مسجل (--:--)'}</strong></div>
+                <div>وقت الإضافي المطلوب: <strong dir="ltr">${leave.startTime || '--:--'} - ${leave.endTime || '--:--'}</strong></div>
+              </div>
+              <p style="font-size: 0.88rem; color: #64748b; margin-bottom: 8px;">
+                يمكنك استكمال وقت الدوام الفعلي للموظف ليتم حفظه ومتابعة الاحتساب الذكي، أو اعتماد ساعات الإضافي كاملة مباشرة:
+              </p>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                <div>
+                  <label style="display: block; font-size: 0.82rem; font-weight: bold; margin-bottom: 4px; color: #475569;">وقت الدخول الفعلي</label>
+                  <input id="swal-manual-time-in" type="time" class="swal2-input" style="width: 100%; margin: 0; height: 38px; font-size: 0.9rem;" value="${defaultPunchIn}">
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.82rem; font-weight: bold; margin-bottom: 4px; color: #475569;">وقت الانصراف الفعلي</label>
+                  <input id="swal-manual-time-out" type="time" class="swal2-input" style="width: 100%; margin: 0; height: 38px; font-size: 0.9rem;" value="${defaultPunchOut}">
+                </div>
+              </div>
+            </div>
+          `,
+          showCancelButton: true,
+          showDenyButton: true,
+          confirmButtonText: 'حفظ الختمات ومتابعة الاحتساب',
+          denyButtonText: 'اعتماد الإضافي كاملاً بالطلب',
+          cancelButtonText: 'إلغاء',
+          confirmButtonColor: '#4f46e5',
+          denyButtonColor: '#10b981',
+          cancelButtonColor: '#64748b',
+          customClass: {
+            popup: 'premium-modal-popup'
+          },
+          preConfirm: () => {
+            const inVal = document.getElementById('swal-manual-time-in')?.value;
+            const outVal = document.getElementById('swal-manual-time-out')?.value;
+            if (!inVal || !outVal) {
+              Swal.showValidationMessage('يرجى تحديد وقت الدخول ووقت الانصراف معاً');
+              return false;
+            }
+            return { timeIn: inVal, timeOut: outVal };
+          }
+        });
+
+        if (isDismissed) return;
+
+        if (isDenied) {
+          await handleStatusChange(leave, 'موافق');
+          return;
+        }
+
+        if (formValues) {
+          const updatedAtt = {
+            id: attendanceData?.id || `${emp?.id || leave.employeeId}_${targetDate}`,
+            employeeId: emp?.id || leave.employeeId,
+            employeeName: emp?.name || leave.employeeName,
+            date: targetDate,
+            timeIn: formValues.timeIn,
+            timeOut: formValues.timeOut,
+            status: 'مداوم',
+            notes: (attendanceData?.notes ? attendanceData.notes + ' - ' : '') + 'تم استكمال الختمات من قبل الإدارة أثناء اعتماد الإضافي'
+          };
+          await saveHRAttendance(updatedAtt, user);
+          attendanceData = updatedAtt;
+
+          defMins = getOfficialAbsenceMinutes({ timeIn: attendanceData.timeIn, timeOut: attendanceData.timeOut, shiftStart, shiftEnd });
+          lateMins = Math.min(defMins, Math.max(0, timeToMinutes(attendanceData.timeIn) - timeToMinutes(shiftStart)));
+          earlyMins = defMins - lateMins;
+        }
       }
     } catch (err) {
       console.error(err);
       setSmartModal(previous => ({ ...previous, show: false, loading: false }));
-      Swal.fire('تعذر تحميل الحضور', 'لم يتم احتساب الإضافي. أعد المحاولة بعد تحميل الختمات المعتمدة.', 'error');
+      Swal.fire(err.code === 'attendance/incomplete' ? 'ختمات الدوام غير مكتملة' : 'تعذر تحميل الحضور', err.code === 'attendance/incomplete' ? err.message : 'تعذر قراءة سجلات الدوام. أعد المحاولة؛ لم يتم اعتماد الطلب أو تغيير احتسابه.', 'error');
       return;
     }
     
@@ -1137,7 +1192,7 @@ const HROvertime = ({ user, refreshCounts }) => {
                     {canApprove && (
                       leave.status === 'معلق' ? (
                         <>
-                          <button onClick={() => openSmartApproval(leave)} className="icon-btn icon-btn-success" title="موافقة">
+                          <button onClick={() => openSmartApproval(leave, emp)} className="icon-btn icon-btn-success" title="موافقة">
                             <Check size={18} strokeWidth={2.5} />
                           </button>
                           <button onClick={() => handleStatusChange(leave, 'مرفوض')} className="icon-btn icon-btn-delete" title="رفض">

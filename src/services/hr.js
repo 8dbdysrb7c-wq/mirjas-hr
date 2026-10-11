@@ -2,6 +2,7 @@ import { db } from '../firebase';
 import { 
   onSnapshot,
   collection, 
+  getDocsFromServer,
   getDocs, 
   doc, 
   getDoc, 
@@ -473,13 +474,14 @@ export const subscribeToHRAttendanceForDate = (date, callback, onError) => {
   return () => { active = false; unsubscribe.forEach(stop => stop()); };
 };
 
+export const getOvertimeAttendanceForDate = async date => {
+  const snapshots = await Promise.all(overtimeAttendanceSources.map(async source =>
+    readAttendanceSnapshot(await getDocsFromServer(query(collection(db, source), where('date', '==', date))), source)));
+  return snapshots.flat();
+};
+
 export const getHRAttendance = async (date = null) => {
   try {
-    if (date) {
-      const snapshots = await Promise.all(overtimeAttendanceSources.map(async source =>
-        readAttendanceSnapshot(await getDocs(query(collection(db, source), where('date', '==', date))), source)));
-      return snapshots.flat();
-    }
     const q = date
       ? query(collection(db, 'hr_attendance'), where('date', '==', date))
       : query(collection(db, 'hr_attendance'), orderBy('date', 'desc'), limit(150));
