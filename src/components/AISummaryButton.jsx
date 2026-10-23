@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { startVisiblePolling } from '../utils/visiblePolling';
 import { Activity, BrainCircuit, Clock3, Package, RefreshCw, Sparkles, TrendingUp } from 'lucide-react';
-import { getLogs, getMissions, getOrders, getReports, getSalesOrders, getStock } from '../store';
+import { getLogsByDateRange, getMissionsByDateRange, getOrders, getReportsByDateRange, getSalesOrders, getStock } from '../store';
 
 const isSameLocalDay = (value, baseDate = new Date()) => {
   if (!value) return false;
@@ -154,7 +153,8 @@ const buildInsights = ({ logs, orders, salesOrders, stock, missions, reports }) 
 };
 
 const AISummaryButton = () => {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [snapshot, setSnapshot] = useState({
     logs: [],
     orders: [],
@@ -170,26 +170,32 @@ const AISummaryButton = () => {
   const activeInsight = summary.insightItems[activeInsightIndex] || summary.insightItems[0];
 
   const loadSnapshot = async () => {
+    if (loading) return;
     setLoading(true);
     try {
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+
       const [logs, orders, salesOrders, stock, missions, reports] = await Promise.all([
-        getLogs(),
+        getLogsByDateRange(todayStr, todayStr),
         getOrders(),
         getSalesOrders(),
         getStock(),
-        getMissions(),
-        getReports()
+        getMissionsByDateRange(yesterdayStr, todayStr),
+        getReportsByDateRange(yesterdayStr, todayStr)
       ]);
 
       setSnapshot({ logs, orders, salesOrders, stock, missions, reports });
+      setLoaded(true);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    return startVisiblePolling(loadSnapshot, 300000);
-  }, []);
+
 
   useEffect(() => {
     if (!summary.insightItems.length) return undefined;
@@ -248,15 +254,15 @@ const AISummaryButton = () => {
               <BrainCircuit size={15} />
               <span>الملخص الذكي</span>
             </div>
-            <h3>النظام يتابع الأداء لحظة بلحظة</h3>
+            <h3>ملخص الأداء عند التحديث</h3>
           </div>
-          <button type="button" className="header-icon-button" onClick={loadSnapshot} aria-label="تحديث الملخص">
+          <button type="button" className="header-icon-button" onClick={loadSnapshot} disabled={loading} aria-label="تحديث الملخص">
             <RefreshCw size={18} />
           </button>
         </div>
 
         <div className="ai-smart-typing-line">
-          {loading ? 'جارٍ تحليل حركة النظام الحالية...' : typedInsight}
+          {loading ? 'جارٍ تحليل حركة النظام الحالية...' : !loaded ? 'اضغط تحديث لعرض ملخص الأداء.' : typedInsight}
           <span className="ai-smart-cursor" />
         </div>
 
@@ -269,7 +275,7 @@ const AISummaryButton = () => {
                   <Icon size={14} />
                   <span>{item.label}</span>
                 </div>
-                <strong>{item.value}</strong>
+                <strong>{loaded ? item.value : '—'}</strong>
               </div>
             );
           })}

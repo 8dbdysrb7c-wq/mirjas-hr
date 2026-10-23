@@ -59,7 +59,7 @@ export const saveQuote = async (quote) => {
       // Auto-generate quote number: e.g. Q26-0001
       const currentYear = new Date().getFullYear().toString().substr(-2);
       const prefix = `Q${currentYear}-`;
-      const allQuotes = await getDocs(collection(db, 'quotes'));
+      const allQuotes = await getDocs(query(collection(db, 'quotes'), orderBy('createdAt', 'desc'), limit(20)));
       let maxNum = 0;
       allQuotes.forEach(d => {
         const q = d.data();

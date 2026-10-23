@@ -1,0 +1,875 @@
+[
+  {
+    "id": "EMP-0006",
+    "data": {
+      "role": "sewing",
+      "hasPreparationTasksAccess": false,
+      "hasSettingsAccess": true,
+      "hasOverviewAccess": false,
+      "supervisorPermissions": {
+        "evaluations": true,
+        "orders": true,
+        "attendance": true
+      },
+      "isHazardousProfession": false,
+      "vacationBalance": 4,
+      "hasStockAccess": true,
+      "shiftStart": "08:00",
+      "hasLogsAccess": false,
+      "level": "مشرف",
+      "hrNotes": "",
+      "allowAdvances": true,
+      "workShiftName": "فترة الدوام الثانية",
+      "customAdvancePeriods": [
+        {
+          "toDay": 20,
+          "fromDay": 15
+        }
+      ],
+      "hasPreparationAccess": false,
+      "password": "12345",
+      "hasLiveAccess": true,
+      "hasRepVisitsAccess": false,
+      "roles": [
+        "اللوجستي"
+      ],
+      "directManager": "عماد فتحي زياد عزيز عوض",
+      "hasReportsAccess": false,
+      "shiftEnd": "17:00",
+      "phone": "00962775548158",
+      "assignedEmployees": [
+        "EMP-0008",
+        "EMP-0012",
+        "EMP-0018",
+        "EMP-0019",
+        "EMP-0021",
+        "EMP-0024"
+      ],
+      "hasEmployeesAccess": false,
+      "contractEndDate": "",
+      "dateOfBirth": "0003-12-20",
+      "hasSocialSecurity": true,
+      "hasSupervisorTasksAccess": true,
+      "hasProductionAccess": true,
+      "hasSalesAccess": true,
+      "joinDate": "2023-01-22",
+      "basicSalary": "375",
+      "useCustomAdvancePeriods": true,
+      "allowedMissingPunches": 3,
+      "hasSupervisorReportsAccess": true,
+      "id": "EMP-0006",
+      "employmentStatus": "فعال",
+      "sickLeaveBalance": 4,
+      "hasSiteSettingsAccess": false,
+      "permissions": {
+        "reports": {
+          "add": false,
+          "print": false,
+          "view": false,
+          "approve": false,
+          "export": false,
+          "edit": false,
+          "delete": false
+        },
+        "stock_production": {
+          "approve": false,
+          "edit": false,
+          "delete": false,
+          "export": false,
+          "add": false,
+          "print": false,
+          "view": false
+        },
+        "supervisor_tasks": {
+          "delete": false,
+          "edit": false,
+          "export": false,
+          "view": false,
+          "print": false,
+          "add": false,
+          "approve": false
+        },
+        "production": {
+          "add": false,
+          "delete": false,
+          "view": true,
+          "approve": false,
+          "export": false,
+          "edit": false,
+          "print": false
+        },
+        "stock_audit": {
+          "view": false,
+          "delete": false,
+          "approve": false,
+          "export": false,
+          "add": false,
+          "edit": false,
+          "print": false
+        },
+        "site_settings": {
+          "edit": false,
+          "view": false,
+          "add": false,
+          "delete": false,
+          "print": false,
+          "export": false,
+          "approve": false
+        },
+        "hr_advances": {
+          "view": false,
+          "delete": false,
+          "approve": false,
+          "edit": false,
+          "export": false,
+          "add": false,
+          "print": false
+        },
+        "hr_overtime": {
+          "edit": false,
+          "approve": false,
+          "delete": false,
+          "print": false,
+          "view": false,
+          "export": false,
+          "add": false
+        },
+        "stock_vouchers": {
+          "approve": false,
+          "add": false,
+          "view": true,
+          "edit": false,
+          "delete": false,
+          "print": false,
+          "export": false
+        },
+        "logs": {
+          "export": false,
+          "approve": false,
+          "print": false,
+          "delete": false,
+          "edit": false,
+          "view": false,
+          "add": false
+        },
+        "hr_salaries": {
+          "view": false,
+          "print": false,
+          "approve": false,
+          "export": false,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        "orders": {
+          "view": true,
+          "delete": false,
+          "approve": false,
+          "export": true,
+          "add": true,
+          "print": true,
+          "edit": true
+        },
+        "scoring": {
+          "view": false,
+          "approve": false,
+          "add": false,
+          "delete": false,
+          "export": false,
+          "edit": false,
+          "print": false
+        },
+        "customers": {
+          "approve": false,
+          "delete": false,
+          "export": false,
+          "edit": false,
+          "view": false,
+          "print": false,
+          "add": false
+        },
+        "preparation": {
+          "delete": false,
+          "edit": true,
+          "export": true,
+          "print": true,
+          "view": true,
+          "approve": false,
+          "add": true
+        },
+        "stock_take": {
+          "print": false,
+          "approve": false,
+          "edit": false,
+          "view": false,
+          "export": false,
+          "add": false,
+          "delete": false
+        },
+        "rep_visits": {
+          "view": false,
+          "approve": false,
+          "delete": false,
+          "export": false,
+          "add": false,
+          "print": false,
+          "edit": false
+        },
+        "hr_attendance": {
+          "delete": false,
+          "add": false,
+          "export": false,
+          "view": false,
+          "edit": false,
+          "approve": false,
+          "print": false
+        },
+        "live": {
+          "add": true,
+          "view": true,
+          "edit": true,
+          "delete": false,
+          "approve": false,
+          "print": false,
+          "export": false
+        },
+        "production_tasks": {
+          "add": true,
+          "approve": false,
+          "view": true,
+          "delete": false,
+          "edit": true,
+          "print": false,
+          "export": false
+        },
+        "delivery": {
+          "view": true,
+          "print": false,
+          "approve": false,
+          "export": false,
+          "add": false,
+          "delete": false,
+          "edit": false
+        },
+        "hr_employees": {
+          "print": false,
+          "add": false,
+          "view": false,
+          "approve": false,
+          "edit": false,
+          "export": false,
+          "delete": false
+        },
+        "hr_leaves": {
+          "view": false,
+          "approve": false,
+          "add": false,
+          "delete": false,
+          "edit": false,
+          "export": false,
+          "print": false
+        },
+        "supervisor_reports": {
+          "add": true,
+          "view": true,
+          "print": true,
+          "export": true,
+          "edit": true,
+          "approve": false,
+          "delete": false
+        },
+        "stock_view": {
+          "add": false,
+          "delete": false,
+          "view": true,
+          "export": false,
+          "edit": false,
+          "approve": false,
+          "print": false
+        }
+      },
+      "department": "الدعم اللوجستي",
+      "workLocationId": "1781177286778",
+      "hasCustomersAccess": false,
+      "annualRaiseDate": "2027-01-21",
+      "socialSecuritySalary": 375,
+      "employmentType": "permanent",
+      "name": "عبد الله يعقوب ايوب غيث",
+      "jobTitle": "فني دعم لوجستي",
+      "hasProductionTasksAccess": true,
+      "bonusMissingPunches": {
+        "2026-08": 3,
+        "2026-10": 0,
+        "2026-09": 20,
+        "2026-07": 10
+      },
+      "hasDeliveryAccess": true,
+      "transportationAllowance": "",
+      "allowedLeaveTypes": [
+        "إجازة سنوية",
+        "إجازة مرضية",
+        "مغادرة خاصة",
+        "مغادرة عمل",
+        "إجازة غير مدفوعة",
+        "بدل عمل إضافي",
+        "مغادرة الدخان"
+      ],
+      "terminationDate": ""
+    }
+  },
+  {
+    "id": "EMP-0007",
+    "data": {
+      "transportationAllowance": "",
+      "department": "المبيعات",
+      "hasPreparationTasksAccess": false,
+      "hasSiteSettingsAccess": false,
+      "sickLeaveBalance": 4,
+      "employmentStatus": "فعال",
+      "permissions": {
+        "hr_petitions": {
+          "view": false,
+          "export": false,
+          "delete": false,
+          "print": false,
+          "approve": false,
+          "add": false,
+          "edit": false
+        },
+        "hr_assets": {
+          "approve": false,
+          "delete": false,
+          "view": false,
+          "export": false,
+          "add": false,
+          "edit": false,
+          "print": false
+        },
+        "production": {
+          "delete": false,
+          "approve": false,
+          "export": true,
+          "edit": false,
+          "view": true,
+          "print": true,
+          "add": false
+        },
+        "customer_statements": {
+          "print": false,
+          "edit": false,
+          "approve": false,
+          "add": false,
+          "export": false,
+          "delete": false,
+          "view": false
+        },
+        "quotes": {
+          "add": true,
+          "view": true,
+          "edit": true,
+          "delete": false,
+          "print": true,
+          "approve": false,
+          "export": true
+        },
+        "stock_quick_add": {
+          "print": false,
+          "edit": false,
+          "export": false,
+          "view": true,
+          "delete": false,
+          "add": false,
+          "approve": false
+        },
+        "reports": {
+          "edit": false,
+          "add": false,
+          "delete": false,
+          "print": false,
+          "approve": false,
+          "export": false,
+          "view": false
+        },
+        "overview": {
+          "edit": false,
+          "delete": false,
+          "print": false,
+          "view": false,
+          "approve": false,
+          "export": false,
+          "add": false
+        },
+        "stock_vouchers": {
+          "print": false,
+          "edit": false,
+          "export": false,
+          "view": true,
+          "delete": false,
+          "approve": false,
+          "add": false
+        },
+        "customers": {
+          "edit": true,
+          "add": true,
+          "delete": false,
+          "print": true,
+          "approve": false,
+          "export": true,
+          "view": true
+        },
+        "supervisor_tasks": {
+          "approve": false,
+          "export": false,
+          "print": false,
+          "add": false,
+          "delete": false,
+          "view": false,
+          "edit": false
+        },
+        "product_costing": {
+          "view": false,
+          "approve": false,
+          "add": false,
+          "delete": false,
+          "edit": false,
+          "export": false,
+          "print": false
+        },
+        "scoring": {
+          "export": false,
+          "view": false,
+          "delete": false,
+          "print": false,
+          "approve": false,
+          "edit": false,
+          "add": false
+        },
+        "hr_employees": {
+          "edit": false,
+          "approve": false,
+          "delete": false,
+          "print": false,
+          "view": false,
+          "export": false,
+          "add": false
+        },
+        "hr_employee_alerts": {
+          "print": false,
+          "edit": false,
+          "export": false,
+          "view": false,
+          "delete": false,
+          "add": false,
+          "approve": false
+        },
+        "logs": {
+          "approve": false,
+          "edit": false,
+          "view": false,
+          "delete": false,
+          "add": false,
+          "print": false,
+          "export": false
+        },
+        "preparation": {
+          "print": true,
+          "edit": false,
+          "approve": false,
+          "add": false,
+          "view": true,
+          "export": true,
+          "delete": false
+        },
+        "stock_production": {
+          "approve": false,
+          "delete": false,
+          "export": false,
+          "edit": false,
+          "view": false,
+          "print": false,
+          "add": false
+        },
+        "hr_attendance_alerts": {
+          "edit": false,
+          "print": false,
+          "add": false,
+          "export": false,
+          "delete": false,
+          "view": false,
+          "approve": false
+        },
+        "hr_leaves": {
+          "edit": false,
+          "approve": false,
+          "add": false,
+          "print": false,
+          "delete": false,
+          "export": false,
+          "view": false
+        },
+        "site_settings": {
+          "view": false,
+          "approve": false,
+          "delete": false,
+          "add": false,
+          "edit": false,
+          "print": false,
+          "export": false
+        },
+        "live": {
+          "delete": false,
+          "add": false,
+          "edit": false,
+          "export": false,
+          "print": false,
+          "view": true,
+          "approve": false
+        },
+        "hr_bonuses_violations": {
+          "edit": false,
+          "delete": false,
+          "view": false,
+          "print": false,
+          "approve": false,
+          "export": false,
+          "add": false
+        },
+        "employees": {
+          "view": false,
+          "approve": false,
+          "add": false,
+          "delete": false,
+          "export": false,
+          "edit": false,
+          "print": false
+        },
+        "hr_salaries": {
+          "view": false,
+          "approve": false,
+          "export": false,
+          "print": false,
+          "delete": false,
+          "edit": false,
+          "add": false
+        },
+        "hr_missing_punches": {
+          "view": false,
+          "print": false,
+          "approve": false,
+          "add": false,
+          "export": false,
+          "edit": false,
+          "delete": false
+        },
+        "rep_visits": {
+          "approve": false,
+          "delete": false,
+          "export": false,
+          "edit": false,
+          "view": false,
+          "add": false,
+          "print": false
+        },
+        "supervisor_reports": {
+          "export": false,
+          "print": false,
+          "add": false,
+          "delete": false,
+          "view": false,
+          "edit": false,
+          "approve": false
+        },
+        "assigned_missions": {
+          "approve": false,
+          "view": true,
+          "export": false,
+          "print": false,
+          "delete": false,
+          "edit": false,
+          "add": false
+        },
+        "fabric_library": {
+          "edit": false,
+          "add": false,
+          "delete": false,
+          "print": true,
+          "approve": false,
+          "export": true,
+          "view": true
+        },
+        "hr_overtime": {
+          "edit": false,
+          "delete": false,
+          "view": false,
+          "print": false,
+          "approve": false,
+          "export": false,
+          "add": false
+        },
+        "stock_take": {
+          "view": false,
+          "approve": false,
+          "print": false,
+          "export": false,
+          "edit": false,
+          "delete": false,
+          "add": false
+        },
+        "hr_salary_reports": {
+          "print": false,
+          "add": false,
+          "view": false,
+          "edit": false,
+          "export": false,
+          "delete": false,
+          "approve": false
+        },
+        "hr_advances": {
+          "delete": false,
+          "view": false,
+          "add": false,
+          "export": false,
+          "edit": false,
+          "print": false,
+          "approve": false
+        },
+        "delivery": {
+          "approve": false,
+          "add": false,
+          "delete": false,
+          "view": true,
+          "export": false,
+          "edit": false,
+          "print": false
+        },
+        "production_tasks": {
+          "add": false,
+          "print": false,
+          "export": false,
+          "edit": false,
+          "delete": false,
+          "approve": false,
+          "view": true
+        },
+        "stock_audit": {
+          "approve": false,
+          "export": false,
+          "print": false,
+          "add": false,
+          "view": false,
+          "delete": false,
+          "edit": false
+        },
+        "stock_view": {
+          "print": false,
+          "edit": false,
+          "add": false,
+          "approve": false,
+          "export": false,
+          "delete": false,
+          "view": true
+        },
+        "pricelists": {
+          "approve": false,
+          "delete": false,
+          "edit": true,
+          "add": true,
+          "export": true,
+          "print": true,
+          "view": true
+        },
+        "hr_attendance": {
+          "add": false,
+          "print": false,
+          "edit": false,
+          "export": false,
+          "view": false,
+          "delete": false,
+          "approve": false
+        },
+        "hr_settlement": {
+          "view": false,
+          "approve": false,
+          "print": false,
+          "export": false,
+          "edit": false,
+          "delete": false,
+          "add": false
+        },
+        "orders": {
+          "add": true,
+          "print": true,
+          "view": true,
+          "approve": false,
+          "edit": true,
+          "export": true,
+          "delete": false
+        }
+      },
+      "hasSupervisorReportsAccess": true,
+      "jobTitle": "مدير المبيعات",
+      "hasRepVisitsAccess": true,
+      "contractEndDate": "",
+      "roles": [
+        "المبيعات"
+      ],
+      "hasSalesAccess": true,
+      "useCustomAdvancePeriods": true,
+      "jobDescriptionUpdatedAt": "2026-08-29T17:15:02.806Z",
+      "basicSalary": "500",
+      "employmentType": "permanent",
+      "hasSettingsAccess": true,
+      "directManagerId": "admin",
+      "joinDate": "2026-01-01",
+      "workLocationId": "anywhere",
+      "terminationDate": "",
+      "name": "جهاد بركات فلاح المهيرات",
+      "allowedMissingPunches": 3,
+      "annualRaiseDate": "2026-12-31",
+      "hasOverviewAccess": false,
+      "dateOfBirth": "1992-06-27",
+      "socialSecuritySalary": 450,
+      "level": "مشرف",
+      "employeeId": "EMP-0007",
+      "hasSupervisorTasksAccess": true,
+      "role": "sewing",
+      "shiftEnd": "16:30",
+      "hasCustomersAccess": true,
+      "vacationBalance": 3,
+      "workShiftName": "فترة الدوام الثالثة",
+      "password": "12345",
+      "allowAdvances": true,
+      "hasStockAccess": true,
+      "hasLiveAccess": true,
+      "bonusMissingPunches": {
+        "2026-07": 2,
+        "2026-09": 3
+      },
+      "id": "EMP-0007",
+      "allowedLeaveTypes": [
+        "إجازة سنوية",
+        "إجازة مرضية",
+        "مغادرة خاصة",
+        "مغادرة عمل",
+        "إجازة غير مدفوعة",
+        "بدل عمل إضافي",
+        "مغادرة الدخان"
+      ],
+      "hrNotes": "",
+      "organizationDepartmentId": "sales",
+      "hasDeliveryAccess": true,
+      "directManager": "المدير العام",
+      "phone": "00962795661846",
+      "hasSocialSecurity": true,
+      "hasPreparationAccess": false,
+      "hasProductionTasksAccess": true,
+      "hasReportsAccess": true,
+      "hasEmployeesAccess": false,
+      "hasProductionAccess": true,
+      "assignedEmployees": [],
+      "isHazardousProfession": false,
+      "hasLogsAccess": false,
+      "shiftStart": "08:00",
+      "supervisorPermissions": {
+        "orders": true,
+        "evaluations": true,
+        "attendance": true
+      },
+      "jobDescription": "• إعداد خطة المبيعات والأهداف الشهرية وتوزيع العملاء والمناطق والمهام ومتابعة نسب الإنجاز.\n• متابعة عروض الأسعار والطلبات والعقود والتأكد من صحة الأسعار والكميات والشروط قبل اعتمادها.\n• إدارة علاقات العملاء والمحافظة عليها ومعالجة الشكاوى والمرتجعات بالتنسيق مع الأقسام المعنية.\n• متابعة التحصيل النقدي والشيكات والتحويلات والأرصدة غير المحصلة ورفع تقارير دقيقة للإدارة.\n• مراجعة أداء المندوبين والمبيعات والمرتجعات وصافي الفواتير والعمولات وفق السياسات المعتمدة.\n• التنسيق مع الإنتاج والمخزون والتغليف لتأكيد توفر المنتجات والطاقة ومواعيد التسليم الواقعية.\n• تحليل السوق والعملاء والمنافسين والأسعار والفرص، وتقديم مقترحات لزيادة المبيعات والربحية.\n• التأكد من إدخال بيانات العملاء والطلبات والزيارات والتحصيلات في النظام بصورة صحيحة وفي وقتها.\n• منع منح خصومات أو تسهيلات أو آجال خارج الصلاحيات، والحصول على الموافقات المطلوبة مسبقًا.\n• المحافظة على سرية بيانات العملاء والأسعار والسياسات التجارية وأي معلومات تنافسية.\n• إعداد تقارير دورية عن المبيعات والتحصيل والتوقعات والمخاطر ورفعها إلى الإدارة.\n• تنفيذ أي مهام تجارية أخرى يكلف بها من المدير المباشر ضمن نطاق العمل.",
+      "customAdvancePeriods": [
+        {
+          "fromDay": 10,
+          "toDay": 15
+        }
+      ]
+    }
+  },
+  {
+    "id": "EMP-0011",
+    "data": {
+      "basicSalary": "475",
+      "employmentType": "permanent",
+      "workLocationId": "1781177286778",
+      "employmentStatus": "فعال",
+      "sickLeaveBalance": 7,
+      "assignedEmployees": [],
+      "useCustomAdvancePeriods": true,
+      "jobDescriptionUpdatedAt": "2026-08-29T17:15:02.806Z",
+      "hasEmployeesAccess": false,
+      "bonusMissingPunches": {
+        "2026-07": 2,
+        "2026-09": 3,
+        "2026-08": 0
+      },
+      "hasSocialSecurity": true,
+      "id": "EMP-0011",
+      "dateOfBirth": "1997-08-10",
+      "roles": [
+        "الخياطة"
+      ],
+      "name": "اسماعيل مصباح صبحي شرف",
+      "vacationBalance": 1,
+      "department": "",
+      "hasDeliveryAccess": false,
+      "hasProductionAccess": false,
+      "socialSecuritySalary": 475,
+      "allowedLeaveTypes": [
+        "إجازة سنوية",
+        "إجازة مرضية",
+        "مغادرة خاصة",
+        "مغادرة عمل",
+        "إجازة غير مدفوعة",
+        "بدل عمل إضافي",
+        "مغادرة الدخان"
+      ],
+      "password": "12345",
+      "hasSupervisorReportsAccess": false,
+      "hasCustomersAccess": false,
+      "transportationAllowance": "12.5",
+      "isHazardousProfession": true,
+      "permissions": null,
+      "hasSalesAccess": false,
+      "hasPreparationTasksAccess": false,
+      "supervisorPermissions": {
+        "attendance": true,
+        "orders": true,
+        "evaluations": true
+      },
+      "level": "موظف إنتاج",
+      "shiftEnd": "17:00",
+      "hasOverviewAccess": false,
+      "terminationDate": "",
+      "organizationDepartmentId": "9XEVp4enejA2Bcbcld2I",
+      "role": "packaging",
+      "hasSiteSettingsAccess": false,
+      "directManagerId": "EMP-0001",
+      "hrNotes": "",
+      "joinDate": "2025-12-02",
+      "hasLogsAccess": false,
+      "hasSupervisorTasksAccess": false,
+      "shiftStart": "08:00",
+      "hasSettingsAccess": false,
+      "jobDescription": "• قراءة كرت الإنتاج وفهم المقاسات والخامة والكمية والعينة المعتمدة قبل إجراء القياس أو القص.\n• تجهيز الخامة وفحصها وتحديد اتجاهها وعيوبها وترتيب طبقاتها بطريقة تمنع الانحراف والهدر.\n• أخذ القياسات ووضع علامات القص بدقة واستخدام القوالب والأدوات المعتمدة لكل صنف.\n• تنفيذ القص والخياطة وفق المواصفات مع المحافظة على تطابق الأجزاء والمقاسات والكميات.\n• عد القطع بعد القص وفصلها وتعريفها وتسليمها بصورة تمنع الخلط بين الطلبات أو الألوان.\n• فحص جودة الحواف والغرز والمقاسات والإبلاغ عن أي فرق أو عيب في الخامة قبل استكمال الإنتاج.\n• تسجيل المنجز والهدر والقطع المتضررة وإبلاغ المشرف بأي نقص يؤثر على الكمية المطلوبة.\n• الاستخدام الآمن لأدوات القص والماكينات والمحافظة عليها وإبلاغ المسؤول عن الأعطال فورًا.\n• المحافظة على نظافة وترتيب منطقة العمل والتخلص الآمن من القصاصات والمخلفات.\n• التنسيق مع الخياطة والتغليف لضمان ترتيب الأولويات ومطابقة القطع المسلمة.\n• الالتزام بتعليمات الجودة والسلامة والدوام وخطة الإنتاج اليومية.\n• تنفيذ أي مهام قص أو خياطة أخرى يكلف بها من المشرف ضمن نطاق العمل.",
+      "annualRaiseDate": "2026-12-01",
+      "allowAdvances": true,
+      "workShiftName": "فترة الدوام الثانية",
+      "phone": "00962788205397",
+      "hasReportsAccess": false,
+      "hasRepVisitsAccess": false,
+      "jobTitle": "فني قص وخياطة",
+      "customAdvancePeriods": [
+        {
+          "fromDay": 15,
+          "toDay": 20
+        }
+      ],
+      "directManager": "رائدة عيسى سعد العبود",
+      "hasPreparationAccess": false,
+      "hasProductionTasksAccess": false,
+      "hasStockAccess": false,
+      "allowedMissingPunches": 3,
+      "contractEndDate": "",
+      "hasLiveAccess": false
+    }
+  }
+]

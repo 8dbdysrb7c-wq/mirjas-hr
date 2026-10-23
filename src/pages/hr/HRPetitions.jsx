@@ -11,7 +11,8 @@ import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import { TableContainer, TableHead, TableRow, TableHeader, TableBody, TableCell, Badge } from '../../components/ui';
 import HRDateFilter from '../../components/ui/HRDateFilter';
-import { getEmployees } from '../../store';
+import { getEmployees, deleteHRPetition, isAdmin } from '../../store';
+import { hasPermission } from '../../utils/permissions';
 import { firestoreErrorMessage } from '../../utils/firestoreError';
 import { triggerWhatsAppRouting } from '../../services/whatsappRouter';
 
@@ -50,6 +51,21 @@ export default function HRPetitions({ user }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('بانتظار الإدارة');
   const [conversationId, setConversationId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const canDelete = isAdmin(user) || hasPermission(user, 'hr_petitions', 'delete');
+  const handleDelete = async petition => {
+    if (!canDelete || deletingId) return;
+    const result = await MySwal.fire({ title: 'حذف الاستدعاء؟', text: `سيتم حذف الاستدعاء «${petition.title || ''}» من القائمة مع الاحتفاظ بسجله.`, icon: 'warning', showCancelButton: true, confirmButtonText: 'نعم، حذف', cancelButtonText: 'إلغاء', confirmButtonColor: '#dc2626' });
+    if (!result.isConfirmed) return;
+    setDeletingId(petition.id);
+    try {
+      await deleteHRPetition(petition.id, user);
+      setPetitions(previous => previous.filter(row => row.id !== petition.id));
+      if (conversationId === petition.id) setConversationId(null);
+      MySwal.fire({ icon: 'success', title: 'تم حذف الاستدعاء', timer: 1400, showConfirmButton: false });
+    } catch (error) { MySwal.fire('تعذر الحذف', firestoreErrorMessage(error, 'حذف الاستدعاء'), 'error'); }
+    finally { setDeletingId(null); }
+  };
 
   // Date Filter State
   const [dateMode, setDateMode] = useState('month');
@@ -261,10 +277,11 @@ export default function HRPetitions({ user }) {
                             onClick={() => handleView(petition)}
                             className="icon-btn hover:bg-blue-50"
                             style={{ borderColor: '#bfdbfe', color: '#3b82f6', backgroundColor: '#ffffff' }}
-                            title="فتح المحادثة"
+                            title="معالجة الاستدعاء وإرسال القرار"
                           >
                             <Eye size={18} />
                           </button>
+                          {canDelete && <button type="button" className="icon-btn hover:bg-red-50" style={{ borderColor: '#fecaca', color: '#dc2626', backgroundColor: '#ffffff' }} title="حذف الاستدعاء" aria-label={`حذف استدعاء ${petition.title || petition.employeeName}`} disabled={Boolean(deletingId)} onClick={() => handleDelete(petition)}><Trash2 size={18} /></button>}
 
                         </div>
                       </TableCell>

@@ -1,3 +1,4 @@
+import { canCheckoutAfterDailyReport, savePendingCheckoutAttempt, hasPendingCheckoutAttempt, completeCheckoutAttempt } from '../services/checkoutReportPolicy';
 import { subscribeToAssignedMissions } from '../services/operations';
 import { isAssignedMission } from '../utils/assignedMission';
 import { subscribeToPendingEmployeeAlerts } from '../services/employeeAlertSubscription';
@@ -30,14 +31,14 @@ import withReactContent from 'sweetalert2-react-content';
 import Flatpickr from 'react-flatpickr';
 import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import 'flatpickr/dist/themes/light.css';
-import AdminProduction from './admin/AdminProduction';
-import AdminSales from './admin/AdminSales';
-import AdminQuotes from './admin/AdminQuotes';
-import AdminPriceLists from './admin/AdminPriceLists';
-import AdminPreparation from './admin/AdminPreparation';
-import AdminSupervisorReports from './admin/AdminSupervisorReports';
-import AdminSupervisorTasks from './admin/AdminSupervisorTasks';
-import AdminLive from './admin/AdminLive';
+const AdminProduction = React.lazy(() => import('./admin/AdminProduction'));
+const AdminSales = React.lazy(() => import('./admin/AdminSales'));
+const AdminQuotes = React.lazy(() => import('./admin/AdminQuotes'));
+const AdminPriceLists = React.lazy(() => import('./admin/AdminPriceLists'));
+const AdminPreparation = React.lazy(() => import('./admin/AdminPreparation'));
+const AdminSupervisorReports = React.lazy(() => import('./admin/AdminSupervisorReports'));
+const AdminSupervisorTasks = React.lazy(() => import('./admin/AdminSupervisorTasks'));
+const AdminLive = React.lazy(() => import('./admin/AdminLive'));
 import { HomeTab } from './employee/tabs/HomeTab';
 import { DailyReportTab } from './employee/tabs/DailyReportTab';
 import { ReportHistoryTab } from './employee/tabs/ReportHistoryTab';
@@ -51,15 +52,15 @@ import RepVisitsTab from './employee/tabs/RepVisitsTab';
 import { RepVisitHistoryTab } from './employee/tabs/RepVisitHistoryTab';
 
 
-import AdminStock from './admin/AdminStock';
-import AdminDelivery from './admin/AdminDelivery';
-import AdminCustomers from './admin/AdminCustomers';
-import AdminReports from './admin/AdminReports';
-import AdminTasks from './admin/AdminTasks';
-import AdminSettings from './admin/AdminSettings';
-import AdminHR from './hr/AdminHR';
-import HRPettyCash from './hr/HRPettyCash';
-import AdminProductCosting from './admin/AdminProductCosting';
+const AdminStock = React.lazy(() => import('./admin/AdminStock'));
+const AdminDelivery = React.lazy(() => import('./admin/AdminDelivery'));
+const AdminCustomers = React.lazy(() => import('./admin/AdminCustomers'));
+const AdminReports = React.lazy(() => import('./admin/AdminReports'));
+const AdminTasks = React.lazy(() => import('./admin/AdminTasks'));
+const AdminSettings = React.lazy(() => import('./admin/AdminSettings'));
+const AdminHR = React.lazy(() => import('./hr/AdminHR'));
+const HRPettyCash = React.lazy(() => import('./hr/HRPettyCash'));
+const AdminProductCosting = React.lazy(() => import('./admin/AdminProductCosting'));
 
 import NotificationCenter from '../components/NotificationCenter';
 import HeaderUserMenu from '../components/HeaderUserMenu';
@@ -638,12 +639,13 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       }
     };
 
-    return startVisiblePolling(fetchCounts, 300000);
-  }, [user, activeTab]);
+    return startVisiblePolling(fetchCounts, 1800000);
+  }, [user]);
 
   const [gpsSettings, setGpsSettings] = useState(null);
   const [todayAttendance, setTodayAttendance] = useState(null);
   const [isCheckingInOut, setIsCheckingInOut] = useState(false);
+  const pendingCheckoutDateRef = useRef(null);
   const [currentAddress, setCurrentAddress] = useState('جاري تحديد الموقع...');
   const [isFlash, setIsFlash] = useState(false);
   const [currentCoords, setCurrentCoords] = useState(null);
@@ -747,7 +749,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       let isAllowed = false;
       let minDistance = Infinity;
 
-      const currentSettings = await getGlobalSettings();
+      const currentSettings = await getGlobalSettings(true);
       let locationsToCheck = currentSettings.workLocations || [];
 
       // Fallback to legacy single location if no workLocations defined
@@ -761,7 +763,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         }];
       }
 
-      if (locationsToCheck.length === 0) {
+      if (locationsToCheck.length === 0 && user.workLocationId !== 'anywhere') {
         setIsCheckingInOut(false);
         Swal.fire('خطأ', 'الشركة لم تحدد موقع العمل الجغرافي. يرجى من الإدارة الدخول لـ (الإعدادات > إعدادات عامة) وتحديد موقع الشركة على الخريطة.', 'error');
         return;
@@ -838,6 +840,12 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
           };
           await saveHRAttendance(newRecord);
         } else if (actionType === 'out') {
+          if (!await canCheckoutAfterDailyReport(user, todayStr)) {
+            setIsCheckingInOut(false);
+            const result = await Swal.fire({ icon: 'warning', title: 'تقرير العمل اليومي مطلوب', text: 'يرجى تقديم تقرير العمل اليومي لهذا اليوم قبل تسجيل الخروج.', confirmButtonText: 'تقديم التقرير ثم تسجيل الخروج تلقائيًا', showCancelButton: true, cancelButtonText: 'إلغاء' });
+            if (result.isConfirmed) { await savePendingCheckoutAttempt(user, todayStr); pendingCheckoutDateRef.current = todayStr; setDate(todayStr); handleTabChange('add'); }
+            return;
+          }
           if (latestAtt && latestAtt.timeOut && latestAtt.timeOut !== '--:--') {
             setIsCheckingInOut(false);
             Swal.fire('تنبيه', 'لقد قمت بتسجيل الخروج مسبقاً لهذا اليوم.', 'info');
@@ -878,6 +886,8 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
             record.notes = existingNotes.includes(newNote) ? existingNotes : (existingNotes ? `${existingNotes} | ${newNote}` : newNote);
           }
           await saveHRAttendance(record);
+          pendingCheckoutDateRef.current = null;
+          await completeCheckoutAttempt(user, todayStr).catch(error => console.error('Unable to close checkout attempt:', error));
         }
 
         const updatedAtt = await getEmployeeAttendanceByDate(user.id, user.employeeId || user.id, todayStr, user.name);
@@ -914,10 +924,10 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       // Use recently fetched coordinates (instant)
       await processLocation(currentCoords.lat, currentCoords.lng);
     } else {
-      navigator.geolocation.getCurrentPosition(
+      await new Promise(resolve => navigator.geolocation.getCurrentPosition(
         (position) => {
           setCurrentCoords({ lat: position.coords.latitude, lng: position.coords.longitude, timestamp: Date.now() });
-          processLocation(position.coords.latitude, position.coords.longitude);
+          processLocation(position.coords.latitude, position.coords.longitude).finally(resolve);
         },
         (error) => {
           setIsCheckingInOut(false);
@@ -925,9 +935,10 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
           if (error.code === 1) msg = 'يرجى السماح بصلاحية الموقع من إعدادات المتصفح.';
           else if (error.code === 3) msg = 'انتهى وقت طلب الموقع، يرجى المحاولة مرة أخرى.';
           Swal.fire('خطأ', msg, 'error');
+          resolve();
         },
         { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
-      );
+      ));
     }
   };
 
@@ -1481,8 +1492,8 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       return;
     }
 
-    if (!timeIn || !timeOut) {
-      MySwal.fire('تنبيه', 'لا يمكنك تقديم التقرير اليومي، يجب أن يكون هناك تسجيل دخول وخروج مسجل لك في النظام أولاً.', 'warning');
+    if (!timeIn || timeIn === '--:--') {
+      MySwal.fire('تنبيه', 'يجب تسجيل الدخول في الدوام قبل تقديم تقرير العمل اليومي. يمكنك تسجيل الخروج بعد تقديم التقرير.', 'warning');
       return;
     }
 
@@ -1524,7 +1535,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         return hours + (minutes / 60);
       };
 
-      let actualHours = 8; // Default to 8 hours if no time tracking entered
+      let actualHours = null; // Final hours are filled from the checkout punch.
       if (timeIn && timeOut) {
         const tIn = parseTime(timeIn);
         const tOut = parseTime(timeOut);
@@ -1592,6 +1603,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         breakTimeFrom,
         breakTimeTo,
         actualHours,
+        attendancePending: !timeOut || timeOut === '--:--',
         department: reportDept,
         phoneSafe: Boolean(phoneSafe),
         phoneUsages: validPhoneUsages,
@@ -1608,6 +1620,14 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
       );
 
       await saveReport(reportData);
+      // Resume only an explicitly requested checkout, after this day's report is saved.
+      const resumeCheckout = date === getLocalDateStr(new Date()) && (pendingCheckoutDateRef.current === date || await hasPendingCheckoutAttempt(user, date));
+      if (resumeCheckout) {
+        setAllReports(previous => [...previous.filter(report => !(String(report.userId) === String(user.id) && report.date === date)), { ...reportData, id: `${user.id}_${date}` }]);
+        setActiveTab('home');
+        window.scrollTo(0, 0);
+        await handleGPSAction('out');
+      }
 
       await createNotification({
         settingKey: 'dailyReport',
@@ -1635,7 +1655,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
         });
       }
 
-      MySwal.fire({ title: 'تم الحفظ!', text: 'تم حفظ التقرير بنجاح', icon: 'success', timer: 1500, showConfirmButton: false });
+      if (!resumeCheckout) MySwal.fire({ title: 'تم الحفظ!', text: 'تم حفظ التقرير بنجاح', icon: 'success', timer: 1500, showConfirmButton: false });
 
       const updatedReports = await getReportsForUser(user.id, user.employeeId || user.id);
       setAllReports(updatedReports);
@@ -1919,11 +1939,6 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
           return;
         }
       } else if (leaveFormData.type !== 'بدل عمل إضافي') {
-        if (diffMins > 240) {
-          MySwal.fire('خطأ', 'يوجد مشكلة بالوقت المدخل', 'error');
-          return;
-        }
-
         if (reqStartMins < shiftStartMins || reqEndMins > shiftEndMins) {
           MySwal.fire('مرفوض', 'الطلب مرفوض بسبب عدم تقديم المغادرة أثناء أوقات الدوام الرسمي المعتمدة لك (' + shiftStart + ' إلى ' + shiftEnd + ')', 'error');
           return;
@@ -2247,16 +2262,165 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
   return (
     <div className="w-full h-full" style={{ maxWidth: '100%' }}>
 
-      {pendingEmployeeAlerts[0] && <div dir="rtl" style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(15,23,42,.72)', backdropFilter: 'blur(5px)', display: 'grid', placeItems: 'center', padding: 'max(8px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom))' }}>
-        <div style={{ width: 'min(540px,96vw)', maxHeight: 'calc(100dvh - 16px)', background: '#fff', borderRadius: 18, boxShadow: '0 28px 70px rgba(0,0,0,.3)', overflow: 'hidden', border: '1px solid #fed7aa', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: '0 0 auto', background: 'linear-gradient(135deg,#c2410c,#f97316)', color: '#fff', padding: '14px 18px', textAlign: 'center' }}><Bell size={28} style={{ margin: '0 auto 4px' }}/><h2 style={{ margin: 0, fontSize: 20 }}>تنبيه إداري مهم</h2><p style={{ margin: '4px 0 0', opacity: .9, fontSize: 12 }}>{pendingEmployeeAlerts.length > 1 ? `لديك ${pendingEmployeeAlerts.length} تنبيهات بانتظار الاستلام` : 'يرجى قراءة الملاحظة وتأكيد استلامها'}</p></div>
-          <div style={{ minHeight: 0, flex: '1 1 auto', overflowY: 'auto', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch', padding: '14px 16px', touchAction: 'pan-y' }}>
-            <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 12, padding: 15, color: '#431407', fontSize: 16, lineHeight: 1.9, fontWeight: 700, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{pendingEmployeeAlerts[0].message}</div>
-            <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', gap: 8, color: '#64748b', fontSize: 11, flexWrap: 'wrap' }}><span>المصدر: {pendingEmployeeAlerts[0].source}</span><span>تاريخ الإرسال: {new Date(pendingEmployeeAlerts[0].sentAt).toLocaleDateString('en-GB')}</span></div>
+      {pendingEmployeeAlerts[0] && (
+        <div 
+          dir="rtl" 
+          style={{ 
+            position: 'fixed', 
+            inset: 0, 
+            zIndex: 100000, 
+            background: 'rgba(15, 23, 42, 0.65)', 
+            backdropFilter: 'blur(6px)',
+            display: 'grid', 
+            placeItems: 'center', 
+            padding: 'max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom))' 
+          }}
+        >
+          <div 
+            style={{ 
+              width: 'min(500px, 95vw)', 
+              maxHeight: 'calc(100dvh - 24px)', 
+              background: '#ffffff', 
+              borderRadius: '24px', 
+              boxShadow: '0 25px 60px -15px rgba(15, 23, 42, 0.45)', 
+              overflow: 'hidden', 
+              border: '1px solid rgba(226, 232, 240, 0.9)', 
+              display: 'flex', 
+              flexDirection: 'column' 
+            }}
+          >
+            {/* Modal Header */}
+            <div 
+              style={{ 
+                flex: '0 0 auto', 
+                background: 'linear-gradient(135deg, #0f766e 0%, #0d9488 100%)', 
+                color: '#ffffff', 
+                padding: '16px 20px', 
+                textAlign: 'center',
+                boxShadow: '0 4px 12px rgba(13, 148, 136, 0.15)'
+              }}
+            >
+              <div 
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '12px',
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 8px',
+                  backdropFilter: 'blur(4px)'
+                }}
+              >
+                <Bell size={22} className="text-white" />
+              </div>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800 }}>
+                {pendingEmployeeAlerts[0].petitionId ? 'قرار وتوجيه الإدارة' : 'ملاحظة إدارية'}
+              </h2>
+              <p style={{ margin: '4px 0 0', opacity: 0.92, fontSize: '12px' }}>
+                {pendingEmployeeAlerts.length > 1 
+                  ? `لديك ${pendingEmployeeAlerts.length} ملاحظات بانتظار الاطلاع` 
+                  : 'يرجى قراءة الملاحظة وتأكيد استلامها واطلاعك عليها'}
+              </p>
+            </div>
+
+            {/* Scrollable Message Content */}
+            <div 
+              style={{ 
+                minHeight: 0, 
+                flex: '1 1 auto', 
+                overflowY: 'auto', 
+                overscrollBehavior: 'contain', 
+                WebkitOverflowScrolling: 'touch', 
+                padding: '16px 18px', 
+                touchAction: 'pan-y' 
+              }}
+            >
+              <div 
+                style={{ 
+                  background: '#f8fafc', 
+                  border: '1.5px solid #e2e8f0', 
+                  borderRadius: '16px', 
+                  padding: '16px 18px', 
+                  color: '#1e293b', 
+                  fontSize: '15px', 
+                  lineHeight: '1.85', 
+                  fontWeight: 600, 
+                  whiteSpace: 'pre-wrap', 
+                  overflowWrap: 'anywhere' 
+                }}
+              >
+                {pendingEmployeeAlerts[0].message}
+              </div>
+
+              <div 
+                style={{ 
+                  marginTop: '12px', 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  gap: '8px', 
+                  color: '#64748b', 
+                  fontSize: '11px', 
+                  flexWrap: 'wrap',
+                  padding: '0 4px'
+                }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  📌 المصدر: <strong style={{ color: '#0f766e' }}>{pendingEmployeeAlerts[0].source || 'الإدارة'}</strong>
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  📅 تاريخ الإرسال: {new Date(pendingEmployeeAlerts[0].sentAt).toLocaleDateString('ar-JO', { year: 'numeric', month: 'numeric', day: 'numeric' })}
+                </span>
+              </div>
+            </div>
+
+            {/* Action Footer */}
+            <div 
+              style={{ 
+                flex: '0 0 auto', 
+                padding: '12px 18px max(12px, env(safe-area-inset-bottom))', 
+                borderTop: '1px solid #e2e8f0', 
+                background: '#ffffff', 
+                boxShadow: '0 -8px 20px rgba(15, 23, 42, 0.04)' 
+              }}
+            >
+              <button 
+                disabled={receivingEmployeeAlert} 
+                onClick={receiveEmployeeAlert} 
+                style={{ 
+                  width: '100%', 
+                  minHeight: '48px', 
+                  border: 0, 
+                  borderRadius: '14px', 
+                  background: 'linear-gradient(135deg, #0f766e 0%, #0d9488 100%)', 
+                  color: '#ffffff', 
+                  fontSize: '15.5px', 
+                  fontWeight: 800, 
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 12px rgba(13, 148, 136, 0.3)',
+                  cursor: receivingEmployeeAlert ? 'wait' : 'pointer' 
+                }}
+              >
+                <CheckCircle2 size={19} />
+                <span>
+                  {receivingEmployeeAlert 
+                    ? 'جاري تسجيل الاستلام...' 
+                    : pendingEmployeeAlerts[0].petitionId 
+                    ? 'تأكيد الاطلاع على القرار' 
+                    : 'تأكيد استلام الملاحظة'}
+                </span>
+              </button>
+              <p style={{ margin: '8px 0 0', textAlign: 'center', color: '#94a3b8', fontSize: '11px' }}>
+                مرّر داخل الرسالة لقراءتها كاملة، ثم أكد الاستلام ليتم حفظه بالسجل.
+              </p>
+            </div>
           </div>
-          <div style={{ flex: '0 0 auto', padding: '10px 16px max(10px, env(safe-area-inset-bottom))', borderTop: '1px solid #e2e8f0', background: '#fff', boxShadow: '0 -8px 20px rgba(15,23,42,.06)' }}><button disabled={receivingEmployeeAlert} onClick={receiveEmployeeAlert} style={{ width: '100%', minHeight: 48, border: 0, borderRadius: 12, background: '#0f8b8d', color: '#fff', fontSize: 16, fontWeight: 900, cursor: receivingEmployeeAlert ? 'wait' : 'pointer' }}>{receivingEmployeeAlert ? 'جاري تسجيل الاستلام...' : 'استلام الملاحظة'}</button><p style={{ margin: '6px 0 0', textAlign: 'center', color: '#94a3b8', fontSize: 10 }}>مرّر داخل الرسالة لقراءتها كاملة، ثم أكد الاستلام.</p></div>
         </div>
-      </div>}
+      )}
 
       {/* Mobile Bottom Nav via CSS classes */}
       <div className="modern-bottom-nav no-print lg:hidden overflow-x-auto hide-scrollbar" style={{ justifyContent: 'center', gap: '1rem', paddingLeft: '1rem', paddingRight: '1rem' }}>
@@ -2501,7 +2665,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
             </div>
           )}
 
-          {renderContent()}
+          <React.Suspense fallback={<div className="loading-state" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px", color: "var(--primary)", fontWeight: "bold" }}>جاري التحميل...</div>}>{renderContent()}</React.Suspense>
         </div>
       </div>
 

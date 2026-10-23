@@ -20,17 +20,33 @@ import { syncToHRAttendance, syncDailyReportViolations } from './hr';
 import { createActivityNotification, isAddAction, resolveModuleKeyFromLog, ACTIVITY_ITEM_LABELS } from './settings';
 import { triggerWhatsAppRouting } from './whatsappRouter';
 
-export const getReports = async () => {
+let cachedReports = null;
+let cachedReportsTimestamp = 0;
+const REPORTS_CACHE_TTL = 3 * 60 * 1000;
+
+export const invalidateReportsCache = () => {
+  cachedReports = null;
+  cachedReportsTimestamp = 0;
+};
+
+export const getReports = async (forceRefresh = false) => {
   try {
+    if (!forceRefresh && cachedReports && (Date.now() - cachedReportsTimestamp < REPORTS_CACHE_TTL)) {
+      return cachedReports;
+    }
     const querySnapshot = await getDocs(collection(db, 'reports'));
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    const result = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    cachedReports = result;
+    cachedReportsTimestamp = Date.now();
+    return result;
   } catch (error) {
     console.error("Error in getReports:", error);
-    return [];
+    return cachedReports || [];
   }
 };
 
 export const saveReports = async (reports) => {
+  invalidateReportsCache();
   try {
     for (const report of reports) {
       const id = `${report.userId}_${report.date}`;
@@ -42,6 +58,7 @@ export const saveReports = async (reports) => {
 };
 
 export const saveReport = async (report) => {
+  invalidateReportsCache();
   try {
     const id = report.id || `${report.userId}_${report.date}`;
     await setDoc(doc(db, 'reports', id), report);
@@ -56,6 +73,7 @@ export const saveReport = async (report) => {
 };
 
 export const deleteReport = async (id) => {
+  invalidateReportsCache();
   try {
     await deleteDoc(doc(db, 'reports', id));
   } catch (error) {
@@ -63,13 +81,28 @@ export const deleteReport = async (id) => {
   }
 };
 
-export const getSupervisorReports = async () => {
+let cachedSupervisorReports = null;
+let cachedSupervisorReportsTimestamp = 0;
+const SUPERVISOR_REPORTS_CACHE_TTL = 30 * 1000;
+
+export const invalidateSupervisorReportsCache = () => {
+  cachedSupervisorReports = null;
+  cachedSupervisorReportsTimestamp = 0;
+};
+
+export const getSupervisorReports = async (forceRefresh = false) => {
   try {
+    if (!forceRefresh && cachedSupervisorReports && (Date.now() - cachedSupervisorReportsTimestamp < SUPERVISOR_REPORTS_CACHE_TTL)) {
+      return cachedSupervisorReports;
+    }
     const querySnapshot = await getDocs(collection(db, 'supervisor_reports'));
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    const result = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    cachedSupervisorReports = result;
+    cachedSupervisorReportsTimestamp = Date.now();
+    return result;
   } catch (error) {
     console.error("Error in getSupervisorReports:", error);
-    return [];
+    return cachedSupervisorReports || [];
   }
 };
 
@@ -92,6 +125,7 @@ export const getSupervisorReportsByDateRange = async (dateFrom, dateTo) => {
 };
 
 export const saveSupervisorReport = async (report) => {
+  invalidateSupervisorReportsCache();
   try {
     const docRef = report.id ? doc(db, 'supervisor_reports', report.id) : doc(collection(db, 'supervisor_reports'));
     await setDoc(docRef, { ...report, id: docRef.id });
@@ -105,6 +139,7 @@ export const saveSupervisorReport = async (report) => {
 };
 
 export const deleteSupervisorReport = async (id) => {
+  invalidateSupervisorReportsCache();
   try {
     await deleteDoc(doc(db, 'supervisor_reports', id));
   } catch (error) {
@@ -112,21 +147,35 @@ export const deleteSupervisorReport = async (id) => {
   }
 };
 
-export const getMissions = async () => {
+let cachedMissions = null;
+let cachedMissionsTimestamp = 0;
+const MISSIONS_CACHE_TTL = 3 * 60 * 1000;
+
+export const invalidateMissionsCache = () => {
+  cachedMissions = null;
+  cachedMissionsTimestamp = 0;
+};
+
+export const getMissions = async (forceRefresh = false) => {
   try {
+    if (!forceRefresh && cachedMissions && (Date.now() - cachedMissionsTimestamp < MISSIONS_CACHE_TTL)) {
+      return cachedMissions;
+    }
     const querySnapshot = await getDocs(collection(db, 'missions'));
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    const result = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    cachedMissions = result;
+    cachedMissionsTimestamp = Date.now();
+    return result;
   } catch (error) {
     console.error("Error in getMissions:", error);
-    return [];
+    return cachedMissions || [];
   }
 };
 
-export const getActiveMissions = async () => {
+export const getActiveMissions = async (forceRefresh = false) => {
   try {
-    const q = query(collection(db, 'missions'), where('status', 'not-in', ['تم الإنجاز', 'تم الانجاز', 'ملغي', 'ملغية', 'ملغاة']));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    const all = await getMissions(forceRefresh);
+    return all.filter(m => !['تم الإنجاز', 'تم الانجاز', 'ملغي', 'ملغية', 'ملغاة'].includes(m.status));
   } catch (error) {
     console.error("Error in getActiveMissions:", error);
     return [];
@@ -197,6 +246,7 @@ const persistMission = async (ref, mission, validateAssignment = false) => {
 };
 
 export const saveMission = async (mission) => {
+  invalidateMissionsCache();
   try {
     let missionToSave = { ...mission };
     if (!missionToSave.id) {
@@ -229,6 +279,7 @@ export const saveMission = async (mission) => {
 };
 
 export const deleteMission = async (id) => {
+  invalidateMissionsCache();
   try {
     await deleteDoc(doc(db, 'missions', id));
   } catch (error) {
@@ -386,14 +437,29 @@ export const saveAttendanceLog = async (log) => {
   }
 };
 
-export const getSupervisorTasks = async () => {
+let cachedSupervisorTasks = null;
+let cachedSupervisorTasksTimestamp = 0;
+const SUPERVISOR_TASKS_CACHE_TTL = 30 * 1000;
+
+export const invalidateSupervisorTasksCache = () => {
+  cachedSupervisorTasks = null;
+  cachedSupervisorTasksTimestamp = 0;
+};
+
+export const getSupervisorTasks = async (forceRefresh = false) => {
   try {
-    const q = query(collection(db, 'supervisor_tasks'), orderBy('createdAt', 'desc'));
+    if (!forceRefresh && cachedSupervisorTasks && (Date.now() - cachedSupervisorTasksTimestamp < SUPERVISOR_TASKS_CACHE_TTL)) {
+      return cachedSupervisorTasks;
+    }
+    const q = query(collection(db, 'supervisor_tasks'), orderBy('createdAt', 'desc'), limit(150));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    const result = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    cachedSupervisorTasks = result;
+    cachedSupervisorTasksTimestamp = Date.now();
+    return result;
   } catch (error) {
     console.error("Error in getSupervisorTasks:", error);
-    return [];
+    return cachedSupervisorTasks || [];
   }
 };
 
@@ -418,15 +484,14 @@ export const getSupervisorTasksForUser = async (userId) => {
 
 
 export const saveSupervisorTask = async (task) => {
+  invalidateSupervisorTasksCache();
   try {
     const isNew = !task.id;
     let docRef;
     let fullTask;
 
     if (isNew) {
-      const q = query(collection(db, 'supervisor_tasks'));
-      const querySnapshot = await getDocs(q);
-      const allTasks = querySnapshot.docs.map(doc => doc.data());
+      const allTasks = await getSupervisorTasks();
       
       let nextNum = 1;
       const tNumberRegex = /TSK-(\d+)/;
@@ -566,9 +631,13 @@ export const subscribeToReportsForUser = (userId, employeeId, callback, onError)
     callback([]);
     return () => {};
   }
-  const q = query(collection(db, 'reports'), where('userId', 'in', ids), orderBy('date', 'desc'), limit(60));
+  // Avoid missing composite index on (userId + date) by querying userId with limit and sorting in memory
+  const q = query(collection(db, 'reports'), where('userId', 'in', ids), limit(60));
   return onSnapshot(q, snapshot => {
-    callback(snapshot.docs.map(report => ({ ...report.data(), id: report.id })));
+    const list = snapshot.docs
+      .map(report => ({ ...report.data(), id: report.id }))
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    callback(list);
   }, onError);
 };
 

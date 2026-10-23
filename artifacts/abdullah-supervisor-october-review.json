@@ -1,0 +1,5540 @@
+{
+  "employees": [
+    {
+      "allowedWorkLocations": [
+        "1792226023673"
+      ],
+      "hasStockAccess": true,
+      "hasLogsAccess": false,
+      "directManager": "عماد فتحي زياد عزيز عوض",
+      "phone": "00962775548158",
+      "jobTitle": "فني دعم لوجستي",
+      "hasCustomersAccess": false,
+      "hasLiveAccess": true,
+      "hasDeliveryAccess": true,
+      "sickLeaveBalance": 4,
+      "hasSupervisorReportsAccess": true,
+      "joinDate": "2023-01-22",
+      "hrNotes": "",
+      "hasOverviewAccess": false,
+      "hasSiteSettingsAccess": false,
+      "annualRaiseDate": "2027-01-21",
+      "terminationDate": "",
+      "updatedAt": "2026-10-17T08:35:10.499Z",
+      "password": "12345",
+      "level": "مشرف",
+      "hasSalesAccess": true,
+      "hasRepVisitsAccess": false,
+      "id": "EMP-0006",
+      "hasPreparationTasksAccess": false,
+      "transportationAllowance": "",
+      "hasProductionTasksAccess": true,
+      "assignedEmployees": [
+        "EMP-0008",
+        "EMP-0012",
+        "EMP-0018",
+        "EMP-0019",
+        "EMP-0021",
+        "EMP-0024"
+      ],
+      "socialSecuritySalary": 375,
+      "basicSalary": "375",
+      "workShiftName": "فترة الدوام الثانية",
+      "hasProductionAccess": true,
+      "contractEndDate": "",
+      "hasSocialSecurity": true,
+      "allowedMissingPunches": 10,
+      "hasReportsAccess": false,
+      "customAdvancePeriods": [
+        {
+          "fromDay": 15,
+          "toDay": 20
+        }
+      ],
+      "isHazardousProfession": false,
+      "permissions": {
+        "delivery": {
+          "approve": false,
+          "edit": false,
+          "view": true,
+          "add": false,
+          "print": false,
+          "export": false,
+          "delete": false
+        },
+        "supervisor_reports": {
+          "edit": true,
+          "approve": false,
+          "view": true,
+          "add": true,
+          "print": true,
+          "export": true,
+          "delete": false
+        },
+        "stock_vouchers": {
+          "edit": false,
+          "add": false,
+          "print": false,
+          "approve": false,
+          "export": false,
+          "delete": false,
+          "view": true
+        },
+        "live": {
+          "approve": false,
+          "delete": false,
+          "print": false,
+          "export": false,
+          "add": true,
+          "view": true,
+          "edit": true
+        },
+        "hr_leaves": {
+          "edit": false,
+          "approve": false,
+          "add": false,
+          "delete": false,
+          "export": false,
+          "view": false,
+          "print": false
+        },
+        "supervisor_tasks": {
+          "approve": false,
+          "view": false,
+          "print": false,
+          "export": false,
+          "delete": false,
+          "edit": false,
+          "add": false
+        },
+        "orders": {
+          "approve": false,
+          "view": true,
+          "add": true,
+          "edit": true,
+          "print": true,
+          "export": true,
+          "delete": false
+        },
+        "hr_employees": {
+          "edit": false,
+          "add": false,
+          "approve": false,
+          "export": false,
+          "delete": false,
+          "view": false,
+          "print": false
+        },
+        "hr_salaries": {
+          "add": false,
+          "view": false,
+          "edit": false,
+          "approve": false,
+          "print": false,
+          "delete": false,
+          "export": false
+        },
+        "site_settings": {
+          "add": false,
+          "approve": false,
+          "view": false,
+          "export": false,
+          "delete": false,
+          "edit": false,
+          "print": false
+        },
+        "production": {
+          "approve": false,
+          "print": false,
+          "view": true,
+          "delete": false,
+          "export": false,
+          "add": false,
+          "edit": false
+        },
+        "hr_advances": {
+          "export": false,
+          "delete": false,
+          "print": false,
+          "edit": false,
+          "view": false,
+          "add": false,
+          "approve": false
+        },
+        "preparation": {
+          "export": true,
+          "delete": false,
+          "edit": true,
+          "view": true,
+          "approve": false,
+          "print": true,
+          "add": true
+        },
+        "hr_overtime": {
+          "print": false,
+          "view": false,
+          "export": false,
+          "delete": false,
+          "add": false,
+          "edit": false,
+          "approve": false
+        },
+        "rep_visits": {
+          "export": false,
+          "delete": false,
+          "approve": false,
+          "print": false,
+          "edit": false,
+          "view": false,
+          "add": false
+        },
+        "stock_take": {
+          "approve": false,
+          "edit": false,
+          "delete": false,
+          "export": false,
+          "add": false,
+          "view": false,
+          "print": false
+        },
+        "production_tasks": {
+          "print": false,
+          "view": true,
+          "export": false,
+          "delete": false,
+          "approve": false,
+          "add": true,
+          "edit": true
+        },
+        "logs": {
+          "delete": false,
+          "export": false,
+          "edit": false,
+          "approve": false,
+          "view": false,
+          "print": false,
+          "add": false
+        },
+        "customers": {
+          "edit": false,
+          "add": false,
+          "approve": false,
+          "print": false,
+          "export": false,
+          "delete": false,
+          "view": false
+        },
+        "scoring": {
+          "export": false,
+          "delete": false,
+          "edit": false,
+          "print": false,
+          "add": false,
+          "approve": false,
+          "view": false
+        },
+        "hr_attendance": {
+          "edit": false,
+          "delete": false,
+          "export": false,
+          "add": false,
+          "view": false,
+          "print": false,
+          "approve": false
+        },
+        "reports": {
+          "approve": false,
+          "edit": false,
+          "add": false,
+          "export": false,
+          "delete": false,
+          "print": false,
+          "view": false
+        },
+        "stock_production": {
+          "approve": false,
+          "view": false,
+          "add": false,
+          "print": false,
+          "edit": false,
+          "delete": false,
+          "export": false
+        },
+        "stock_audit": {
+          "view": false,
+          "approve": false,
+          "delete": false,
+          "export": false,
+          "print": false,
+          "add": false,
+          "edit": false
+        },
+        "stock_view": {
+          "view": true,
+          "print": false,
+          "approve": false,
+          "add": false,
+          "delete": false,
+          "export": false,
+          "edit": false
+        }
+      },
+      "employmentStatus": "فعال",
+      "role": "sewing",
+      "useCustomAdvancePeriods": true,
+      "shiftEnd": "17:00",
+      "allowAdvances": true,
+      "bonusMissingPunches": {
+        "2026-07": 10,
+        "2026-08": 3,
+        "2026-10": 10,
+        "2026-09": 20
+      },
+      "healthInsurancePayer": "employee",
+      "roles": [
+        "اللوجستي"
+      ],
+      "hasSettingsAccess": true,
+      "hasPreparationAccess": false,
+      "employmentType": "permanent",
+      "healthInsuranceAmount": 15,
+      "supervisorPermissions": {
+        "orders": true,
+        "evaluations": true,
+        "attendance": true
+      },
+      "shiftStart": "08:00",
+      "allowedLeaveTypes": [
+        "إجازة سنوية",
+        "إجازة مرضية",
+        "مغادرة خاصة",
+        "مغادرة عمل",
+        "إجازة غير مدفوعة",
+        "بدل عمل إضافي",
+        "مغادرة الدخان"
+      ],
+      "hasEmployeesAccess": false,
+      "department": "الدعم اللوجستي",
+      "vacationBalance": 4,
+      "dateOfBirth": "0003-12-20",
+      "workLocationId": "1792226023673",
+      "hasSupervisorTasksAccess": true,
+      "name": "عبد الله يعقوب ايوب غيث"
+    },
+    {
+      "vacationBalance": 14,
+      "allowAdvances": true,
+      "hasOverviewAccess": true,
+      "joinDate": "2026-09-01",
+      "password": "123456",
+      "allowedWorkLocations": [
+        "1792226023673"
+      ],
+      "hasCustomersAccess": false,
+      "level": "موظف إنتاج",
+      "supervisorPermissions": {
+        "evaluations": true,
+        "attendance": true,
+        "orders": true
+      },
+      "employmentStatus": "منتهي خدمات",
+      "hasSupervisorReportsAccess": false,
+      "jobTitle": "فني دعم لوجستي",
+      "id": "EMP-0022",
+      "hasDeliveryAccess": false,
+      "transportationAllowance": "",
+      "basicSalary": "290",
+      "role": "general",
+      "hasStockAccess": false,
+      "isHazardousProfession": false,
+      "hasRepVisitsAccess": false,
+      "socialSecuritySalary": 0,
+      "name": "زيد فريد عبد الله حميد الخوالدة",
+      "phone": "0782975302",
+      "bonusMissingPunches": {
+        "2026-09": 0
+      },
+      "hasSocialSecurity": false,
+      "assignedEmployees": [],
+      "customAdvancePeriods": [
+        {
+          "fromDay": 15,
+          "toDay": 20
+        }
+      ],
+      "hrNotes": "",
+      "hasSalesAccess": false,
+      "hasProductionTasksAccess": false,
+      "contractEndDate": "",
+      "hasProductionAccess": false,
+      "dateOfBirth": "1996-06-11",
+      "sickLeaveBalance": 14,
+      "hasLogsAccess": false,
+      "allowedMissingPunches": 3,
+      "directManager": "عبد الله يعقوب ايوب غيث",
+      "shiftEnd": "18:00",
+      "hasLiveAccess": false,
+      "workShiftName": "فترة الدوام الخامسة",
+      "workLocationId": "1792226023673",
+      "hasPreparationTasksAccess": false,
+      "updatedAt": "2026-10-17T08:35:10.499Z",
+      "shiftStart": "08:00",
+      "terminationDate": "2026-09-02",
+      "hasSupervisorTasksAccess": false,
+      "hasPreparationAccess": false,
+      "annualRaiseDate": "2026-08-31",
+      "roles": [
+        "اللوجستي"
+      ],
+      "department": "الدعم اللوجستي",
+      "allowedLeaveTypes": [
+        "مغادرة خاصة",
+        "إجازة غير مدفوعة",
+        "بدل عمل إضافي"
+      ],
+      "employmentType": "daily_worker",
+      "hasEmployeesAccess": false,
+      "useCustomAdvancePeriods": true,
+      "hasSettingsAccess": false,
+      "hasReportsAccess": false,
+      "permissions": null,
+      "hasSiteSettingsAccess": false
+    }
+  ],
+  "supervisor_reports": [
+    {
+      "ordersSnapshot": [
+        {
+          "readyForDeliveryBy": "عماد فتحي زياد عزيز عوض",
+          "deliveryDriverName": "بهاء الدين اسامة ايوب غيث",
+          "customerId": "rpPPndldWkWRBWtPZKyk",
+          "deliveryDate": "2026-10-05",
+          "lastActionBy": "عماد فتحي زياد عزيز عوض",
+          "deliveryCompletedAt": null,
+          "status": "جاهز للتسليم للتوصيل",
+          "supervisorNotes": "تم",
+          "orderNumber": "ORD-0037",
+          "deliveryDriverId": "EMP-0018",
+          "id": "CXRIedT3WEQ3Y5ecfHDA",
+          "deliveryStatus": "بانتظار الاستلام",
+          "createdBy": "المدير العام",
+          "deliveryMethod": "employee",
+          "isSales": true,
+          "items": [
+            {
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "notes": "جرد رصيد الكمية كامل للزبون",
+              "itemStatus": "جاهز",
+              "quantity": "414"
+            },
+            {
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "itemStatus": "جاهز",
+              "quantity": "26",
+              "notes": "جرد رصيد الكمية كامل للزبون"
+            }
+          ],
+          "readyForDeliveryAt": "2026-10-03T11:16:55.711Z",
+          "orderNotes": "",
+          "statusUpdateDate": "2026-10-03",
+          "orderDate": "2026-10-03",
+          "currentDepartment": "الطلبيات",
+          "customerName": "شركة الوعد للتسويق المباشر"
+        },
+        {
+          "readyForDeliveryAt": "2026-09-28T11:15:47.751Z",
+          "customerId": "ByvkjppcHm4BTiqjB0Iu",
+          "statusUpdateDate": "2026-09-28",
+          "id": "nFHRHcGX97MLH3S4h7tE",
+          "supervisorNotes": "تم",
+          "items": [
+            {
+              "productName": "طقم أرضية حمام تركي2 قطعة 50*80 سم",
+              "itemStatus": "جاهز",
+              "notes": "",
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false,
+              "hasProductionDetails": false,
+              "quantity": "1"
+            }
+          ],
+          "isSales": true,
+          "status": "جاهز للتسليم للتوصيل",
+          "customerName": "أصدقاء وأصحاب الشركة ",
+          "orderDate": "2026-09-28",
+          "orderNumber": "ORD-0021",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "readyForDeliveryBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDriverName": "أماني يونس صالح وادي",
+          "deliveryMethod": "employee",
+          "orderNotes": "هبه ابو طالب ",
+          "deliveryStatus": "تم الإنجاز",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-09-28",
+          "deliveryDriverId": "EMP-0013",
+          "deliveryCompletedAt": "2026-10-03T05:45:30.890Z",
+          "currentDepartment": "الطلبيات"
+        },
+        {
+          "orderDate": "2026-10-03",
+          "customerName": "مخازن المدينة التجارية",
+          "statusUpdateDate": "2026-10-03",
+          "isSales": true,
+          "orderNumber": "ORD-0041",
+          "id": "DXiG8JmUJPrphIa2ucWf",
+          "orderNotes": "تسليم فرع جبل الحسين\nالمخدات المايكروفايبر سحب هوا+شنته ",
+          "supervisorNotes": "تم",
+          "currentDepartment": "الطلبيات",
+          "items": [
+            {
+              "notes": "جميع المخدات مسحوبه هوا جيدا",
+              "itemStatus": "جاهز",
+              "productName": "مخدة بوليستر 600غ",
+              "quantity": "30"
+            },
+            {
+              "productName": "مخدة بوليستر 1000غ",
+              "itemStatus": "جاهز",
+              "notes": "جميع المخدات مسحوبه هوا جيدا",
+              "quantity": "20"
+            },
+            {
+              "notes": "باركود مخدة مايكروفايبر 1300",
+              "productName": "مخدة شبك ابيض 1400غ",
+              "quantity": "5",
+              "itemStatus": "قيد التجهيز"
+            },
+            {
+              "notes": "باركود مخدة مايكروفايبر 1300",
+              "productName": "مخدة مايكروفايبر خطوط",
+              "itemStatus": "قيد التجهيز",
+              "quantity": "1"
+            },
+            {
+              "productName": "مخدة مايكروفايبر دبل بريم 2000غ",
+              "quantity": "1",
+              "itemStatus": "قيد التجهيز",
+              "notes": "باركود مخدة مايكروفايبر 1300"
+            },
+            {
+              "quantity": "1",
+              "itemStatus": "قيد التجهيز",
+              "productName": "مخدة دبل بريم رفيع 1600غ",
+              "notes": "باركود مخدة مايكروفايبر 1300"
+            },
+            {
+              "quantity": "1",
+              "notes": "عدد 2 - يوجد 2 مخدات جاهزاتباركود مخدة مايكروفايبر 1300  ",
+              "productName": "مخدة مايكروفايبر بريم واحد 1300غ",
+              "itemStatus": "قيد التجهيز"
+            }
+          ],
+          "deliveryDate": "2026-10-04",
+          "lastActionBy": "جهاد بركات فلاح المهيرات",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "customerId": "EorsLiy1nU2VFrnrdZnh",
+          "status": "جديد"
+        },
+        {
+          "id": "aTOAUvsBTwtrybX39RZi",
+          "status": "جديد",
+          "customerId": "AXxkP01sUxVLKCXtQPHe",
+          "isSales": true,
+          "orderNumber": "ORD-0036",
+          "statusUpdateDate": "2026-10-03",
+          "deliveryDate": "2026-10-04",
+          "lastActionBy": "نظام الإنتاج",
+          "orderDate": "2026-10-03",
+          "currentDepartment": "الطلبيات",
+          "supervisorNotes": "تم",
+          "customerName": "محمد مراد محمد خميس الالفي - فرشة ومخدة",
+          "orderNotes": "",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "items": [
+            {
+              "quantity": "2",
+              "productName": "وجه مخدة تواصي",
+              "notes": "قياس 55*80 لون سكني سترايب الجديد",
+              "hasProductionDetails": true,
+              "itemStatus": "إنتاج قيد التغليف"
+            }
+          ]
+        },
+        {
+          "items": [
+            {
+              "notes": "240*220 لون ابيض سادة",
+              "itemStatus": "إنتاج قيد التغليف",
+              "productName": "وجه لحاف تواصي",
+              "hasProductionDetails": true,
+              "quantity": "1"
+            }
+          ],
+          "isSales": true,
+          "customerName": "شركة الوعد للتسويق المباشر",
+          "orderNumber": "ORD-0038",
+          "orderDate": "2026-10-03",
+          "orderNotes": "",
+          "statusUpdateDate": "2026-10-03",
+          "id": "utXxBxyKd2ex7YG99iU1",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "currentDepartment": "الطلبيات",
+          "deliveryDate": "2026-10-04",
+          "lastActionBy": "نظام الإنتاج",
+          "status": "جديد",
+          "customerId": "rpPPndldWkWRBWtPZKyk",
+          "supervisorNotes": "تم"
+        }
+      ],
+      "timeOut": "19:59",
+      "supervisorName": "عبد الله يعقوب ايوب غيث",
+      "supervisorId": "EMP-0006",
+      "id": "sup_rep_EMP-0006_2026-10-03",
+      "employeeEvaluations": [
+        {
+          "rating": "جيد",
+          "reason": "",
+          "scorePercentage": "80",
+          "employeeId": "EMP-0008",
+          "reportApproved": false,
+          "employeeName": "محمد سمير علي محمد العبود"
+        },
+        {
+          "employeeId": "EMP-0012",
+          "reportApproved": false,
+          "employeeName": "ايهاب رامي محمد راغب الشرباتي",
+          "scorePercentage": "90",
+          "reason": "",
+          "rating": "جيد"
+        },
+        {
+          "reason": "",
+          "rating": "جيد",
+          "employeeName": "بهاء الدين اسامة ايوب غيث",
+          "employeeId": "EMP-0018",
+          "reportApproved": false,
+          "scorePercentage": "80"
+        },
+        {
+          "rating": "جيد",
+          "reason": "",
+          "employeeName": "حمزة ماهر احمد الكردي",
+          "reportApproved": false,
+          "employeeId": "EMP-0019",
+          "scorePercentage": "90"
+        },
+        {
+          "rating": "لم يقدم تقرير",
+          "employeeId": "EMP-0021",
+          "reportApproved": false,
+          "scorePercentage": "40",
+          "employeeName": "ماجد يوسف عبد الجابر محمود",
+          "reason": "روح بدري إصابة عمل "
+        },
+        {
+          "scorePercentage": "90",
+          "employeeName": "أحمد لطفي حسن حسين",
+          "rating": "جيد",
+          "employeeId": "EMP-0024",
+          "reason": "",
+          "reportApproved": false
+        }
+      ],
+      "createdAt": "2026-10-04T06:18:55.248Z",
+      "employeeAttendanceStatus": "all_present",
+      "timeIn": "08:03",
+      "status": "معتمد",
+      "attendanceNotes": "",
+      "date": "2026-10-03"
+    },
+    {
+      "status": "معتمد",
+      "id": "sup_rep_EMP-0006_2026-10-04",
+      "attendanceNotes": "تم تحميل طلبيت القويرة النجم الهادي ",
+      "supervisorName": "عبد الله يعقوب ايوب غيث",
+      "ordersSnapshot": [
+        {
+          "isSales": true,
+          "createdBy": "المدير العام",
+          "items": [
+            {
+              "productName": "مخدة مايكروفايبر بريم واحد 1300غ",
+              "itemStatus": "قيد التحضير",
+              "quantity": "10",
+              "notes": "بريم واحد اي لون +باركود ميرانا 1300غ + شنته نايلون مسحوب هوا ",
+              "hasPreparationDetails": true
+            },
+            {
+              "quantity": "10",
+              "notes": " سيلك قديم + باركود ميرانا 1800غ + شنته نايلون مسحوب هوا ",
+              "hasPreparationDetails": true,
+              "productName": "مخدة مايكروفايبر دبل بريم 1800غ",
+              "itemStatus": "قيد التحضير"
+            },
+            {
+              "quantity": "2",
+              "productName": "لحاف داون بروف 240*260سم",
+              "itemStatus": "جاهز",
+              "notes": "ورقة دعاية بيت بيوت "
+            },
+            {
+              "itemStatus": "جاهز",
+              "notes": "ورقة دعاية بيت بيوت ",
+              "quantity": "3",
+              "productName": "لحاف داون بروف 160*220سم"
+            }
+          ],
+          "supervisorNotes": "تم",
+          "deliveryDate": "2026-10-08",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "orderNotes": "",
+          "currentDepartment": "الطلبيات",
+          "id": "34h4aGll0z2wL55bAaNf",
+          "orderNumber": "ORD-0060",
+          "customerId": "rpPPndldWkWRBWtPZKyk",
+          "statusUpdateDate": "2026-10-08",
+          "status": "جديد",
+          "orderDate": "2026-10-07",
+          "customerName": "شركة الوعد للتسويق المباشر"
+        },
+        {
+          "items": [
+            {
+              "notes": "ابولو تغليف سحاب",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "hasProductionDetails": true,
+              "quantity": "60",
+              "productName": "شرشف مطاط شتوي 200*200 سم"
+            },
+            {
+              "itemStatus": "إنتاج قيد الخياطة",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "notes": "ابولو تغليف سحاب",
+              "quantity": "60",
+              "hasProductionDetails": true
+            },
+            {
+              "itemStatus": "جاهز",
+              "productName": "وجه مخدة شتوي عدد 1 - أسود (مستودع: مصنع البياضات)",
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "quantity": 72
+            },
+            {
+              "productName": "وجه مخدة شتوي عدد 1 - اوفوايت (مستودع: مصنع البياضات)",
+              "quantity": 72,
+              "itemStatus": "جاهز",
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع"
+            },
+            {
+              "quantity": 1529,
+              "productName": "وجه مخدة شتوي عدد 1 - بيج (مستودع: مصنع البياضات)",
+              "itemStatus": "جاهز",
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع"
+            },
+            {
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "productName": "وجه مخدة شتوي عدد 1 - سكني (مستودع: مصنع البياضات)",
+              "itemStatus": "جاهز",
+              "quantity": 580
+            },
+            {
+              "productName": "وجه مخدة شتوي عدد 1 - سومو (مستودع: مصنع البياضات)",
+              "quantity": 1,
+              "itemStatus": "جاهز",
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع"
+            }
+          ],
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "orderNotes": "فرع مرج الحمام ",
+          "orderNumber": "ORD-0059",
+          "status": "جديد",
+          "orderDate": "2026-10-07",
+          "currentDepartment": "الطلبيات",
+          "createdBy": "المدير العام",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-12",
+          "id": "4REbO02GIXr0IYVuKd9R",
+          "statusUpdateDate": "2026-10-09",
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "isSales": true,
+          "supervisorNotes": "تم"
+        },
+        {
+          "status": "جديد",
+          "statusUpdateDate": "2026-10-07",
+          "supervisorNotes": "تم",
+          "deliveryDate": "2026-10-11",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "id": "4rHeLboPtUrTYG8pFyfo",
+          "orderDate": "2026-10-07",
+          "orderNotes": "",
+          "isSales": true,
+          "items": [
+            {
+              "quantity": "60",
+              "hasProductionDetails": false,
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false,
+              "notes": "كيس سحاب كرت فوكس",
+              "itemStatus": "جاهز",
+              "productName": "شرشف مطاط شتوي 120*200 سم"
+            },
+            {
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "itemStatus": "جاهز",
+              "notes": "كيس سحاب كرت فوكس",
+              "hasProductionDetails": false,
+              "quantity": "60"
+            },
+            {
+              "hasPreparationDetails": false,
+              "quantity": "36",
+              "notes": "شنته +كرت الزغير الليت 6 اللوان 6 من كل لون (تم إلغاء الصنف في الإنتاج)",
+              "thickness": "",
+              "hasProductionDetails": true,
+              "colorModel": "شتوي ببلي ثرو",
+              "productionNotes": "شنته +كرت الزغير الليت ",
+              "sizeCm": "200*220",
+              "productName": "ثرو شتوي 200*220 سم",
+              "itemStatus": "إنتاج قيد الخياطة"
+            },
+            {
+              "notes": "شنته +كرت الزغير الليت 6 اللوان 6 من كل لون (تم إلغاء الصنف في الإنتاج)",
+              "quantity": "36",
+              "thickness": "",
+              "hasProductionDetails": true,
+              "colorModel": "شتوي ببلي ثرو",
+              "productName": "ثرو شتوي 160*220 سم",
+              "hasPreparationDetails": false,
+              "sizeCm": "160*220",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "productionNotes": "شنته +كرت الزغير الليت "
+            },
+            {
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "quantity": "10",
+              "notes": "",
+              "itemStatus": "جاهز",
+              "productName": "لحاف مايكروفايبر 160*220سم",
+              "hasProductionDetails": false
+            },
+            {
+              "hasPreparationDetails": true,
+              "itemStatus": "قيد التحضير",
+              "productName": "لحاف مايكروفايبر 220*240سم",
+              "notes": "",
+              "hasProductionDetails": false,
+              "preparationNotes": "",
+              "quantity": "5"
+            },
+            {
+              "productName": "لحاف مايكروفايبر 240*260سم",
+              "quantity": "5",
+              "itemStatus": "قيد التحضير",
+              "hasPreparationDetails": true,
+              "hasProductionDetails": false,
+              "notes": "",
+              "preparationNotes": ""
+            },
+            {
+              "productName": "واقي مخدة تنسل عدد 2",
+              "itemStatus": "جاهز",
+              "hasProductionDetails": false,
+              "notes": "ستيكر ",
+              "quantity": "5",
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false
+            },
+            {
+              "quantity": "10",
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false,
+              "productName": "واقي مخدة عرض عدد 1",
+              "notes": "كل جوز ببكيت ",
+              "hasProductionDetails": false,
+              "itemStatus": "جاهز"
+            }
+          ],
+          "customerId": "kgfmZd2nx0Wnx2yO2Ciz",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "customerName": "انوار شرق اسيا لخدمات التسويق -الزغير ايليت",
+          "currentDepartment": "الطلبيات",
+          "orderNumber": "ORD-0054"
+        },
+        {
+          "status": "جديد",
+          "orderNotes": "فرع العبدلي مول - لا يوجد طلب شراء ولكن الزبون ينتظر انجازهم ومن ثم نخبر الزبون ب انه البضاعة جاهزة ",
+          "supervisorNotes": "تم",
+          "id": "DrSe1NL0PAbIYo6Gutxi",
+          "customerName": "مخازن المدينة التجارية",
+          "createdBy": "المدير العام",
+          "currentDepartment": "الطلبيات",
+          "items": [
+            {
+              "quantity": "120",
+              "notes": "",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "productName": "وجه مخدة عرض 50*70 سم عدد 2",
+              "hasProductionDetails": true
+            }
+          ],
+          "deliveryDate": "2026-10-15",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "orderDate": "2026-10-07",
+          "customerId": "EorsLiy1nU2VFrnrdZnh",
+          "isSales": true,
+          "statusUpdateDate": "2026-10-07",
+          "orderNumber": "ORD-0055"
+        },
+        {
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "supervisorNotes": "تم",
+          "items": [
+            {
+              "itemStatus": "جاهز",
+              "notes": "",
+              "hasProductionDetails": false,
+              "quantity": "60",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "productName": "واقي فرشة عرض 100*200سم"
+            },
+            {
+              "quantity": "40",
+              "productName": "واقي فرشة عرض 120*200سم",
+              "itemStatus": "جاهز",
+              "notes": "",
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false,
+              "hasProductionDetails": false
+            },
+            {
+              "itemStatus": "جاهز",
+              "quantity": "60",
+              "productName": "واقي فرشة عرض200*200سم",
+              "hasPrepAndProdDetails": false,
+              "notes": "",
+              "hasPreparationDetails": false,
+              "hasProductionDetails": false
+            },
+            {
+              "itemStatus": "قيد التحضير",
+              "hasProductionDetails": false,
+              "quantity": "60",
+              "preparationNotes": "",
+              "hasPreparationDetails": true,
+              "notes": "",
+              "productName": "مخدة مايكروفايبر 1400غ مصفاة"
+            }
+          ],
+          "isSales": true,
+          "statusUpdateDate": "2026-10-09",
+          "orderNumber": "ORD-0064",
+          "orderDate": "2026-10-09",
+          "id": "HbxfZyvhd1Jfzdgkgm8r",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "orderNotes": "الواقي العرض جاهز عند المصعد\nسيتم تعديل الاعداد على السستم حسب العدد المتواجد عند المصعد",
+          "status": "جديد",
+          "currentDepartment": "الطلبيات",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-10",
+          "createdBy": "جهاد بركات فلاح المهيرات"
+        },
+        {
+          "orderNumber": "ORD-0057",
+          "id": "zQw7UFn18j2wpPjWJvo0",
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "createdBy": "المدير العام",
+          "isSales": true,
+          "orderDate": "2026-10-07",
+          "status": "جديد",
+          "orderNotes": "فرع حي نزال ",
+          "currentDepartment": "الطلبيات",
+          "statusUpdateDate": "2026-10-07",
+          "items": [
+            {
+              "notes": "كرت ابولو تغليف سحاب ",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "quantity": "36",
+              "hasProductionDetails": true
+            },
+            {
+              "itemStatus": "إنتاج قيد الخياطة",
+              "quantity": "36",
+              "notes": "كرت ابولو تغليف سحاب ",
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "hasProductionDetails": true
+            }
+          ],
+          "supervisorNotes": "تم",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-12"
+        },
+        {
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "currentDepartment": "الطلبيات",
+          "orderNumber": "ORD-0051",
+          "isSales": true,
+          "status": "قيد التجهيز",
+          "customerName": "الزغير هوم سنتر",
+          "items": [
+            {
+              "itemStatus": "قيد التحضير",
+              "quantity": "36",
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "hasPreparationDetails": true,
+              "hasProductionDetails": false,
+              "notes": "عدد 6 من كل لون  كيس سيلك كرت كانون ",
+              "preparationNotes": "عدد 6 من كل لون\n كيس سيلك\nكرت كانون "
+            },
+            {
+              "hasProductionDetails": false,
+              "preparationNotes": "",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "itemStatus": "قيد التحضير",
+              "notes": "عدد 6 من كل لون  كيس سيلك كرت كانون ",
+              "quantity": "36",
+              "hasPreparationDetails": true
+            },
+            {
+              "notes": "عدد 2 من كل لون كرت الزغير مع شبره-قماش سترايب عريض شتوي ",
+              "sizeCm": "200*220",
+              "quantity": "12",
+              "productionNotes": "عدد 2 من كل لون كرت الزغير مع شبره\nقماش شتوي جديد سترايب عريض ",
+              "productName": "ثرو شتوي 200*220 سم",
+              "colorModel": "أبيض",
+              "itemStatus": "قيد التحضير",
+              "hasPreparationDetails": false,
+              "thickness": "",
+              "hasProductionDetails": true
+            },
+            {
+              "sizeCm": "160*220",
+              "productName": "ثرو شتوي 160*220 سم",
+              "hasProductionDetails": true,
+              "quantity": "24",
+              "colorModel": "أبيض",
+              "hasPreparationDetails": false,
+              "notes": "عدد 4 من كل لون شبره مع كرت الزغير ",
+              "itemStatus": "قيد التحضير",
+              "productionNotes": "عدد 2 من كل لون كرت الزغير مع شبره",
+              "thickness": ""
+            },
+            {
+              "colorModel": "أبيض",
+              "sizeCm": "170*130",
+              "quantity": "18",
+              "thickness": "",
+              "itemStatus": "قيد التحضير",
+              "hasPreparationDetails": false,
+              "hasProductionDetails": true,
+              "notes": "",
+              "productionNotes": "قماش شتوي سترايب عريض\nعدد 3 من كل لون 6 اللوان\nتغليف شبره مع كرت الزغير ",
+              "productName": "شرشف فلات تواصي"
+            }
+          ],
+          "orderNotes": "ارجو مراجعه جهاد بكل اشي يتعلق بالاوردر",
+          "supervisorNotes": "تم",
+          "id": "5iwZ5XISGs60IytMgzxE",
+          "deliveryDate": "2026-10-08",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "statusUpdateDate": "2026-10-10",
+          "orderDate": "2026-10-07",
+          "customerId": "hNiXghAVc3D1x8WKfrtF"
+        },
+        {
+          "salesOrderNumber": "ORD-0054",
+          "items": [
+            {
+              "quantity": "5",
+              "status": "لم يتم التنفيذ",
+              "thickness": "",
+              "productName": "طقم وجه لحاف مايكروفايبر 220*240سم - 4 قطع",
+              "colorModel": "",
+              "sizeCm": "",
+              "notes": ""
+            },
+            {
+              "status": "لم يتم التنفيذ",
+              "colorModel": "",
+              "productName": "لحاف مايكروفايبر 240*260سم",
+              "thickness": "",
+              "quantity": "5",
+              "notes": "",
+              "sizeCm": ""
+            },
+            {
+              "colorModel": "",
+              "sizeCm": "",
+              "productName": "لحاف مايكروفايبر 220*240سم",
+              "quantity": "5",
+              "thickness": "",
+              "notes": "",
+              "status": "لم يتم التنفيذ"
+            }
+          ],
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "customerId": "kgfmZd2nx0Wnx2yO2Ciz",
+          "deliveryDate": "2026-10-11",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "id": "6AlOz3ug3jWoh3KH6xsh",
+          "supervisorNotes": "تم",
+          "customerName": "انوار شرق اسيا لخدمات التسويق -الزغير ايليت",
+          "orderDate": "2026-09-24",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0009",
+          "status": "لم يتم التنفيذ",
+          "salesOrderId": "4rHeLboPtUrTYG8pFyfo",
+          "orderNumber": "PREP-0018",
+          "isPreparation": true
+        },
+        {
+          "customerName": "انوار شرق اسيا لخدمات التسويق -الزغير ايليت",
+          "orderDate": "2026-09-24",
+          "supervisorNotes": "تم",
+          "orderNumber": "PREP-0017",
+          "id": "L9BqaClG4oNQ0hjmQl98",
+          "salesOrderId": "TOOKzOCSnUNSCbwLdVQM",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0009",
+          "deliveryDate": "2026-09-27",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "items": [
+            {
+              "sizeCm": "",
+              "thickness": "",
+              "quantity": "5",
+              "notes": "",
+              "colorModel": "",
+              "productName": "طقم وجه لحاف مايكروفايبر 220*240سم - 4 قطع",
+              "status": "لم يتم التنفيذ"
+            },
+            {
+              "status": "لم يتم التنفيذ",
+              "quantity": "5",
+              "colorModel": "",
+              "thickness": "",
+              "notes": "",
+              "productName": "لحاف مايكروفايبر 240*260سم",
+              "sizeCm": ""
+            }
+          ],
+          "salesOrderNumber": "ORD-0053",
+          "isPreparation": true,
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "customerId": "kgfmZd2nx0Wnx2yO2Ciz",
+          "status": "لم يتم التنفيذ"
+        },
+        {
+          "items": [
+            {
+              "thickness": "",
+              "quantity": "36",
+              "sizeCm": "",
+              "productName": "",
+              "colorModel": "",
+              "notes": "",
+              "status": "لم يتم التنفيذ"
+            },
+            {
+              "thickness": "",
+              "sizeCm": "",
+              "notes": "عدد 6 من كل لون\n كيس سيلك\nكرت كانون ",
+              "quantity": "36",
+              "colorModel": "",
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "status": "لم يتم التنفيذ"
+            },
+            {
+              "sizeCm": "",
+              "notes": "",
+              "thickness": "",
+              "quantity": "36",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "colorModel": "",
+              "status": "لم يتم التنفيذ"
+            }
+          ],
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "hasLedgerMismatch": false,
+          "id": "U17YOLdzNuQmAKsD2QIh",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0051",
+          "stockDeducted": false,
+          "customerName": "الزغير هوم سنتر",
+          "orderNumber": "PREP-0015",
+          "salesOrderId": "5iwZ5XISGs60IytMgzxE",
+          "stockReceived": false,
+          "isPreparation": true,
+          "customerId": "hNiXghAVc3D1x8WKfrtF",
+          "storedStockDeducted": false,
+          "productionType": "preparation",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "ignoredMaterialAudit": true,
+          "status": "لم يتم التنفيذ",
+          "supervisorNotes": "تم",
+          "orderDate": "2026-10-07",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-08",
+          "salesOrderNumber": "ORD-0051"
+        },
+        {
+          "orderNotes": "مرتبط بطلبية رقم ORD-0063",
+          "status": "لم يتم التنفيذ",
+          "deliveryDate": "2026-10-10",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "orderDate": "2026-10-09",
+          "isPreparation": true,
+          "supervisorNotes": "تم",
+          "id": "awc1yTqjQiDdtz2ZTm64",
+          "items": [
+            {
+              "productName": "مخدة مايكروفايبر 1400غ مصفاة",
+              "sizeCm": "",
+              "quantity": "60",
+              "thickness": "",
+              "notes": "",
+              "status": "لم يتم التنفيذ",
+              "colorModel": ""
+            }
+          ],
+          "currentDepartment": "إنتاج قيد التحضير",
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "salesOrderNumber": "ORD-0064",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "orderNumber": "PREP-0021",
+          "salesOrderId": "HbxfZyvhd1Jfzdgkgm8r"
+        },
+        {
+          "items": [
+            {
+              "quantity": "10",
+              "thickness": "",
+              "status": "لم يتم التنفيذ",
+              "notes": " سيلك قديم + باركود ميرانا 1800غ + شنته نايلون مسحوب هوا ",
+              "productName": "مخدة مايكروفايبر دبل بريم 1800غ",
+              "sizeCm": "",
+              "colorModel": ""
+            },
+            {
+              "notes": "بريم واحد اي لون +باركود ميرانا 1300غ + شنته نايلون مسحوب هوا ",
+              "colorModel": "",
+              "sizeCm": "",
+              "quantity": "10",
+              "productName": "مخدة مايكروفايبر بريم واحد 1300غ",
+              "thickness": "",
+              "status": "لم يتم التنفيذ"
+            }
+          ],
+          "customerName": "شركة الوعد للتسويق المباشر",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "status": "لم يتم التنفيذ",
+          "customerId": "rpPPndldWkWRBWtPZKyk",
+          "salesOrderId": "34h4aGll0z2wL55bAaNf",
+          "orderDate": "2026-10-07",
+          "createdBy": "المدير العام",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0056",
+          "isPreparation": true,
+          "supervisorNotes": "تم",
+          "deliveryDate": "2026-10-08",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "salesOrderNumber": "ORD-0060",
+          "id": "m31JTpvNVOIT4uxztISm",
+          "orderNumber": "PREP-0019"
+        }
+      ],
+      "timeIn": "",
+      "employeeEvaluations": [
+        {
+          "scorePercentage": "40",
+          "reportApproved": false,
+          "rating": "لم يقدم تقرير",
+          "reason": "لم يقم بتقديم أي تقرير",
+          "employeeName": "أحمد لطفي حسن حسين",
+          "employeeId": "EMP-0024"
+        },
+        {
+          "scorePercentage": "40",
+          "reason": "لم يقم بتقديم أي تقرير",
+          "employeeName": "ماجد يوسف عبد الجابر محمود",
+          "employeeId": "EMP-0021",
+          "reportApproved": false,
+          "rating": "لم يقدم تقرير"
+        },
+        {
+          "reportApproved": false,
+          "rating": "لم يقدم تقرير",
+          "employeeName": "محمد سمير علي محمد العبود",
+          "reason": "لم يقم بتقديم أي تقرير",
+          "employeeId": "EMP-0008",
+          "scorePercentage": "40"
+        },
+        {
+          "employeeName": "ايهاب رامي محمد راغب الشرباتي",
+          "employeeId": "EMP-0012",
+          "scorePercentage": "40",
+          "reportApproved": false,
+          "rating": "لم يقدم تقرير",
+          "reason": "لم يقم بتقديم أي تقرير"
+        },
+        {
+          "employeeName": "بهاء الدين اسامة ايوب غيث",
+          "employeeId": "EMP-0018",
+          "scorePercentage": "40",
+          "rating": "لم يقدم تقرير",
+          "reportApproved": false,
+          "reason": "لم يقم بتقديم أي تقرير"
+        },
+        {
+          "employeeName": "حمزة ماهر احمد الكردي",
+          "reportApproved": false,
+          "employeeId": "EMP-0019",
+          "scorePercentage": "40",
+          "rating": "لم يقدم تقرير",
+          "reason": "لم يقم بتقديم أي تقرير"
+        }
+      ],
+      "timeOut": "17:00",
+      "date": "2026-10-04",
+      "supervisorId": "EMP-0006",
+      "employeeAttendanceStatus": "all_present",
+      "createdAt": "2026-10-10T05:50:32.366Z"
+    },
+    {
+      "ordersSnapshot": [
+        {
+          "customerId": "rpPPndldWkWRBWtPZKyk",
+          "currentDepartment": "الطلبيات",
+          "statusUpdateDate": "2026-10-08",
+          "status": "جديد",
+          "customerName": "شركة الوعد للتسويق المباشر",
+          "orderDate": "2026-10-07",
+          "orderNotes": "",
+          "supervisorNotes": "تم",
+          "createdBy": "المدير العام",
+          "deliveryDate": "2026-10-08",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "orderNumber": "ORD-0060",
+          "items": [
+            {
+              "quantity": "10",
+              "notes": "بريم واحد اي لون +باركود ميرانا 1300غ + شنته نايلون مسحوب هوا ",
+              "itemStatus": "قيد التحضير",
+              "hasPreparationDetails": true,
+              "productName": "مخدة مايكروفايبر بريم واحد 1300غ"
+            },
+            {
+              "productName": "مخدة مايكروفايبر دبل بريم 1800غ",
+              "hasPreparationDetails": true,
+              "quantity": "10",
+              "notes": " سيلك قديم + باركود ميرانا 1800غ + شنته نايلون مسحوب هوا ",
+              "itemStatus": "قيد التحضير"
+            },
+            {
+              "itemStatus": "جاهز",
+              "quantity": "2",
+              "productName": "لحاف داون بروف 240*260سم",
+              "notes": "ورقة دعاية بيت بيوت "
+            },
+            {
+              "productName": "لحاف داون بروف 160*220سم",
+              "quantity": "3",
+              "itemStatus": "جاهز",
+              "notes": "ورقة دعاية بيت بيوت "
+            }
+          ],
+          "isSales": true,
+          "id": "34h4aGll0z2wL55bAaNf"
+        },
+        {
+          "statusUpdateDate": "2026-10-09",
+          "status": "جديد",
+          "orderNotes": "فرع مرج الحمام ",
+          "orderDate": "2026-10-07",
+          "orderNumber": "ORD-0059",
+          "deliveryDate": "2026-10-12",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "isSales": true,
+          "currentDepartment": "الطلبيات",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "id": "4REbO02GIXr0IYVuKd9R",
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "createdBy": "المدير العام",
+          "supervisorNotes": "نم",
+          "items": [
+            {
+              "itemStatus": "إنتاج قيد الخياطة",
+              "notes": "ابولو تغليف سحاب",
+              "quantity": "60",
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "hasProductionDetails": true
+            },
+            {
+              "itemStatus": "إنتاج قيد الخياطة",
+              "quantity": "60",
+              "hasProductionDetails": true,
+              "notes": "ابولو تغليف سحاب",
+              "productName": "شرشف مطاط شتوي 120*200 سم"
+            },
+            {
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "itemStatus": "جاهز",
+              "productName": "وجه مخدة شتوي عدد 1 - أسود (مستودع: مصنع البياضات)",
+              "quantity": 72
+            },
+            {
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "itemStatus": "جاهز",
+              "quantity": 72,
+              "productName": "وجه مخدة شتوي عدد 1 - اوفوايت (مستودع: مصنع البياضات)"
+            },
+            {
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "productName": "وجه مخدة شتوي عدد 1 - بيج (مستودع: مصنع البياضات)",
+              "quantity": 1529,
+              "itemStatus": "جاهز"
+            },
+            {
+              "productName": "وجه مخدة شتوي عدد 1 - سكني (مستودع: مصنع البياضات)",
+              "quantity": 580,
+              "itemStatus": "جاهز",
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع"
+            },
+            {
+              "itemStatus": "جاهز",
+              "productName": "وجه مخدة شتوي عدد 1 - سومو (مستودع: مصنع البياضات)",
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "quantity": 1
+            }
+          ]
+        },
+        {
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "customerId": "kgfmZd2nx0Wnx2yO2Ciz",
+          "statusUpdateDate": "2026-10-07",
+          "orderNumber": "ORD-0054",
+          "customerName": "انوار شرق اسيا لخدمات التسويق -الزغير ايليت",
+          "items": [
+            {
+              "itemStatus": "جاهز",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "quantity": "60",
+              "notes": "كيس سحاب كرت فوكس",
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false,
+              "hasProductionDetails": false
+            },
+            {
+              "notes": "كيس سحاب كرت فوكس",
+              "quantity": "60",
+              "hasProductionDetails": false,
+              "itemStatus": "جاهز",
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false
+            },
+            {
+              "notes": "شنته +كرت الزغير الليت 6 اللوان 6 من كل لون (تم إلغاء الصنف في الإنتاج)",
+              "productionNotes": "شنته +كرت الزغير الليت ",
+              "thickness": "",
+              "hasPreparationDetails": false,
+              "productName": "ثرو شتوي 200*220 سم",
+              "quantity": "36",
+              "colorModel": "شتوي ببلي ثرو",
+              "hasProductionDetails": true,
+              "itemStatus": "إنتاج قيد الخياطة",
+              "sizeCm": "200*220"
+            },
+            {
+              "hasProductionDetails": true,
+              "itemStatus": "إنتاج قيد الخياطة",
+              "sizeCm": "160*220",
+              "hasPreparationDetails": false,
+              "colorModel": "شتوي ببلي ثرو",
+              "productName": "ثرو شتوي 160*220 سم",
+              "thickness": "",
+              "quantity": "36",
+              "notes": "شنته +كرت الزغير الليت 6 اللوان 6 من كل لون (تم إلغاء الصنف في الإنتاج)",
+              "productionNotes": "شنته +كرت الزغير الليت "
+            },
+            {
+              "itemStatus": "جاهز",
+              "quantity": "10",
+              "productName": "لحاف مايكروفايبر 160*220سم",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "notes": "",
+              "hasProductionDetails": false
+            },
+            {
+              "notes": "",
+              "preparationNotes": "",
+              "quantity": "5",
+              "hasProductionDetails": false,
+              "hasPreparationDetails": true,
+              "productName": "لحاف مايكروفايبر 220*240سم",
+              "itemStatus": "قيد التحضير"
+            },
+            {
+              "quantity": "5",
+              "hasPreparationDetails": true,
+              "productName": "لحاف مايكروفايبر 240*260سم",
+              "hasProductionDetails": false,
+              "notes": "",
+              "itemStatus": "قيد التحضير",
+              "preparationNotes": ""
+            },
+            {
+              "hasProductionDetails": false,
+              "notes": "ستيكر ",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "itemStatus": "جاهز",
+              "productName": "واقي مخدة تنسل عدد 2",
+              "quantity": "5"
+            },
+            {
+              "notes": "كل جوز ببكيت ",
+              "itemStatus": "جاهز",
+              "quantity": "10",
+              "hasProductionDetails": false,
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "productName": "واقي مخدة عرض عدد 1"
+            }
+          ],
+          "orderNotes": "",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-11",
+          "status": "جديد",
+          "supervisorNotes": "تم",
+          "isSales": true,
+          "id": "4rHeLboPtUrTYG8pFyfo",
+          "orderDate": "2026-10-07",
+          "currentDepartment": "الطلبيات"
+        },
+        {
+          "id": "DrSe1NL0PAbIYo6Gutxi",
+          "isSales": true,
+          "createdBy": "المدير العام",
+          "orderNotes": "فرع العبدلي مول - لا يوجد طلب شراء ولكن الزبون ينتظر انجازهم ومن ثم نخبر الزبون ب انه البضاعة جاهزة ",
+          "customerName": "مخازن المدينة التجارية",
+          "supervisorNotes": "تم",
+          "items": [
+            {
+              "notes": "",
+              "hasProductionDetails": true,
+              "itemStatus": "إنتاج قيد الخياطة",
+              "productName": "وجه مخدة عرض 50*70 سم عدد 2",
+              "quantity": "120"
+            }
+          ],
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-15",
+          "customerId": "EorsLiy1nU2VFrnrdZnh",
+          "statusUpdateDate": "2026-10-07",
+          "orderNumber": "ORD-0055",
+          "currentDepartment": "الطلبيات",
+          "orderDate": "2026-10-07",
+          "status": "جديد"
+        },
+        {
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-10",
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "status": "جديد",
+          "supervisorNotes": "تم",
+          "orderNumber": "ORD-0064",
+          "id": "HbxfZyvhd1Jfzdgkgm8r",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "isSales": true,
+          "items": [
+            {
+              "hasProductionDetails": false,
+              "itemStatus": "جاهز",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "productName": "واقي فرشة عرض 100*200سم",
+              "quantity": "60",
+              "notes": ""
+            },
+            {
+              "hasProductionDetails": false,
+              "quantity": "40",
+              "notes": "",
+              "itemStatus": "جاهز",
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false,
+              "productName": "واقي فرشة عرض 120*200سم"
+            },
+            {
+              "productName": "واقي فرشة عرض200*200سم",
+              "quantity": "60",
+              "notes": "",
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false,
+              "hasProductionDetails": false,
+              "itemStatus": "جاهز"
+            },
+            {
+              "preparationNotes": "",
+              "notes": "",
+              "quantity": "60",
+              "hasPreparationDetails": true,
+              "itemStatus": "قيد التحضير",
+              "hasProductionDetails": false,
+              "productName": "مخدة مايكروفايبر 1400غ مصفاة"
+            }
+          ],
+          "orderNotes": "الواقي العرض جاهز عند المصعد\nسيتم تعديل الاعداد على السستم حسب العدد المتواجد عند المصعد",
+          "orderDate": "2026-10-09",
+          "statusUpdateDate": "2026-10-09",
+          "currentDepartment": "الطلبيات",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث"
+        },
+        {
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "id": "zQw7UFn18j2wpPjWJvo0",
+          "statusUpdateDate": "2026-10-07",
+          "supervisorNotes": "تم",
+          "items": [
+            {
+              "hasProductionDetails": true,
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "quantity": "36",
+              "notes": "كرت ابولو تغليف سحاب ",
+              "itemStatus": "إنتاج قيد الخياطة"
+            },
+            {
+              "quantity": "36",
+              "hasProductionDetails": true,
+              "notes": "كرت ابولو تغليف سحاب ",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "productName": "شرشف مطاط شتوي 200*200 سم"
+            }
+          ],
+          "isSales": true,
+          "orderDate": "2026-10-07",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "status": "جديد",
+          "orderNumber": "ORD-0057",
+          "createdBy": "المدير العام",
+          "orderNotes": "فرع حي نزال ",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-12",
+          "currentDepartment": "الطلبيات"
+        },
+        {
+          "orderDate": "2026-10-07",
+          "customerName": "الزغير هوم سنتر",
+          "statusUpdateDate": "2026-10-10",
+          "isSales": true,
+          "orderNumber": "ORD-0051",
+          "id": "5iwZ5XISGs60IytMgzxE",
+          "orderNotes": "ارجو مراجعه جهاد بكل اشي يتعلق بالاوردر",
+          "supervisorNotes": "تم",
+          "currentDepartment": "الطلبيات",
+          "items": [
+            {
+              "itemStatus": "قيد التحضير",
+              "notes": "عدد 6 من كل لون  كيس سيلك كرت كانون ",
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "quantity": "36",
+              "hasPreparationDetails": true,
+              "hasProductionDetails": false,
+              "preparationNotes": "عدد 6 من كل لون\n كيس سيلك\nكرت كانون "
+            },
+            {
+              "itemStatus": "قيد التحضير",
+              "hasProductionDetails": false,
+              "preparationNotes": "",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "hasPreparationDetails": true,
+              "quantity": "36",
+              "notes": "عدد 6 من كل لون  كيس سيلك كرت كانون "
+            },
+            {
+              "productionNotes": "عدد 2 من كل لون كرت الزغير مع شبره\nقماش شتوي جديد سترايب عريض ",
+              "itemStatus": "قيد التحضير",
+              "thickness": "",
+              "notes": "عدد 2 من كل لون كرت الزغير مع شبره-قماش سترايب عريض شتوي ",
+              "colorModel": "أبيض",
+              "hasPreparationDetails": false,
+              "quantity": "12",
+              "sizeCm": "200*220",
+              "hasProductionDetails": true,
+              "productName": "ثرو شتوي 200*220 سم"
+            },
+            {
+              "thickness": "",
+              "quantity": "24",
+              "itemStatus": "قيد التحضير",
+              "sizeCm": "160*220",
+              "notes": "عدد 4 من كل لون شبره مع كرت الزغير ",
+              "hasPreparationDetails": false,
+              "hasProductionDetails": true,
+              "colorModel": "أبيض",
+              "productName": "ثرو شتوي 160*220 سم",
+              "productionNotes": "عدد 2 من كل لون كرت الزغير مع شبره"
+            },
+            {
+              "colorModel": "أبيض",
+              "hasProductionDetails": true,
+              "quantity": "18",
+              "itemStatus": "قيد التحضير",
+              "productName": "شرشف فلات تواصي",
+              "thickness": "",
+              "sizeCm": "170*130",
+              "hasPreparationDetails": false,
+              "productionNotes": "قماش شتوي سترايب عريض\nعدد 3 من كل لون 6 اللوان\nتغليف شبره مع كرت الزغير ",
+              "notes": ""
+            }
+          ],
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-08",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "customerId": "hNiXghAVc3D1x8WKfrtF",
+          "status": "قيد التجهيز"
+        },
+        {
+          "id": "6AlOz3ug3jWoh3KH6xsh",
+          "salesOrderNumber": "ORD-0054",
+          "status": "لم يتم التنفيذ",
+          "customerId": "kgfmZd2nx0Wnx2yO2Ciz",
+          "orderNumber": "PREP-0018",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-11",
+          "isPreparation": true,
+          "orderDate": "2026-09-24",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "supervisorNotes": "تم",
+          "customerName": "انوار شرق اسيا لخدمات التسويق -الزغير ايليت",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0009",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "items": [
+            {
+              "status": "لم يتم التنفيذ",
+              "productName": "طقم وجه لحاف مايكروفايبر 220*240سم - 4 قطع",
+              "thickness": "",
+              "quantity": "5",
+              "colorModel": "",
+              "sizeCm": "",
+              "notes": ""
+            },
+            {
+              "productName": "لحاف مايكروفايبر 240*260سم",
+              "thickness": "",
+              "status": "لم يتم التنفيذ",
+              "quantity": "5",
+              "notes": "",
+              "sizeCm": "",
+              "colorModel": ""
+            },
+            {
+              "sizeCm": "",
+              "colorModel": "",
+              "quantity": "5",
+              "notes": "",
+              "productName": "لحاف مايكروفايبر 220*240سم",
+              "thickness": "",
+              "status": "لم يتم التنفيذ"
+            }
+          ],
+          "salesOrderId": "4rHeLboPtUrTYG8pFyfo"
+        },
+        {
+          "items": [
+            {
+              "notes": "",
+              "status": "لم يتم التنفيذ",
+              "sizeCm": "",
+              "colorModel": "",
+              "productName": "طقم وجه لحاف مايكروفايبر 220*240سم - 4 قطع",
+              "thickness": "",
+              "quantity": "5"
+            },
+            {
+              "productName": "لحاف مايكروفايبر 240*260سم",
+              "status": "لم يتم التنفيذ",
+              "thickness": "",
+              "colorModel": "",
+              "notes": "",
+              "sizeCm": "",
+              "quantity": "5"
+            }
+          ],
+          "salesOrderNumber": "ORD-0053",
+          "salesOrderId": "TOOKzOCSnUNSCbwLdVQM",
+          "orderNumber": "PREP-0017",
+          "customerName": "انوار شرق اسيا لخدمات التسويق -الزغير ايليت",
+          "orderDate": "2026-09-24",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0009",
+          "id": "L9BqaClG4oNQ0hjmQl98",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "deliveryDate": "2026-09-27",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "status": "لم يتم التنفيذ",
+          "customerId": "kgfmZd2nx0Wnx2yO2Ciz",
+          "isPreparation": true,
+          "supervisorNotes": "تم"
+        },
+        {
+          "hasLedgerMismatch": false,
+          "customerId": "hNiXghAVc3D1x8WKfrtF",
+          "isPreparation": true,
+          "orderDate": "2026-10-07",
+          "storedStockDeducted": false,
+          "ignoredMaterialAudit": true,
+          "items": [
+            {
+              "status": "لم يتم التنفيذ",
+              "notes": "",
+              "quantity": "36",
+              "thickness": "",
+              "colorModel": "",
+              "sizeCm": "",
+              "productName": ""
+            },
+            {
+              "status": "لم يتم التنفيذ",
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "thickness": "",
+              "colorModel": "",
+              "notes": "عدد 6 من كل لون\n كيس سيلك\nكرت كانون ",
+              "sizeCm": "",
+              "quantity": "36"
+            },
+            {
+              "status": "لم يتم التنفيذ",
+              "thickness": "",
+              "quantity": "36",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "notes": "",
+              "colorModel": "",
+              "sizeCm": ""
+            }
+          ],
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-08",
+          "productionType": "preparation",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0051",
+          "orderNumber": "PREP-0015",
+          "id": "U17YOLdzNuQmAKsD2QIh",
+          "supervisorNotes": "تم",
+          "customerName": "الزغير هوم سنتر",
+          "stockDeducted": false,
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "stockReceived": false,
+          "salesOrderId": "5iwZ5XISGs60IytMgzxE",
+          "status": "لم يتم التنفيذ",
+          "salesOrderNumber": "ORD-0051"
+        },
+        {
+          "currentDepartment": "إنتاج قيد التحضير",
+          "isPreparation": true,
+          "id": "awc1yTqjQiDdtz2ZTm64",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "supervisorNotes": "تم",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-10",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0063",
+          "items": [
+            {
+              "productName": "مخدة مايكروفايبر 1400غ مصفاة",
+              "notes": "",
+              "status": "لم يتم التنفيذ",
+              "quantity": "60",
+              "colorModel": "",
+              "sizeCm": "",
+              "thickness": ""
+            }
+          ],
+          "orderDate": "2026-10-09",
+          "salesOrderNumber": "ORD-0064",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "salesOrderId": "HbxfZyvhd1Jfzdgkgm8r",
+          "status": "لم يتم التنفيذ",
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "orderNumber": "PREP-0021"
+        },
+        {
+          "createdBy": "المدير العام",
+          "customerName": "شركة الوعد للتسويق المباشر",
+          "salesOrderId": "34h4aGll0z2wL55bAaNf",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0056",
+          "supervisorNotes": "تم",
+          "id": "m31JTpvNVOIT4uxztISm",
+          "salesOrderNumber": "ORD-0060",
+          "status": "لم يتم التنفيذ",
+          "orderNumber": "PREP-0019",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "orderDate": "2026-10-07",
+          "isPreparation": true,
+          "customerId": "rpPPndldWkWRBWtPZKyk",
+          "items": [
+            {
+              "colorModel": "",
+              "sizeCm": "",
+              "thickness": "",
+              "quantity": "10",
+              "status": "لم يتم التنفيذ",
+              "notes": " سيلك قديم + باركود ميرانا 1800غ + شنته نايلون مسحوب هوا ",
+              "productName": "مخدة مايكروفايبر دبل بريم 1800غ"
+            },
+            {
+              "sizeCm": "",
+              "thickness": "",
+              "notes": "بريم واحد اي لون +باركود ميرانا 1300غ + شنته نايلون مسحوب هوا ",
+              "status": "لم يتم التنفيذ",
+              "productName": "مخدة مايكروفايبر بريم واحد 1300غ",
+              "quantity": "10",
+              "colorModel": ""
+            }
+          ],
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-08"
+        }
+      ],
+      "date": "2026-10-05",
+      "employeeEvaluations": [
+        {
+          "reportApproved": false,
+          "rating": "جيد",
+          "employeeName": "أحمد لطفي حسن حسين",
+          "reason": "",
+          "scorePercentage": "80",
+          "employeeId": "EMP-0024"
+        },
+        {
+          "scorePercentage": "0",
+          "reportApproved": false,
+          "employeeName": "ماجد يوسف عبد الجابر محمود",
+          "rating": "غائب",
+          "employeeId": "EMP-0021",
+          "reason": "لم يقم بتقديم أي تقرير"
+        },
+        {
+          "reportApproved": false,
+          "rating": "غائب",
+          "employeeId": "EMP-0008",
+          "scorePercentage": "0",
+          "reason": "",
+          "employeeName": "محمد سمير علي محمد العبود"
+        },
+        {
+          "reportApproved": false,
+          "employeeName": "ايهاب رامي محمد راغب الشرباتي",
+          "reason": "",
+          "scorePercentage": "80",
+          "employeeId": "EMP-0012",
+          "rating": "جيد"
+        },
+        {
+          "reportApproved": false,
+          "employeeId": "EMP-0018",
+          "scorePercentage": "80",
+          "employeeName": "بهاء الدين اسامة ايوب غيث",
+          "reason": "",
+          "rating": "جيد"
+        },
+        {
+          "scorePercentage": "80",
+          "employeeName": "حمزة ماهر احمد الكردي",
+          "reason": "",
+          "employeeId": "EMP-0019",
+          "rating": "جيد",
+          "reportApproved": false
+        }
+      ],
+      "status": "معتمد",
+      "timeIn": "8:26 ص",
+      "supervisorName": "عبد الله يعقوب ايوب غيث",
+      "attendanceNotes": "",
+      "supervisorId": "EMP-0006",
+      "createdAt": "2026-10-10T05:47:39.569Z",
+      "id": "sup_rep_EMP-0006_2026-10-05",
+      "timeOut": "17:05",
+      "employeeAttendanceStatus": "all_present"
+    },
+    {
+      "supervisorName": "عبد الله يعقوب ايوب غيث",
+      "employeeAttendanceStatus": "all_present",
+      "id": "sup_rep_EMP-0006_2026-10-06",
+      "employeeEvaluations": [
+        {
+          "reason": "",
+          "employeeId": "EMP-0024",
+          "rating": "جيد",
+          "scorePercentage": "80",
+          "reportApproved": false,
+          "employeeName": "أحمد لطفي حسن حسين"
+        },
+        {
+          "reason": "",
+          "employeeId": "EMP-0021",
+          "rating": "جيد",
+          "employeeName": "ماجد يوسف عبد الجابر محمود",
+          "reportApproved": false,
+          "scorePercentage": "80"
+        },
+        {
+          "reportApproved": false,
+          "employeeId": "EMP-0019",
+          "rating": "جيد",
+          "employeeName": "حمزة ماهر احمد الكردي",
+          "reason": "",
+          "scorePercentage": "80"
+        },
+        {
+          "employeeId": "EMP-0018",
+          "employeeName": "بهاء الدين اسامة ايوب غيث",
+          "rating": "جيد",
+          "reportApproved": false,
+          "reason": "",
+          "scorePercentage": "80"
+        },
+        {
+          "employeeName": "ايهاب رامي محمد راغب الشرباتي",
+          "employeeId": "EMP-0012",
+          "scorePercentage": "40",
+          "reportApproved": false,
+          "reason": "لم يقم بتقديم أي تقرير",
+          "rating": "لم يقدم تقرير"
+        },
+        {
+          "scorePercentage": "40",
+          "rating": "لم يقدم تقرير",
+          "reportApproved": false,
+          "reason": "لم يقم بتقديم أي تقرير",
+          "employeeName": "محمد سمير علي محمد العبود",
+          "employeeId": "EMP-0008"
+        }
+      ],
+      "ordersSnapshot": [
+        {
+          "currentDepartment": "الطلبيات",
+          "customerName": "شركة الوعد للتسويق المباشر",
+          "orderNumber": "ORD-0060",
+          "status": "جديد",
+          "isSales": true,
+          "orderDate": "2026-10-07",
+          "statusUpdateDate": "2026-10-08",
+          "orderNotes": "",
+          "supervisorNotes": "تم",
+          "createdBy": "المدير العام",
+          "items": [
+            {
+              "quantity": "10",
+              "notes": "بريم واحد اي لون +باركود ميرانا 1300غ + شنته نايلون مسحوب هوا ",
+              "hasPreparationDetails": true,
+              "itemStatus": "قيد التحضير",
+              "productName": "مخدة مايكروفايبر بريم واحد 1300غ"
+            },
+            {
+              "productName": "مخدة مايكروفايبر دبل بريم 1800غ",
+              "quantity": "10",
+              "notes": " سيلك قديم + باركود ميرانا 1800غ + شنته نايلون مسحوب هوا ",
+              "hasPreparationDetails": true,
+              "itemStatus": "قيد التحضير"
+            },
+            {
+              "itemStatus": "جاهز",
+              "notes": "ورقة دعاية بيت بيوت ",
+              "quantity": "2",
+              "productName": "لحاف داون بروف 240*260سم"
+            },
+            {
+              "quantity": "3",
+              "notes": "ورقة دعاية بيت بيوت ",
+              "productName": "لحاف داون بروف 160*220سم",
+              "itemStatus": "جاهز"
+            }
+          ],
+          "deliveryDate": "2026-10-08",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "id": "34h4aGll0z2wL55bAaNf",
+          "customerId": "rpPPndldWkWRBWtPZKyk"
+        },
+        {
+          "supervisorNotes": "تم",
+          "statusUpdateDate": "2026-10-09",
+          "orderNumber": "ORD-0059",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "status": "جديد",
+          "orderNotes": "فرع مرج الحمام ",
+          "orderDate": "2026-10-07",
+          "id": "4REbO02GIXr0IYVuKd9R",
+          "currentDepartment": "الطلبيات",
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "createdBy": "المدير العام",
+          "items": [
+            {
+              "hasProductionDetails": true,
+              "notes": "ابولو تغليف سحاب",
+              "quantity": "60",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "productName": "شرشف مطاط شتوي 200*200 سم"
+            },
+            {
+              "itemStatus": "إنتاج قيد الخياطة",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "quantity": "60",
+              "hasProductionDetails": true,
+              "notes": "ابولو تغليف سحاب"
+            },
+            {
+              "itemStatus": "جاهز",
+              "productName": "وجه مخدة شتوي عدد 1 - أسود (مستودع: مصنع البياضات)",
+              "quantity": 72,
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع"
+            },
+            {
+              "itemStatus": "جاهز",
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "productName": "وجه مخدة شتوي عدد 1 - اوفوايت (مستودع: مصنع البياضات)",
+              "quantity": 72
+            },
+            {
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "itemStatus": "جاهز",
+              "productName": "وجه مخدة شتوي عدد 1 - بيج (مستودع: مصنع البياضات)",
+              "quantity": 1529
+            },
+            {
+              "quantity": 580,
+              "itemStatus": "جاهز",
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "productName": "وجه مخدة شتوي عدد 1 - سكني (مستودع: مصنع البياضات)"
+            },
+            {
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "quantity": 1,
+              "itemStatus": "جاهز",
+              "productName": "وجه مخدة شتوي عدد 1 - سومو (مستودع: مصنع البياضات)"
+            }
+          ],
+          "deliveryDate": "2026-10-12",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "isSales": true
+        },
+        {
+          "orderNumber": "ORD-0054",
+          "customerId": "kgfmZd2nx0Wnx2yO2Ciz",
+          "id": "4rHeLboPtUrTYG8pFyfo",
+          "statusUpdateDate": "2026-10-07",
+          "status": "جديد",
+          "supervisorNotes": "تم",
+          "customerName": "انوار شرق اسيا لخدمات التسويق -الزغير ايليت",
+          "currentDepartment": "الطلبيات",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "orderDate": "2026-10-07",
+          "orderNotes": "",
+          "deliveryDate": "2026-10-11",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "isSales": true,
+          "items": [
+            {
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "itemStatus": "جاهز",
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false,
+              "hasProductionDetails": false,
+              "quantity": "60",
+              "notes": "كيس سحاب كرت فوكس"
+            },
+            {
+              "hasPrepAndProdDetails": false,
+              "hasProductionDetails": false,
+              "hasPreparationDetails": false,
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "quantity": "60",
+              "notes": "كيس سحاب كرت فوكس",
+              "itemStatus": "جاهز"
+            },
+            {
+              "productionNotes": "شنته +كرت الزغير الليت ",
+              "sizeCm": "200*220",
+              "hasProductionDetails": true,
+              "itemStatus": "إنتاج قيد الخياطة",
+              "hasPreparationDetails": false,
+              "colorModel": "شتوي ببلي ثرو",
+              "thickness": "",
+              "productName": "ثرو شتوي 200*220 سم",
+              "notes": "شنته +كرت الزغير الليت 6 اللوان 6 من كل لون (تم إلغاء الصنف في الإنتاج)",
+              "quantity": "36"
+            },
+            {
+              "hasPreparationDetails": false,
+              "colorModel": "شتوي ببلي ثرو",
+              "notes": "شنته +كرت الزغير الليت 6 اللوان 6 من كل لون (تم إلغاء الصنف في الإنتاج)",
+              "sizeCm": "160*220",
+              "productName": "ثرو شتوي 160*220 سم",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "quantity": "36",
+              "thickness": "",
+              "productionNotes": "شنته +كرت الزغير الليت ",
+              "hasProductionDetails": true
+            },
+            {
+              "productName": "لحاف مايكروفايبر 160*220سم",
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false,
+              "itemStatus": "جاهز",
+              "notes": "",
+              "hasProductionDetails": false,
+              "quantity": "10"
+            },
+            {
+              "productName": "لحاف مايكروفايبر 220*240سم",
+              "hasProductionDetails": false,
+              "hasPreparationDetails": true,
+              "preparationNotes": "",
+              "itemStatus": "قيد التحضير",
+              "notes": "",
+              "quantity": "5"
+            },
+            {
+              "quantity": "5",
+              "hasPreparationDetails": true,
+              "notes": "",
+              "preparationNotes": "",
+              "productName": "لحاف مايكروفايبر 240*260سم",
+              "hasProductionDetails": false,
+              "itemStatus": "قيد التحضير"
+            },
+            {
+              "notes": "ستيكر ",
+              "hasProductionDetails": false,
+              "productName": "واقي مخدة تنسل عدد 2",
+              "itemStatus": "جاهز",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "quantity": "5"
+            },
+            {
+              "notes": "كل جوز ببكيت ",
+              "hasProductionDetails": false,
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false,
+              "productName": "واقي مخدة عرض عدد 1",
+              "quantity": "10",
+              "itemStatus": "جاهز"
+            }
+          ]
+        },
+        {
+          "customerId": "EorsLiy1nU2VFrnrdZnh",
+          "orderDate": "2026-10-07",
+          "customerName": "مخازن المدينة التجارية",
+          "currentDepartment": "الطلبيات",
+          "status": "جديد",
+          "items": [
+            {
+              "productName": "وجه مخدة عرض 50*70 سم عدد 2",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "notes": "",
+              "quantity": "120",
+              "hasProductionDetails": true
+            }
+          ],
+          "supervisorNotes": "تم",
+          "deliveryDate": "2026-10-15",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "id": "DrSe1NL0PAbIYo6Gutxi",
+          "orderNotes": "فرع العبدلي مول - لا يوجد طلب شراء ولكن الزبون ينتظر انجازهم ومن ثم نخبر الزبون ب انه البضاعة جاهزة ",
+          "statusUpdateDate": "2026-10-07",
+          "createdBy": "المدير العام",
+          "orderNumber": "ORD-0055",
+          "isSales": true
+        },
+        {
+          "supervisorNotes": "نم",
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "status": "جديد",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-10",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "orderNotes": "الواقي العرض جاهز عند المصعد\nسيتم تعديل الاعداد على السستم حسب العدد المتواجد عند المصعد",
+          "orderDate": "2026-10-09",
+          "orderNumber": "ORD-0064",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "id": "HbxfZyvhd1Jfzdgkgm8r",
+          "statusUpdateDate": "2026-10-09",
+          "isSales": true,
+          "items": [
+            {
+              "hasProductionDetails": false,
+              "notes": "",
+              "itemStatus": "جاهز",
+              "productName": "واقي فرشة عرض 100*200سم",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "quantity": "60"
+            },
+            {
+              "hasProductionDetails": false,
+              "itemStatus": "جاهز",
+              "productName": "واقي فرشة عرض 120*200سم",
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false,
+              "notes": "",
+              "quantity": "40"
+            },
+            {
+              "itemStatus": "جاهز",
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false,
+              "quantity": "60",
+              "productName": "واقي فرشة عرض200*200سم",
+              "hasProductionDetails": false,
+              "notes": ""
+            },
+            {
+              "itemStatus": "قيد التحضير",
+              "preparationNotes": "",
+              "hasProductionDetails": false,
+              "hasPreparationDetails": true,
+              "notes": "",
+              "quantity": "60",
+              "productName": "مخدة مايكروفايبر 1400غ مصفاة"
+            }
+          ],
+          "currentDepartment": "الطلبيات"
+        },
+        {
+          "status": "جديد",
+          "isSales": true,
+          "orderNumber": "ORD-0057",
+          "currentDepartment": "الطلبيات",
+          "supervisorNotes": "نم",
+          "items": [
+            {
+              "hasProductionDetails": true,
+              "notes": "كرت ابولو تغليف سحاب ",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "quantity": "36",
+              "productName": "شرشف مطاط شتوي 120*200 سم"
+            },
+            {
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "hasProductionDetails": true,
+              "notes": "كرت ابولو تغليف سحاب ",
+              "quantity": "36",
+              "itemStatus": "إنتاج قيد الخياطة"
+            }
+          ],
+          "orderNotes": "فرع حي نزال ",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "createdBy": "المدير العام",
+          "orderDate": "2026-10-07",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-12",
+          "id": "zQw7UFn18j2wpPjWJvo0",
+          "statusUpdateDate": "2026-10-07",
+          "customerId": "9MAV6jcQwXVVvonZVeSD"
+        },
+        {
+          "orderNotes": "ارجو مراجعه جهاد بكل اشي يتعلق بالاوردر",
+          "status": "قيد التجهيز",
+          "statusUpdateDate": "2026-10-10",
+          "orderNumber": "ORD-0051",
+          "items": [
+            {
+              "hasPreparationDetails": true,
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "notes": "عدد 6 من كل لون  كيس سيلك كرت كانون ",
+              "preparationNotes": "عدد 6 من كل لون\n كيس سيلك\nكرت كانون ",
+              "hasProductionDetails": false,
+              "quantity": "36",
+              "itemStatus": "قيد التحضير"
+            },
+            {
+              "preparationNotes": "",
+              "itemStatus": "قيد التحضير",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "quantity": "36",
+              "hasPreparationDetails": true,
+              "hasProductionDetails": false,
+              "notes": "عدد 6 من كل لون  كيس سيلك كرت كانون "
+            },
+            {
+              "hasPreparationDetails": false,
+              "notes": "عدد 2 من كل لون كرت الزغير مع شبره-قماش سترايب عريض شتوي ",
+              "sizeCm": "200*220",
+              "quantity": "12",
+              "thickness": "",
+              "colorModel": "أبيض",
+              "productName": "ثرو شتوي 200*220 سم",
+              "productionNotes": "عدد 2 من كل لون كرت الزغير مع شبره\nقماش شتوي جديد سترايب عريض ",
+              "hasProductionDetails": true,
+              "itemStatus": "قيد التحضير"
+            },
+            {
+              "productName": "ثرو شتوي 160*220 سم",
+              "thickness": "",
+              "productionNotes": "عدد 2 من كل لون كرت الزغير مع شبره",
+              "notes": "عدد 4 من كل لون شبره مع كرت الزغير ",
+              "sizeCm": "160*220",
+              "quantity": "24",
+              "itemStatus": "قيد التحضير",
+              "hasProductionDetails": true,
+              "hasPreparationDetails": false,
+              "colorModel": "أبيض"
+            },
+            {
+              "sizeCm": "170*130",
+              "itemStatus": "قيد التحضير",
+              "productName": "شرشف فلات تواصي",
+              "notes": "",
+              "hasPreparationDetails": false,
+              "thickness": "",
+              "quantity": "18",
+              "productionNotes": "قماش شتوي سترايب عريض\nعدد 3 من كل لون 6 اللوان\nتغليف شبره مع كرت الزغير ",
+              "colorModel": "أبيض",
+              "hasProductionDetails": true
+            }
+          ],
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "deliveryDate": "2026-10-08",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "customerId": "hNiXghAVc3D1x8WKfrtF",
+          "orderDate": "2026-10-07",
+          "customerName": "الزغير هوم سنتر",
+          "currentDepartment": "الطلبيات",
+          "supervisorNotes": "تم",
+          "isSales": true,
+          "id": "5iwZ5XISGs60IytMgzxE"
+        },
+        {
+          "salesOrderNumber": "ORD-0054",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "deliveryDate": "2026-10-11",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "supervisorNotes": "تم",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0009",
+          "orderNumber": "PREP-0018",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "salesOrderId": "4rHeLboPtUrTYG8pFyfo",
+          "orderDate": "2026-09-24",
+          "isPreparation": true,
+          "status": "لم يتم التنفيذ",
+          "customerId": "kgfmZd2nx0Wnx2yO2Ciz",
+          "id": "6AlOz3ug3jWoh3KH6xsh",
+          "customerName": "انوار شرق اسيا لخدمات التسويق -الزغير ايليت",
+          "items": [
+            {
+              "colorModel": "",
+              "sizeCm": "",
+              "status": "لم يتم التنفيذ",
+              "notes": "",
+              "productName": "طقم وجه لحاف مايكروفايبر 220*240سم - 4 قطع",
+              "quantity": "5",
+              "thickness": ""
+            },
+            {
+              "thickness": "",
+              "status": "لم يتم التنفيذ",
+              "quantity": "5",
+              "colorModel": "",
+              "notes": "",
+              "productName": "لحاف مايكروفايبر 240*260سم",
+              "sizeCm": ""
+            },
+            {
+              "productName": "لحاف مايكروفايبر 220*240سم",
+              "thickness": "",
+              "sizeCm": "",
+              "quantity": "5",
+              "notes": "",
+              "status": "لم يتم التنفيذ",
+              "colorModel": ""
+            }
+          ]
+        },
+        {
+          "supervisorNotes": "تم",
+          "salesOrderId": "TOOKzOCSnUNSCbwLdVQM",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0009",
+          "orderDate": "2026-09-24",
+          "id": "L9BqaClG4oNQ0hjmQl98",
+          "status": "لم يتم التنفيذ",
+          "customerName": "انوار شرق اسيا لخدمات التسويق -الزغير ايليت",
+          "orderNumber": "PREP-0017",
+          "items": [
+            {
+              "status": "لم يتم التنفيذ",
+              "productName": "طقم وجه لحاف مايكروفايبر 220*240سم - 4 قطع",
+              "thickness": "",
+              "quantity": "5",
+              "sizeCm": "",
+              "colorModel": "",
+              "notes": ""
+            },
+            {
+              "sizeCm": "",
+              "notes": "",
+              "productName": "لحاف مايكروفايبر 240*260سم",
+              "thickness": "",
+              "quantity": "5",
+              "status": "لم يتم التنفيذ",
+              "colorModel": ""
+            }
+          ],
+          "deliveryDate": "2026-09-27",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "salesOrderNumber": "ORD-0053",
+          "customerId": "kgfmZd2nx0Wnx2yO2Ciz",
+          "isPreparation": true,
+          "currentDepartment": "إنتاج قيد التحضير"
+        },
+        {
+          "items": [
+            {
+              "productName": "",
+              "quantity": "36",
+              "thickness": "",
+              "colorModel": "",
+              "sizeCm": "",
+              "status": "لم يتم التنفيذ",
+              "notes": ""
+            },
+            {
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "sizeCm": "",
+              "thickness": "",
+              "quantity": "36",
+              "status": "لم يتم التنفيذ",
+              "notes": "عدد 6 من كل لون\n كيس سيلك\nكرت كانون ",
+              "colorModel": ""
+            },
+            {
+              "sizeCm": "",
+              "quantity": "36",
+              "thickness": "",
+              "colorModel": "",
+              "notes": "",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "status": "لم يتم التنفيذ"
+            }
+          ],
+          "id": "U17YOLdzNuQmAKsD2QIh",
+          "stockDeducted": false,
+          "storedStockDeducted": false,
+          "customerId": "hNiXghAVc3D1x8WKfrtF",
+          "salesOrderNumber": "ORD-0051",
+          "productionType": "preparation",
+          "customerName": "الزغير هوم سنتر",
+          "orderNumber": "PREP-0015",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "salesOrderId": "5iwZ5XISGs60IytMgzxE",
+          "status": "لم يتم التنفيذ",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "ignoredMaterialAudit": true,
+          "stockReceived": false,
+          "orderNotes": "مرتبط بطلبية رقم ORD-0051",
+          "orderDate": "2026-10-07",
+          "isPreparation": true,
+          "supervisorNotes": "تم",
+          "hasLedgerMismatch": false,
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-08"
+        },
+        {
+          "supervisorNotes": "نم",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-10",
+          "id": "awc1yTqjQiDdtz2ZTm64",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0063",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "salesOrderId": "HbxfZyvhd1Jfzdgkgm8r",
+          "status": "لم يتم التنفيذ",
+          "orderDate": "2026-10-09",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "salesOrderNumber": "ORD-0064",
+          "isPreparation": true,
+          "items": [
+            {
+              "productName": "مخدة مايكروفايبر 1400غ مصفاة",
+              "sizeCm": "",
+              "notes": "",
+              "thickness": "",
+              "quantity": "60",
+              "status": "لم يتم التنفيذ",
+              "colorModel": ""
+            }
+          ],
+          "orderNumber": "PREP-0021",
+          "customerId": "9MAV6jcQwXVVvonZVeSD"
+        },
+        {
+          "status": "لم يتم التنفيذ",
+          "salesOrderId": "34h4aGll0z2wL55bAaNf",
+          "supervisorNotes": "تم",
+          "customerName": "شركة الوعد للتسويق المباشر",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0056",
+          "salesOrderNumber": "ORD-0060",
+          "orderDate": "2026-10-07",
+          "deliveryDate": "2026-10-08",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "createdBy": "المدير العام",
+          "items": [
+            {
+              "status": "لم يتم التنفيذ",
+              "thickness": "",
+              "colorModel": "",
+              "notes": " سيلك قديم + باركود ميرانا 1800غ + شنته نايلون مسحوب هوا ",
+              "quantity": "10",
+              "sizeCm": "",
+              "productName": "مخدة مايكروفايبر دبل بريم 1800غ"
+            },
+            {
+              "quantity": "10",
+              "sizeCm": "",
+              "notes": "بريم واحد اي لون +باركود ميرانا 1300غ + شنته نايلون مسحوب هوا ",
+              "colorModel": "",
+              "thickness": "",
+              "productName": "مخدة مايكروفايبر بريم واحد 1300غ",
+              "status": "لم يتم التنفيذ"
+            }
+          ],
+          "id": "m31JTpvNVOIT4uxztISm",
+          "customerId": "rpPPndldWkWRBWtPZKyk",
+          "isPreparation": true,
+          "orderNumber": "PREP-0019"
+        }
+      ],
+      "date": "2026-10-06",
+      "supervisorId": "EMP-0006",
+      "createdAt": "2026-10-10T05:42:40.650Z",
+      "attendanceNotes": "",
+      "status": "معتمد",
+      "timeIn": "8:14 م",
+      "timeOut": "18:28"
+    },
+    {
+      "status": "معتمد",
+      "employeeAttendanceStatus": "all_present",
+      "attendanceNotes": "",
+      "createdAt": "2026-10-10T05:35:33.544Z",
+      "timeIn": "08:15",
+      "id": "sup_rep_EMP-0006_2026-10-07",
+      "supervisorId": "EMP-0006",
+      "timeOut": "19:52",
+      "date": "2026-10-07",
+      "supervisorName": "عبد الله يعقوب ايوب غيث",
+      "employeeEvaluations": [
+        {
+          "employeeName": "محمد سمير علي محمد العبود",
+          "reason": "",
+          "reportApproved": false,
+          "employeeId": "EMP-0008",
+          "rating": "جيد",
+          "scorePercentage": "80"
+        },
+        {
+          "reportApproved": false,
+          "scorePercentage": "80",
+          "employeeName": "ايهاب رامي محمد راغب الشرباتي",
+          "rating": "جيد",
+          "employeeId": "EMP-0012",
+          "reason": ""
+        },
+        {
+          "reportApproved": false,
+          "rating": "جيد",
+          "reason": "",
+          "scorePercentage": "80",
+          "employeeId": "EMP-0018",
+          "employeeName": "بهاء الدين اسامة ايوب غيث"
+        },
+        {
+          "employeeId": "EMP-0019",
+          "scorePercentage": "90",
+          "employeeName": "حمزة ماهر احمد الكردي",
+          "reason": "",
+          "reportApproved": false,
+          "rating": "جيد"
+        },
+        {
+          "employeeId": "EMP-0021",
+          "employeeName": "ماجد يوسف عبد الجابر محمود",
+          "rating": "جيد",
+          "scorePercentage": "80",
+          "reason": "",
+          "reportApproved": false
+        },
+        {
+          "reason": "",
+          "reportApproved": false,
+          "rating": "جيد",
+          "scorePercentage": "80",
+          "employeeName": "أحمد لطفي حسن حسين",
+          "employeeId": "EMP-0024"
+        }
+      ],
+      "ordersSnapshot": [
+        {
+          "deliveryDate": "2026-10-08",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "id": "34h4aGll0z2wL55bAaNf",
+          "orderNotes": "",
+          "supervisorNotes": "تم",
+          "orderNumber": "ORD-0060",
+          "isSales": true,
+          "orderDate": "2026-10-07",
+          "status": "جديد",
+          "createdBy": "المدير العام",
+          "customerId": "rpPPndldWkWRBWtPZKyk",
+          "items": [
+            {
+              "productName": "مخدة مايكروفايبر بريم واحد 1300غ",
+              "quantity": "10",
+              "notes": "بريم واحد اي لون +باركود ميرانا 1300غ + شنته نايلون مسحوب هوا ",
+              "itemStatus": "قيد التحضير",
+              "hasPreparationDetails": true
+            },
+            {
+              "hasPreparationDetails": true,
+              "quantity": "10",
+              "notes": " سيلك قديم + باركود ميرانا 1800غ + شنته نايلون مسحوب هوا ",
+              "itemStatus": "قيد التحضير",
+              "productName": "مخدة مايكروفايبر دبل بريم 1800غ"
+            },
+            {
+              "notes": "ورقة دعاية بيت بيوت ",
+              "productName": "لحاف داون بروف 240*260سم",
+              "itemStatus": "جاهز",
+              "quantity": "2"
+            },
+            {
+              "quantity": "3",
+              "itemStatus": "جاهز",
+              "productName": "لحاف داون بروف 160*220سم",
+              "notes": "ورقة دعاية بيت بيوت "
+            }
+          ],
+          "customerName": "شركة الوعد للتسويق المباشر",
+          "currentDepartment": "الطلبيات",
+          "statusUpdateDate": "2026-10-08"
+        },
+        {
+          "currentDepartment": "الطلبيات",
+          "status": "جديد",
+          "items": [
+            {
+              "hasProductionDetails": true,
+              "itemStatus": "إنتاج قيد الخياطة",
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "notes": "ابولو تغليف سحاب",
+              "quantity": "60"
+            },
+            {
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "notes": "ابولو تغليف سحاب",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "hasProductionDetails": true,
+              "quantity": "60"
+            },
+            {
+              "quantity": 72,
+              "productName": "وجه مخدة شتوي عدد 1 - أسود (مستودع: مصنع البياضات)",
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "itemStatus": "جاهز"
+            },
+            {
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "quantity": 72,
+              "itemStatus": "جاهز",
+              "productName": "وجه مخدة شتوي عدد 1 - اوفوايت (مستودع: مصنع البياضات)"
+            },
+            {
+              "itemStatus": "جاهز",
+              "productName": "وجه مخدة شتوي عدد 1 - بيج (مستودع: مصنع البياضات)",
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "quantity": 1529
+            },
+            {
+              "productName": "وجه مخدة شتوي عدد 1 - سكني (مستودع: مصنع البياضات)",
+              "quantity": 580,
+              "itemStatus": "جاهز",
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع"
+            },
+            {
+              "quantity": 1,
+              "itemStatus": "جاهز",
+              "productName": "وجه مخدة شتوي عدد 1 - سومو (مستودع: مصنع البياضات)",
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع"
+            }
+          ],
+          "supervisorNotes": "تم",
+          "createdBy": "المدير العام",
+          "statusUpdateDate": "2026-10-09",
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "deliveryDate": "2026-10-12",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "id": "4REbO02GIXr0IYVuKd9R",
+          "orderDate": "2026-10-07",
+          "orderNotes": "فرع مرج الحمام ",
+          "isSales": true,
+          "orderNumber": "ORD-0059"
+        },
+        {
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-11",
+          "isSales": true,
+          "statusUpdateDate": "2026-10-07",
+          "customerId": "kgfmZd2nx0Wnx2yO2Ciz",
+          "items": [
+            {
+              "quantity": "60",
+              "itemStatus": "جاهز",
+              "hasProductionDetails": false,
+              "notes": "كيس سحاب كرت فوكس",
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false,
+              "productName": "شرشف مطاط شتوي 120*200 سم"
+            },
+            {
+              "notes": "كيس سحاب كرت فوكس",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "itemStatus": "جاهز",
+              "hasProductionDetails": false,
+              "quantity": "60"
+            },
+            {
+              "hasProductionDetails": true,
+              "itemStatus": "إنتاج قيد الخياطة",
+              "productName": "ثرو شتوي 200*220 سم",
+              "sizeCm": "200*220",
+              "hasPreparationDetails": false,
+              "colorModel": "شتوي ببلي ثرو",
+              "quantity": "36",
+              "notes": "شنته +كرت الزغير الليت 6 اللوان 6 من كل لون (تم إلغاء الصنف في الإنتاج)",
+              "productionNotes": "شنته +كرت الزغير الليت ",
+              "thickness": ""
+            },
+            {
+              "quantity": "36",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "notes": "شنته +كرت الزغير الليت 6 اللوان 6 من كل لون (تم إلغاء الصنف في الإنتاج)",
+              "hasProductionDetails": true,
+              "sizeCm": "160*220",
+              "colorModel": "شتوي ببلي ثرو",
+              "thickness": "",
+              "hasPreparationDetails": false,
+              "productName": "ثرو شتوي 160*220 سم",
+              "productionNotes": "شنته +كرت الزغير الليت "
+            },
+            {
+              "hasProductionDetails": false,
+              "notes": "",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "productName": "لحاف مايكروفايبر 160*220سم",
+              "quantity": "10",
+              "itemStatus": "جاهز"
+            },
+            {
+              "itemStatus": "قيد التحضير",
+              "hasPreparationDetails": true,
+              "notes": "",
+              "productName": "لحاف مايكروفايبر 220*240سم",
+              "quantity": "5",
+              "hasProductionDetails": false,
+              "preparationNotes": ""
+            },
+            {
+              "quantity": "5",
+              "productName": "لحاف مايكروفايبر 240*260سم",
+              "preparationNotes": "",
+              "hasProductionDetails": false,
+              "itemStatus": "قيد التحضير",
+              "hasPreparationDetails": true,
+              "notes": ""
+            },
+            {
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "notes": "ستيكر ",
+              "itemStatus": "جاهز",
+              "quantity": "5",
+              "hasProductionDetails": false,
+              "productName": "واقي مخدة تنسل عدد 2"
+            },
+            {
+              "quantity": "10",
+              "productName": "واقي مخدة عرض عدد 1",
+              "hasProductionDetails": false,
+              "notes": "كل جوز ببكيت ",
+              "itemStatus": "جاهز",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false
+            }
+          ],
+          "orderDate": "2026-10-07",
+          "id": "4rHeLboPtUrTYG8pFyfo",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "status": "جديد",
+          "currentDepartment": "الطلبيات",
+          "orderNotes": "",
+          "orderNumber": "ORD-0054",
+          "customerName": "انوار شرق اسيا لخدمات التسويق -الزغير ايليت",
+          "supervisorNotes": "تم"
+        },
+        {
+          "customerId": "EorsLiy1nU2VFrnrdZnh",
+          "customerName": "مخازن المدينة التجارية",
+          "createdBy": "المدير العام",
+          "status": "جديد",
+          "orderNumber": "ORD-0055",
+          "items": [
+            {
+              "itemStatus": "إنتاج قيد الخياطة",
+              "notes": "",
+              "quantity": "120",
+              "hasProductionDetails": true,
+              "productName": "وجه مخدة عرض 50*70 سم عدد 2"
+            }
+          ],
+          "id": "DrSe1NL0PAbIYo6Gutxi",
+          "currentDepartment": "الطلبيات",
+          "orderNotes": "فرع العبدلي مول - لا يوجد طلب شراء ولكن الزبون ينتظر انجازهم ومن ثم نخبر الزبون ب انه البضاعة جاهزة ",
+          "supervisorNotes": "تم",
+          "statusUpdateDate": "2026-10-07",
+          "orderDate": "2026-10-07",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-15",
+          "isSales": true
+        },
+        {
+          "orderNumber": "ORD-0064",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-10",
+          "isSales": true,
+          "id": "HbxfZyvhd1Jfzdgkgm8r",
+          "status": "جديد",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "orderNotes": "الواقي العرض جاهز عند المصعد\nسيتم تعديل الاعداد على السستم حسب العدد المتواجد عند المصعد",
+          "orderDate": "2026-10-09",
+          "supervisorNotes": "تم",
+          "currentDepartment": "الطلبيات",
+          "statusUpdateDate": "2026-10-09",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "items": [
+            {
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "itemStatus": "جاهز",
+              "productName": "واقي فرشة عرض 100*200سم",
+              "hasProductionDetails": false,
+              "notes": "",
+              "quantity": "60"
+            },
+            {
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "productName": "واقي فرشة عرض 120*200سم",
+              "hasProductionDetails": false,
+              "quantity": "40",
+              "itemStatus": "جاهز",
+              "notes": ""
+            },
+            {
+              "itemStatus": "جاهز",
+              "hasProductionDetails": false,
+              "productName": "واقي فرشة عرض200*200سم",
+              "quantity": "60",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "notes": ""
+            },
+            {
+              "itemStatus": "قيد التحضير",
+              "quantity": "60",
+              "notes": "",
+              "hasProductionDetails": false,
+              "hasPreparationDetails": true,
+              "preparationNotes": "",
+              "productName": "مخدة مايكروفايبر 1400غ مصفاة"
+            }
+          ]
+        },
+        {
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "status": "جديد",
+          "isSales": true,
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-12",
+          "statusUpdateDate": "2026-10-07",
+          "createdBy": "المدير العام",
+          "orderNotes": "فرع حي نزال ",
+          "orderDate": "2026-10-07",
+          "id": "zQw7UFn18j2wpPjWJvo0",
+          "items": [
+            {
+              "quantity": "36",
+              "hasProductionDetails": true,
+              "itemStatus": "إنتاج قيد الخياطة",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "notes": "كرت ابولو تغليف سحاب "
+            },
+            {
+              "quantity": "36",
+              "notes": "كرت ابولو تغليف سحاب ",
+              "hasProductionDetails": true,
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "itemStatus": "إنتاج قيد الخياطة"
+            }
+          ],
+          "supervisorNotes": "تم",
+          "orderNumber": "ORD-0057",
+          "currentDepartment": "الطلبيات",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث"
+        },
+        {
+          "customerId": "hNiXghAVc3D1x8WKfrtF",
+          "currentDepartment": "الطلبيات",
+          "customerName": "الزغير هوم سنتر",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "status": "قيد التجهيز",
+          "supervisorNotes": "تم",
+          "isSales": true,
+          "orderNotes": "ارجو مراجعه جهاد بكل اشي يتعلق بالاوردر",
+          "statusUpdateDate": "2026-10-10",
+          "items": [
+            {
+              "hasProductionDetails": false,
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "preparationNotes": "عدد 6 من كل لون\n كيس سيلك\nكرت كانون ",
+              "itemStatus": "قيد التحضير",
+              "quantity": "36",
+              "hasPreparationDetails": true,
+              "notes": "عدد 6 من كل لون  كيس سيلك كرت كانون "
+            },
+            {
+              "hasPreparationDetails": true,
+              "itemStatus": "قيد التحضير",
+              "notes": "عدد 6 من كل لون  كيس سيلك كرت كانون ",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "hasProductionDetails": false,
+              "preparationNotes": "",
+              "quantity": "36"
+            },
+            {
+              "sizeCm": "200*220",
+              "quantity": "12",
+              "productionNotes": "عدد 2 من كل لون كرت الزغير مع شبره\nقماش شتوي جديد سترايب عريض ",
+              "hasPreparationDetails": false,
+              "colorModel": "أبيض",
+              "notes": "عدد 2 من كل لون كرت الزغير مع شبره-قماش سترايب عريض شتوي ",
+              "hasProductionDetails": true,
+              "itemStatus": "قيد التحضير",
+              "productName": "ثرو شتوي 200*220 سم",
+              "thickness": ""
+            },
+            {
+              "sizeCm": "160*220",
+              "productionNotes": "عدد 2 من كل لون كرت الزغير مع شبره",
+              "quantity": "24",
+              "thickness": "",
+              "colorModel": "أبيض",
+              "hasProductionDetails": true,
+              "productName": "ثرو شتوي 160*220 سم",
+              "itemStatus": "قيد التحضير",
+              "notes": "عدد 4 من كل لون شبره مع كرت الزغير ",
+              "hasPreparationDetails": false
+            },
+            {
+              "productName": "شرشف فلات تواصي",
+              "productionNotes": "قماش شتوي سترايب عريض\nعدد 3 من كل لون 6 اللوان\nتغليف شبره مع كرت الزغير ",
+              "hasPreparationDetails": false,
+              "itemStatus": "قيد التحضير",
+              "thickness": "",
+              "sizeCm": "170*130",
+              "hasProductionDetails": true,
+              "colorModel": "أبيض",
+              "notes": "",
+              "quantity": "18"
+            }
+          ],
+          "orderDate": "2026-10-07",
+          "id": "5iwZ5XISGs60IytMgzxE",
+          "orderNumber": "ORD-0051",
+          "lastActionBy": "نظام التحضير",
+          "deliveryDate": "2026-10-08"
+        },
+        {
+          "customerId": "kgfmZd2nx0Wnx2yO2Ciz",
+          "salesOrderNumber": "ORD-0054",
+          "status": "لم يتم التنفيذ",
+          "salesOrderId": "4rHeLboPtUrTYG8pFyfo",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "customerName": "انوار شرق اسيا لخدمات التسويق -الزغير ايليت",
+          "items": [
+            {
+              "colorModel": "",
+              "notes": "",
+              "quantity": "5",
+              "status": "لم يتم التنفيذ",
+              "sizeCm": "",
+              "thickness": "",
+              "productName": "طقم وجه لحاف مايكروفايبر 220*240سم - 4 قطع"
+            },
+            {
+              "colorModel": "",
+              "status": "لم يتم التنفيذ",
+              "notes": "",
+              "quantity": "5",
+              "productName": "لحاف مايكروفايبر 240*260سم",
+              "thickness": "",
+              "sizeCm": ""
+            },
+            {
+              "status": "لم يتم التنفيذ",
+              "quantity": "5",
+              "colorModel": "",
+              "thickness": "",
+              "notes": "",
+              "productName": "لحاف مايكروفايبر 220*240سم",
+              "sizeCm": ""
+            }
+          ],
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "isPreparation": true,
+          "orderNumber": "PREP-0018",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0009",
+          "orderDate": "2026-09-24",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-11",
+          "id": "6AlOz3ug3jWoh3KH6xsh",
+          "supervisorNotes": "تم"
+        },
+        {
+          "items": [
+            {
+              "status": "لم يتم التنفيذ",
+              "quantity": "5",
+              "productName": "طقم وجه لحاف مايكروفايبر 220*240سم - 4 قطع",
+              "thickness": "",
+              "colorModel": "",
+              "notes": "",
+              "sizeCm": ""
+            },
+            {
+              "thickness": "",
+              "status": "لم يتم التنفيذ",
+              "colorModel": "",
+              "notes": "",
+              "quantity": "5",
+              "sizeCm": "",
+              "productName": "لحاف مايكروفايبر 240*260سم"
+            }
+          ],
+          "customerId": "kgfmZd2nx0Wnx2yO2Ciz",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-09-27",
+          "status": "لم يتم التنفيذ",
+          "orderDate": "2026-09-24",
+          "orderNumber": "PREP-0017",
+          "salesOrderId": "TOOKzOCSnUNSCbwLdVQM",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "id": "L9BqaClG4oNQ0hjmQl98",
+          "supervisorNotes": "تم",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0009",
+          "isPreparation": true,
+          "salesOrderNumber": "ORD-0053",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "customerName": "انوار شرق اسيا لخدمات التسويق -الزغير ايليت"
+        },
+        {
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-08",
+          "stockDeducted": false,
+          "hasLedgerMismatch": false,
+          "salesOrderNumber": "ORD-0051",
+          "status": "لم يتم التنفيذ",
+          "orderDate": "2026-10-07",
+          "items": [
+            {
+              "quantity": "36",
+              "sizeCm": "",
+              "status": "لم يتم التنفيذ",
+              "colorModel": "",
+              "thickness": "",
+              "notes": "",
+              "productName": ""
+            },
+            {
+              "sizeCm": "",
+              "quantity": "36",
+              "colorModel": "",
+              "notes": "عدد 6 من كل لون\n كيس سيلك\nكرت كانون ",
+              "thickness": "",
+              "status": "لم يتم التنفيذ",
+              "productName": "شرشف مطاط شتوي 200*200 سم"
+            },
+            {
+              "status": "لم يتم التنفيذ",
+              "colorModel": "",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "thickness": "",
+              "notes": "",
+              "quantity": "36",
+              "sizeCm": ""
+            }
+          ],
+          "id": "U17YOLdzNuQmAKsD2QIh",
+          "stockReceived": false,
+          "customerId": "hNiXghAVc3D1x8WKfrtF",
+          "ignoredMaterialAudit": true,
+          "currentDepartment": "إنتاج قيد التحضير",
+          "supervisorNotes": "تم",
+          "isPreparation": true,
+          "productionType": "preparation",
+          "salesOrderId": "5iwZ5XISGs60IytMgzxE",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "orderNumber": "PREP-0015",
+          "customerName": "الزغير هوم سنتر",
+          "storedStockDeducted": false,
+          "orderNotes": "مرتبط بطلبية رقم ORD-0051"
+        },
+        {
+          "isPreparation": true,
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "id": "awc1yTqjQiDdtz2ZTm64",
+          "status": "لم يتم التنفيذ",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0063",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "salesOrderId": "HbxfZyvhd1Jfzdgkgm8r",
+          "salesOrderNumber": "ORD-0064",
+          "items": [
+            {
+              "sizeCm": "",
+              "notes": "",
+              "colorModel": "",
+              "quantity": "60",
+              "productName": "مخدة مايكروفايبر 1400غ مصفاة",
+              "thickness": "",
+              "status": "لم يتم التنفيذ"
+            }
+          ],
+          "supervisorNotes": "تم",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "orderDate": "2026-10-09",
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "deliveryDate": "2026-10-10",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "orderNumber": "PREP-0021"
+        },
+        {
+          "status": "لم يتم التنفيذ",
+          "orderNumber": "PREP-0019",
+          "createdBy": "المدير العام",
+          "supervisorNotes": "تم",
+          "customerId": "rpPPndldWkWRBWtPZKyk",
+          "customerName": "شركة الوعد للتسويق المباشر",
+          "salesOrderId": "34h4aGll0z2wL55bAaNf",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "isPreparation": true,
+          "items": [
+            {
+              "sizeCm": "",
+              "thickness": "",
+              "quantity": "10",
+              "productName": "مخدة مايكروفايبر دبل بريم 1800غ",
+              "notes": " سيلك قديم + باركود ميرانا 1800غ + شنته نايلون مسحوب هوا ",
+              "colorModel": "",
+              "status": "لم يتم التنفيذ"
+            },
+            {
+              "status": "لم يتم التنفيذ",
+              "notes": "بريم واحد اي لون +باركود ميرانا 1300غ + شنته نايلون مسحوب هوا ",
+              "productName": "مخدة مايكروفايبر بريم واحد 1300غ",
+              "sizeCm": "",
+              "colorModel": "",
+              "quantity": "10",
+              "thickness": ""
+            }
+          ],
+          "id": "m31JTpvNVOIT4uxztISm",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0056",
+          "salesOrderNumber": "ORD-0060",
+          "orderDate": "2026-10-07",
+          "deliveryDate": "2026-10-08",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث"
+        }
+      ]
+    },
+    {
+      "employeeEvaluations": [
+        {
+          "rating": "جيد",
+          "employeeName": "محمد سمير علي محمد العبود",
+          "reason": "",
+          "scorePercentage": "80",
+          "reportApproved": false,
+          "employeeId": "EMP-0008"
+        },
+        {
+          "reportApproved": false,
+          "scorePercentage": "80",
+          "employeeName": "ايهاب رامي محمد راغب الشرباتي",
+          "employeeId": "EMP-0012",
+          "reason": "",
+          "rating": "جيد"
+        },
+        {
+          "scorePercentage": "40",
+          "reason": "كان بل القويرة ",
+          "employeeId": "EMP-0018",
+          "reportApproved": false,
+          "rating": "لم يقدم تقرير",
+          "employeeName": "بهاء الدين اسامة ايوب غيث"
+        },
+        {
+          "reportApproved": false,
+          "rating": "جيد",
+          "reason": "",
+          "scorePercentage": "80",
+          "employeeName": "حمزة ماهر احمد الكردي",
+          "employeeId": "EMP-0019"
+        },
+        {
+          "employeeName": "ماجد يوسف عبد الجابر محمود",
+          "scorePercentage": "80",
+          "reportApproved": false,
+          "rating": "جيد",
+          "employeeId": "EMP-0021",
+          "reason": ""
+        },
+        {
+          "reportApproved": false,
+          "employeeId": "EMP-0024",
+          "employeeName": "أحمد لطفي حسن حسين",
+          "reason": "",
+          "rating": "غائب",
+          "scorePercentage": "0"
+        }
+      ],
+      "timeIn": "08:15",
+      "ordersSnapshot": [
+        {
+          "statusUpdateDate": "2026-10-08",
+          "customerName": "شركة الوعد للتسويق المباشر",
+          "customerId": "rpPPndldWkWRBWtPZKyk",
+          "supervisorNotes": "تم",
+          "createdBy": "المدير العام",
+          "items": [
+            {
+              "notes": "بريم واحد اي لون +باركود ميرانا 1300غ + شنته نايلون مسحوب هوا ",
+              "hasPreparationDetails": true,
+              "productName": "مخدة مايكروفايبر بريم واحد 1300غ",
+              "itemStatus": "قيد التحضير",
+              "quantity": "10"
+            },
+            {
+              "productName": "مخدة مايكروفايبر دبل بريم 1800غ",
+              "quantity": "10",
+              "itemStatus": "قيد التحضير",
+              "notes": " سيلك قديم + باركود ميرانا 1800غ + شنته نايلون مسحوب هوا ",
+              "hasPreparationDetails": true
+            },
+            {
+              "notes": "ورقة دعاية بيت بيوت ",
+              "quantity": "2",
+              "productName": "لحاف داون بروف 240*260سم",
+              "itemStatus": "جاهز"
+            },
+            {
+              "productName": "لحاف داون بروف 160*220سم",
+              "notes": "ورقة دعاية بيت بيوت ",
+              "quantity": "3",
+              "itemStatus": "جاهز"
+            }
+          ],
+          "orderNumber": "ORD-0060",
+          "orderDate": "2026-10-07",
+          "isSales": true,
+          "id": "34h4aGll0z2wL55bAaNf",
+          "orderNotes": "",
+          "currentDepartment": "الطلبيات",
+          "deliveryDate": "2026-10-08",
+          "lastActionBy": "المدير العام",
+          "status": "جديد"
+        },
+        {
+          "orderNotes": "فرع مرج الحمام ",
+          "lastActionBy": "عماد فتحي زياد عزيز عوض",
+          "deliveryDate": "2026-10-12",
+          "status": "جديد",
+          "orderNumber": "ORD-0059",
+          "currentDepartment": "الطلبيات",
+          "orderDate": "2026-10-07",
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "statusUpdateDate": "2026-10-09",
+          "id": "4REbO02GIXr0IYVuKd9R",
+          "isSales": true,
+          "items": [
+            {
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "hasProductionDetails": true,
+              "notes": "ابولو تغليف سحاب",
+              "quantity": "60"
+            },
+            {
+              "notes": "ابولو تغليف سحاب",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "hasProductionDetails": true,
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "quantity": "60"
+            },
+            {
+              "itemStatus": "جاهز",
+              "productName": "وجه مخدة شتوي عدد 1 - أسود (مستودع: مصنع البياضات)",
+              "quantity": 72,
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع"
+            },
+            {
+              "itemStatus": "جاهز",
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "quantity": 72,
+              "productName": "وجه مخدة شتوي عدد 1 - اوفوايت (مستودع: مصنع البياضات)"
+            },
+            {
+              "productName": "وجه مخدة شتوي عدد 1 - بيج (مستودع: مصنع البياضات)",
+              "itemStatus": "جاهز",
+              "quantity": 1529,
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع"
+            },
+            {
+              "itemStatus": "جاهز",
+              "quantity": 580,
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "productName": "وجه مخدة شتوي عدد 1 - سكني (مستودع: مصنع البياضات)"
+            },
+            {
+              "itemStatus": "جاهز",
+              "quantity": 1,
+              "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+              "productName": "وجه مخدة شتوي عدد 1 - سومو (مستودع: مصنع البياضات)"
+            }
+          ],
+          "supervisorNotes": "تم",
+          "createdBy": "المدير العام",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث"
+        },
+        {
+          "currentDepartment": "الطلبيات",
+          "supervisorNotes": "تم",
+          "status": "جديد",
+          "lastActionBy": "جهاد بركات فلاح المهيرات",
+          "deliveryDate": "2026-10-11",
+          "orderNotes": "",
+          "items": [
+            {
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "quantity": "60",
+              "itemStatus": "جاهز",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "hasProductionDetails": false,
+              "notes": "كيس سحاب كرت فوكس"
+            },
+            {
+              "notes": "كيس سحاب كرت فوكس",
+              "hasProductionDetails": false,
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "quantity": "60",
+              "itemStatus": "جاهز",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false
+            },
+            {
+              "hasProductionDetails": true,
+              "quantity": "36",
+              "thickness": "",
+              "notes": "شنته +كرت الزغير الليت 6 اللوان 6 من كل لون (تم إلغاء الصنف في الإنتاج)",
+              "productName": "ثرو شتوي 200*220 سم",
+              "colorModel": "شتوي ببلي ثرو",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "hasPreparationDetails": false,
+              "productionNotes": "شنته +كرت الزغير الليت ",
+              "sizeCm": "200*220"
+            },
+            {
+              "productName": "ثرو شتوي 160*220 سم",
+              "notes": "شنته +كرت الزغير الليت 6 اللوان 6 من كل لون (تم إلغاء الصنف في الإنتاج)",
+              "productionNotes": "شنته +كرت الزغير الليت ",
+              "quantity": "36",
+              "colorModel": "شتوي ببلي ثرو",
+              "hasProductionDetails": true,
+              "sizeCm": "160*220",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "thickness": "",
+              "hasPreparationDetails": false
+            },
+            {
+              "hasProductionDetails": false,
+              "itemStatus": "جاهز",
+              "productName": "لحاف مايكروفايبر 160*220سم",
+              "quantity": "10",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "notes": ""
+            },
+            {
+              "itemStatus": "قيد التحضير",
+              "hasProductionDetails": false,
+              "quantity": "5",
+              "preparationNotes": "",
+              "notes": "",
+              "hasPreparationDetails": true,
+              "productName": "لحاف مايكروفايبر 220*240سم"
+            },
+            {
+              "notes": "",
+              "hasPreparationDetails": true,
+              "hasProductionDetails": false,
+              "quantity": "5",
+              "productName": "لحاف مايكروفايبر 240*260سم",
+              "itemStatus": "قيد التحضير",
+              "preparationNotes": ""
+            },
+            {
+              "notes": "ستيكر ",
+              "hasProductionDetails": false,
+              "productName": "واقي مخدة تنسل عدد 2",
+              "itemStatus": "جاهز",
+              "hasPrepAndProdDetails": false,
+              "quantity": "5",
+              "hasPreparationDetails": false
+            },
+            {
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "quantity": "10",
+              "itemStatus": "جاهز",
+              "notes": "كل جوز ببكيت ",
+              "hasProductionDetails": false,
+              "productName": "واقي مخدة عرض عدد 1"
+            }
+          ],
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "id": "4rHeLboPtUrTYG8pFyfo",
+          "isSales": true,
+          "customerId": "kgfmZd2nx0Wnx2yO2Ciz",
+          "orderDate": "2026-10-07",
+          "statusUpdateDate": "2026-10-07",
+          "orderNumber": "ORD-0054",
+          "customerName": "انوار شرق اسيا لخدمات التسويق -الزغير ايليت"
+        },
+        {
+          "customerId": "EorsLiy1nU2VFrnrdZnh",
+          "orderNumber": "ORD-0055",
+          "supervisorNotes": "تم",
+          "items": [
+            {
+              "productName": "وجه مخدة عرض 50*70 سم عدد 2",
+              "notes": "",
+              "hasProductionDetails": true,
+              "itemStatus": "إنتاج قيد الخياطة",
+              "quantity": "120"
+            }
+          ],
+          "createdBy": "المدير العام",
+          "isSales": true,
+          "customerName": "مخازن المدينة التجارية",
+          "status": "جديد",
+          "statusUpdateDate": "2026-10-07",
+          "orderNotes": "فرع العبدلي مول - لا يوجد طلب شراء ولكن الزبون ينتظر انجازهم ومن ثم نخبر الزبون ب انه البضاعة جاهزة ",
+          "orderDate": "2026-10-07",
+          "id": "DrSe1NL0PAbIYo6Gutxi",
+          "deliveryDate": "2026-10-15",
+          "lastActionBy": "نظام الإنتاج",
+          "currentDepartment": "الطلبيات"
+        },
+        {
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "currentDepartment": "الطلبيات",
+          "status": "جديد",
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "lastActionBy": "جهاد بركات فلاح المهيرات",
+          "deliveryDate": "2026-10-10",
+          "items": [
+            {
+              "itemStatus": "جاهز",
+              "hasProductionDetails": false,
+              "notes": "",
+              "productName": "واقي فرشة عرض 100*200سم",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false,
+              "quantity": "60"
+            },
+            {
+              "hasProductionDetails": false,
+              "productName": "واقي فرشة عرض 120*200سم",
+              "notes": "",
+              "quantity": "40",
+              "itemStatus": "جاهز",
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false
+            },
+            {
+              "productName": "واقي فرشة عرض200*200سم",
+              "hasPrepAndProdDetails": false,
+              "hasPreparationDetails": false,
+              "hasProductionDetails": false,
+              "quantity": "60",
+              "notes": "",
+              "itemStatus": "جاهز"
+            },
+            {
+              "hasProductionDetails": false,
+              "itemStatus": "قيد التحضير",
+              "notes": "",
+              "hasPreparationDetails": true,
+              "preparationNotes": "",
+              "quantity": "60",
+              "productName": "مخدة مايكروفايبر 1400غ مصفاة"
+            }
+          ],
+          "isSales": true,
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "orderNumber": "ORD-0064",
+          "orderDate": "2026-10-09",
+          "id": "HbxfZyvhd1Jfzdgkgm8r",
+          "supervisorNotes": "تم",
+          "orderNotes": "الواقي العرض جاهز عند المصعد\nسيتم تعديل الاعداد على السستم حسب العدد المتواجد عند المصعد",
+          "statusUpdateDate": "2026-10-09"
+        },
+        {
+          "orderDate": "2026-10-07",
+          "statusUpdateDate": "2026-10-07",
+          "id": "zQw7UFn18j2wpPjWJvo0",
+          "status": "جديد",
+          "orderNotes": "فرع حي نزال ",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "isSales": true,
+          "currentDepartment": "الطلبيات",
+          "lastActionBy": "نظام الإنتاج",
+          "deliveryDate": "2026-10-12",
+          "orderNumber": "ORD-0057",
+          "supervisorNotes": "تم",
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "items": [
+            {
+              "itemStatus": "إنتاج قيد الخياطة",
+              "quantity": "36",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "hasProductionDetails": true,
+              "notes": "كرت ابولو تغليف سحاب "
+            },
+            {
+              "hasProductionDetails": true,
+              "quantity": "36",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "notes": "كرت ابولو تغليف سحاب ",
+              "productName": "شرشف مطاط شتوي 200*200 سم"
+            }
+          ],
+          "createdBy": "المدير العام"
+        },
+        {
+          "customerId": "hNiXghAVc3D1x8WKfrtF",
+          "orderNumber": "ORD-0051",
+          "currentDepartment": "الطلبيات",
+          "status": "قيد التجهيز",
+          "statusUpdateDate": "2026-10-08",
+          "orderDate": "2026-10-07",
+          "isSales": true,
+          "lastActionBy": "نظام الإنتاج",
+          "deliveryDate": "2026-10-08",
+          "orderNotes": "ارجو مراجعه جهاد بكل اشي يتعلق بالاوردر",
+          "id": "5iwZ5XISGs60IytMgzxE",
+          "items": [
+            {
+              "hasProductionDetails": false,
+              "quantity": "36",
+              "notes": "عدد 6 من كل لون  كيس سيلك كرت كانون ",
+              "itemStatus": "قيد التحضير",
+              "preparationNotes": "عدد 6 من كل لون\n كيس سيلك\nكرت كانون ",
+              "hasPreparationDetails": true,
+              "productName": "شرشف مطاط شتوي 200*200 سم"
+            },
+            {
+              "quantity": "36",
+              "hasProductionDetails": false,
+              "notes": "عدد 6 من كل لون  كيس سيلك كرت كانون ",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "itemStatus": "قيد التحضير",
+              "preparationNotes": "",
+              "hasPreparationDetails": true
+            },
+            {
+              "thickness": "",
+              "hasProductionDetails": true,
+              "productionNotes": "عدد 2 من كل لون كرت الزغير مع شبره\nقماش شتوي جديد سترايب عريض ",
+              "sizeCm": "200*220",
+              "itemStatus": "جاهز",
+              "notes": "عدد 2 من كل لون كرت الزغير مع شبره-قماش سترايب عريض شتوي ",
+              "productName": "ثرو شتوي 200*220 سم",
+              "quantity": "12",
+              "hasPreparationDetails": false,
+              "colorModel": "أبيض"
+            },
+            {
+              "hasProductionDetails": true,
+              "notes": "عدد 4 من كل لون شبره مع كرت الزغير ",
+              "quantity": "24",
+              "productionNotes": "عدد 2 من كل لون كرت الزغير مع شبره",
+              "hasPreparationDetails": false,
+              "thickness": "",
+              "itemStatus": "جاهز",
+              "productName": "ثرو شتوي 160*220 سم",
+              "sizeCm": "160*220",
+              "colorModel": "أبيض"
+            },
+            {
+              "hasPreparationDetails": false,
+              "notes": "",
+              "productionNotes": "قماش شتوي سترايب عريض\nعدد 3 من كل لون 6 اللوان\nتغليف شبره مع كرت الزغير ",
+              "thickness": "",
+              "quantity": "18",
+              "itemStatus": "جاهز",
+              "colorModel": "أبيض",
+              "productName": "شرشف فلات تواصي",
+              "sizeCm": "170*130",
+              "hasProductionDetails": true
+            }
+          ],
+          "supervisorNotes": "تم",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "customerName": "الزغير هوم سنتر"
+        },
+        {
+          "orderNotes": "مرتبط بطلبية رقم ORD-0009",
+          "deliveryDate": "2026-10-11",
+          "lastActionBy": "جهاد بركات فلاح المهيرات",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "items": [
+            {
+              "sizeCm": "",
+              "notes": "",
+              "productName": "طقم وجه لحاف مايكروفايبر 220*240سم - 4 قطع",
+              "quantity": "5",
+              "status": "لم يتم التنفيذ",
+              "colorModel": "",
+              "thickness": ""
+            },
+            {
+              "productName": "لحاف مايكروفايبر 240*260سم",
+              "notes": "",
+              "quantity": "5",
+              "status": "لم يتم التنفيذ",
+              "thickness": "",
+              "sizeCm": "",
+              "colorModel": ""
+            },
+            {
+              "notes": "",
+              "colorModel": "",
+              "status": "لم يتم التنفيذ",
+              "sizeCm": "",
+              "quantity": "5",
+              "thickness": "",
+              "productName": "لحاف مايكروفايبر 220*240سم"
+            }
+          ],
+          "salesOrderId": "4rHeLboPtUrTYG8pFyfo",
+          "orderNumber": "PREP-0018",
+          "orderDate": "2026-09-24",
+          "customerId": "kgfmZd2nx0Wnx2yO2Ciz",
+          "id": "6AlOz3ug3jWoh3KH6xsh",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "salesOrderNumber": "ORD-0054",
+          "isPreparation": true,
+          "supervisorNotes": "تم",
+          "status": "لم يتم التنفيذ",
+          "customerName": "انوار شرق اسيا لخدمات التسويق -الزغير ايليت"
+        },
+        {
+          "status": "لم يتم التنفيذ",
+          "lastActionBy": "جهاد بركات فلاح المهيرات",
+          "deliveryDate": "2026-09-27",
+          "salesOrderNumber": "ORD-0053",
+          "orderDate": "2026-09-24",
+          "customerId": "kgfmZd2nx0Wnx2yO2Ciz",
+          "isPreparation": true,
+          "currentDepartment": "إنتاج قيد التحضير",
+          "id": "L9BqaClG4oNQ0hjmQl98",
+          "items": [
+            {
+              "colorModel": "",
+              "sizeCm": "",
+              "notes": "",
+              "quantity": "5",
+              "status": "لم يتم التنفيذ",
+              "thickness": "",
+              "productName": "طقم وجه لحاف مايكروفايبر 220*240سم - 4 قطع"
+            },
+            {
+              "sizeCm": "",
+              "notes": "",
+              "productName": "لحاف مايكروفايبر 240*260سم",
+              "quantity": "5",
+              "status": "لم يتم التنفيذ",
+              "colorModel": "",
+              "thickness": ""
+            }
+          ],
+          "salesOrderId": "TOOKzOCSnUNSCbwLdVQM",
+          "orderNumber": "PREP-0017",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0009",
+          "customerName": "انوار شرق اسيا لخدمات التسويق -الزغير ايليت",
+          "supervisorNotes": "تم"
+        },
+        {
+          "supervisorNotes": "تم",
+          "salesOrderId": "5iwZ5XISGs60IytMgzxE",
+          "salesOrderNumber": "ORD-0051",
+          "isPreparation": true,
+          "orderDate": "2026-10-07",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0051",
+          "orderNumber": "PREP-0015",
+          "hasLedgerMismatch": false,
+          "productionType": "preparation",
+          "customerName": "الزغير هوم سنتر",
+          "id": "U17YOLdzNuQmAKsD2QIh",
+          "stockDeducted": false,
+          "deliveryDate": "2026-10-08",
+          "lastActionBy": "جهاد بركات فلاح المهيرات",
+          "customerId": "hNiXghAVc3D1x8WKfrtF",
+          "items": [
+            {
+              "sizeCm": "",
+              "colorModel": "",
+              "notes": "",
+              "thickness": "",
+              "productName": "",
+              "quantity": "36",
+              "status": "لم يتم التنفيذ"
+            },
+            {
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "status": "لم يتم التنفيذ",
+              "notes": "عدد 6 من كل لون\n كيس سيلك\nكرت كانون ",
+              "sizeCm": "",
+              "colorModel": "",
+              "thickness": "",
+              "quantity": "36"
+            },
+            {
+              "sizeCm": "",
+              "notes": "",
+              "thickness": "",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "quantity": "36",
+              "status": "لم يتم التنفيذ",
+              "colorModel": ""
+            }
+          ],
+          "status": "لم يتم التنفيذ",
+          "stockReceived": false,
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "storedStockDeducted": false,
+          "ignoredMaterialAudit": true
+        },
+        {
+          "salesOrderId": "HbxfZyvhd1Jfzdgkgm8r",
+          "supervisorNotes": "تم",
+          "customerId": "9MAV6jcQwXVVvonZVeSD",
+          "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+          "salesOrderNumber": "ORD-0064",
+          "orderDate": "2026-10-09",
+          "id": "awc1yTqjQiDdtz2ZTm64",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "deliveryDate": "2026-10-10",
+          "lastActionBy": "جهاد بركات فلاح المهيرات",
+          "orderNumber": "PREP-0021",
+          "status": "لم يتم التنفيذ",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "isPreparation": true,
+          "orderNotes": "مرتبط بطلبية رقم ORD-0063",
+          "items": [
+            {
+              "productName": "مخدة مايكروفايبر 1400غ مصفاة",
+              "sizeCm": "",
+              "notes": "",
+              "thickness": "",
+              "quantity": "60",
+              "colorModel": "",
+              "status": "لم يتم التنفيذ"
+            }
+          ]
+        },
+        {
+          "customerName": "شركة الوعد للتسويق المباشر",
+          "orderNumber": "PREP-0019",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0056",
+          "salesOrderId": "34h4aGll0z2wL55bAaNf",
+          "orderDate": "2026-10-07",
+          "salesOrderNumber": "ORD-0060",
+          "items": [
+            {
+              "thickness": "",
+              "status": "لم يتم التنفيذ",
+              "productName": "مخدة مايكروفايبر دبل بريم 1800غ",
+              "colorModel": "",
+              "notes": " سيلك قديم + باركود ميرانا 1800غ + شنته نايلون مسحوب هوا ",
+              "quantity": "10",
+              "sizeCm": ""
+            },
+            {
+              "colorModel": "",
+              "productName": "مخدة مايكروفايبر بريم واحد 1300غ",
+              "sizeCm": "",
+              "status": "لم يتم التنفيذ",
+              "thickness": "",
+              "notes": "بريم واحد اي لون +باركود ميرانا 1300غ + شنته نايلون مسحوب هوا ",
+              "quantity": "10"
+            }
+          ],
+          "supervisorNotes": "تم",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "status": "لم يتم التنفيذ",
+          "createdBy": "المدير العام",
+          "customerId": "rpPPndldWkWRBWtPZKyk",
+          "id": "m31JTpvNVOIT4uxztISm",
+          "isPreparation": true,
+          "deliveryDate": "2026-10-08",
+          "lastActionBy": "المدير العام"
+        }
+      ],
+      "date": "2026-10-08",
+      "supervisorName": "عبد الله يعقوب ايوب غيث",
+      "status": "معتمد",
+      "createdAt": "2026-10-10T05:33:09.704Z",
+      "timeOut": "18:20",
+      "employeeAttendanceStatus": "absence",
+      "id": "sup_rep_EMP-0006_2026-10-08",
+      "attendanceNotes": "",
+      "supervisorId": "EMP-0006"
+    },
+    {
+      "supervisorId": "EMP-0006",
+      "status": "معتمد",
+      "employeeEvaluations": [
+        {
+          "scorePercentage": "80",
+          "employeeName": "محمد سمير علي محمد العبود",
+          "rating": "جيد",
+          "employeeId": "EMP-0008",
+          "reportApproved": false,
+          "reason": ""
+        },
+        {
+          "rating": "جيد",
+          "employeeName": "ايهاب رامي محمد راغب الشرباتي",
+          "reason": "",
+          "reportApproved": false,
+          "employeeId": "EMP-0012",
+          "scorePercentage": "90"
+        },
+        {
+          "employeeName": "بهاء الدين اسامة ايوب غيث",
+          "employeeId": "EMP-0018",
+          "reportApproved": false,
+          "scorePercentage": "90",
+          "rating": "جيد",
+          "reason": ""
+        },
+        {
+          "employeeId": "EMP-0019",
+          "reason": "لم يقم بتقديم أي تقرير",
+          "rating": "غائب",
+          "employeeName": "حمزة ماهر احمد الكردي",
+          "scorePercentage": "0",
+          "reportApproved": false
+        },
+        {
+          "reason": "لم يقم بتقديم أي تقرير",
+          "scorePercentage": "40",
+          "rating": "لم يقدم تقرير",
+          "employeeName": "ماجد يوسف عبد الجابر محمود",
+          "reportApproved": false,
+          "employeeId": "EMP-0021"
+        },
+        {
+          "employeeId": "EMP-0024",
+          "employeeName": "أحمد لطفي حسن حسين",
+          "reportApproved": false,
+          "reason": "",
+          "rating": "جيد",
+          "scorePercentage": "80"
+        }
+      ],
+      "attendanceNotes": "",
+      "employeeAttendanceStatus": "all_present",
+      "timeIn": "08:14",
+      "id": "sup_rep_EMP-0006_2026-10-10",
+      "timeOut": "",
+      "ordersSnapshot": [
+        {
+          "readyForDeliveryBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDriverName": "بهاء الدين اسامة ايوب غيث",
+          "deliveryCompletedAt": null,
+          "deliveryMethod": "employee",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-12",
+          "createdBy": "المدير العام",
+          "deliveryDriverId": "EMP-0018",
+          "items": [
+            {
+              "receivedReservedQuantity": 1,
+              "itemStatus": "جاهز",
+              "notes": "سحاب حرف ال + تغليف كرتونة تركيا  + بدون وجوه مخدات",
+              "quantity": "1",
+              "hasProductionDetails": true,
+              "productName": "وجه فرشة سحاب تواصي"
+            }
+          ],
+          "orderNumber": "ORD-0065",
+          "deliveryStatus": "بانتظار الاستلام",
+          "orderNotes": "",
+          "currentDepartment": "الطلبيات",
+          "customerName": "محمد مراد محمد خميس الالفي - فرشة ومخدة",
+          "orderDate": "2026-10-07",
+          "status": "جاهز للتسليم للتوصيل",
+          "readyForDeliveryAt": "2026-10-11T10:59:06.699Z",
+          "isSales": true,
+          "statusUpdateDate": "2026-10-11",
+          "id": "BllyJ2Qr4nlskQGNAKGR",
+          "supervisorNotes": "تم",
+          "customerId": "AXxkP01sUxVLKCXtQPHe"
+        },
+        {
+          "customerId": "EorsLiy1nU2VFrnrdZnh",
+          "supervisorNotes": "تم",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "id": "DrSe1NL0PAbIYo6Gutxi",
+          "deliveryDate": "2026-10-15",
+          "items": [
+            {
+              "quantity": "120",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "productName": "وجه مخدة عرض 50*70 سم عدد 2",
+              "hasProductionDetails": true,
+              "notes": ""
+            }
+          ],
+          "isSales": true,
+          "statusUpdateDate": "2026-10-07",
+          "createdBy": "المدير العام",
+          "orderNumber": "ORD-0055",
+          "orderDate": "2026-10-07",
+          "currentDepartment": "الطلبيات",
+          "customerName": "مخازن المدينة التجارية",
+          "status": "جديد",
+          "orderNotes": "فرع العبدلي مول - لا يوجد طلب شراء ولكن الزبون ينتظر انجازهم ومن ثم نخبر الزبون ب انه البضاعة جاهزة "
+        },
+        {
+          "status": "جديد",
+          "orderNumber": "ORD-0067",
+          "customerId": "aSM33wQkKf56m7jCr9Bv",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "customerName": "فرشات كوالا - التعمري ",
+          "currentDepartment": "الطلبيات",
+          "id": "sM3F5UxEnQNiHPxHxWZf",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "items": [
+            {
+              "hasPreparationDetails": true,
+              "productName": "وجه مخدة سيلك جديد",
+              "itemStatus": "قيد التحضير",
+              "quantity": "20",
+              "notes": "شنته + وصف "
+            },
+            {
+              "quantity": "10",
+              "hasPreparationDetails": true,
+              "notes": "الموافقة على عينه قبل التصنيع //جهاد ",
+              "productName": "مخدة مخلوط حبيبات",
+              "itemStatus": "قيد التحضير"
+            }
+          ],
+          "orderNotes": "تسليم فرع المقابلين ",
+          "orderDate": "2026-10-11",
+          "isSales": true,
+          "statusUpdateDate": "2026-10-11",
+          "supervisorNotes": "تم"
+        },
+        {
+          "orderNotes": "مستعجلات",
+          "isSales": true,
+          "customerName": "الزغير هوم سنتر",
+          "orderNumber": "ORD-0066",
+          "createdBy": "المدير العام",
+          "supervisorNotes": "تم",
+          "currentDepartment": "الطلبيات",
+          "items": [
+            {
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "notes": "كيس سيلك - كرت كانون - من كل لون 10 حبات",
+              "quantity": "60",
+              "itemStatus": "قيد التجهيز"
+            }
+          ],
+          "customerId": "hNiXghAVc3D1x8WKfrtF",
+          "orderDate": "2026-10-10",
+          "statusUpdateDate": "2026-10-10",
+          "id": "spDi1OAvhIejInc8Isy5",
+          "status": "جديد",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-11"
+        },
+        {
+          "salesOrderNumber": "ORD-0067",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "orderDate": "2026-10-11",
+          "status": "لم يتم التنفيذ",
+          "id": "qBahbg8zL6R6aVduZ3pD",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "items": [
+            {
+              "quantity": "20",
+              "productName": "وجه مخدة سيلك جديد",
+              "status": "لم يتم التنفيذ",
+              "notes": "شنته + وصف ",
+              "thickness": "",
+              "colorModel": "",
+              "sizeCm": ""
+            },
+            {
+              "status": "لم يتم التنفيذ",
+              "thickness": "",
+              "productName": "مخدة مخلوط حبيبات",
+              "notes": "الموافقة على عينه قبل التصنيع //جهاد ",
+              "quantity": "10",
+              "colorModel": "",
+              "sizeCm": ""
+            }
+          ],
+          "orderNotes": "مرتبط بطلبية رقم ORD-0067",
+          "orderNumber": "PREP-0022",
+          "supervisorNotes": "تم",
+          "customerName": "فرشات كوالا - التعمري ",
+          "salesOrderId": "sM3F5UxEnQNiHPxHxWZf",
+          "isPreparation": true,
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "customerId": "aSM33wQkKf56m7jCr9Bv"
+        }
+      ],
+      "createdAt": "2026-10-11T18:47:55.659Z",
+      "date": "2026-10-10",
+      "supervisorName": "عبد الله يعقوب ايوب غيث"
+    },
+    {
+      "date": "2026-10-11",
+      "employeeEvaluations": [
+        {
+          "scorePercentage": "80",
+          "reason": "",
+          "reportApproved": false,
+          "employeeName": "محمد سمير علي محمد العبود",
+          "rating": "جيد",
+          "employeeId": "EMP-0008"
+        },
+        {
+          "rating": "جيد",
+          "reportApproved": false,
+          "scorePercentage": "90",
+          "reason": "",
+          "employeeId": "EMP-0012",
+          "employeeName": "ايهاب رامي محمد راغب الشرباتي"
+        },
+        {
+          "employeeName": "بهاء الدين اسامة ايوب غيث",
+          "reportApproved": false,
+          "rating": "جيد",
+          "employeeId": "EMP-0018",
+          "reason": "",
+          "scorePercentage": "90"
+        },
+        {
+          "employeeName": "حمزة ماهر احمد الكردي",
+          "reportApproved": false,
+          "reason": "لم يقم بتقديم أي تقرير",
+          "scorePercentage": "0",
+          "employeeId": "EMP-0019",
+          "rating": "غائب"
+        },
+        {
+          "reportApproved": false,
+          "employeeName": "ماجد يوسف عبد الجابر محمود",
+          "employeeId": "EMP-0021",
+          "rating": "جيد",
+          "scorePercentage": "80",
+          "reason": ""
+        },
+        {
+          "reportApproved": false,
+          "reason": "",
+          "employeeId": "EMP-0024",
+          "employeeName": "أحمد لطفي حسن حسين",
+          "rating": "جيد",
+          "scorePercentage": "80"
+        }
+      ],
+      "id": "sup_rep_EMP-0006_2026-10-11",
+      "employeeAttendanceStatus": "all_present",
+      "createdAt": "2026-10-11T18:41:58.868Z",
+      "supervisorName": "عبد الله يعقوب ايوب غيث",
+      "status": "معتمد",
+      "attendanceNotes": "",
+      "timeIn": "08:26",
+      "ordersSnapshot": [
+        {
+          "supervisorNotes": "تم",
+          "customerId": "AXxkP01sUxVLKCXtQPHe",
+          "readyForDeliveryAt": "2026-10-11T10:59:06.699Z",
+          "deliveryDriverId": "EMP-0018",
+          "lastActionBy": "عماد فتحي زياد عزيز عوض",
+          "deliveryDate": "2026-10-12",
+          "items": [
+            {
+              "quantity": "1",
+              "receivedReservedQuantity": 1,
+              "itemStatus": "جاهز",
+              "productName": "وجه فرشة سحاب تواصي",
+              "notes": "سحاب حرف ال + تغليف كرتونة تركيا  + بدون وجوه مخدات",
+              "hasProductionDetails": true
+            }
+          ],
+          "orderNumber": "ORD-0065",
+          "currentDepartment": "الطلبيات",
+          "deliveryStatus": "بانتظار الاستلام",
+          "deliveryCompletedAt": null,
+          "isSales": true,
+          "createdBy": "المدير العام",
+          "deliveryMethod": "employee",
+          "status": "جاهز للتسليم للتوصيل",
+          "orderNotes": "",
+          "orderDate": "2026-10-07",
+          "readyForDeliveryBy": "عماد فتحي زياد عزيز عوض",
+          "deliveryDriverName": "بهاء الدين اسامة ايوب غيث",
+          "customerName": "محمد مراد محمد خميس الالفي - فرشة ومخدة",
+          "statusUpdateDate": "2026-10-11",
+          "id": "BllyJ2Qr4nlskQGNAKGR"
+        },
+        {
+          "isSales": true,
+          "items": [
+            {
+              "productName": "وجه مخدة عرض 50*70 سم عدد 2",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "hasProductionDetails": true,
+              "notes": "",
+              "quantity": "120"
+            }
+          ],
+          "supervisorNotes": "تم",
+          "statusUpdateDate": "2026-10-07",
+          "status": "جديد",
+          "currentDepartment": "الطلبيات",
+          "orderNotes": "فرع العبدلي مول - لا يوجد طلب شراء ولكن الزبون ينتظر انجازهم ومن ثم نخبر الزبون ب انه البضاعة جاهزة ",
+          "orderDate": "2026-10-07",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-15",
+          "id": "DrSe1NL0PAbIYo6Gutxi",
+          "createdBy": "المدير العام",
+          "orderNumber": "ORD-0055",
+          "customerName": "مخازن المدينة التجارية",
+          "customerId": "EorsLiy1nU2VFrnrdZnh"
+        },
+        {
+          "statusUpdateDate": "2026-10-11",
+          "supervisorNotes": "تم",
+          "orderNumber": "ORD-0067",
+          "customerId": "aSM33wQkKf56m7jCr9Bv",
+          "customerName": "فرشات كوالا - التعمري ",
+          "status": "جديد",
+          "orderDate": "2026-10-11",
+          "items": [
+            {
+              "quantity": "20",
+              "itemStatus": "قيد التحضير",
+              "hasPreparationDetails": true,
+              "productName": "وجه مخدة سيلك جديد",
+              "notes": "شنته + وصف "
+            },
+            {
+              "productName": "مخدة مخلوط حبيبات",
+              "notes": "الموافقة على عينه قبل التصنيع //جهاد ",
+              "quantity": "10",
+              "hasPreparationDetails": true,
+              "itemStatus": "قيد التحضير"
+            }
+          ],
+          "isSales": true,
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "lastActionBy": "جهاد بركات فلاح المهيرات",
+          "orderNotes": "تسليم فرع المقابلين ",
+          "id": "sM3F5UxEnQNiHPxHxWZf",
+          "currentDepartment": "الطلبيات"
+        },
+        {
+          "currentDepartment": "الطلبيات",
+          "supervisorNotes": "تم",
+          "status": "جديد",
+          "orderNumber": "ORD-0066",
+          "id": "spDi1OAvhIejInc8Isy5",
+          "lastActionBy": "المدير العام",
+          "deliveryDate": "2026-10-11",
+          "orderNotes": "مستعجلات",
+          "isSales": true,
+          "createdBy": "المدير العام",
+          "items": [
+            {
+              "quantity": "60",
+              "notes": "كيس سيلك - كرت كانون - من كل لون 10 حبات",
+              "productName": "شرشف مطاط شتوي 120*200 سم",
+              "itemStatus": "قيد التجهيز"
+            }
+          ],
+          "orderDate": "2026-10-10",
+          "customerName": "الزغير هوم سنتر",
+          "statusUpdateDate": "2026-10-10",
+          "customerId": "hNiXghAVc3D1x8WKfrtF"
+        },
+        {
+          "isPreparation": true,
+          "status": "لم يتم التنفيذ",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "customerName": "فرشات كوالا - التعمري ",
+          "items": [
+            {
+              "status": "لم يتم التنفيذ",
+              "colorModel": "",
+              "notes": "شنته + وصف ",
+              "thickness": "",
+              "sizeCm": "",
+              "quantity": "20",
+              "productName": "وجه مخدة سيلك جديد"
+            },
+            {
+              "productName": "مخدة مخلوط حبيبات",
+              "quantity": "10",
+              "thickness": "",
+              "sizeCm": "",
+              "status": "لم يتم التنفيذ",
+              "colorModel": "",
+              "notes": "الموافقة على عينه قبل التصنيع //جهاد "
+            }
+          ],
+          "orderNotes": "مرتبط بطلبية رقم ORD-0067",
+          "salesOrderNumber": "ORD-0067",
+          "orderNumber": "PREP-0022",
+          "salesOrderId": "sM3F5UxEnQNiHPxHxWZf",
+          "id": "qBahbg8zL6R6aVduZ3pD",
+          "supervisorNotes": "تم",
+          "currentDepartment": "إنتاج قيد التحضير",
+          "customerId": "aSM33wQkKf56m7jCr9Bv",
+          "lastActionBy": "جهاد بركات فلاح المهيرات",
+          "orderDate": "2026-10-11"
+        }
+      ],
+      "timeOut": "17:25",
+      "supervisorId": "EMP-0006"
+    },
+    {
+      "date": "2026-10-12",
+      "createdAt": "2026-10-17T21:20:24.226Z",
+      "supervisorId": "EMP-0006",
+      "timeOut": "18:00",
+      "id": "sup_rep_EMP-0006_2026-10-12",
+      "employeeEvaluations": [
+        {
+          "rating": "لم يقدم تقرير",
+          "scorePercentage": "40",
+          "reportApproved": false,
+          "reason": "لم يقم بتقديم أي تقرير",
+          "employeeName": "محمد سمير علي محمد العبود",
+          "employeeId": "EMP-0008"
+        },
+        {
+          "employeeId": "EMP-0012",
+          "rating": "غائب",
+          "employeeName": "ايهاب رامي محمد راغب الشرباتي",
+          "reason": "",
+          "scorePercentage": "0",
+          "reportApproved": false
+        },
+        {
+          "rating": "غائب",
+          "reportApproved": false,
+          "scorePercentage": "0",
+          "employeeId": "EMP-0018",
+          "reason": "لم يقم بتقديم أي تقرير",
+          "employeeName": "بهاء الدين اسامة ايوب غيث"
+        },
+        {
+          "reportApproved": false,
+          "employeeName": "ماجد يوسف عبد الجابر محمود",
+          "reason": "",
+          "employeeId": "EMP-0021",
+          "rating": "جيد",
+          "scorePercentage": "80"
+        },
+        {
+          "employeeId": "EMP-0024",
+          "scorePercentage": "50",
+          "employeeName": "أحمد لطفي حسن حسين",
+          "reason": "روح بدري كان تعبان",
+          "rating": "مقبول",
+          "reportApproved": false
+        }
+      ],
+      "status": "قيد المراجعة",
+      "attendanceNotes": "",
+      "supervisorName": "عبد الله يعقوب ايوب غيث",
+      "timeIn": "",
+      "employeeAttendanceStatus": "all_present",
+      "ordersSnapshot": [
+        {
+          "readyForDeliveryAt": "2026-10-17T13:20:35.092Z",
+          "currentDepartment": "الطلبيات",
+          "orderNumber": "ORD-0091",
+          "deliveryDate": "2026-10-17",
+          "lastActionBy": "المدير العام",
+          "items": [
+            {
+              "notes": "",
+              "itemStatus": "جاهز",
+              "productName": "واقي فرشة تواصي",
+              "quantity": "24",
+              "hasProductionDetails": true
+            }
+          ],
+          "customerId": "rY5GEK34JrdSoWQZc195",
+          "isSales": true,
+          "orderDate": "2026-10-17",
+          "statusUpdateDate": "2026-10-17",
+          "deliveryDriverName": "",
+          "readyForDeliveryBy": "المدير العام",
+          "createdBy": "المدير العام",
+          "deliveryCompletedAt": null,
+          "deliveryDriverId": "",
+          "status": "جاهز للتسليم للتوصيل",
+          "id": "RM1gAItGvDXXPPq9Yp6y",
+          "deliveryMethod": "pickup",
+          "supervisorNotes": "تم ",
+          "orderNotes": "12 منهم قماش الواقي النتد موديل 27 + و12 منهم قماش واقي العرض وتفاصيل التغليف موجودة ب كرت الانتاج ",
+          "deliveryStatus": "بانتظار الاستلام",
+          "customerName": "صندوق القطن لتجارة الالبسة والقطنيات"
+        },
+        {
+          "customerName": "مخازن المدينة التجارية",
+          "statusUpdateDate": "2026-10-07",
+          "id": "DrSe1NL0PAbIYo6Gutxi",
+          "supervisorNotes": "تم",
+          "createdBy": "المدير العام",
+          "customerId": "EorsLiy1nU2VFrnrdZnh",
+          "status": "جديد",
+          "orderNumber": "ORD-0055",
+          "isSales": true,
+          "orderDate": "2026-10-07",
+          "deliveryDate": "2026-10-15",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "currentDepartment": "الطلبيات",
+          "orderNotes": "فرع العبدلي مول - لا يوجد طلب شراء ولكن الزبون ينتظر انجازهم ومن ثم نخبر الزبون ب انه البضاعة جاهزة ",
+          "items": [
+            {
+              "hasProductionDetails": true,
+              "quantity": "120",
+              "productName": "وجه مخدة عرض 50*70 سم عدد 2",
+              "notes": "",
+              "itemStatus": "إنتاج قيد الخياطة"
+            }
+          ]
+        },
+        {
+          "orderDate": "2026-10-16",
+          "orderNumber": "ORD-0090",
+          "supervisorNotes": "تم",
+          "items": [
+            {
+              "hasPreparationDetails": false,
+              "thickness": "10",
+              "productionNotes": "",
+              "colorModel": "موديل 27 واقي تنسل",
+              "sizeCm": "67*138",
+              "productName": "فرشة بيبي تواصي",
+              "hasProductionDetails": true,
+              "notes": "",
+              "quantity": "2",
+              "itemStatus": "جاهز"
+            },
+            {
+              "itemStatus": "جاهز",
+              "productionNotes": "تغليف كبسه أسود 8",
+              "notes": "",
+              "colorModel": "موديل 27 واقي تنسل",
+              "hasPreparationDetails": false,
+              "thickness": "15",
+              "hasProductionDetails": true,
+              "sizeCm": "60*120",
+              "quantity": "20",
+              "productName": "واقي فرشة تنسل 60*120سم"
+            },
+            {
+              "hasPreparationDetails": false,
+              "itemStatus": "جاهز",
+              "thickness": "10",
+              "colorModel": "قطن صيني أبيض",
+              "productionNotes": "تغليف كبسه أسود 8",
+              "sizeCm": "60*120",
+              "hasProductionDetails": true,
+              "productName": "شرشف مطاط قطن 400خيط 60*120 سم",
+              "notes": "",
+              "quantity": "10"
+            },
+            {
+              "colorModel": "موديل 27 واقي تنسل",
+              "hasProductionDetails": true,
+              "thickness": "15",
+              "itemStatus": "جاهز",
+              "sizeCm": "67*138",
+              "hasPreparationDetails": false,
+              "productionNotes": "تغليف كبسه أسود 8",
+              "notes": "67*138*15",
+              "productName": "واقي فرشة تواصي",
+              "quantity": "1"
+            }
+          ],
+          "orderNotes": "",
+          "customerName": "شركة الوعد للتسويق المباشر",
+          "lastActionBy": "نظام الإنتاج",
+          "deliveryDate": "2026-10-18",
+          "status": "جديد",
+          "isSales": true,
+          "id": "g3QGaXDlJf6e9CG47ZuB",
+          "statusUpdateDate": "2026-10-17",
+          "customerId": "rpPPndldWkWRBWtPZKyk",
+          "currentDepartment": "الطلبيات",
+          "createdBy": "جهاد بركات فلاح المهيرات"
+        }
+      ]
+    },
+    {
+      "status": "قيد المراجعة",
+      "attendanceNotes": "",
+      "employeeAttendanceStatus": "all_present",
+      "createdAt": "2026-10-17T10:50:52.821Z",
+      "supervisorId": "EMP-0006",
+      "timeIn": "",
+      "supervisorName": "عبد الله يعقوب ايوب غيث",
+      "timeOut": "20:45",
+      "date": "2026-10-15",
+      "id": "sup_rep_EMP-0006_2026-10-15",
+      "ordersSnapshot": [
+        {
+          "deliveryMethod": "employee",
+          "orderNotes": "تسليم مع طلبيه جلال ل رينج هوم فرع مرج الحمام  .. استثناء اللون النهدي واضافه اللون الاسود السترايب العرض بداله 4 حبات .. اتنين منهم 180*200 سم واتنين 200*200 سم مع وحهين مخده ",
+          "createdBy": "المدير العام",
+          "readyForDeliveryAt": "2026-10-16T09:39:43.635Z",
+          "deliveryStatus": "بانتظار الاستلام",
+          "deliveryDate": "2026-10-17",
+          "lastActionBy": "عماد فتحي زياد عزيز عوض",
+          "currentDepartment": "الطلبيات",
+          "statusUpdateDate": "2026-10-16",
+          "supervisorNotes": "تم",
+          "items": [
+            {
+              "itemStatus": "جاهز",
+              "productName": "شرشف مطاط شتوي 200*200 سم",
+              "hasProductionDetails": false,
+              "notes": "كيس سحاب الموجود ورا البنات ينعمل على كرت ميرانا كلهم .. 12 منهم حطو عليهم مقاس 180 و 12 مقاس 200 ",
+              "quantity": "24",
+              "hasPreparationDetails": false,
+              "hasPrepAndProdDetails": false
+            }
+          ],
+          "deliveryDriverId": "EMP-0018",
+          "customerId": "r83yLqfMBcoXpwZwPczl",
+          "status": "جاهز للتسليم للتوصيل",
+          "deliveryCompletedAt": null,
+          "readyForDeliveryBy": "عماد فتحي زياد عزيز عوض",
+          "deliveryDriverName": "بهاء الدين اسامة ايوب غيث",
+          "isSales": true,
+          "orderNumber": "ORD-0089",
+          "id": "5D2LECcmbZHt3K6EkLiU",
+          "orderDate": "2026-10-16",
+          "customerName": "تاج هوم - جلال الزغير "
+        },
+        {
+          "orderNumber": "ORD-0055",
+          "statusUpdateDate": "2026-10-07",
+          "currentDepartment": "الطلبيات",
+          "createdBy": "المدير العام",
+          "deliveryDate": "2026-10-15",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "items": [
+            {
+              "quantity": "120",
+              "notes": "",
+              "hasProductionDetails": true,
+              "itemStatus": "إنتاج قيد الخياطة",
+              "productName": "وجه مخدة عرض 50*70 سم عدد 2"
+            }
+          ],
+          "orderNotes": "فرع العبدلي مول - لا يوجد طلب شراء ولكن الزبون ينتظر انجازهم ومن ثم نخبر الزبون ب انه البضاعة جاهزة ",
+          "customerName": "مخازن المدينة التجارية",
+          "supervisorNotes": "تم",
+          "status": "جديد",
+          "orderDate": "2026-10-07",
+          "customerId": "EorsLiy1nU2VFrnrdZnh",
+          "id": "DrSe1NL0PAbIYo6Gutxi",
+          "isSales": true
+        },
+        {
+          "id": "RM1gAItGvDXXPPq9Yp6y",
+          "currentDepartment": "الطلبيات",
+          "customerName": "صندوق القطن لتجارة الالبسة والقطنيات",
+          "createdBy": "المدير العام",
+          "orderNotes": "12 منهم قماش الواقي النتد موديل 27 + و12 منهم قماش واقي العرض وتفاصيل التغليف موجودة ب كرت الانتاج ",
+          "items": [
+            {
+              "itemStatus": "إنتاج قيد الخياطة",
+              "quantity": "24",
+              "hasProductionDetails": true,
+              "productName": "واقي فرشة تواصي",
+              "notes": ""
+            }
+          ],
+          "orderNumber": "ORD-0091",
+          "status": "جديد",
+          "isSales": true,
+          "orderDate": "2026-10-17",
+          "customerId": "rY5GEK34JrdSoWQZc195",
+          "statusUpdateDate": "2026-10-16",
+          "supervisorNotes": "تم",
+          "lastActionBy": "نظام الإنتاج",
+          "deliveryDate": "2026-10-17"
+        },
+        {
+          "items": [
+            {
+              "quantity": "2",
+              "productName": "فرشة بيبي تواصي",
+              "sizeCm": "67*138",
+              "hasProductionDetails": true,
+              "notes": "",
+              "hasPreparationDetails": false,
+              "thickness": "10",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "productionNotes": "",
+              "colorModel": "موديل 27 واقي تنسل"
+            },
+            {
+              "sizeCm": "60*120",
+              "hasPreparationDetails": false,
+              "productName": "واقي فرشة تنسل 60*120سم",
+              "colorModel": "موديل 27 واقي تنسل",
+              "productionNotes": "تغليف كبسه أسود 8",
+              "hasProductionDetails": true,
+              "quantity": "20",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "notes": "",
+              "thickness": "15"
+            },
+            {
+              "itemStatus": "إنتاج قيد الخياطة",
+              "hasPreparationDetails": false,
+              "productName": "شرشف مطاط قطن 400خيط 60*120 سم",
+              "productionNotes": "تغليف كبسه أسود 8",
+              "colorModel": "قطن صيني أبيض",
+              "thickness": "10",
+              "notes": "",
+              "quantity": "10",
+              "hasProductionDetails": true,
+              "sizeCm": "60*120"
+            },
+            {
+              "colorModel": "موديل 27 واقي تنسل",
+              "hasProductionDetails": true,
+              "productName": "واقي فرشة تواصي",
+              "itemStatus": "إنتاج قيد الخياطة",
+              "thickness": "15",
+              "hasPreparationDetails": false,
+              "notes": "67*138*15",
+              "productionNotes": "تغليف كبسه أسود 8",
+              "quantity": "1",
+              "sizeCm": "67*138"
+            }
+          ],
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "customerId": "rpPPndldWkWRBWtPZKyk",
+          "currentDepartment": "الطلبيات",
+          "lastActionBy": "المدير العام",
+          "deliveryDate": "2026-10-18",
+          "status": "جديد",
+          "customerName": "شركة الوعد للتسويق المباشر",
+          "isSales": true,
+          "orderNumber": "ORD-0090",
+          "orderNotes": "",
+          "id": "g3QGaXDlJf6e9CG47ZuB",
+          "supervisorNotes": "تم",
+          "orderDate": "2026-10-16",
+          "statusUpdateDate": "2026-10-17"
+        }
+      ],
+      "employeeEvaluations": [
+        {
+          "scorePercentage": "80",
+          "employeeId": "EMP-0008",
+          "reason": "",
+          "employeeName": "محمد سمير علي محمد العبود",
+          "rating": "جيد",
+          "reportApproved": false
+        },
+        {
+          "rating": "جيد",
+          "reason": "",
+          "employeeName": "ايهاب رامي محمد راغب الشرباتي",
+          "reportApproved": false,
+          "employeeId": "EMP-0012",
+          "scorePercentage": "80"
+        },
+        {
+          "reportApproved": false,
+          "employeeName": "بهاء الدين اسامة ايوب غيث",
+          "rating": "ممتاز",
+          "scorePercentage": "90",
+          "reason": "",
+          "employeeId": "EMP-0018"
+        },
+        {
+          "reason": "",
+          "employeeName": "ماجد يوسف عبد الجابر محمود",
+          "scorePercentage": "80",
+          "rating": "جيد",
+          "employeeId": "EMP-0021",
+          "reportApproved": false
+        },
+        {
+          "reportApproved": false,
+          "employeeName": "أحمد لطفي حسن حسين",
+          "scorePercentage": "50",
+          "employeeId": "EMP-0024",
+          "rating": "مقبول",
+          "reason": "روح بدري كان تعبان"
+        }
+      ]
+    },
+    {
+      "date": "2026-10-17",
+      "timeIn": "08:00",
+      "supervisorName": "عبد الله يعقوب ايوب غيث",
+      "attendanceNotes": "",
+      "ordersSnapshot": [
+        {
+          "id": "RM1gAItGvDXXPPq9Yp6y",
+          "status": "جاهز للتسليم للتوصيل",
+          "statusUpdateDate": "2026-10-17",
+          "isSales": true,
+          "orderDate": "2026-10-17",
+          "readyForDeliveryBy": "المدير العام",
+          "deliveryDriverName": "",
+          "customerName": "صندوق القطن لتجارة الالبسة والقطنيات",
+          "customerId": "rY5GEK34JrdSoWQZc195",
+          "items": [
+            {
+              "quantity": "24",
+              "itemStatus": "جاهز",
+              "productName": "واقي فرشة تواصي",
+              "hasProductionDetails": true,
+              "notes": ""
+            }
+          ],
+          "deliveryDate": "2026-10-17",
+          "lastActionBy": "المدير العام",
+          "deliveryCompletedAt": null,
+          "supervisorNotes": "تم",
+          "currentDepartment": "الطلبيات",
+          "orderNumber": "ORD-0091",
+          "readyForDeliveryAt": "2026-10-17T13:20:35.092Z",
+          "deliveryStatus": "بانتظار الاستلام",
+          "deliveryDriverId": "",
+          "orderNotes": "12 منهم قماش الواقي النتد موديل 27 + و12 منهم قماش واقي العرض وتفاصيل التغليف موجودة ب كرت الانتاج ",
+          "createdBy": "المدير العام",
+          "deliveryMethod": "pickup"
+        },
+        {
+          "supervisorNotes": "تم",
+          "lastActionBy": "عبد الله يعقوب ايوب غيث",
+          "deliveryDate": "2026-10-15",
+          "createdBy": "المدير العام",
+          "isSales": true,
+          "id": "DrSe1NL0PAbIYo6Gutxi",
+          "currentDepartment": "الطلبيات",
+          "items": [
+            {
+              "quantity": "120",
+              "notes": "",
+              "hasProductionDetails": true,
+              "productName": "وجه مخدة عرض 50*70 سم عدد 2",
+              "itemStatus": "إنتاج قيد الخياطة"
+            }
+          ],
+          "orderNotes": "فرع العبدلي مول - لا يوجد طلب شراء ولكن الزبون ينتظر انجازهم ومن ثم نخبر الزبون ب انه البضاعة جاهزة ",
+          "statusUpdateDate": "2026-10-07",
+          "customerName": "مخازن المدينة التجارية",
+          "orderDate": "2026-10-07",
+          "customerId": "EorsLiy1nU2VFrnrdZnh",
+          "orderNumber": "ORD-0055",
+          "status": "جديد"
+        },
+        {
+          "orderNumber": "ORD-0090",
+          "lastActionBy": "نظام الإنتاج",
+          "deliveryDate": "2026-10-18",
+          "createdBy": "جهاد بركات فلاح المهيرات",
+          "items": [
+            {
+              "hasProductionDetails": true,
+              "productionNotes": "",
+              "productName": "فرشة بيبي تواصي",
+              "quantity": "2",
+              "itemStatus": "جاهز",
+              "hasPreparationDetails": false,
+              "sizeCm": "67*138",
+              "colorModel": "موديل 27 واقي تنسل",
+              "notes": "",
+              "thickness": "10"
+            },
+            {
+              "sizeCm": "60*120",
+              "hasProductionDetails": true,
+              "productionNotes": "تغليف كبسه أسود 8",
+              "notes": "",
+              "thickness": "15",
+              "quantity": "20",
+              "hasPreparationDetails": false,
+              "colorModel": "موديل 27 واقي تنسل",
+              "itemStatus": "جاهز",
+              "productName": "واقي فرشة تنسل 60*120سم"
+            },
+            {
+              "quantity": "10",
+              "colorModel": "قطن صيني أبيض",
+              "notes": "",
+              "hasPreparationDetails": false,
+              "itemStatus": "جاهز",
+              "sizeCm": "60*120",
+              "productionNotes": "تغليف كبسه أسود 8",
+              "thickness": "10",
+              "hasProductionDetails": true,
+              "productName": "شرشف مطاط قطن 400خيط 60*120 سم"
+            },
+            {
+              "thickness": "15",
+              "hasPreparationDetails": false,
+              "productionNotes": "تغليف كبسه أسود 8",
+              "productName": "واقي فرشة تواصي",
+              "hasProductionDetails": true,
+              "colorModel": "موديل 27 واقي تنسل",
+              "quantity": "1",
+              "sizeCm": "67*138",
+              "itemStatus": "جاهز",
+              "notes": "67*138*15"
+            }
+          ],
+          "statusUpdateDate": "2026-10-17",
+          "customerId": "rpPPndldWkWRBWtPZKyk",
+          "supervisorNotes": "تم",
+          "orderDate": "2026-10-16",
+          "id": "g3QGaXDlJf6e9CG47ZuB",
+          "isSales": true,
+          "status": "جديد",
+          "customerName": "شركة الوعد للتسويق المباشر",
+          "orderNotes": "",
+          "currentDepartment": "الطلبيات"
+        }
+      ],
+      "employeeAttendanceStatus": "all_present",
+      "status": "قيد المراجعة",
+      "employeeEvaluations": [
+        {
+          "rating": "جيد",
+          "reportApproved": false,
+          "reason": "",
+          "employeeName": "محمد سمير علي محمد العبود",
+          "scorePercentage": "80",
+          "employeeId": "EMP-0008"
+        },
+        {
+          "employeeId": "EMP-0012",
+          "employeeName": "ايهاب رامي محمد راغب الشرباتي",
+          "rating": "جيد",
+          "reason": "",
+          "scorePercentage": "80",
+          "reportApproved": false
+        },
+        {
+          "employeeName": "بهاء الدين اسامة ايوب غيث",
+          "reason": "",
+          "employeeId": "EMP-0018",
+          "rating": "ممتاز",
+          "reportApproved": false,
+          "scorePercentage": "90"
+        },
+        {
+          "reason": "",
+          "scorePercentage": "80",
+          "rating": "جيد",
+          "employeeName": "ماجد يوسف عبد الجابر محمود",
+          "employeeId": "EMP-0021",
+          "reportApproved": false
+        },
+        {
+          "reason": "",
+          "reportApproved": false,
+          "employeeId": "EMP-0024",
+          "employeeName": "أحمد لطفي حسن حسين",
+          "scorePercentage": "80",
+          "rating": "جيد"
+        }
+      ],
+      "timeOut": "18:15",
+      "id": "sup_rep_EMP-0006_2026-10-17",
+      "supervisorId": "EMP-0006",
+      "createdAt": "2026-10-17T21:17:29.781Z"
+    }
+  ],
+  "hr_attendance": [
+    {
+      "employeeId": "EMP-0006",
+      "type": "إجازة سنوية",
+      "notes": "طلب معتمد (إجازة سنوية): ظرف عائلي",
+      "time": "يوم كامل",
+      "updatedAt": "2026-09-29T21:24:01.821Z",
+      "date": "2026-10-01",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "isLeave": true,
+      "id": "a8vB9miKKVxhbQAAePEN"
+    },
+    {
+      "id": "DBNKMw8o5zbDsXpRbBt8",
+      "timeOut": "19:59",
+      "userId": "EMP-0006",
+      "timeIn": "08:03",
+      "date": "2026-10-03",
+      "employeeId": "EMP-0006",
+      "status": "مداوم",
+      "locationConfirmed": true,
+      "updatedAt": "2026-10-03T16:59:35.936Z",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | خروج جغرافي (مصنع البياضات)"
+    },
+    {
+      "timeIn": "08:03",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "status": "مداوم",
+      "lateMinutes": 0,
+      "actualHours": 0,
+      "date": "2026-10-03",
+      "timeOut": "19:59",
+      "employeeId": "EMP-0006",
+      "overtimeHours": 0,
+      "officialAbsenceMinutes": 3,
+      "notes": "تم سحب الدوام وحساب الساعات تلقائياً",
+      "id": "EMP-0006_2026-10-03"
+    },
+    {
+      "date": "2026-10-04",
+      "id": "dwM8zXGKS8YlpdV5uw3b",
+      "updatedAt": "2026-10-04T21:59:26.285Z",
+      "timeIn": "08:10",
+      "locationConfirmed": true,
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | أُدخل وقت خروج يدوي",
+      "userId": "EMP-0006",
+      "employeeId": "EMP-0006",
+      "timeOut": "17:00",
+      "status": "مكتمل الدوام",
+      "employeeName": "عبد الله يعقوب ايوب غيث"
+    },
+    {
+      "actualHours": 0,
+      "timeOut": "17:05",
+      "notes": "تم سحب الدوام وحساب الساعات تلقائياً",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "officialAbsenceMinutes": 26,
+      "status": "مداوم",
+      "employeeId": "EMP-0006",
+      "date": "2026-10-05",
+      "lateMinutes": 0,
+      "timeIn": "8:26 ص",
+      "overtimeHours": 0,
+      "id": "EMP-0006_2026-10-05"
+    },
+    {
+      "locationConfirmed": true,
+      "id": "g4xBXJYrVSzKVXqrfYhe",
+      "isMissingPunch": true,
+      "date": "2026-10-05",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | ختمة ناقصة معتمدة من قبل المدير العام (GM) | خروج جغرافي (مصنع البياضات)",
+      "timeIn": "8:26 ص",
+      "updatedAt": "2026-10-05T14:05:44.915Z",
+      "userId": "EMP-0006",
+      "employeeId": "EMP-0006",
+      "timeOut": "17:05",
+      "status": "مداوم",
+      "employeeName": "عبد الله يعقوب ايوب غيث"
+    },
+    {
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "id": "EMP-0006_2026-10-06",
+      "notes": "تم سحب الدوام وحساب الساعات تلقائياً",
+      "lateMinutes": 0,
+      "status": "مداوم",
+      "date": "2026-10-06",
+      "updatedAt": "2026-10-10T18:53:00.126Z",
+      "timeIn": "8:14 م",
+      "officialAbsenceMinutes": 480,
+      "locationConfirmed": true,
+      "actualHours": 0,
+      "employeeId": "EMP-0006",
+      "userId": "EMP-0006",
+      "timeOut": "18:28",
+      "overtimeHours": 0,
+      "isMissingPunch": true
+    },
+    {
+      "officialAbsenceMinutes": 15,
+      "notes": "تم سحب الدوام وحساب الساعات تلقائياً",
+      "employeeId": "EMP-0006",
+      "actualHours": 0,
+      "date": "2026-10-07",
+      "timeOut": "19:52",
+      "lateMinutes": 0,
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "status": "مداوم",
+      "timeIn": "08:15",
+      "overtimeHours": 0,
+      "id": "EMP-0006_2026-10-07"
+    },
+    {
+      "timeOut": "19:52",
+      "userId": "EMP-0006",
+      "timeIn": "08:15",
+      "id": "jvD6J0PxEtZSDDZwpW1y",
+      "status": "مداوم",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "date": "2026-10-07",
+      "updatedAt": "2026-10-07T16:52:49.772Z",
+      "employeeId": "EMP-0006",
+      "locationConfirmed": true,
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | خروج جغرافي (مصنع البياضات)"
+    },
+    {
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "locationConfirmed": true,
+      "employeeId": "EMP-0006",
+      "userId": "EMP-0006",
+      "id": "EJ0SdBxDnQcmDcta0GZ8",
+      "timeIn": "08:15",
+      "updatedAt": "2026-10-08T15:20:01.837Z",
+      "date": "2026-10-08",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | خروج جغرافي (مصنع البياضات)",
+      "timeOut": "18:20",
+      "status": "مداوم"
+    },
+    {
+      "employeeId": "EMP-0006",
+      "status": "مداوم",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "timeOut": "18:20",
+      "overtimeHours": 0,
+      "timeIn": "08:15",
+      "notes": "تم سحب الدوام وحساب الساعات تلقائياً",
+      "actualHours": 0,
+      "officialAbsenceMinutes": 15,
+      "lateMinutes": 0,
+      "date": "2026-10-08",
+      "id": "EMP-0006_2026-10-08"
+    },
+    {
+      "overtimeHours": 0,
+      "timeIn": "08:14",
+      "timeOut": "",
+      "employeeId": "EMP-0006",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "lateMinutes": 0,
+      "status": "مداوم",
+      "date": "2026-10-10",
+      "notes": "تم سحب الدوام وحساب الساعات تلقائياً",
+      "actualHours": 0,
+      "updatedAt": "2026-10-11T21:29:59.106Z",
+      "officialAbsenceMinutes": 14,
+      "id": "EMP-0006_2026-10-10"
+    },
+    {
+      "userId": "EMP-0006",
+      "employeeId": "EMP-0006",
+      "timeIn": "08:14",
+      "locationConfirmed": true,
+      "status": "مداوم",
+      "timeOut": "19:50",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) - خروج إضافي معتمد 19:50",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "date": "2026-10-10",
+      "updatedAt": "2026-10-11T21:29:59.106Z",
+      "id": "EXAM6qAZ7Y0IMZY7BBgL"
+    },
+    {
+      "overtimeHours": 0,
+      "timeOut": "17:25",
+      "lateMinutes": 0,
+      "date": "2026-10-11",
+      "notes": "تم سحب الدوام وحساب الساعات تلقائياً",
+      "actualHours": 0,
+      "timeIn": "08:26",
+      "employeeId": "EMP-0006",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "officialAbsenceMinutes": 26,
+      "status": "مداوم",
+      "id": "EMP-0006_2026-10-11"
+    },
+    {
+      "status": "مداوم",
+      "timeOut": "17:25",
+      "updatedAt": "2026-10-11T14:26:20.105Z",
+      "userId": "EMP-0006",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | خروج جغرافي (مصنع البياضات)",
+      "id": "QHBUcaEt0OgcUE58Ll4W",
+      "employeeId": "EMP-0006",
+      "timeIn": "08:26",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "locationConfirmed": true,
+      "date": "2026-10-11"
+    },
+    {
+      "date": "2026-10-12",
+      "timeIn": "08:11",
+      "employeeId": "EMP-0006",
+      "userId": "EMP-0006",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "status": "مكتمل الدوام",
+      "updatedAt": "2026-10-14T15:53:04.406Z",
+      "locationConfirmed": true,
+      "timeOut": "18:00",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | أُدخل وقت خروج يدوي",
+      "id": "xAsOVU8vTdxhb53161Pl"
+    },
+    {
+      "updatedAt": "2026-10-13T20:21:12.774Z",
+      "date": "2026-10-13",
+      "locationConfirmed": true,
+      "id": "EMP-0006_2026-10-13",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "timeOut": "19:46",
+      "employeeId": "EMP-0006",
+      "timeIn": "8:15 ص",
+      "isMissingPunch": true,
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | خروج جغرافي (مصنع البياضات) | ختمة ناقصة معتمدة من قبل المدير العام (رحت ع الترخيص)",
+      "userId": "EMP-0006",
+      "status": "مداوم"
+    },
+    {
+      "isMissingPunch": true,
+      "locationConfirmed": true,
+      "timeOut": "18:35",
+      "id": "EMP-0006_2026-10-14",
+      "updatedAt": "2026-10-14T15:52:44.340Z",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "employeeId": "EMP-0006",
+      "userId": "EMP-0006",
+      "timeIn": "8:00 ص",
+      "status": "مكتمل الدوام",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | ختمة ناقصة معتمدة من قبل المدير العام (GM) | أُدخل وقت خروج يدوي",
+      "date": "2026-10-14"
+    },
+    {
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "id": "VyYzh5B3JvTgEskX8vMb",
+      "date": "2026-10-15",
+      "employeeId": "EMP-0006",
+      "userId": "EMP-0006",
+      "timeIn": "08:12",
+      "updatedAt": "2026-10-16T11:27:43.930Z",
+      "locationConfirmed": true,
+      "timeOut": "20:45",
+      "status": "مكتمل الدوام",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | أُدخل وقت خروج يدوي"
+    },
+    {
+      "source": "admin-attendance-correction",
+      "overtimeHours": 0,
+      "employeeId": "EMP-0006",
+      "actualHours": 0,
+      "timeIn": "08:00",
+      "updatedAt": "2026-10-17T15:15:49.138Z",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "status": "مداوم",
+      "locationConfirmed": false,
+      "date": "2026-10-17",
+      "correction": {
+        "previousTimeIn": "",
+        "correctedAt": "2026-10-17T08:30:39.757Z",
+        "previousStatus": "حضور",
+        "reason": "تصحيح إداري بطلب الإدارة: إثبات بداية الدوام حسب موعد الموظف بسبب تعطل البصمة الجغرافية"
+      },
+      "notes": "تم سحب الدوام وحساب الساعات تلقائياً",
+      "timeOut": "18:15",
+      "userId": "EMP-0006",
+      "officialAbsenceMinutes": 0,
+      "id": "EMP-0006_2026-10-17",
+      "lateMinutes": 0
+    }
+  ],
+  "attendance_logs": [
+    {
+      "date": "2026-10-01",
+      "status": "مداوم",
+      "notes": "طلب معتمد (إجازة سنوية): ظرف عائلي",
+      "timeIn": "",
+      "userId": "EMP-0006",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "timeOut": "",
+      "employeeId": "EMP-0006",
+      "updatedAt": "2026-09-29T21:24:01.944Z",
+      "id": "EMP-0006_2026-10-01"
+    },
+    {
+      "employeeId": "EMP-0006",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | خروج جغرافي (مصنع البياضات)",
+      "date": "2026-10-03",
+      "status": "مداوم",
+      "userId": "EMP-0006",
+      "timeIn": "08:03",
+      "timeOut": "19:59",
+      "updatedAt": "2026-10-03T16:59:36.344Z",
+      "id": "EMP-0006_2026-10-03"
+    },
+    {
+      "timestamp": "2026-10-04T05:36:29.152Z",
+      "employeeId": "EMP-0006",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | أُدخل وقت خروج يدوي",
+      "timeOut": "17:00",
+      "updatedAt": "2026-10-04T21:59:26.543Z",
+      "status": "مكتمل الدوام",
+      "id": "EMP-0006_2026-10-04",
+      "userId": "EMP-0006",
+      "date": "2026-10-04",
+      "timeIn": "",
+      "employeeName": "عبد الله يعقوب ايوب غيث"
+    },
+    {
+      "timeOut": "17:05",
+      "timeIn": "8:26 ص",
+      "timestamp": "2026-10-05T06:46:22.778Z",
+      "userId": "EMP-0006",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "date": "2026-10-05",
+      "status": "مداوم",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | ختمة ناقصة معتمدة من قبل المدير العام (GM) | خروج جغرافي (مصنع البياضات)",
+      "updatedAt": "2026-10-05T14:05:45.625Z",
+      "employeeId": "EMP-0006",
+      "id": "EMP-0006_2026-10-05"
+    },
+    {
+      "timeIn": "8:14 ص",
+      "userId": "EMP-0006",
+      "date": "2026-10-06",
+      "employeeId": "EMP-0006",
+      "updatedAt": "2026-10-10T18:53:00.260Z",
+      "status": "مداوم",
+      "timeOut": "18:28",
+      "notes": "تم سحب الدوام وحساب الساعات تلقائياً | ختمة ناقصة معتمدة من قبل المدير العام (ادارة)",
+      "timestamp": "2026-10-06T05:26:45.985Z",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "id": "EMP-0006_2026-10-06"
+    },
+    {
+      "updatedAt": "2026-10-07T16:52:50.216Z",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | خروج جغرافي (مصنع البياضات)",
+      "status": "مداوم",
+      "employeeId": "EMP-0006",
+      "date": "2026-10-07",
+      "userId": "EMP-0006",
+      "timeOut": "19:52",
+      "timeIn": "08:15",
+      "id": "EMP-0006_2026-10-07"
+    },
+    {
+      "updatedAt": "2026-10-08T15:20:02.466Z",
+      "id": "EMP-0006_2026-10-08",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | خروج جغرافي (مصنع البياضات)",
+      "status": "مداوم",
+      "timeOut": "18:20",
+      "timeIn": "08:15",
+      "userId": "EMP-0006",
+      "date": "2026-10-08",
+      "timestamp": "2026-10-08T06:39:42.219Z",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "employeeId": "EMP-0006"
+    },
+    {
+      "timeOut": "19:50",
+      "userId": "EMP-0006",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "timeIn": "08:14",
+      "updatedAt": "2026-10-11T21:29:59.106Z",
+      "status": "مداوم",
+      "employeeId": "EMP-0006",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) - خروج إضافي معتمد 19:50",
+      "date": "2026-10-10",
+      "id": "EMP-0006_2026-10-10"
+    },
+    {
+      "date": "2026-10-11",
+      "status": "مداوم",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | خروج جغرافي (مصنع البياضات)",
+      "timeIn": "08:26",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "userId": "EMP-0006",
+      "updatedAt": "2026-10-11T14:26:20.611Z",
+      "employeeId": "EMP-0006",
+      "timeOut": "17:25",
+      "id": "EMP-0006_2026-10-11"
+    },
+    {
+      "timeIn": "",
+      "timeOut": "18:00",
+      "userId": "EMP-0006",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "status": "مكتمل الدوام",
+      "id": "EMP-0006_2026-10-12",
+      "updatedAt": "2026-10-14T15:53:04.406Z",
+      "employeeId": "EMP-0006",
+      "date": "2026-10-12",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | أُدخل وقت خروج يدوي",
+      "timestamp": "2026-10-12T05:52:46.996Z"
+    },
+    {
+      "updatedAt": "2026-10-13T20:21:12.774Z",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "timeOut": "19:46",
+      "userId": "EMP-0006",
+      "timeIn": "8:15 ص",
+      "employeeId": "EMP-0006",
+      "status": "مداوم",
+      "date": "2026-10-13",
+      "timestamp": "2026-10-13T05:56:39.071Z",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | خروج جغرافي (مصنع البياضات) | ختمة ناقصة معتمدة من قبل المدير العام (رحت ع الترخيص)",
+      "id": "EMP-0006_2026-10-13"
+    },
+    {
+      "updatedAt": "2026-10-14T15:52:44.340Z",
+      "timeOut": "18:35",
+      "userId": "EMP-0006",
+      "timeIn": "",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "status": "مكتمل الدوام",
+      "employeeId": "EMP-0006",
+      "date": "2026-10-14",
+      "timestamp": "2026-10-14T06:58:12.520Z",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | ختمة ناقصة معتمدة من قبل المدير العام (GM) | أُدخل وقت خروج يدوي",
+      "id": "EMP-0006_2026-10-14"
+    },
+    {
+      "timeOut": "20:45",
+      "timeIn": "",
+      "updatedAt": "2026-10-16T11:27:43.930Z",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "userId": "EMP-0006",
+      "date": "2026-10-15",
+      "status": "مكتمل الدوام",
+      "notes": "دخول جغرافي معتمد (مصنع البياضات) | أُدخل وقت خروج يدوي",
+      "employeeId": "EMP-0006",
+      "id": "EMP-0006_2026-10-15"
+    },
+    {
+      "source": "admin-attendance-correction",
+      "updatedAt": "2026-10-17T15:15:49.138Z",
+      "timeIn": "08:00",
+      "status": "مداوم",
+      "timeOut": "18:15",
+      "notes": "تصحيح إداري بطلب الإدارة: إثبات بداية الدوام حسب موعد الموظف بسبب تعطل البصمة الجغرافية | خروج جغرافي (مصنع البياضات)",
+      "userId": "EMP-0006",
+      "locationConfirmed": false,
+      "employeeId": "EMP-0006",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "correction": {
+        "reason": "تصحيح إداري بطلب الإدارة: إثبات بداية الدوام حسب موعد الموظف بسبب تعطل البصمة الجغرافية",
+        "previousStatus": "حضور",
+        "previousTimeIn": "",
+        "correctedAt": "2026-10-17T08:30:39.757Z"
+      },
+      "timestamp": "2026-10-17T07:46:32.296Z",
+      "date": "2026-10-17",
+      "id": "EMP-0006_2026-10-17"
+    }
+  ],
+  "hr_leaves": [
+    {
+      "startTime": "17:01",
+      "id": "Q9MZMehTyJ3DyP4WAXt9",
+      "endTime": "23:59",
+      "department": "غير محدد",
+      "date": "2026-10-04",
+      "employeeId": "EMP-0006",
+      "updatedAt": "2026-10-04T22:37:23.700Z",
+      "type": "بدل عمل إضافي",
+      "createdAt": "2026-10-04T22:33:32.724Z",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "rate": "1:1.25",
+      "rateDetails": {
+        "baseRate": "1:1.25",
+        "compMins": 10,
+        "extraMins": 408,
+        "lateCoveredMins": 10,
+        "earlyCoveredMins": 0
+      },
+      "notes": "النجم الهادئ \n\n-- تفاصيل الاحتساب الذكي --\n* تم اقتطاع 0 ساعة و 10 دقيقة (بمعدل 1:1 لتغطية العجز)\n* الصافي الفعلي للإضافي: 6 ساعة و 48 دقيقة (بمعدل 1:1.25)\n",
+      "status": "موافق"
+    },
+    {
+      "type": "بدل عمل إضافي",
+      "id": "5UmBbw5vkEyYvPBNjccM",
+      "rateDetails": {
+        "lateCoveredMins": 14,
+        "extraMins": 66,
+        "earlyCoveredMins": 0,
+        "compMins": 14,
+        "baseRate": "1:1.25"
+      },
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "createdAt": "2026-10-06T15:29:30.532Z",
+      "endTime": "18:20",
+      "status": "موافق",
+      "department": "الدعم اللوجستي",
+      "updatedAt": "2026-10-10T18:53:14.354Z",
+      "employeeId": "EMP-0006",
+      "notes": "اضافي\n\n-- تفاصيل الاحتساب الذكي --\n* تم اقتطاع 0 ساعة و 14 دقيقة (بمعدل 1:1 لتغطية العجز)\n* الصافي الفعلي للإضافي: 1 ساعة و 6 دقيقة (بمعدل 1:1.25)\n",
+      "endDate": "",
+      "startDate": "",
+      "startTime": "17:00",
+      "date": "2026-10-06"
+    },
+    {
+      "updatedAt": "2026-10-07T22:14:48.765Z",
+      "department": "الدعم اللوجستي",
+      "startDate": "",
+      "employeeId": "EMP-0006",
+      "notes": "اضافي\n\n-- تفاصيل الاحتساب الذكي --\n* تم اقتطاع 0 ساعة و 15 دقيقة (بمعدل 1:1 لتغطية العجز)\n* الصافي الفعلي للإضافي: 2 ساعة و 38 دقيقة (بمعدل 1:1.25)\n",
+      "endTime": "19:53",
+      "startTime": "17:00",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "date": "2026-10-07",
+      "type": "بدل عمل إضافي",
+      "endDate": "",
+      "id": "zN6nsZl8KqbDfN9vdj6l",
+      "status": "موافق",
+      "rateDetails": {
+        "baseRate": "1:1.25",
+        "compMins": 15,
+        "extraMins": 158,
+        "earlyCoveredMins": 0,
+        "lateCoveredMins": 15
+      },
+      "createdAt": "2026-10-07T16:53:58.352Z"
+    },
+    {
+      "rateDetails": {
+        "extraMins": 55,
+        "lateCoveredMins": 15,
+        "earlyCoveredMins": 0,
+        "baseRate": "1:1.25",
+        "compMins": 15
+      },
+      "endDate": "",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "createdAt": "2026-10-08T15:36:22.540Z",
+      "id": "JOr3ASsfkjndXClJ7Grw",
+      "notes": "اضافي \n\n-- تفاصيل الاحتساب الذكي --\n* تم اقتطاع 0 ساعة و 15 دقيقة (بمعدل 1:1 لتغطية العجز)\n* الصافي الفعلي للإضافي: 0 ساعة و 55 دقيقة (بمعدل 1:1.25)\n",
+      "type": "بدل عمل إضافي",
+      "status": "موافق",
+      "employeeId": "EMP-0006",
+      "date": "2026-10-08",
+      "department": "الدعم اللوجستي",
+      "startTime": "17:00",
+      "endTime": "18:10",
+      "updatedAt": "2026-10-08T16:07:09.802Z",
+      "startDate": ""
+    },
+    {
+      "vacationDaysDeducted": 0,
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "employeeId": "EMP-0006",
+      "notes": "اضافي\n\n-- تفاصيل الاحتساب الذكي --\n* تم اقتطاع 0 ساعة و 14 دقيقة (بمعدل 1:1 لتغطية العجز)\n* الصافي الفعلي للإضافي: 2 ساعة و 36 دقيقة (بمعدل 1:1.25)\n",
+      "type": "بدل عمل إضافي",
+      "createdAt": "2026-10-11T18:45:09.949Z",
+      "deductFromVacationBalance": false,
+      "department": "الدعم اللوجستي",
+      "id": "ZIVRNEB4zhXj48uTl8Y4",
+      "endTime": "19:50",
+      "startDate": "",
+      "updatedAt": "2026-10-11T21:34:58.587Z",
+      "date": "2026-10-10",
+      "endDate": "",
+      "status": "موافق",
+      "startTime": "17:00",
+      "rateDetails": {
+        "lateCoveredMins": 14,
+        "earlyCoveredMins": 0,
+        "extraMins": 156,
+        "compMins": 14,
+        "baseRate": "1:1.25"
+      }
+    },
+    {
+      "updatedAt": "2026-10-17T21:21:43.400Z",
+      "startDate": "",
+      "status": "معلق",
+      "date": "2026-10-18",
+      "vacationDaysDeducted": 0,
+      "startTime": "17:00",
+      "endTime": "18:00",
+      "deductFromVacationBalance": false,
+      "department": "الدعم اللوجستي",
+      "notes": "اضافي",
+      "employeeId": "EMP-0006",
+      "endDate": "",
+      "employeeName": "عبد الله يعقوب ايوب غيث",
+      "type": "بدل عمل إضافي",
+      "createdAt": "2026-10-17T21:21:43.400Z",
+      "id": "AqQDHwzVxfcd6KaD8knM"
+    }
+  ],
+  "hr_holidays": []
+}

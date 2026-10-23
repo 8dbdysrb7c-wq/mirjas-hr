@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { startVisiblePolling } from '../../utils/visiblePolling';
+import { readSummary } from '../../utils/summaryCache';
 import { awaitsPetitionAdmin } from '../../utils/petitionConversation';
 import { 
   getEmployees, 
@@ -125,7 +126,7 @@ const AdminOverview = ({ onNavigate, user }) => {
       try {
         const todayKey = toLocalDateKey();
         const monthStart = `${todayKey.substring(0, 7)}-01`;
-        const [prodOrd, salesOrd, emps, missions, supReports, sLogs, todayLogs, hrLeaves, advances, missingPunches, repVisits, prepOrd, petitions, empReports] = await Promise.all([
+        const [prodOrd, salesOrd, emps, missions, supReports, sLogs, todayLogs, hrLeaves, advances, missingPunches, repVisits, prepOrd, petitions, empReports] = await readSummary(`overview:${user?.id || 'unknown'}:${todayKey}:${retryCount}`, () => Promise.all([
           getActiveOrders(),
           getActiveSalesOrders(),
           getEmployees(),
@@ -140,7 +141,7 @@ const AdminOverview = ({ onNavigate, user }) => {
           getActivePreparationOrders(),
           getHRPetitions(monthStart, todayKey),
           getReportsByDateRange(todayKey, todayKey)
-        ]);
+        ]));
 
         if (!isMounted) return;
 
@@ -310,12 +311,12 @@ const AdminOverview = ({ onNavigate, user }) => {
       }
     };
 
-    const stopPolling = startVisiblePolling(fetchData, 300000);
+    const stopPolling = startVisiblePolling(fetchData, 1800000);
     return () => {
       isMounted = false;
       stopPolling();
     };
-  }, [retryCount]);
+  }, [retryCount, user?.id]);
 
   const handleShowListModal = (title, list) => {
     if (!list || list.length === 0) {
@@ -359,6 +360,7 @@ const AdminOverview = ({ onNavigate, user }) => {
 
   return (
     <div className="overview-wrapper">
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}><button type="button" className="btn btn-outline" onClick={() => setRetryCount(count => count + 1)}>تحديث مؤشرات الرئيسية</button></div>
       
       {/* Header */}
       <div className="overview-header">

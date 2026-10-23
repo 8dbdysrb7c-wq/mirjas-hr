@@ -1,0 +1,21 @@
+import {readFileSync,writeFileSync} from 'node:fs';
+import {initializeApp} from 'firebase/app';
+import {getFirestore,collection,getDocs,doc,runTransaction} from 'firebase/firestore';
+const source=readFileSync('src/firebase.js','utf8');const config=Object.fromEntries([...source.matchAll(/(apiKey|authDomain|projectId|appId):\s*"([^"]+)"/g)].map(m=>[m[1],m[2]]));
+const db=getFirestore(initializeApp(config));const siteId='1792226023673';
+const snapshot=await getDocs(collection(db,'employees'));const refs=snapshot.docs.filter(d=>d.id!=='admin').map(d=>d.ref);
+const timestamp=new Date().toISOString();const audit=doc(collection(db,'hr_audit_logs'));
+const result=await runTransaction(db,async tx=>{
+ const settings=await tx.get(doc(db,'settings','globalSettings'));
+ const site=settings.data()?.value?.workLocations?.find(l=>l.id===siteId&&l.name==='مصنع البياضات');
+ if(!site||!Number.isFinite(Number(site.lat))||!Number.isFinite(Number(site.lng))||!(Number(site.radius)>0))throw Error('Factory location missing or invalid');
+ const profiles=await Promise.all(refs.map(ref=>tx.get(ref)));
+ const changes=profiles.map(p=>({id:p.id,name:p.data().name,previousWorkLocationId:p.data().workLocationId||'',previousAllowedWorkLocations:p.data().allowedWorkLocations||[],workLocationId:siteId}));
+ for(const p of profiles)tx.update(p.ref,{workLocationId:siteId,allowedWorkLocations:[siteId],updatedAt:timestamp});
+ tx.set(audit,{date:'2026-10-17',timestamp,user:'المدير العام',action:'تثبيت موقع البصمة لجميع الموظفين',description:'حصر بصمة الموظفين بموقع مصنع البياضات بطلب الإدارة',location:site,changes});
+ return {site,changes};
+});
+const after=await getDocs(collection(db,'employees'));const employees=after.docs.filter(d=>d.id!=='admin');
+if(employees.some(d=>d.data().workLocationId!==siteId||JSON.stringify(d.data().allowedWorkLocations)!==JSON.stringify([siteId])))throw Error('Verification failed');
+writeFileSync('artifacts/factory-punch-location-result.json',JSON.stringify({...result,count:employees.length,verified:true},null,2));
+console.log(JSON.stringify({count:employees.length,active:employees.filter(d=>d.data().employmentStatus==='فعال').length,site:result.site,verified:true,anywhereRemaining:employees.filter(d=>d.data().workLocationId==='anywhere').length}));process.exit(0);

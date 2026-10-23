@@ -25,7 +25,7 @@ function harness(seed=[]) {
  const getDocs=async path=>({docs:[...records.keys()].filter(k=>k.startsWith(path+'/')).map(snap)});
  const runTransaction=async (_,fn)=>{const next=tail.then(()=>fn({get:async key=>snap(key),set:(key,value)=>records.set(key,structuredClone(value))}));tail=next.catch(()=>{});return next;};
  const body=source.slice(source.indexOf('export const saveOrder ='),source.indexOf('export const deleteOrder =')).replace('export const saveOrder =','return ');
- const save=new Function('db','collection','getDocs','getDoc','doc','setDoc','runTransaction','sameProductionSale','triggerWhatsAppRouting','console',body)(null,(_,name)=>name,getDocs,async key=>snap(key),doc,async(k,v)=>records.set(k,v),runTransaction,sameProductionSale,()=>{},{error:()=>{}});
+ const save=new Function('db','collection','getDocs','getDoc','doc','setDoc','runTransaction','sameProductionSale','triggerWhatsAppRouting','invalidateOrdersCache','getOrders','console',body)(null,(_,name)=>name,getDocs,async key=>snap(key),doc,async(k,v)=>records.set(k,v),runTransaction,sameProductionSale,()=>{},()=>{},async()=>[...records.values()],{error:()=>{}});
  return {save,records};
 }
 test('concurrent saves for one sales order create one card',async()=>{

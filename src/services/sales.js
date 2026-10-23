@@ -19,8 +19,20 @@ import { cascadeCustomerNameUpdate } from './cascadeUpdates';
 import { triggerWhatsAppRouting } from './whatsappRouter';
 import { buildReservedQuantityMap, cleanStockProductName, isCancelledOrder, isReservableSalesItem } from '../utils/stockAvailability';
 
-export const getCustomers = async () => {
+let cachedCustomers = null;
+let cachedCustomersTimestamp = 0;
+const CUSTOMERS_CACHE_TTL = 60 * 1000;
+
+export const invalidateCustomersCache = () => {
+  cachedCustomers = null;
+  cachedCustomersTimestamp = 0;
+};
+
+export const getCustomers = async (forceRefresh = false) => {
   try {
+    if (!forceRefresh && cachedCustomers && (Date.now() - cachedCustomersTimestamp < CUSTOMERS_CACHE_TTL)) {
+      return cachedCustomers;
+    }
     const querySnapshot = await getDocs(collection(db, 'customers'));
     const customers = querySnapshot.docs.map(doc => {
       const data = doc.data();
@@ -30,14 +42,17 @@ export const getCustomers = async () => {
         id: doc.id
       };
     });
+    cachedCustomers = customers;
+    cachedCustomersTimestamp = Date.now();
     return customers;
   } catch (error) {
     console.error("Error in getCustomers:", error);
-    return [];
+    return cachedCustomers || [];
   }
 };
 
 export const saveCustomer = async (customer) => {
+  invalidateCustomersCache();
   try {
     let oldName = null;
     const docRef = customer.id ? doc(db, 'customers', customer.id) : doc(collection(db, 'customers'));
@@ -56,10 +71,9 @@ export const saveCustomer = async (customer) => {
       // Force generate ID for new customers to prevent duplicates from frontend
       const type = customer.type || 'عميل';
       const prefix = type === 'مورد' ? 'SUP-' : 'CLI-';
-      const allCusts = await getDocs(collection(db, 'customers'));
+      const allCusts = await getCustomers();
       let maxNum = 0;
-      allCusts.forEach(d => {
-        const c = d.data();
+      allCusts.forEach(c => {
         if (c.customerNumber && c.customerNumber.startsWith(prefix)) {
           const num = parseInt(c.customerNumber.replace(prefix, ''), 10);
           if (num > maxNum) maxNum = num;
@@ -84,6 +98,7 @@ export const saveCustomer = async (customer) => {
 };
 
 export const deleteCustomer = async (id) => {
+  invalidateCustomersCache();
   try {
     await deleteDoc(doc(db, 'customers', id));
   } catch (error) {
@@ -91,18 +106,30 @@ export const deleteCustomer = async (id) => {
   }
 };
 
-export const getOrders = async () => {
+let cachedOrders = null;
+let cachedOrdersTimestamp = 0;
+const ORDERS_CACHE_TTL = 2 * 60 * 1000;
+
+export const invalidateOrdersCache = () => {
+  cachedOrders = null;
+  cachedOrdersTimestamp = 0;
+};
+
+export const getOrders = async (forceRefresh = false) => {
   try {
+    if (!forceRefresh && cachedOrders && (Date.now() - cachedOrdersTimestamp < ORDERS_CACHE_TTL)) {
+      return cachedOrders;
+    }
     const querySnapshot = await getDocs(collection(db, 'orders'));
-    return querySnapshot.docs
+    const orders = querySnapshot.docs
       .map(doc => ({ ...doc.data(), id: doc.id }))
-      // Legacy preparation cards were copied into both collections. Keep them
-      // available in preparation_orders, but never expose them as sewing or
-      // packaging production orders.
       .filter(order => !String(order.orderNumber || '').trim().toUpperCase().startsWith('PREP-'));
+    cachedOrders = orders;
+    cachedOrdersTimestamp = Date.now();
+    return orders;
   } catch (error) {
     console.error("Error in getOrders:", error);
-    return [];
+    return cachedOrders || [];
   }
 };
 
@@ -343,6 +370,7 @@ export const syncProductionStatusToSalesOrder = async (prodOrPrepOrder, orderTyp
 };
 
 export const saveOrder = async (order) => {
+  invalidateOrdersCache();
   try {
     let orderToSave = { ...order };
     let isNew = !orderToSave.id;
@@ -426,7 +454,7 @@ export const deleteOrder = async (id, actor = null) => {
           deletedAt: new Date().toISOString()
         });
       } catch (archErr) {
-        console.warn("Archive write error:", archErr);
+        throw archErr;
       }
 
       // Trigger cancel notification
@@ -443,13 +471,28 @@ export const deleteOrder = async (id, actor = null) => {
   }
 };
 
-export const getPreparationOrders = async () => {
+let cachedPreparationOrders = null;
+let cachedPreparationOrdersTimestamp = 0;
+const PREPARATION_ORDERS_CACHE_TTL = 2 * 60 * 1000;
+
+export const invalidatePreparationOrdersCache = () => {
+  cachedPreparationOrders = null;
+  cachedPreparationOrdersTimestamp = 0;
+};
+
+export const getPreparationOrders = async (forceRefresh = false) => {
   try {
+    if (!forceRefresh && cachedPreparationOrders && (Date.now() - cachedPreparationOrdersTimestamp < PREPARATION_ORDERS_CACHE_TTL)) {
+      return cachedPreparationOrders;
+    }
     const querySnapshot = await getDocs(collection(db, 'preparation_orders'));
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    const orders = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    cachedPreparationOrders = orders;
+    cachedPreparationOrdersTimestamp = Date.now();
+    return orders;
   } catch (error) {
     console.error("Error in getPreparationOrders:", error);
-    return [];
+    return cachedPreparationOrders || [];
   }
 };
 
@@ -472,6 +515,7 @@ export const getPreparationOrdersByDateRange = async (dateFrom, dateTo) => {
 };
 
 export const savePreparationOrder = async (order) => {
+  invalidatePreparationOrdersCache();
   try {
     let orderToSave = { ...order };
     let isNew = !orderToSave.id;
@@ -528,11 +572,17 @@ export const savePreparationOrder = async (order) => {
 };
 
 export const deletePreparationOrder = async (id) => {
+  invalidatePreparationOrdersCache();
   try {
     const docRef = doc(db, 'preparation_orders', id);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
       const order = docSnap.data();
+      await setDoc(doc(collection(db, 'preparation_order_archives')), {
+        ...order,
+        originalId: id,
+        deletedAt: new Date().toISOString()
+      });
       // Trigger cancel notification for preparation production
       triggerWhatsAppRouting('production_preparation', 'delete', {
         orderNumber: order.orderNumber,
@@ -542,6 +592,7 @@ export const deletePreparationOrder = async (id) => {
     await deleteDoc(docRef);
   } catch (error) {
     console.error("Error in deletePreparationOrder:", error);
+    throw error;
   }
 };
 

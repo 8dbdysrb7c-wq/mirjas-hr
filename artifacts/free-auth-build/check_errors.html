@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Retroactive Leave Sync</title>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #0f172a; color: #e2e8f0; }
+    h2 { color: #10b981; }
+    #logs { background: #1e293b; padding: 15px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <h2>Retroactive Leave Sync (July 2026)</h2>
+  <div id="logs">Starting sync...</div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDrTFkfeZr7F2UFhubaxt0s4_VNwYC5R8Q",
+      authDomain: "mirjaswork.firebaseapp.com",
+      projectId: "mirjaswork",
+      storageBucket: "mirjaswork.firebasestorage.app",
+      messagingSenderId: "742199978686",
+      appId: "1:742199978686:web:6fc97d192fa99d8dd60cef"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    async function runSync() {
+      const logsDiv = document.getElementById("logs");
+      let output = "";
+      
+      try {
+        output += "1. Fetching all attendance logs, employees, and existing leaves...\n";
+        logsDiv.textContent = output;
+        
+        const [attSnap, leavesSnap, empsSnap] = await Promise.all([
+          getDocs(collection(db, "hr_attendance")),
+          getDocs(collection(db, "hr_leaves")),
+          getDocs(collection(db, "hr_employees"))
+        ]);
+
+        output += `Fetched ${attSnap.size} attendance records, ${leavesSnap.size} leaves, and ${empsSnap.size} employees.\n`;
+        logsDiv.textContent = output;
+
+        // Map employees
+        const empsMap = {};
+        empsSnap.forEach(doc => {
+          const data = doc.data();
+          const key = String(data.id || data.employeeId || doc.id).trim();
+          empsMap[key] = { id: doc.id, ...data };
+        });
+
+        // Filter attendance for July 2026 where status is one of the leave types
+        const targetStatuses = ['إجازة غير مدفوعة', 'إجازة سنوية', 'إجازة مرضية'];
+        const targetAtts = [];
+        
+        attSnap.forEach(doc => {
+          const data = doc.data();
+          if (data.date && data.date >= '2026-07-01' && data.date <= '2026-07-31') {
+            if (targetStatuses.includes(data.status)) {
+              targetAtts.push({ docId: doc.id, ...data });
+            }
+          }
+        });
+
+        output += `Found ${targetAtts.length} attendance records in July 2026 with leave status.\n`;
+        logsDiv.textContent = output;
+
+        // Parse existing approved leaves
+        const approvedStatuses = ['موافق', 'موافق عليه', 'مقبول', 'تمت الموافقة', 'تم التسليم'];
+        const leavesList = [];
+        leavesSnap.forEach(doc => {
+          const data = doc.data();
+          if (approvedStatuses.includes(data.status)) {
+            leavesList.push({ docId: doc.id, ...data });
+          }
+        });
+
+        const isMatch = (empId1, empName1, empId2, empName2) => {
+          const id1 = String(empId1 || '').trim();
+          const name1 = String(empName1 || '').trim();
+          const id2 = String(empId2 || '').trim();
+          const name2 = String(empName2 || '').trim();
+          
+          if (id1 && id2 && id1 === id2) return true;
+          if (name1 && name2 && name1 === name2) return true;
+          return false;
+        };
+
+        let createdCount = 0;
+
+        for (const att of targetAtts) {
+          const attDate = att.date;
+          // Check if there is an approved leave request matching this date
+          const hasLeave = leavesList.some(l => {
+            const empMatch = isMatch(l.employeeId, l.employeeName, att.employeeId || att.userId, att.employeeName);
+            if (!empMatch) return false;
+            
+            if (l.date && l.date === attDate) return true;
+            if (l.startDate && l.endDate && attDate >= l.startDate && attDate <= l.endDate) return true;
+            return false;
+          });
+
+          if (!hasLeave) {
+            output += `Missing leave for ${att.employeeName} (${att.employeeId || att.userId}) on ${attDate} (Status: ${att.status})\n`;
+            logsDiv.textContent = output;
+
+            // Find employee department
+            const empKey = String(att.employeeId || att.userId || '').trim();
+            const empObj = empsMap[empKey] || Object.values(empsMap).find(e => String(e.name).trim() === String(att.employeeName).trim());
+            const department = empObj?.department || 'غير محدد';
+
+            const newLeave = {
+              employeeId: att.employeeId || att.userId || empObj?.id || '',
+              employeeName: att.employeeName,
+              department: department,
+              type: att.status,
+              date: attDate,
+              status: 'موافق',
+              notes: `تسوية بصمة ناقصة: حُسب كـ ${att.status} لاكتشاف غياب البصمة (تحديث تلقائي بأثر رجعي)`,
+              createdAt: new Date().toISOString()
+            };
+
+            await addDoc(collection(db, "hr_leaves"), newLeave);
+            createdCount++;
+            output += `Created leave request doc successfully!\n`;
+            logsDiv.textContent = output;
+          }
+        }
+
+        output += `\n=== Sync Completed successfully! Created ${createdCount} leave records. ===\n`;
+        logsDiv.textContent = output;
+      } catch (err) {
+        output += `\nError during sync: ${err.message}\n${err.stack}\n`;
+        logsDiv.textContent = output;
+      }
+    }
+
+    runSync();
+  </script>
+</body>
+</html>

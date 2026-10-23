@@ -1,3 +1,7 @@
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../../firebase';
+import { createPortal } from 'react-dom';
+import CheckoutReportSettings from '../../components/CheckoutReportSettings';
 import { getDirectReports, canReviewSubordinateReport } from '../../utils/supervisorHierarchy';
 import { escapeReportNote } from '../../utils/reportNote.js';
 import { isActiveEmployee } from '../../utils/employeeStatus';
@@ -198,7 +202,7 @@ const MonthPicker = ({ selectedMonth, setSelectedMonth }) => {
   );
 };
 
-const AdminSupervisorReports = ({ user }) => {
+const AdminSupervisorReports = ({ user, requiredDate, onReportSaved }) => {
   // An employer is ONLY the system owner (Anas/Mashhour/Admin)
   const isEmployer = user.id === 'admin' || String(user.name).includes('مشهور') || String(user.name).includes('انس') || String(user.name).includes('أنس') || user.name === 'المدير العام';
   const isSuperAdmin = isEmployer;
@@ -222,7 +226,7 @@ const AdminSupervisorReports = ({ user }) => {
   const [activeTab, setActiveTab] = useState(isSuperAdmin || isImad ? 'history' : 'add');
   const [isEditMode, setIsEditMode] = useState(false);
 
-  const [date, setDate] = useState(getLocalDateStr(new Date()));
+  const [date, setDate] = useState(requiredDate || getLocalDateStr(new Date()));
   const loadedDateRef = useRef(date);
   const [timeIn, setTimeIn] = useState('');
   const [timeOut, setTimeOut] = useState('');
@@ -416,16 +420,15 @@ const AdminSupervisorReports = ({ user }) => {
   }, [user, date, activeTab, dateMode, selectedMonth, dateFrom, dateTo, selectedDate]);
 
   useEffect(() => {
-    const fetchDailyReports = async () => {
-      if (!date) return;
-      try {
-        const reps = await getReportsByDateRange(date, date);
-        setEmployeeReports(reps);
-      } catch (err) {
-        console.error("Error fetching daily reports:", err);
-      }
-    };
-    fetchDailyReports();
+    if (!date) return;
+    const onError = error => console.error('Unable to update daily report attendance:', error);
+    const stopReports = onSnapshot(query(collection(db, 'reports'), where('date', '==', date)), snapshot => {
+      setEmployeeReports(snapshot.docs.map(record => ({ ...record.data(), id: record.id })));
+    }, onError);
+    const stopAttendance = onSnapshot(query(collection(db, 'attendance_logs'), where('date', '==', date)), snapshot => {
+      setAttendanceLogs(snapshot.docs.map(record => ({ ...record.data(), id: record.id })));
+    }, onError);
+    return () => { stopReports(); stopAttendance(); };
   }, [date]);
 
   useEffect(() => {
@@ -880,6 +883,7 @@ const AdminSupervisorReports = ({ user }) => {
       });
 
       setActiveTab('history');
+      onReportSaved?.();
 
     } catch (err) {
       MySwal.fire('خطأ', 'حدث خطأ أثناء حفظ التقرير.', 'error');
@@ -1480,6 +1484,7 @@ const AdminSupervisorReports = ({ user }) => {
   return (
     <div className="space-y-4">
       <div className="premium-tabs-container no-print mb-4" style={{ display: 'flex' }}>
+        {isAdmin(user) && <button type="button" className={`premium-tab ${activeTab === 'checkout-policy' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('checkout-policy')}>إلزام التقرير قبل الخروج</button>}
         <>
           <button className={`premium-tab ${activeTab === 'add' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => { setActiveTab('add'); setIsEditMode(false); setDate(getLocalDateStr(new Date())); }}>
             <Plus size={20} /> <span>إضافة/تعديل تقرير</span>
@@ -1489,6 +1494,8 @@ const AdminSupervisorReports = ({ user }) => {
           </button>
         </>
       </div>
+
+      {activeTab === 'checkout-policy' && isAdmin(user) && <CheckoutReportSettings user={user} />}
 
       {activeTab === 'add' && (
         (() => {
@@ -1510,7 +1517,7 @@ const AdminSupervisorReports = ({ user }) => {
           }
 
           return (
-            <form onSubmit={handleSubmit} className="glass-card">
+            <form id={`supervisor-report-form-${currentUserId}`} onSubmit={handleSubmit} className="glass-card supervisor-report-form">
               <div className="mb-4 pb-2 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <h3 className="text-xl font-bold flex items-center gap-2 mb-0">
                   <Calendar size={20} className="text-primary" /> تقرير المشرف اليومي
@@ -2068,9 +2075,10 @@ const AdminSupervisorReports = ({ user }) => {
                 ></textarea>
               </div>
 
-              <button type="submit" className="btn btn-primary w-full h-12 text-lg font-bold mb-8 mt-4 shadow-lg">
+              <button type="submit" className="btn btn-primary w-full h-12 text-lg font-bold mb-8 mt-4 shadow-lg supervisor-report-desktop-save">
                 <Save size={20} /> حفظ التقرير واعتماده
               </button>
+              {typeof document !== 'undefined' && createPortal(<div className="supervisor-report-mobile-save no-print" dir="rtl"><button type="submit" form={`supervisor-report-form-${currentUserId}`} className="btn btn-primary"><Save size={20} /> حفظ التقرير واعتماده</button></div>, document.body)}
             </form>
           );
         })()

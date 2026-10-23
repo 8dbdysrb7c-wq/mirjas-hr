@@ -75,7 +75,7 @@ const HREmployees = ({ user, onViewProfile }) => {
     basicSalary: 0, phone: '', employmentStatus: 'فعال',
     vacationBalance: 14, sickLeaveBalance: 14, allowedLeaveTypes: ['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'], directManager: '', hrNotes: '',
     shiftStart: '08:00', shiftEnd: '16:00', workShiftName: '',
-    hasSocialSecurity: false, socialSecuritySalary: 0, isHazardousProfession: false, workLocationId: '',
+    socialSecurityEmployeePaysExcess: false, socialSecurityCompanyBaseSalary: '', hasSocialSecurity: false, socialSecuritySalary: 0, isHazardousProfession: false, workLocationId: '',
     useCustomAdvancePeriods: false, customAdvancePeriods: []
   });
 
@@ -124,6 +124,8 @@ const HREmployees = ({ user, onViewProfile }) => {
         shiftStart: emp.shiftStart || '08:00',
         shiftEnd: emp.shiftEnd || '16:00',
         workShiftName: emp.workShiftName || '',
+        socialSecurityEmployeePaysExcess: emp.socialSecurityEmployeePaysExcess === true,
+        socialSecurityCompanyBaseSalary: emp.socialSecurityCompanyBaseSalary ?? '',
         hasSocialSecurity: emp.hasSocialSecurity || false,
         socialSecuritySalary: emp.socialSecuritySalary || emp.basicSalary || 0,
         isHazardousProfession: emp.isHazardousProfession || false,
@@ -136,7 +138,7 @@ const HREmployees = ({ user, onViewProfile }) => {
       setFormData({
         id: nextId, name: '', jobTitle: '', department: '', administration: '', joinDate: '', dateOfBirth: '',
         basicSalary: '', phone: '', employmentStatus: 'فعال', directManager: '', hrNotes: '', vacationBalance: '14', sickLeaveBalance: '14', allowedLeaveTypes: ['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'],
-        shiftStart: '08:00', shiftEnd: '16:00', workShiftName: '', hasSocialSecurity: false, socialSecuritySalary: '', isHazardousProfession: false, workLocationId: '',
+        shiftStart: '08:00', shiftEnd: '16:00', workShiftName: '', socialSecurityEmployeePaysExcess: false, socialSecurityCompanyBaseSalary: '', hasSocialSecurity: false, socialSecuritySalary: '', isHazardousProfession: false, workLocationId: '',
         useCustomAdvancePeriods: false, customAdvancePeriods: []
       });
     }
@@ -170,6 +172,11 @@ const HREmployees = ({ user, onViewProfile }) => {
       return;
     }
     
+    if (formData.socialSecurityEmployeePaysExcess && formData.socialSecurityCompanyBaseSalary !== '' && (!Number.isFinite(Number(formData.socialSecurityCompanyBaseSalary)) || Number(formData.socialSecurityCompanyBaseSalary) < 0)) {
+      Swal.fire('قيمة غير صحيحة', 'أدخل راتب حصة الشركة بقيمة صحيحة لا تقل عن صفر', 'warning');
+      return;
+    }
+
     // Check for active assets if terminating
     if (editingEmp && editingEmp.employmentStatus === 'فعال' && (formData.employmentStatus === 'منتهي خدمات' || formData.employmentStatus === 'مستقيل')) {
       const allAssets = await getHRAssets();
@@ -469,6 +476,15 @@ const HREmployees = ({ user, onViewProfile }) => {
                           placeholder="اتركه فارغاً لاستخدام الراتب الأساسي"
                         />
                       </div>
+                      <label className="font-bold flex items-center gap-2">
+                        <input type="checkbox" checked={formData.socialSecurityEmployeePaysExcess === true} onChange={e => setFormData({ ...formData, socialSecurityEmployeePaysExcess: e.target.checked })} />
+                        الموظف يتحمل كامل اشتراك الضمان على فرق الزيادة
+                      </label>
+                      {formData.socialSecurityEmployeePaysExcess && <div>
+                        <label className="text-xs text-slate-500 mb-1 block">الراتب الذي تتحمل الشركة حصتها عليه (اختياري)</label>
+                        <input type="number" min="0" step="0.01" className="input-field" value={formData.socialSecurityCompanyBaseSalary} onChange={e => setFormData({ ...formData, socialSecurityCompanyBaseSalary: e.target.value })} placeholder="اتركه فارغًا لاستخدام الراتب الأساسي" />
+                        <small>الموظف يتحمل حصته على كامل الراتب الخاضع للضمان، وحصة الشركة على الفرق فوق هذا المبلغ.</small>
+                      </div>}
                       <label className="font-bold flex items-center gap-2 text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-100">
                         <input 
                           type="checkbox" 

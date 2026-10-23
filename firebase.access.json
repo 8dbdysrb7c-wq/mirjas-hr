@@ -1,0 +1,8 @@
+{
+  "functions": [{
+    "source": "access-server",
+    "codebase": "employee-access",
+    "runtime": "nodejs22",
+    "ignore": ["node_modules", "*.test.mjs", "README.md", "*.rules", "package-lock.json", "firebase-debug.log"]
+  }]
+}

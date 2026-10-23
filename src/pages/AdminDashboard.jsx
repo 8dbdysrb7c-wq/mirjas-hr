@@ -1,27 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { LogOut, Home, Users, Settings, FileText, ShoppingBag, ShoppingCart, UserCheck, Target, Plus, MoreHorizontal, X, Truck, ClipboardList, SunMoon, Layers, ChevronDown, ChevronUp, Palette, Package, Moon, Activity, RefreshCw, MapPin, Tag, Scissors, Calculator } from 'lucide-react';
 import AdminOverview from './admin/AdminOverview';
-import AdminEmployees from './admin/AdminEmployees';
-import AdminProduction from './admin/AdminProduction';
-import AdminPreparation from './admin/AdminPreparation';
-import AdminSales from './admin/AdminSales';
-import AdminDelivery from './admin/AdminDelivery';
-import AdminCustomers from './admin/AdminCustomers';
-import AdminCustomerStatements from './admin/AdminCustomerStatements';
-import AdminSettings from './admin/AdminSettings';
-import AdminHR from './hr/AdminHR';
-import AdminLogs from './admin/AdminLogs';
-import AdminTasks from './admin/AdminTasks';
-import AdminStock from './admin/AdminStock';
-import AdminReports from './admin/AdminReports';
-import AdminSupervisorReports from './admin/AdminSupervisorReports';
-import AdminSupervisorTasks from './admin/AdminSupervisorTasks';
-import AdminLive from './admin/AdminLive';
-import AdminRepVisits from './admin/AdminRepVisits';
-import AdminQuotes from './admin/AdminQuotes';
-import AdminPriceLists from './admin/AdminPriceLists';
-import AdminProductCosting from './admin/AdminProductCosting';
-import AdminFabricLibrary from './admin/AdminFabricLibrary';
+const AdminEmployees = React.lazy(() => import('./admin/AdminEmployees'));
+const AdminProduction = React.lazy(() => import('./admin/AdminProduction'));
+const AdminPreparation = React.lazy(() => import('./admin/AdminPreparation'));
+const AdminSales = React.lazy(() => import('./admin/AdminSales'));
+const AdminDelivery = React.lazy(() => import('./admin/AdminDelivery'));
+const AdminCustomers = React.lazy(() => import('./admin/AdminCustomers'));
+const AdminCustomerStatements = React.lazy(() => import('./admin/AdminCustomerStatements'));
+const AdminSettings = React.lazy(() => import('./admin/AdminSettings'));
+const AdminHR = React.lazy(() => import('./hr/AdminHR'));
+const AdminLogs = React.lazy(() => import('./admin/AdminLogs'));
+const AdminTasks = React.lazy(() => import('./admin/AdminTasks'));
+const AdminStock = React.lazy(() => import('./admin/AdminStock'));
+const AdminReports = React.lazy(() => import('./admin/AdminReports'));
+const AdminSupervisorReports = React.lazy(() => import('./admin/AdminSupervisorReports'));
+const AdminSupervisorTasks = React.lazy(() => import('./admin/AdminSupervisorTasks'));
+const AdminLive = React.lazy(() => import('./admin/AdminLive'));
+const AdminRepVisits = React.lazy(() => import('./admin/AdminRepVisits'));
+const AdminQuotes = React.lazy(() => import('./admin/AdminQuotes'));
+const AdminPriceLists = React.lazy(() => import('./admin/AdminPriceLists'));
+const AdminProductCosting = React.lazy(() => import('./admin/AdminProductCosting'));
+const AdminFabricLibrary = React.lazy(() => import('./admin/AdminFabricLibrary'));
 import { useAttendanceReminders } from '../hooks/useAttendanceReminders';
 import { getGlobalSettings, isAdmin, saveEmployee } from '../store';
 import { hasPermission } from '../utils/permissions';
@@ -255,7 +255,7 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'overview': return <AdminOverview onNavigate={handleNotificationNavigate} />;
+      case 'overview': return <AdminOverview user={user} onNavigate={handleNotificationNavigate} />;
       case 'live': return <AdminLive user={user} />;
       case 'employees': return <AdminEmployees user={user} />;
       case 'production-orders': return <AdminProduction user={user} />;
@@ -279,7 +279,7 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
       case 'site-settings': return <AdminSettings user={user} />;
 
       case 'logs': return <AdminLogs user={user} />;
-      default: return <AdminOverview onNavigate={handleNotificationNavigate} />;
+      default: return <AdminOverview user={user} onNavigate={handleNotificationNavigate} />;
     }
   };
 
@@ -601,7 +601,7 @@ const AdminDashboard = ({ user, onLogout, onUpdateUser }) => {
           </header>
 
           <div className={`content-inner ${activeTab === 'overview' ? 'overview-mode' : ''}`}>
-            {renderContent()}
+            <React.Suspense fallback={<div className="loading-state" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "300px", color: "var(--primary)", fontWeight: "bold" }}>جاري التحميل...</div>}>{renderContent()}</React.Suspense>
           </div>
         </div>
       </div>

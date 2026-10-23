@@ -5,6 +5,48 @@ import { petitionTransition } from '../utils/petitionConversation';
 import { createNotification } from './settings';
 
 export const canManagePetitions = user => hasPermission(user, 'hr_petitions', 'approve');
+
+export async function issuePetitionDecision(id, user, text) {
+  if (!canManagePetitions(user)) throw new Error('لا تملك صلاحية معالجة الاستدعاء');
+  const decision = String(text || '').trim();
+  if (!decision || decision.length > 5000) throw new Error('اكتب قرارًا لا يتجاوز 5000 حرف');
+  const ref = doc(db, 'hr_petitions', id);
+  const alertRef = doc(db, 'employee_alerts', `petition_decision_${id}`);
+  return runTransaction(db, async transaction => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error('الاستدعاء غير موجود');
+    const petition = snapshot.data();
+    if (['محذوف', 'deleted'].includes(petition.status)) throw new Error('الاستدعاء محذوف');
+    if (petition.decisionAlertId) {
+      if (petition.resolution === decision) return petition;
+      throw new Error('سبق إرسال القرار لهذا الاستدعاء');
+    }
+    if (!petition.employeeId) throw new Error('الموظف غير محدد');
+    const now = new Date().toISOString();
+    const update = { resolution: decision, conversationStatus: 'مغلق', status: 'مغلق', closedAt: now, closedBy: user.name || '', updatedAt: now, decisionAlertId: alertRef.id, decisionReceivedAt: null, reopenRequested: false };
+    transaction.update(ref, update);
+    transaction.set(alertRef, { employeeId: String(petition.employeeId), employeeName: petition.employeeName || '', message: `قرار الإدارة بشأن استدعاء «${petition.title || ''}»:\n${decision}`, source: 'قرار استدعاء', sourceReference: id, petitionId: id, status: 'pending', sentAt: now, receivedAt: null, sentById: String(user.id), sentByName: user.name || '', archived: false, archivedAt: null });
+    return { ...petition, ...update };
+  });
+}
+
+export async function acknowledgePetitionDecision(alertId, employee) {
+  const ref = doc(db, 'employee_alerts', alertId);
+  return runTransaction(db, async transaction => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error('التنبيه غير موجود');
+    const alert = snapshot.data();
+    if (String(alert.employeeId) !== String(employee.id)) throw new Error('هذا التنبيه ليس لك');
+    const petitionRef = doc(db, 'hr_petitions', alert.petitionId);
+    const petition = await transaction.get(petitionRef);
+    if (!petition.exists() || petition.data().decisionAlertId !== alertId || String(petition.data().employeeId) !== String(employee.id)) throw new Error('تعذر التحقق من ارتباط القرار');
+    if (alert.status === 'received') return { id: alertId, ...alert };
+    const receivedAt = new Date().toISOString();
+    transaction.update(ref, { status: 'received', receivedAt, receivedById: String(employee.id), receivedByName: employee.name || '' });
+    transaction.update(petitionRef, { decisionReceivedAt: receivedAt });
+    return { id: alertId, ...alert, status: 'received', receivedAt };
+  });
+}
 export async function markPetitionRead(id, user, adminView, knownPetition) {
   const knownLast = knownPetition?.messages?.at(-1)?.id;
   if (knownPetition && (!knownLast || knownPetition.readBy?.[String(user.id)] === knownLast)) return;

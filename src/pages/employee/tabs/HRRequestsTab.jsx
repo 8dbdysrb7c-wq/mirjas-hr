@@ -1,3 +1,4 @@
+import { requestDecisionNote, supportsRequestNote } from '../../../utils/requestNotes';
 import PetitionConversation from '../../../components/PetitionConversation';
 import { petitionStatus } from '../../../utils/petitionConversation';
 import { watchPetitions } from '../../../services/petitionConversation';
@@ -49,18 +50,12 @@ export const HRRequestsTab = ({
     return res.trim();
   };
 
-  const getAdminNoteOnly = (notes) => {
-    if (!notes) return '';
-    const match = notes.match(/\((?:سبب الرفض|ملاحظات الإدارة):\s*([^\)]+)\)/);
-    return match ? match[1].trim() : '';
-  };
-
   const allRequests = [
-    ...myLeaves.filter(l => l.status !== 'محذوف' && l.status !== 'deleted').map(l => ({ id: l.id, type: l.type, date: l.startDate || l.date || l.createdAt?.split('T')[0], status: normalizeReqStatus(l.status), details: l.notes ? `السبب: ${cleanNotes(l.notes)}` : '', adminNote: getAdminNoteOnly(l.notes), originalReq: l, modelType: 'leave' })),
-    ...missingPunches.filter(p => String(p.employeeId) === String(user.id) && p.status !== 'محذوف' && p.status !== 'deleted').map(p => ({ id: p.id, type: `ختمة ناقصة (${p.type})`, date: p.date || p.createdAt?.split('T')[0], status: normalizeReqStatus(p.status), details: p.reason || p.time || '', adminNote: p.adminNote || '', originalReq: p, modelType: 'punch' })),
+    ...myLeaves.filter(l => l.status !== 'محذوف' && l.status !== 'deleted').map(l => ({ id: l.id, type: l.type, date: l.startDate || l.date || l.createdAt?.split('T')[0], status: normalizeReqStatus(l.status), details: l.notes ? `السبب: ${cleanNotes(l.notes)}` : '', adminNote: requestDecisionNote(l), originalReq: l, modelType: 'leave' })),
+    ...missingPunches.filter(p => String(p.employeeId) === String(user.id) && p.status !== 'محذوف' && p.status !== 'deleted').map(p => ({ id: p.id, type: `ختمة ناقصة (${p.type})`, date: p.date || p.createdAt?.split('T')[0], status: normalizeReqStatus(p.status), details: p.reason || p.time || '', adminNote: requestDecisionNote(p), originalReq: p, modelType: 'punch' })),
     ...myReports.filter(r => r.status !== 'محذوف' && r.status !== 'deleted').map(r => ({ id: r.id, type: 'تقرير عمل يومي', date: r.date || r.createdAt?.split('T')[0], status: r.supervisorRating ? 'تم التقييم' : 'معلق', details: r.supervisorRating ? `تقييم المشرف: ${r.supervisorRating} (${Math.round(r.finalScore || 0)}%)` : 'معلق (بانتظار المشرف)', adminNote: r.supervisorReason || r.supervisorNotes || '', originalReq: r, modelType: 'report' })),
     ...myAdvances.filter(a => a.status !== 'محذوف' && a.status !== 'deleted').map(a => ({ id: a.id, type: a.type, date: a.date || a.createdAt?.split('T')[0], status: normalizeReqStatus(a.status), details: a.reason ? `${a.amount} د.أ - ${a.reason}` : `${a.amount} د.أ`, adminNote: a.status === 'مرفوض' ? (a.rejectionReason || '') : (a.approvalReason || ''), originalReq: a, modelType: 'advance' })),
-    ...(livePetitions || myPetitions || []).filter(p => p.status !== 'محذوف' && p.status !== 'deleted').map(p => ({ id: p.id, type: 'طلب استدعاء', date: p.date || p.createdAt?.split('T')[0], status: petitionStatus(p), details: p.title ? `${p.title}` : '', adminNote: p.status === 'مرفوض' ? (p.rejectionReason || '') : (p.approvalReason || ''), originalReq: p, modelType: 'petition' }))
+    ...(livePetitions || myPetitions || []).filter(p => p.status !== 'محذوف' && p.status !== 'deleted').map(p => ({ id: p.id, type: 'طلب استدعاء', date: p.date || p.createdAt?.split('T')[0], status: petitionStatus(p), details: p.title ? `${p.title}` : '', adminNote: p.resolution || (p.status === 'مرفوض' ? (p.rejectionReason || '') : (p.approvalReason || '')), originalReq: p, modelType: 'petition' }))
   ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
   const filteredRequests = allRequests.filter(req => {
@@ -181,32 +176,43 @@ export const HRRequestsTab = ({
                     <TableCell className="px-4 py-3 text-slate-600 font-medium" dir="ltr" style={{ textAlign: 'right' }}>{req.date}</TableCell>
                     <TableCell className="px-4 py-3 text-slate-500" style={{ maxWidth: '250px' }}>
                       <div className="font-medium text-slate-700">{req.details}</div>
-                      {req.adminNote && (
+                      {req.adminNote && !supportsRequestNote(req.type, req.modelType) && (
                         <div 
                           className={`text-xs mt-1.5 p-2 rounded-lg border ${
-                            req.status === 'تمت الموافقة' || req.status === 'تم التقييم'
+                            req.status === 'تمت الموافقة' || req.status === 'تم التقييم' || req.status === 'مغلق'
                               ? 'bg-emerald-50 text-emerald-800 border-emerald-100' 
                               : 'bg-red-50 text-red-800 border-red-100'
                           }`}
                           style={{ direction: 'rtl', textAlign: 'right', whiteSpace: 'normal', wordBreak: 'break-word', display: 'inline-block', minWidth: '100%' }}
                         >
-                          <span className="font-bold">{req.status === 'تمت الموافقة' || req.status === 'تم التقييم' ? 'ملاحظة الإدارة: ' : 'سبب الرفض: '}</span>
+                          <span className="font-bold">{req.modelType === 'petition' ? 'قرار وتوجيه الإدارة: ' : (req.status === 'تمت الموافقة' || req.status === 'تم التقييم' ? 'ملاحظة الإدارة: ' : 'سبب الرفض: ')}</span>
                           {req.adminNote}
                         </div>
                       )}
                     </TableCell>
                     <TableCell className="px-4 py-3 text-center">
                       <Badge variant={
-                        req.status === 'تمت الموافقة' ? 'success' :
+                        req.status === 'تمت الموافقة' || req.status === 'مغلق' ? 'success' :
                         req.status === 'مرفوض' ? 'danger' :
                         'warning'
                       }>
                         {req.status}
                       </Badge>
+                      {supportsRequestNote(req.type, req.modelType) && req.adminNote && ['مرفوض', 'تمت الموافقة'].includes(req.status) && <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-right text-xs text-slate-700" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', minWidth: 140 }}><strong>{req.status === 'مرفوض' ? 'سبب الرفض: ' : 'ملاحظة: '}</strong>{req.adminNote}</div>}
                     </TableCell>
                     <TableCell className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-2">
-                        {req.modelType === 'petition' && <button className="btn btn-primary" onClick={() => setConversationId(req.id)}>المحادثة{req.originalReq.lastMessageRole === 'admin' && req.originalReq.messages?.at(-1)?.id !== req.originalReq.readBy?.[String(user.id)] ? ' · رد جديد' : ''}</button>}
+                        {req.modelType === 'petition' && (
+                          <button 
+                            className="btn btn-primary flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl shadow-sm"
+                            style={{ minHeight: '34px', whiteSpace: 'nowrap' }}
+                            onClick={() => setConversationId(req.id)}
+                            title="معاينة الاستدعاء وقرار الإدارة"
+                          >
+                            <Eye size={15} />
+                            <span>معاينة الاستدعاء</span>
+                          </button>
+                        )}
                         {req.modelType === 'report' && (
                           <button 
                             onClick={() => handleViewReportDetails(req.originalReq)} 

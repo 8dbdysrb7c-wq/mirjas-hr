@@ -1,3 +1,4 @@
+import { deleteCardItem } from '../../services/cardItemDeletion';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { 
@@ -920,6 +921,26 @@ const AdminPreparation = ({ user, notificationTarget }) => {
     }
   };
 
+  const handleDeleteItem = async (order, index) => {
+    if (!isAdmin(user)) return;
+    const item = order.items?.[index];
+    if (!item) return;
+    const answer = await Swal.fire({
+      title: 'حذف هذا الصنف؟',
+      text: 'سيتم حذف الصنف رقم ' + (index + 1) + ' (' + (item.productName || '') + ') فقط مع حفظ نسخة مؤرشفة. سيبقى الكرت وبقية الأصناف.',
+      icon: 'warning', showCancelButton: true, confirmButtonText: 'حذف الصنف', cancelButtonText: 'إلغاء', confirmButtonColor: '#dc2626'
+    });
+    if (!answer.isConfirmed) return;
+    try {
+      const updated = await deleteCardItem(order, index, user, true);
+      setSelectedOrder(updated);
+      await fetchData();
+      Swal.fire({ icon: 'success', title: 'تم حذف الصنف', timer: 1500, showConfirmButton: false });
+    } catch (error) {
+      Swal.fire('تعذر حذف الصنف', error.message || 'حدث خطأ؛ حاول مجددًا.', 'error');
+    }
+  };
+
   const handleDelete = async (id) => {
     if (!isAdmin(user)) return;
     const orderToDelete = orders.find(o => o.id === id);
@@ -944,6 +965,7 @@ const AdminPreparation = ({ user, notificationTarget }) => {
     });
 
     if (result.isConfirmed) {
+      try {
       const deductionReverted = await revertAuditVouchers(orderToDelete.orderNumber);
       const receiptReverted = await revertReceiptVouchers(orderToDelete.orderNumber);
       if (!deductionReverted || !receiptReverted) {
@@ -972,6 +994,8 @@ const AdminPreparation = ({ user, notificationTarget }) => {
         await saveSalesOrder(updatedSalesOrder);
       }
       await deletePreparationOrder(id);
+      setShowPreview(false);
+      setSelectedOrder(null);
       await addLog({
         userName: user.name,
         userId: user.id,
@@ -994,6 +1018,9 @@ const AdminPreparation = ({ user, notificationTarget }) => {
         showConfirmButton: false
       });
       fetchData();
+      } catch (error) {
+        Swal.fire('تعذر الحذف الآمن', error.message || 'حدث خطأ أثناء الحذف؛ يرجى إعادة المحاولة.', 'error');
+      }
     }
   };
 
@@ -1378,7 +1405,7 @@ const AdminPreparation = ({ user, notificationTarget }) => {
 
   const getNormalizedItems = (order) => {
     if (!order) return [];
-    if (order.items && order.items.length > 0) return order.items;
+    if (Array.isArray(order.items)) return order.items;
     return [{
       productName: order.productName || '',
       colorModel: order.colorModel || '',
@@ -2827,7 +2854,7 @@ const AdminPreparation = ({ user, notificationTarget }) => {
                 }}
               >
                 {/* Empty placeholder to balance flex space-between */}
-                <div style={{ width: '38px' }} />
+                <div style={{ width: 38 }} />
                 
                 {/* Center Title */}
                 <div style={{ textAlign: 'center' }}>
@@ -3011,6 +3038,7 @@ const AdminPreparation = ({ user, notificationTarget }) => {
                            direction: 'rtl' 
                          }}
                        >
+                          {isAdmin(user) && <button type="button" className="card-item-delete no-print" onClick={() => handleDeleteItem(selectedOrder, idx)}><Trash2 size={14}/> حذف الصنف</button>}
                           {/* Status & Number Badge Header */}
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
                             <div 
@@ -3226,7 +3254,7 @@ const AdminPreparation = ({ user, notificationTarget }) => {
                         <th className="border p-2 text-center">السماكة</th>
                         <th className="border p-2 text-center">نوع التغليف</th>
                         <th className="border p-2 text-center">الكمية</th>
-                        <th className="border p-2 text-center">الحالة</th>
+                        <th className="border p-2 text-center">الحالة</th>{isAdmin(user) && <th className="border p-2 text-center no-print">حذف</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -3261,6 +3289,7 @@ const AdminPreparation = ({ user, notificationTarget }) => {
                               {item.status || 'لم يتم التنفيذ'}
                             </span>
                           </td>
+                          {isAdmin(user) && <td className="border p-2 text-center no-print"><button type="button" className="card-item-delete" onClick={() => handleDeleteItem(selectedOrder, idx)}><Trash2 size={14}/> حذف الصنف</button></td>}
                         </tr>
                       ))}
                     </tbody>

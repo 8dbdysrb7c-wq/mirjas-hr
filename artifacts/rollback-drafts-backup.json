@@ -1,0 +1,118 @@
+[
+  {
+    "collection": "sales_orders",
+    "id": "D7nPeMfSPB12eNzxOQR7",
+    "data": {
+      "lastActionBy": "نظام الإنتاج",
+      "orderDate": "2026-10-07",
+      "orderNumber": "ORD-0056",
+      "status": "جديد",
+      "customerName": "محمد مراد محمد خميس الالفي - فرشة ومخدة",
+      "createdBy": "المدير العام",
+      "statusUpdateDate": "2026-10-07",
+      "deliveryDate": "2026-10-12",
+      "customerId": "AXxkP01sUxVLKCXtQPHe",
+      "orderNotes": "",
+      "id": "D7nPeMfSPB12eNzxOQR7",
+      "items": [
+        {
+          "itemStatus": "إنتاج قيد الخياطة",
+          "hasProductionDetails": true,
+          "notes": "سحاب حرف ال + تغليف كرتونة تركيا  + بدون وجوه مخدات",
+          "quantity": "1",
+          "productName": "وجه فرشة سحاب تواصي"
+        }
+      ],
+      "sourceDraftId": "draft_admin_0a114e75-120b-4009-bdbc-f7ca0e96f823"
+    }
+  },
+  {
+    "collection": "orders",
+    "id": "RSVdhBtI2UQkUceuKNf8",
+    "data": {
+      "createdBy": "المدير العام",
+      "id": "RSVdhBtI2UQkUceuKNf8",
+      "sourceDraftId": "draft_admin_0a114e75-120b-4009-bdbc-f7ca0e96f823",
+      "customerName": "محمد مراد محمد خميس الالفي - فرشة ومخدة",
+      "orderNumber": "PRO-0024",
+      "items": [
+        {
+          "colorModel": "موديل 1 أبيض سادة",
+          "notes": "سحاب حرف ال + تغليف كرتونة تركيا  + بدون وجوه مخدات",
+          "quantity": "1",
+          "status": "لم يتم التنفيذ",
+          "sizeCm": "180*200",
+          "thickness": "40",
+          "productName": "وجه فرشة سحاب تواصي"
+        }
+      ],
+      "orderDate": "2026-10-07",
+      "lastActionBy": "المدير العام",
+      "customerId": "AXxkP01sUxVLKCXtQPHe",
+      "orderNotes": "مرتبط بطلبية رقم ORD-0056",
+      "salesOrderNumber": "ORD-0056",
+      "status": "لم يتم التنفيذ",
+      "salesOrderId": "D7nPeMfSPB12eNzxOQR7",
+      "deliveryDate": "2026-10-12"
+    }
+  },
+  {
+    "collection": "sales_order_draft_conversion_receipts",
+    "id": "draft_admin_0a114e75-120b-4009-bdbc-f7ca0e96f823",
+    "data": {
+      "draftId": "draft_admin_0a114e75-120b-4009-bdbc-f7ca0e96f823",
+      "draftBackup": {
+        "formData": {
+          "items": [
+            {
+              "productName": "وجه فرشة سحاب تواصي",
+              "notes": "سحاب حرف ال + تغليف كرتونة تركيا  + بدون وجوه مخدات",
+              "hasProductionDetails": true,
+              "itemStatus": "قيد الإنتاج",
+              "quantity": "1"
+            }
+          ],
+          "status": "جديد",
+          "orderNotes": "",
+          "orderDate": "2026-10-07",
+          "customerName": "محمد مراد محمد خميس الالفي - فرشة ومخدة",
+          "customerId": "AXxkP01sUxVLKCXtQPHe",
+          "deliveryDate": "2026-10-12",
+          "orderNumber": "ORD-0056"
+        },
+        "updatedAt": "2026-10-07T15:47:39.330Z",
+        "userId": "admin",
+        "id": "draft_admin_0a114e75-120b-4009-bdbc-f7ca0e96f823",
+        "userName": "المدير العام",
+        "linkedPreparationOrder": null,
+        "linkedProductionOrder": {
+          "orderNumber": "PRO-0024",
+          "orderDate": "2026-10-07",
+          "items": [
+            {
+              "notes": "سحاب حرف ال + تغليف كرتونة تركيا  + بدون وجوه مخدات",
+              "status": "لم يتم التنفيذ",
+              "productName": "وجه فرشة سحاب تواصي",
+              "sizeCm": "180*200",
+              "colorModel": "موديل 1 أبيض سادة",
+              "thickness": "40",
+              "quantity": "1"
+            }
+          ],
+          "customerName": "محمد مراد محمد خميس الالفي - فرشة ومخدة",
+          "id": null,
+          "salesOrderNumber": "ORD-0056",
+          "customerId": "AXxkP01sUxVLKCXtQPHe",
+          "deliveryDate": "2026-10-12",
+          "orderNotes": "مرتبط بطلبية رقم ORD-0056",
+          "status": "لم يتم التنفيذ"
+        }
+      },
+      "convertedAt": "2026-10-07T20:29:29.257Z",
+      "customer": "محمد مراد محمد خميس الالفي - فرشة ومخدة",
+      "orderNumber": "ORD-0056",
+      "orders": "PRO-0024",
+      "id": "D7nPeMfSPB12eNzxOQR7"
+    }
+  }
+]

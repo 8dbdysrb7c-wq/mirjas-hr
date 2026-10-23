@@ -210,6 +210,8 @@ const AdminEmployees = ({ user }) => {
       useCustomAdvancePeriods: emp.useCustomAdvancePeriods ?? false,
       customAdvancePeriods: Array.isArray(emp.customAdvancePeriods) ? emp.customAdvancePeriods.map(period => ({ ...period })) : [],
       hasSocialSecurity: false,
+      socialSecurityEmployeePaysExcess: emp.socialSecurityEmployeePaysExcess === true,
+      socialSecurityCompanyBaseSalary: emp.socialSecurityCompanyBaseSalary ?? '',
       socialSecuritySalary: '',
       isHazardousProfession: emp.isHazardousProfession ?? false
     } : {
@@ -253,7 +255,7 @@ const AdminEmployees = ({ user }) => {
       workLocationId: ''
     };
 
-    const assignableEmployees = employees.filter(e => e.id !== initialData.id && e.level !== 'admin' && e.level !== 'إدارة');
+    const assignableEmployees = employees.filter(e => e.id !== initialData.id && e.id !== 'admin' && e.name !== 'المدير العام');
     
     const assignedEmpCheckboxes = assignableEmployees.map(e => `
       <label class="premium-checkbox-item">
@@ -434,6 +436,15 @@ const AdminEmployees = ({ user }) => {
                   مُسجل في الضمان الاجتماعي
                 </label>
                 <div id="ss-fields-container" style="display: ${initialData.hasSocialSecurity ? 'block' : 'none'}; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+                  <label style="display:flex;gap:8px;align-items:center;margin-bottom:12px;cursor:pointer;">
+                    <input type="checkbox" id="swal-ss-pays-excess" ${initialData.socialSecurityEmployeePaysExcess ? 'checked' : ''} onchange="document.getElementById('swal-ss-company-base-wrap').style.display=this.checked?'block':'none';" />
+                    الموظف يتحمل كامل اشتراك الضمان على فرق الزيادة
+                  </label>
+                  <div id="swal-ss-company-base-wrap" style="display:${initialData.socialSecurityEmployeePaysExcess ? 'block' : 'none'};margin-bottom:12px;">
+                    <label>الراتب الذي تتحمل الشركة حصتها عليه (اختياري)</label>
+                    <input type="number" min="0" step="0.01" id="swal-ss-company-base" class="premium-input" value="${initialData.socialSecurityCompanyBaseSalary ?? ''}" placeholder="اتركه فارغًا لاستخدام الراتب الأساسي" />
+                    <small>الموظف يتحمل حصته على كامل الراتب الخاضع للضمان، وحصة الشركة على الفرق فوق هذا المبلغ.</small>
+                  </div>
                   <div class="grid grid-cols-2 gap-4">
                     <div>
                       <label style="font-size: 0.85rem; color: #64748b; margin-bottom: 4px; display: block;">الراتب الخاضع للضمان</label>
@@ -656,6 +667,13 @@ const AdminEmployees = ({ user }) => {
         const hasSocialSecurity = document.getElementById('swal-has-social-security')?.checked || false;
         const socialSecuritySalaryRaw = document.getElementById('swal-ss-salary')?.value;
         const socialSecuritySalary = socialSecuritySalaryRaw !== '' && socialSecuritySalaryRaw !== undefined ? Number(socialSecuritySalaryRaw) : (hasSocialSecurity ? Number(basicSalary) : 0);
+        const socialSecurityEmployeePaysExcess = document.getElementById('swal-ss-pays-excess')?.checked || false;
+        const companyBaseRaw = document.getElementById('swal-ss-company-base')?.value || '';
+        const socialSecurityCompanyBaseSalary = companyBaseRaw === '' ? '' : Number(companyBaseRaw);
+        if (socialSecurityEmployeePaysExcess && companyBaseRaw !== '' && (!Number.isFinite(socialSecurityCompanyBaseSalary) || socialSecurityCompanyBaseSalary < 0)) {
+          Swal.showValidationMessage('أدخل راتب حصة الشركة بقيمة صحيحة لا تقل عن صفر');
+          return false;
+        }
         const isHazardousProfession = document.getElementById('swal-hazardous-profession')?.checked || false;
         
         const workShiftEl = document.getElementById('swal-work-shift');
@@ -743,7 +761,7 @@ const AdminEmployees = ({ user }) => {
         }
         return { 
           id, name, jobTitle, department, directManager, phone, dateOfBirth, joinDate, annualRaiseDate, basicSalary, transportationAllowance, employmentStatus, employmentType, contractEndDate, terminationDate, vacationBalance, sickLeaveBalance, allowedMissingPunches, bonusMissingPunches, allowedLeaveTypes, hrNotes, level, password, 
-          workShiftName, shiftStart, shiftEnd, workLocationId, hasSocialSecurity, socialSecuritySalary, isHazardousProfession, healthInsuranceAmount, healthInsurancePayer,
+          workShiftName, shiftStart, shiftEnd, workLocationId, hasSocialSecurity, socialSecuritySalary, socialSecurityEmployeePaysExcess, socialSecurityCompanyBaseSalary, isHazardousProfession, healthInsuranceAmount, healthInsurancePayer,
           allowAdvances, useCustomAdvancePeriods, customAdvancePeriods,
           hasOverviewAccess, hasLiveAccess, hasEmployeesAccess, hasSalesAccess, 
           hasProductionAccess, hasProductionTasksAccess, hasPreparationAccess, hasPreparationTasksAccess, hasDeliveryAccess, hasReportsAccess, 

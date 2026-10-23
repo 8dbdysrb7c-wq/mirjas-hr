@@ -1,3 +1,4 @@
+import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import { isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, Clock, XCircle, FileText, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Undo2, Trash2, Eye, ChevronDown, ChevronUp, User, Edit2 } from 'lucide-react';
@@ -215,13 +216,22 @@ const HRLeaves = ({ user, refreshCounts }) => {
       return;
     }
 
-    await saveHRLeave({
+    const payload = {
       ...formData,
       employeeName: emp.name,
       department: emp.department || 'غير محدد',
       keepAsDepartureOnly,
       calculationMode
-    }, user);
+    };
+
+    if (isDept) {
+      payload.startDate = formData.date;
+      payload.endDate = formData.date;
+    } else {
+      payload.date = formData.startDate;
+    }
+
+    await saveHRLeave(payload, user);
 
     Swal.fire('نجاح', formData.id ? 'تم تعديل الطلب بنجاح' : 'تم تسجيل الطلب بنجاح', 'success');
     setShowModal(false);
@@ -356,7 +366,9 @@ const HRLeaves = ({ user, refreshCounts }) => {
         keepAsDepartureOnly,
         deductFromVacationBalance: isDeductVacation ? true : (selectedCalculationMode === 'unpaid_leave' || selectedCalculationMode === 'departure_only' ? false : !!leave.deductFromVacationBalance),
         vacationDaysDeducted: isDeductVacation ? vacDaysToUse : (selectedCalculationMode === 'unpaid_leave' || selectedCalculationMode === 'departure_only' ? 0 : (leave.vacationDaysDeducted || 0)),
-        ...(newStatus === 'مرفوض' ? { rejectionReason: actionReason } : {})
+        adminNote: actionReason,
+        rejectionReason: newStatus === 'مرفوض' ? actionReason : '',
+        approvalReason: newStatus === 'موافق' ? actionReason : ''
       }, user);
 
       if (newStatus === 'موافق') {
@@ -563,7 +575,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
       htmlContent += `<tr><th>من تاريخ</th><td>${leave.startDate || '-'}</td></tr>`;
       htmlContent += `<tr><th>إلى تاريخ</th><td>${leave.endDate || '-'}</td></tr>`;
     } else {
-      htmlContent += `<tr><th>التاريخ</th><td>${leave.date || leave.startDate || leave.endDate || '-'}</td></tr>`;
+      htmlContent += `<tr><th>التاريخ</th><td>${leave.startDate || leave.date || leave.endDate || '-'}</td></tr>`;
     }
     htmlContent += `</table>`;
     htmlContent += `<div class="swal-notes-box"><strong>السبب / الملاحظات:</strong><br><div style="margin-top: 8px;">${leave.notes ? leave.notes.replace(/\n/g, '<br>') : '<span style="color:#94a3b8; font-style:italic;">لا يوجد ملاحظات</span>'}</div></div>`;
@@ -1094,7 +1106,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
                         <div className="flex flex-col items-center justify-center">
                           <div className="flex items-center justify-center gap-2">
                             <span className="font-bold text-slate-800 text-xs font-mono" dir="ltr">
-                              {leave.date || leave.startDate || leave.endDate}
+                              {leave.startDate || leave.date || leave.endDate}
                             </span>
                             <Calendar size={14} className="text-[#0f766e]" />
                           </div>
@@ -1142,6 +1154,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
                             <Edit2 size={16} strokeWidth={2} />
                           </button>
                         )}
+                        {(canApprove || canEdit) && <button type="button" onClick={() => promptEmployeeAlert({ employeeId: leave.employeeId, employeeName: leave.employeeName, source: leave.type, sourceReference: leave.id, suggestedMessage: 'بخصوص طلب ' + leave.type + ' بتاريخ ' + (leave.date || leave.startDate || '') + ': ', user })} className="btn btn-outline" title="إرسال ملاحظة للموظف">إرسال ملاحظة</button>}
                         {canApprove && (
                           leave.status === 'معلق' ? (
                             <>

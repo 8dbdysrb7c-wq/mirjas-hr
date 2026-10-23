@@ -1,0 +1,316 @@
+{
+  "billing": {
+    "status": 200,
+    "data": {
+      "name": "projects/mirjaswork/billingInfo",
+      "projectId": "mirjaswork",
+      "billingAccountName": "",
+      "billingEnabled": false
+    }
+  },
+  "quotas": {
+    "status": 200,
+    "data": {
+      "metrics": [
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fcmek_databases",
+          "displayName": "Cloud Firestore CMEK databases",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fcmek_databases/limits/%2Fproject",
+              "unit": "1/{project}",
+              "isPrecise": true,
+              "metric": "firestore.googleapis.com/cmek_databases",
+              "quotaBuckets": [
+                {}
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/cmek_databases"
+        },
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fcomposite_indexes_per_database",
+          "displayName": "Composite Indexes Per Database",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fcomposite_indexes_per_database/limits/%2Fdatabase_id%2Fproject",
+              "unit": "1/{project}/{database_id}",
+              "isPrecise": true,
+              "metric": "firestore.googleapis.com/composite_indexes_per_database",
+              "quotaBuckets": [
+                {
+                  "effectiveLimit": "200",
+                  "defaultLimit": "200"
+                }
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/composite_indexes_per_database",
+          "unit": "1"
+        },
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fdatabase_operation_requests",
+          "displayName": "Database operation requests",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fdatabase_operation_requests/limits/%2Fmin%2Fproject",
+              "unit": "1/min/{project}",
+              "metric": "firestore.googleapis.com/database_operation_requests",
+              "quotaBuckets": [
+                {
+                  "effectiveLimit": "60",
+                  "defaultLimit": "60"
+                }
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/database_operation_requests"
+        },
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fdatabases",
+          "displayName": "Cloud Firestore databases",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fdatabases/limits/%2Fproject",
+              "unit": "1/{project}",
+              "isPrecise": true,
+              "metric": "firestore.googleapis.com/databases",
+              "quotaBuckets": [
+                {
+                  "effectiveLimit": "100",
+                  "defaultLimit": "100"
+                }
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/databases"
+        },
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fdelete_operations_per_project",
+          "displayName": "Free daily delete operations per project ('(default)' database)",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fdelete_operations_per_project/limits/%2Fd%2Fproject",
+              "unit": "1/d/{project}",
+              "metric": "firestore.googleapis.com/delete_operations_per_project",
+              "quotaBuckets": [
+                {
+                  "effectiveLimit": "20000",
+                  "defaultLimit": "20000"
+                }
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/delete_operations_per_project",
+          "unit": "1"
+        },
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fexport_requests",
+          "displayName": "Export requests",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fexport_requests/limits/%2Fmin%2Fproject",
+              "unit": "1/min/{project}",
+              "metric": "firestore.googleapis.com/export_requests",
+              "quotaBuckets": [
+                {
+                  "effectiveLimit": "20",
+                  "defaultLimit": "20"
+                }
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/export_requests"
+        },
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fimport_requests",
+          "displayName": "Import requests",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fimport_requests/limits/%2Fmin%2Fproject",
+              "unit": "1/min/{project}",
+              "metric": "firestore.googleapis.com/import_requests",
+              "quotaBuckets": [
+                {
+                  "effectiveLimit": "20",
+                  "defaultLimit": "20"
+                }
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/import_requests"
+        },
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Flocations_requests",
+          "displayName": "GetLocation and ListLocations requests",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Flocations_requests/limits/%2Fmin%2Fproject",
+              "unit": "1/min/{project}",
+              "metric": "firestore.googleapis.com/locations_requests",
+              "quotaBuckets": [
+                {
+                  "effectiveLimit": "60",
+                  "defaultLimit": "60"
+                }
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/locations_requests"
+        },
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fquery_insights_requests",
+          "displayName": "Query and Usage Insights AggregatedData requests and Timeseries requests",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fquery_insights_requests/limits/%2Fmin%2Fproject",
+              "unit": "1/min/{project}",
+              "metric": "firestore.googleapis.com/query_insights_requests",
+              "quotaBuckets": [
+                {
+                  "effectiveLimit": "660",
+                  "defaultLimit": "660"
+                }
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/query_insights_requests"
+        },
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fread_operations_per_project",
+          "displayName": "Free daily read operations per project ('(default)' database)",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fread_operations_per_project/limits/%2Fd%2Fproject",
+              "unit": "1/d/{project}",
+              "metric": "firestore.googleapis.com/read_operations_per_project",
+              "quotaBuckets": [
+                {
+                  "effectiveLimit": "50000",
+                  "defaultLimit": "50000"
+                }
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/read_operations_per_project",
+          "unit": "1"
+        },
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fread_units_per_project",
+          "displayName": "Free daily read units per project (free tier database)",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fread_units_per_project/limits/%2Fd%2Fproject",
+              "unit": "1/d/{project}",
+              "metric": "firestore.googleapis.com/read_units_per_project",
+              "quotaBuckets": [
+                {
+                  "effectiveLimit": "50000",
+                  "defaultLimit": "50000"
+                }
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/read_units_per_project",
+          "unit": "1"
+        },
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Frealtime_update_units_per_project",
+          "displayName": "Free daily realtime update units per project (free tier database)",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Frealtime_update_units_per_project/limits/%2Fd%2Fproject",
+              "unit": "1/d/{project}",
+              "metric": "firestore.googleapis.com/realtime_update_units_per_project",
+              "quotaBuckets": [
+                {
+                  "effectiveLimit": "50000",
+                  "defaultLimit": "50000"
+                }
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/realtime_update_units_per_project",
+          "unit": "1"
+        },
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fsearch_stored_bytes",
+          "displayName": "Search Stored Bytes",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fsearch_stored_bytes/limits/%2Findex%2Fproject",
+              "unit": "1/{project}/{index}",
+              "isPrecise": true,
+              "metric": "firestore.googleapis.com/search_stored_bytes",
+              "quotaBuckets": [
+                {
+                  "effectiveLimit": "268435456000",
+                  "defaultLimit": "268435456000"
+                }
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/search_stored_bytes",
+          "unit": "1"
+        },
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fsmall_operations_per_project",
+          "displayName": "Free daily small operations per project ('(default)' database)",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fsmall_operations_per_project/limits/%2Fd%2Fproject",
+              "unit": "1/d/{project}",
+              "metric": "firestore.googleapis.com/small_operations_per_project",
+              "quotaBuckets": [
+                {
+                  "effectiveLimit": "50000",
+                  "defaultLimit": "50000"
+                }
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/small_operations_per_project",
+          "unit": "1"
+        },
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fwrite_operations_per_project",
+          "displayName": "Free daily write operations per project ('(default)' database)",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fwrite_operations_per_project/limits/%2Fd%2Fproject",
+              "unit": "1/d/{project}",
+              "metric": "firestore.googleapis.com/write_operations_per_project",
+              "quotaBuckets": [
+                {
+                  "effectiveLimit": "20000",
+                  "defaultLimit": "20000"
+                }
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/write_operations_per_project",
+          "unit": "1"
+        },
+        {
+          "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fwrite_units_per_project",
+          "displayName": "Free daily write units per project (free tier database)",
+          "consumerQuotaLimits": [
+            {
+              "name": "projects/742199978686/services/firestore.googleapis.com/consumerQuotaMetrics/firestore.googleapis.com%2Fwrite_units_per_project/limits/%2Fd%2Fproject",
+              "unit": "1/d/{project}",
+              "metric": "firestore.googleapis.com/write_units_per_project",
+              "quotaBuckets": [
+                {
+                  "effectiveLimit": "40000",
+                  "defaultLimit": "40000"
+                }
+              ]
+            }
+          ],
+          "metric": "firestore.googleapis.com/write_units_per_project",
+          "unit": "1"
+        }
+      ]
+    }
+  }
+}

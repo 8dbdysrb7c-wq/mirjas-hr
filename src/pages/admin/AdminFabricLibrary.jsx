@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Search, Trash2, Edit2, Copy, Tag, RefreshCw, Eye, Save, X, Box, Scale, Ruler, CheckCircle2, ArrowUp, ArrowDown, ChevronsUpDown, Folder, FolderPlus, Scissors, Download, FileText, Printer, FileSpreadsheet } from 'lucide-react';
-import * as XLSX from 'xlsx';
-import html2pdf from 'html2pdf.js';
 import { getFabrics, saveFabric, deleteFabric } from '../../store';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 import Swal from 'sweetalert2';
@@ -67,7 +65,8 @@ const AdminFabricLibrary = ({ user }) => {
     setSortConfig({ key, direction });
   };
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.json_to_sheet(sortedFabrics.map((f, i) => ({
       '#': i + 1,
       'اسم القماش': f.name || '',
@@ -125,7 +124,8 @@ const AdminFabricLibrary = ({ user }) => {
     URL.revokeObjectURL(url);
   };
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
+    const { default: html2pdf } = await import('html2pdf.js');
     const element = document.getElementById('pdf-export-wrapper');
     const opt = {
       margin: [0.5, 0.5, 0.5, 0.5],

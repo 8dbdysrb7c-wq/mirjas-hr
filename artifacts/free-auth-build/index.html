@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ar" dir="rtl" translate="no">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Mr Sleep</title>
+    <link rel="manifest" href="/manifest.json?v=2" />
+    <meta name="theme-color" content="#1a8d9b" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Mr Sleep">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="HandheldFriendly" content="true">
+    <script type="module" crossorigin src="/assets/index-DogJ9i2D.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/chunk-jRWAZmH_.js">
+    <link rel="modulepreload" crossorigin href="/assets/index-DogJ9i2D.js">
+    <link rel="modulepreload" crossorigin href="/assets/whatsappService-BAIHgrha.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-TnGPYGCg.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="print-portal"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js?v=20260815');
+        });
+      }
+    </script>
+    <script>
+      window.printSupervisorReport = function() {
+        const swalContent = document.querySelector('.premium-modal-popup-report');
+        if (!swalContent) {
+          window.print();
+          return;
+        }
+        const printPortal = document.getElementById('print-portal');
+        if (printPortal) {
+          printPortal.innerHTML = '<div class="report-print-layout" style="direction: rtl; text-align: right; font-family: \'Tajawal\', sans-serif; background: #fff; padding: 2rem; width: 100%; box-sizing: border-box;">' + swalContent.innerHTML + '</div>';
+          const buttons = printPortal.querySelectorAll('button');
+          buttons.forEach(btn => btn.style.display = 'none');
+          window.print();
+          setTimeout(() => {
+            printPortal.innerHTML = '';
+          }, 100);
+        } else {
+          window.print();
+        }
+      };
+    </script>
+  </body>
+</html>

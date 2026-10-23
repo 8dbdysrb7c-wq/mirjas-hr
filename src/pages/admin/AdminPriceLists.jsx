@@ -667,7 +667,7 @@ const AdminPriceLists = ({ user }) => {
 
   const handleInlineMasterChange = (id, field, value) => {
     if (field === 'defaultDiscount' && value !== '' && !/^\d{0,2}(\.\d{0,2})?$/.test(value)) return;
-    if (field === 'basePrice' && value !== '' && !/^\d{0,4}(\.\d{0,2})?$/.test(value)) return;
+    if (field === 'basePrice' && value !== '' && !/^\d{0,4}(\.\d{0,3})?$/.test(value)) return;
 
     setMasterProducts(prev => prev.map(p => {
       if (p.id === id) {
@@ -920,14 +920,14 @@ const AdminPriceLists = ({ user }) => {
 
   const handleItemChange = (index, field, value) => {
     if (field === 'discountPercent' && value !== '' && !/^\d{0,2}(\.\d{0,2})?$/.test(value)) return;
-    if (field === 'basePrice' && value !== '' && !/^\d{0,4}(\.\d{0,2})?$/.test(value)) return;
+    if (field === 'basePrice' && value !== '' && !/^\d{0,4}(\.\d{0,3})?$/.test(value)) return;
 
     const updated = [...formData.items];
     const item = { ...updated[index] };
 
     if (field === 'basePrice') {
       const base = parseFloat(value) || 0;
-      item.basePrice = base;
+      item.basePrice = value; // Preserve the decimal separator while typing.
       const disc = parseFloat(item.discountPercent) || 0;
       item.discountedPrice = parseFloat((base * (1 - disc / 100)).toFixed(3));
     } else if (field === 'discountPercent') {
@@ -1009,7 +1009,7 @@ const AdminPriceLists = ({ user }) => {
 
     try {
       Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-      await savePriceList(formData);
+      await savePriceList({ ...formData, items: formData.items.map(item => ({ ...item, basePrice: Number(item.basePrice) || 0 })) });
       await fetchData();
       setShowModal(false);
       Swal.fire('تم الحفظ!', 'تم حفظ قائمة الأسعار للزبون بنجاح.', 'success');
@@ -1078,7 +1078,7 @@ const AdminPriceLists = ({ user }) => {
 
   const handleShareWhatsApp = (list) => {
     const text = `*قائمة الأسعار المعتمدة للزبون: ${list.customerName}*\n*رقم القائمة:* ${list.code || '-'}\n*تاريخ التحديث:* ${list.updatedAt ? getLocalDateStr(new Date(list.updatedAt)) : '-'}\n-----------------------------\n` +
-      (list.items || []).slice(0, 15).map(it => `• *${it.name}*: السعر الأساسي (${(parseFloat(it.basePrice)||0).toFixed(2)}) د.أ | الخصم (%${it.discountPercent}) | *السعر النهائي: ${(parseFloat(it.discountedPrice)||0).toFixed(2)} د.أ*`).join('\n') +
+      (list.items || []).slice(0, 15).map(it => `• *${it.name}*: السعر الأساسي (${(parseFloat(it.basePrice)||0).toFixed(3)}) د.أ | الخصم (%${it.discountPercent}) | *السعر النهائي: ${(parseFloat(it.discountedPrice)||0).toFixed(2)} د.أ*`).join('\n') +
       `\n-----------------------------\n*ملاحظات:* ${list.notes || 'معتمدة'}`;
 
     const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
@@ -1741,7 +1741,7 @@ const AdminPriceLists = ({ user }) => {
                 <thead>
                   <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0', color: '#334155', fontWeight: '800' }}>
                     <th style={{ padding: '14px 16px', textAlign: 'center' }}>رقم الزبون</th>
-                    <th style={{ padding: '14px 16px', textAlign: 'center' }}>الزبون</th>
+                    <th style={{ padding: '14px 20px', textAlign: 'right' }}>الزبون</th>
                     <th style={{ padding: '14px 16px', textAlign: 'center' }}>عدد البنود</th>
                     <th style={{ padding: '14px 16px', textAlign: 'center' }}>متوسط الخصم</th>
                     <th style={{ padding: '14px 16px', textAlign: 'center' }}>تاريخ التحديث</th>
@@ -1766,7 +1766,7 @@ const AdminPriceLists = ({ user }) => {
                             {customerNum}
                           </span>
                         </td>
-                        <td style={{ padding: '14px 16px', fontWeight: '900', color: '#0f172a', fontSize: '14.5px' }}>
+                        <td style={{ padding: '14px 20px', textAlign: 'right', direction: 'rtl', fontWeight: '900', color: '#0f172a', fontSize: '14.5px' }}>
                           {list.customerName}
                         </td>
                         <td style={{ padding: '14px 16px', fontWeight: 'bold', color: '#475569' }}>
@@ -2574,8 +2574,8 @@ const AdminPriceLists = ({ user }) => {
                         </td>
                         <td style={{ padding: '8px', textAlign: 'center' }}>
                           <input
-                            type="number"
-                            step="0.01"
+                            type="text" inputMode="decimal"
+                            step="0.001"
                             style={{ width: '100%', height: '36px', border: '1px solid #e2e8f0', borderRadius: '6px', textAlign: 'center', fontWeight: 'bold', color: '#0f172a', outline: 'none', backgroundColor: '#ffffff' }}
                             value={item.basePrice}
                             onChange={(e) => handleItemChange(idx, 'basePrice', e.target.value)}
@@ -2760,7 +2760,7 @@ const AdminPriceLists = ({ user }) => {
                     <tr key={i} style={{ backgroundColor: i % 2 === 0 ? '#ffffff' : '#fafafa' }}>
                       <td style={{ padding: '8px', border: '1px solid #e2e8f0', textAlign: 'center', color: '#64748b', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{i + 1}</td>
                       <td style={{ padding: '8px', border: '1px solid #e2e8f0', fontWeight: 'bold', color: '#0f172a', whiteSpace: 'nowrap' }}>{item.name}</td>
-                      <td style={{ padding: '8px', border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{parseFloat(item.basePrice || 0).toFixed(2)}</td>
+                      <td style={{ padding: '8px', border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{parseFloat(item.basePrice || 0).toFixed(3)}</td>
                       <td style={{ padding: '8px', border: '1px solid #e2e8f0', textAlign: 'center', color: '#92400e', fontWeight: 'bold', backgroundColor: '#fffdf0', whiteSpace: 'nowrap' }}>%{item.discountPercent}</td>
                       <td style={{ padding: '8px', border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 'bold', color: '#166534', backgroundColor: '#f0fdf4', whiteSpace: 'nowrap' }}>
                         {parseFloat(item.discountedPrice || 0).toFixed(3)}

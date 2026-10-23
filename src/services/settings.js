@@ -56,7 +56,7 @@ export const defaultScoring = {
 export const defaultGlobalSettings = {
   siteName: "Mirjas HR",
   logoUrl: "/logo-mrsleep.png",
-  primaryColor: "#0f172a",
+  primaryColor: "#1a8d9b",
   itemStatuses: ["مخزون", "قيد التشغيل", "مباع", "تالف", "مفقود", "مرتجع"],
   productionStatuses: ["لم يتم التنفيذ", "تم استلام كرت الإنتاج", "مرحلة القص", "مرحلة المستودع", "مرحلة الخياطة", "بانتظار استلام التغليف", "مرحلة التغليف", "إنتاج مختلط", "منتهي", "ملغي"],
   preparationStatuses: ["لم يتم التنفيذ", "تم استلام كرت الانتاج", "مرحلة المستودع", "مرحلة الحشوة", "مرحلة التطريز", "مرحلة التشطيب", "منتهي", "ملغي"],
@@ -379,8 +379,7 @@ export const createNotification = async (notification) => {
 
     // Calculate targetUsers to allow Firestore array-contains querying
     try {
-      const employeesRef = await getDocs(collection(db, 'employees'));
-      const allEmployees = employeesRef.docs.map(d => ({ id: d.id, ...d.data() }));
+      const allEmployees = await getEmployees();
       
       const targets = new Set();
       if (payload.visibleToAll) {
@@ -418,8 +417,7 @@ export const createNotification = async (notification) => {
         // We already fetched employees, but since this is inside another try block and previously used getDocs, we'll fetch or use a simpler approach.
         // For safety, we can just fetch again or rely on the previous fetch if we refactor.
         // Let's just re-fetch to keep logic isolated
-        const employeesRef = await getDocs(collection(db, 'employees'));
-        const allEmployees = employeesRef.docs.map(d => ({ id: d.id, ...d.data() }));
+        const allEmployees = await getEmployees();
         
         const sentPhones = new Set();
         for (const emp of allEmployees) {
@@ -491,17 +489,19 @@ export const createActivityNotification = async ({
 
 export const watchNotificationsForUser = (user, settings, next, error) => {
   const preferences = normalizeNotificationSettings(settings);
-  // Fetch where targetUsers contains user.id OR 'ALL_USERS'
-  // Firestore supports array-contains-any for up to 10 items
+  // Avoid missing composite index error on (targetUsers + createdAt) by querying targetUsers and sorting in memory
   const source = query(
     collection(db, 'notifications'), 
     where('targetUsers', 'array-contains-any', [user.id, 'ALL_USERS']),
-    orderBy('createdAt', 'desc'), 
     limit(50)
   );
-  return onSnapshot(source, snapshot => next(snapshot.docs
-    .map(row => ({ ...row.data(), id: row.id }))
-    .filter(notification => !(preferences.hideReadNotifications && notification.readBy?.[user.id]))), error);
+  return onSnapshot(source, snapshot => {
+    const list = snapshot.docs
+      .map(row => ({ ...row.data(), id: row.id }))
+      .filter(notification => !(preferences.hideReadNotifications && notification.readBy?.[user.id]))
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    next(list);
+  }, error);
 };
 
 export const getNotificationsForUser = async (user, settings) => {
@@ -511,7 +511,6 @@ export const getNotificationsForUser = async (user, settings) => {
     const q = query(
       collection(db, 'notifications'), 
       where('targetUsers', 'array-contains-any', [user.id, 'ALL_USERS']),
-      orderBy('createdAt', 'desc'), 
       limit(50)
     );
     const querySnapshot = await getDocs(q);

@@ -122,7 +122,7 @@ export const DailyReportTab = ({
             </div>
             <div className="dr-time-display">
               <Clock size={14} style={{ color: '#94a3b8' }} />
-              <span dir="ltr">{formatTimeArabic(timeOut)}</span>
+              <span>{timeOut && timeOut !== '--:--' ? <span dir="ltr">{formatTimeArabic(timeOut)}</span> : 'يُسحب تلقائيًا عند تسجيل الخروج'}</span>
             </div>
           </div>
         </div>

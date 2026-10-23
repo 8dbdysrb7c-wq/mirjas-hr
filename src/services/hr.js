@@ -1,3 +1,5 @@
+import { reportAttendanceFields } from '../utils/reportAttendance';
+import { acknowledgePetitionDecision } from './petitionConversation';
 import { db } from '../firebase';
 import { 
   onSnapshot,
@@ -16,7 +18,7 @@ import {
   updateDoc,
   writeBatch
 } from 'firebase/firestore';
-import { getGlobalSettings, createNotification, isAdmin } from './settings';
+import { getGlobalSettings, createNotification, isAdmin, getEmployees } from './settings';
 import { triggerWhatsAppRouting } from './whatsappRouter';
 import {
   getOfficialAbsenceMinutes,
@@ -54,6 +56,7 @@ export const getHRAuditLogs = async () => {
 };
 
 export const createEmployeeAlert = async (alertData) => {
+  invalidateEmployeeAlertsCache();
   const now = new Date().toISOString();
   const payload = {
     employeeId: String(alertData.employeeId || ''),
@@ -75,6 +78,7 @@ export const createEmployeeAlert = async (alertData) => {
 };
 
 export const createEmployeeAlerts = async ({ employees = [], ...alertData }) => {
+  invalidateEmployeeAlertsCache();
   const recipients = employees.filter(employee => employee?.id != null);
   const message = String(alertData.message || '').trim();
   if (!recipients.length || !message) throw new Error('بيانات التنبيه أو المستلمين غير مكتملة');
@@ -110,16 +114,39 @@ export const createEmployeeAlerts = async ({ employees = [], ...alertData }) => 
   return { count: recipients.length, sentAt: now };
 };
 
-export const getEmployeeAlerts = async () => {
-  const snapshot = await getDocs(collection(db, 'employee_alerts'));
-  return snapshot.docs.map(row => ({ id: row.id, ...row.data() })).sort((a, b) => String(b.sentAt || '').localeCompare(String(a.sentAt || '')));
+let cachedEmployeeAlerts = null;
+let cachedEmployeeAlertsTimestamp = 0;
+const EMPLOYEE_ALERTS_CACHE_TTL = 30 * 1000;
+
+export const invalidateEmployeeAlertsCache = () => {
+  cachedEmployeeAlerts = null;
+  cachedEmployeeAlertsTimestamp = 0;
+};
+
+export const getEmployeeAlerts = async (forceRefresh = false) => {
+  try {
+    if (!forceRefresh && cachedEmployeeAlerts && (Date.now() - cachedEmployeeAlertsTimestamp < EMPLOYEE_ALERTS_CACHE_TTL)) {
+      return cachedEmployeeAlerts;
+    }
+    const q = query(collection(db, 'employee_alerts'), orderBy('sentAt', 'desc'), limit(150));
+    const snapshot = await getDocs(q);
+    const result = snapshot.docs.map(row => ({ id: row.id, ...row.data() }));
+    cachedEmployeeAlerts = result;
+    cachedEmployeeAlertsTimestamp = Date.now();
+    return result;
+  } catch (error) {
+    console.error("Error in getEmployeeAlerts:", error);
+    return cachedEmployeeAlerts || [];
+  }
 };
 
 export const acknowledgeEmployeeAlert = async (alertId, employee) => {
+  invalidateEmployeeAlertsCache();
   const ref = doc(db, 'employee_alerts', alertId);
   const snapshot = await getDoc(ref);
   if (!snapshot.exists()) throw new Error('التنبيه غير موجود');
   const alert = snapshot.data();
+  if (alert.petitionId) return acknowledgePetitionDecision(alertId, employee);
   if (String(alert.employeeId) !== String(employee.id)) throw new Error('هذا التنبيه غير مرتبط بالموظف الحالي');
   if (alert.status === 'received') return { id: alertId, ...alert };
   const receivedAt = new Date().toISOString();
@@ -503,29 +530,34 @@ export const saveHRAttendance = async (attendance, userContext = null) => {
 
     const docRef = attendance.id ? doc(db, 'hr_attendance', attendance.id) : doc(collection(db, 'hr_attendance'));
     const data = { ...attendance, updatedAt: new Date().toISOString() };
-    await setDoc(docRef, data, { merge: true });
-
-    // Also sync with attendance_logs collection to ensure attendance lookup finds punches instantly
+    // Commit attendance, its live log, and the report's punch fields together.
+    const batch = writeBatch(db);
+    batch.set(docRef, data, { merge: true });
     const empKey = String(attendance.employeeId || attendance.userId || '').trim();
     if (empKey && attendance.date) {
-      try {
-        const logDocRef = doc(db, 'attendance_logs', `${empKey}_${attendance.date}`);
-        await setDoc(logDocRef, {
-          employeeId: attendance.employeeId || empKey,
-          userId: attendance.userId || empKey,
-          employeeName: attendance.employeeName || '',
-          date: attendance.date,
-          timeIn: attendance.timeIn || '',
-          timeOut: attendance.timeOut || '',
-          status: attendance.status || 'مداوم',
-          notes: attendance.notes || '',
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      } catch (logErr) {
-        console.error("Error syncing to attendance_logs:", logErr);
+      batch.set(doc(db, 'attendance_logs', `${empKey}_${attendance.date}`), {
+        employeeId: attendance.employeeId || empKey,
+        userId: attendance.userId || empKey,
+        employeeName: attendance.employeeName || '',
+        date: attendance.date,
+        timeIn: attendance.timeIn || '',
+        timeOut: attendance.timeOut || '',
+        status: attendance.status || 'مداوم',
+        notes: attendance.notes || '',
+        updatedAt: data.updatedAt
+      }, { merge: true });
+      if (attendance.timeOut && attendance.timeOut !== '--:--') {
+        const ids = [...new Set([attendance.employeeId, attendance.userId].filter(Boolean).map(String))];
+        const snapshots = await Promise.all(ids.flatMap(id => ['userId', 'employeeId'].map(field =>
+          getDocsFromServer(query(collection(db, 'reports'), where(field, '==', id), where('date', '==', attendance.date))))));
+        const reports = new Map(snapshots.flatMap(snapshot => snapshot.docs.map(record => [record.id, record])));
+        for (const record of reports.values()) {
+          if (['محذوف', 'deleted'].includes(record.data().status)) continue;
+          batch.update(record.ref, reportAttendanceFields(record.data(), attendance));
+        }
       }
     }
-    
+    await batch.commit();
     if (userContext) {
        await saveHRAuditLog({
           user: userContext.name || userContext,
@@ -764,18 +796,34 @@ export const getEmployeeAttendanceByDate = async (userId, employeeId, dateStr, e
   }
 };
 
-export const getHRAdvances = async () => {
+let cachedHRAdvances = null;
+let cachedHRAdvancesTimestamp = 0;
+const HR_ADVANCES_CACHE_TTL = 3 * 60 * 1000;
+
+export const invalidateHRAdvancesCache = () => {
+  cachedHRAdvances = null;
+  cachedHRAdvancesTimestamp = 0;
+};
+
+export const getHRAdvances = async (forceRefresh = false) => {
   try {
-    const q = query(collection(db, 'hr_advances'), orderBy('createdAt', 'desc'));
+    if (!forceRefresh && cachedHRAdvances && (Date.now() - cachedHRAdvancesTimestamp < HR_ADVANCES_CACHE_TTL)) {
+      return cachedHRAdvances;
+    }
+    const q = query(collection(db, 'hr_advances'), orderBy('createdAt', 'desc'), limit(200));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const result = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    cachedHRAdvances = result;
+    cachedHRAdvancesTimestamp = Date.now();
+    return result;
   } catch (error) {
     console.error("Error in getHRAdvances:", error);
-    return [];
+    return cachedHRAdvances || [];
   }
 };
 
 export const saveHRAdvance = async (advance, userContext = null) => {
+  invalidateHRAdvancesCache();
   try {
     if (!advance.id && advance.date) {
       const today = new Date();
@@ -835,6 +883,7 @@ export const saveHRAdvance = async (advance, userContext = null) => {
 };
 
 export const deleteHRAdvance = async (id, userContext = null) => {
+  invalidateHRAdvancesCache();
   try {
     await updateDoc(doc(db, 'hr_advances', id), {
       status: 'محذوف',
@@ -1056,8 +1105,13 @@ export const syncDailyReportViolations = async (report, approvedLeaves = null) =
 
   let leaves = approvedLeaves;
   if (!Array.isArray(leaves)) {
-    const leavesSnapshot = await getDocs(collection(db, 'hr_leaves'));
-    leaves = leavesSnapshot.docs.map(leaveDoc => ({ id: leaveDoc.id, ...leaveDoc.data() }));
+    if (employeeId) {
+      leaves = await getHRLeavesForUser(employeeId, employeeName);
+    } else if (date) {
+      leaves = await getHRLeavesByDateRange(date, date);
+    } else {
+      leaves = [];
+    }
   }
   const hasApprovedLeave = leaves.some(leave => {
     const status = String(leave.status || '').trim();
@@ -1265,7 +1319,14 @@ export const saveHRLeave = async (leave, userContext = null) => {
     }
 
     const docRef = leave.id ? doc(db, 'hr_leaves', leave.id) : doc(collection(db, 'hr_leaves'));
+    const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان', 'إذن تأخير', 'خروج مبكر'].includes(leave.type);
     const data = { ...leave, updatedAt: new Date().toISOString() };
+    if (!isDept && data.startDate) {
+      data.date = data.startDate;
+    } else if (isDept && data.date) {
+      if (!data.startDate) data.startDate = data.date;
+      if (!data.endDate) data.endDate = data.date;
+    }
     if (duplicateAuthorized) {
       data.duplicateAuthorizedById = userContext?.id || '';
       data.duplicateAuthorizedByName = userContext?.name || '';
@@ -1540,16 +1601,17 @@ export const saveMissingPunch = async (request) => {
   }
 };
 
-export const updateMissingPunchStatus = async (id, status, adminName, punchData) => {
+export const updateMissingPunchStatus = async (id, status, adminName, punchData, { attendanceAlreadySaved = false } = {}) => {
   try {
     const docRef = doc(db, 'missing_punches', id);
     await setDoc(docRef, {
       status,
+      ...(punchData?.adminNote !== undefined ? { adminNote: punchData.adminNote } : {}),
       approvedBy: adminName,
       approvedAt: new Date().toISOString()
     }, { merge: true });
     
-    if (status === 'موافق عليه' && punchData) {
+    if (status === 'موافق عليه' && punchData && !attendanceAlreadySaved) {
       // Find existing attendance for this day
       const existing = await getEmployeeAttendanceByDate(punchData.employeeId, punchData.employeeId, punchData.date, punchData.employeeName);
       
@@ -1624,8 +1686,8 @@ export const processDailyAbsences = async (dateFrom, dateTo, userContext) => {
     const endProcessDate = dateTo > todayStr ? todayStr : dateTo;
     
     // 1. Fetch data
-    const usersSnap = await getDocs(query(collection(db, 'users'), where('status', '==', 'active')));
-    const employees = usersSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.role !== 'admin');
+    const allEmployees = await getEmployees();
+    const employees = allEmployees.filter(e => e.employmentStatus === 'فعال' && !isAdmin(e) && e.id !== 'admin');
     
     const settings = await getGlobalSettings();
     const hrSettings = settings.hrSettings || {};
@@ -1634,11 +1696,8 @@ export const processDailyAbsences = async (dateFrom, dateTo, userContext) => {
     const attSnap = await getDocs(query(collection(db, 'hr_attendance'), where('date', '>=', dateFrom), where('date', '<=', endProcessDate)));
     const attendances = attSnap.docs.map(d => d.data());
     
-    const leavesSnap = await getDocs(collection(db, 'hr_leaves'));
-    const leaves = leavesSnap.docs.map(d => d.data()).filter(l => l.status === 'موافق' || l.status === 'مقبول');
-    
-    const holidaysSnap = await getDocs(collection(db, 'hr_holidays'));
-    const holidays = holidaysSnap.docs.map(d => d.data()).filter(h => h.isActive !== false);
+    const leaves = (await getHRLeavesByDateRange(dateFrom, endProcessDate)).filter(l => l.status === 'موافق' || l.status === 'مقبول');
+    const holidays = (await getHolidays()).filter(h => h.isActive !== false);
 
     const arabicDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
     let addedCount = 0;

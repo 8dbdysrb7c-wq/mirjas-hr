@@ -1,0 +1,51 @@
+[
+  {
+    "collection": "hr_attendance",
+    "id": "ySOGMhbSxaiEXoWuK8CE",
+    "data": {
+      "timeIn": "7:30 م",
+      "id": "ySOGMhbSxaiEXoWuK8CE",
+      "date": "2026-10-03",
+      "updatedAt": "2026-10-04T19:38:34.774Z",
+      "status": "مداوم",
+      "isMissingPunch": true,
+      "employeeName": "البراء محمد سمير علي لعبود",
+      "notes": "ختمة ناقصة معتمدة من قبل المدير العام (موقع الهاتف لا يعمل)",
+      "timeOut": "6:00 م",
+      "employeeId": "EMP-0005"
+    }
+  },
+  {
+    "collection": "attendance_logs",
+    "id": "EMP-0005_2026-10-03",
+    "data": {
+      "timeIn": "7:30 م",
+      "timeOut": "6:00 م",
+      "status": "مداوم",
+      "userId": "EMP-0005",
+      "updatedAt": "2026-10-04T19:38:34.932Z",
+      "notes": "ختمة ناقصة معتمدة من قبل المدير العام (موقع الهاتف لا يعمل)",
+      "date": "2026-10-03",
+      "employeeName": "البراء محمد سمير علي لعبود",
+      "employeeId": "EMP-0005"
+    }
+  },
+  {
+    "collection": "missing_punches",
+    "id": "9ekAYqxvxciP1MuLLJah",
+    "data": {
+      "date": "2026-10-03",
+      "createdAt": "2026-10-03T15:19:03.191Z",
+      "status": "موافق عليه",
+      "department": "غير محدد",
+      "updatedAt": "2026-10-03T15:19:03.191Z",
+      "approvedBy": "المدير العام",
+      "approvedAt": "2026-10-04T19:38:33.356Z",
+      "employeeId": "EMP-0005",
+      "employeeName": "البراء محمد سمير علي لعبود",
+      "reason": "موقع الهاتف لا يعمل",
+      "time": "7:30 م",
+      "type": "دخول"
+    }
+  }
+]

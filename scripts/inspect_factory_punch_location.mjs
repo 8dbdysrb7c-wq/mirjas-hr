@@ -1,0 +1,10 @@
+import {readFileSync,writeFileSync} from 'node:fs';
+import {initializeApp} from 'firebase/app';
+import {getFirestore,collection,getDocs,doc,getDoc} from 'firebase/firestore';
+const source=readFileSync('src/firebase.js','utf8');const config=Object.fromEntries([...source.matchAll(/(apiKey|authDomain|projectId|appId):\s*"([^"]+)"/g)].map(m=>[m[1],m[2]]));
+const db=getFirestore(initializeApp(config));
+const settings=(await getDoc(doc(db,'settings','globalSettings'))).data()?.value||{};
+console.log('locations',JSON.stringify(settings.workLocations));
+const employees=(await getDocs(collection(db,'employees'))).docs.map(d=>({id:d.id,name:d.data().name,employmentStatus:d.data().employmentStatus,workLocationId:d.data().workLocationId,allowedWorkLocations:d.data().allowedWorkLocations}));
+writeFileSync('artifacts/factory-punch-location-before.json',JSON.stringify({settings:{workLocations:settings.workLocations},employees},null,2));
+console.log('employees',JSON.stringify(employees));process.exit(0);

@@ -4,9 +4,6 @@ import Select from './SearchSelect';
 import { getBarcodes, saveBarcode, deleteBarcode, getStock, saveStockItem } from '../store';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
-import * as XLSX from 'xlsx';
-import mammoth from 'mammoth';
-import { Html5Qrcode } from 'html5-qrcode';
 
 const MySwal = withReactContent(Swal);
 
@@ -85,66 +82,6 @@ const BarcodeManagerTab = ({ user }) => {
 
   useEffect(() => {
     loadData();
-    
-    // Auto-fix script for wrongly overwritten itemNumbers
-    const fixItemNumber = async () => {
-      try {
-        const { collection, getDocs, setDoc } = require('firebase/firestore');
-        const stockSnap = await getDocs(collection(db, 'stock'));
-        
-        let docsToFix = [];
-        stockSnap.forEach(d => {
-          const data = d.data();
-          if (data.itemNumber && /^\d{10,15}$/.test(data.itemNumber)) {
-             docsToFix.push(d);
-          }
-        });
-        
-        if (docsToFix.length > 0) {
-          const salesSnap = await getDocs(collection(db, 'sales_orders'));
-          const prepSnap = await getDocs(collection(db, 'preparation_orders'));
-          const ordersSnap = await getDocs(collection(db, 'orders'));
-
-          for (const targetDoc of docsToFix) {
-             let oldNum = null;
-             
-             const findOld = (snap) => {
-               snap.forEach(d => {
-                 (d.data().items || []).forEach(i => {
-                   if (i.name === targetDoc.data().name && i.itemNumber && !/^\d{10,15}$/.test(i.itemNumber)) {
-                     oldNum = i.itemNumber;
-                   }
-                 });
-               });
-             };
-             
-             findOld(salesSnap);
-             if (!oldNum) findOld(prepSnap);
-             if (!oldNum) findOld(ordersSnap);
-             
-             if (oldNum) {
-               await setDoc(targetDoc.ref, { ...targetDoc.data(), itemNumber: oldNum, itemCode: targetDoc.data().itemNumber });
-               console.log("Fixed itemNumber to:", oldNum, "and moved barcode to itemCode for", targetDoc.data().name);
-             } else {
-               // Fallback: If we really can't find it, look at the other items with same name
-               stockSnap.forEach(d => {
-                 const dData = d.data();
-                 if (dData.name === targetDoc.data().name && dData.itemNumber && !/^\d{10,15}$/.test(dData.itemNumber)) {
-                    oldNum = dData.itemNumber;
-                 }
-               });
-               if (oldNum) {
-                 await setDoc(targetDoc.ref, { ...targetDoc.data(), itemNumber: oldNum, itemCode: targetDoc.data().itemNumber });
-               }
-             }
-          }
-        }
-      } catch (e) {
-        console.error("Auto-fix error:", e);
-      }
-    };
-    fixItemNumber();
-    
   }, []);
 
   const handleFileUpload = async (e) => {
@@ -167,6 +104,7 @@ const BarcodeManagerTab = ({ user }) => {
 
       for (const file of files) {
         if (file.name.match(/\.(xlsx|xls|csv)$/i)) {
+          const XLSX = await import('xlsx');
           const data = await file.arrayBuffer();
           const workbook = XLSX.read(data);
           workbook.SheetNames.forEach(sheetName => {
@@ -183,6 +121,7 @@ const BarcodeManagerTab = ({ user }) => {
             });
           });
         } else if (file.name.match(/\.(docx)$/i)) {
+          const { default: mammoth } = await import('mammoth');
           const arrayBuffer = await file.arrayBuffer();
           const result = await mammoth.extractRawText({ arrayBuffer });
           const lines = result.value.split('\n');
@@ -199,6 +138,7 @@ const BarcodeManagerTab = ({ user }) => {
           // Image Processing with html5-qrcode
           try {
             if (!html5QrCode) {
+              const { Html5Qrcode } = await import('html5-qrcode');
               html5QrCode = new Html5Qrcode("hidden-qr-reader"); // We need a hidden div
             }
             const result = await html5QrCode.scanFile(file, true);

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Query Attendance Data</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; direction: ltr; }
+    h2 { color: #1e3a8a; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #f3f4f6; }
+    pre { background: #f9fafb; padding: 10px; border: 1px solid #e5e7eb; overflow-x: auto; white-space: pre-wrap; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h2>Querying Attendance for 2026-07-18...</h2>
+  <div id="output">Loading SDK and querying database...</div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDrTFkfeZr7F2UFhubaxt0s4_VNwYC5R8Q",
+      authDomain: "mirjaswork.firebaseapp.com",
+      projectId: "mirjaswork",
+      storageBucket: "mirjaswork.firebasestorage.app",
+      messagingSenderId: "742199978686",
+      appId: "1:742199978686:web:6fc97d192fa99d8dd60cef"
+    };
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+
+      document.getElementById('output').innerHTML = "Fetching...";
+
+      // 1. Fetch EMP-0011 employee doc
+      const empSnap = await getDocs(collection(db, 'employees'));
+      const emp0011 = empSnap.docs.map(d => ({ id: d.id, ...d.data() })).find(e => e.id === 'EMP-0011' || String(e.name).includes('مؤمن') || String(e.name).includes('مومن'));
+
+      // 2. Fetch hr_attendance for 2026-07-18
+      const attSnap = await getDocs(query(collection(db, 'hr_attendance'), where('date', '==', '2026-07-18')));
+      const attRecords = attSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // 3. Fetch attendance_logs for 2026-07-18
+      const logSnap = await getDocs(query(collection(db, 'attendance_logs'), where('date', '==', '2026-07-18')));
+      const logRecords = logSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // 4. Fetch reports for 2026-07-18
+      const repSnap = await getDocs(query(collection(db, 'reports'), where('date', '==', '2026-07-18')));
+      const repRecords = repSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      let html = "";
+      html += "<h3>1. Employee EMP-0011 Document:</h3>";
+      html += `<pre>${JSON.stringify(emp0011, null, 2)}</pre>`;
+
+      html += "<h3>2. hr_attendance records for 2026-07-18:</h3>";
+      html += `<pre>${JSON.stringify(attRecords, null, 2)}</pre>`;
+
+      html += "<h3>3. attendance_logs records for 2026-07-18:</h3>";
+      html += `<pre>${JSON.stringify(logRecords, null, 2)}</pre>`;
+
+      html += "<h3>4. reports records for 2026-07-18:</h3>";
+      html += `<pre>${JSON.stringify(repRecords, null, 2)}</pre>`;
+
+      document.getElementById('output').innerHTML = html;
+
+    } catch (e) {
+      document.getElementById('output').innerHTML = "<span style='color:red;'>Error: " + e.message + "</span><pre>" + e.stack + "</pre>";
+    }
+  </script>
+</body>
+</html>

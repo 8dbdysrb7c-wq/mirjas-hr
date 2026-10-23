@@ -1,0 +1,9 @@
+import {readFileSync,writeFileSync} from 'node:fs';import {initializeApp} from 'firebase/app';import {getFirestore,doc,getDoc,collection,runTransaction} from 'firebase/firestore';
+const source=readFileSync('src/firebase.js','utf8');const config=Object.fromEntries([...source.matchAll(/(apiKey|authDomain|projectId|appId):\s*"([^"]+)"/g)].map(m=>[m[1],m[2]]));const db=getFirestore(initializeApp(config));
+const before=JSON.parse(readFileSync('artifacts/stock-settings-review-before.json','utf8'));const ref=doc(db,'settings','globalSettings');const audit=doc(collection(db,'operations_log'));
+await runTransaction(db,async tx=>{const snap=await tx.get(ref);const current=snap.data().value;
+const warehouses=[...new Set([...(current.warehouses||[]),...Object.keys(before.warehouses)])];
+const stockCategories=[...new Set([...(current.stockCategories||[]),'بضاعة جاهزة','مواد خام','تغليف',...Object.keys(before.categories)])];
+tx.update(ref,{'value.warehouses':warehouses,'value.stockCategories':stockCategories});tx.set(audit,{action:'استعادة إعدادات المخزون',userName:'المدير العام',date:'2026-10-17',timestamp:new Date().toISOString(),details:'استعادة مصنع المخدة وتصنيفات المخزون من بيانات الأصناف القائمة دون تعديل الأرصدة',warehouses,stockCategories});});
+const result=(await getDoc(ref)).data().value;if(!result.warehouses.includes('مصنع المخدة')||!['بضاعة جاهزة','مواد خام','تغليف'].every(c=>result.stockCategories.includes(c)))throw Error('Verification failed');
+console.log(JSON.stringify({warehouses:result.warehouses,stockCategories:result.stockCategories,workLocations:result.workLocations,verified:true},null,2));writeFileSync('artifacts/stock-settings-restored-result.json',JSON.stringify({warehouses:result.warehouses,stockCategories:result.stockCategories,verified:true},null,2));process.exit(0);

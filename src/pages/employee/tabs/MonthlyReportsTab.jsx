@@ -113,6 +113,9 @@ const renderOvertimeStatus = (request) => {
   );
 };
 
+const monthlyRecordsCache = new Map();
+const MONTHLY_CACHE_TTL = 90 * 1000;
+
 export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = false }) => {
   const [today, setToday] = useState(localDate);
   const currentMonthStr = useMemo(() => localDate().slice(0, 7), []);
@@ -176,6 +179,15 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
 
     const runFetch = async () => {
       try {
+        const cacheKey = `${ids.join('_')}_${selectedMonth}`;
+        const cached = monthlyRecordsCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < MONTHLY_CACHE_TTL)) {
+          if (!live) return;
+          setSources(cached.sources);
+          if (cached.supervisorReports) setSupervisorReports(cached.supervisorReports);
+          setLoading(false);
+          return;
+        }
         const results = await Promise.allSettled(
           requests.map(async ([name, field, id]) => {
             const snap = await getDocs(query(collection(db, name), where(field, '==', id)));
@@ -204,6 +216,8 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
           }
         });
         setSources(newSources);
+        monthlyRecordsCache.set(cacheKey, { sources: newSources, supervisorReports: loadedSupReports, timestamp: Date.now() });
+        let loadedSupReports = [];
 
         if (isImad) {
           try {
@@ -212,8 +226,9 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
               where('date', '>=', `${selectedMonth}-01`),
               where('date', '<=', `${selectedMonth}-31`)
             ));
+            loadedSupReports = supSnap.docs.map(d => ({ ...d.data(), id: d.id }));
             if (live) {
-              setSupervisorReports(supSnap.docs.map(d => ({ ...d.data(), id: d.id })));
+              setSupervisorReports(loadedSupReports);
             }
           } catch (supErr) {
             console.error('Failed to load supervisor_reports for employee month:', supErr);

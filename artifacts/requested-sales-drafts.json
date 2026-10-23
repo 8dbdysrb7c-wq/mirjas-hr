@@ -1,0 +1,391 @@
+[
+  {
+    "id": "draft_EMP-0007_1789472891895",
+    "updatedAt": "2026-09-15T11:48:13.481Z",
+    "userName": "جهاد بركات فلاح المهيرات",
+    "formData": {
+      "customerId": "",
+      "orderNotes": "",
+      "orderDate": "2026-09-15",
+      "customerName": "",
+      "items": [
+        {
+          "itemStatus": "",
+          "notes": "",
+          "quantity": "",
+          "productName": ""
+        }
+      ],
+      "status": "جديد",
+      "orderNumber": "ORD-0003"
+    },
+    "linkedProductionOrder": null,
+    "linkedPreparationOrder": null,
+    "userId": "EMP-0007"
+  },
+  {
+    "id": "draft_EMP-0007_c4425bb6-336a-4de8-8257-1bd110c04279",
+    "userName": "جهاد بركات فلاح المهيرات",
+    "updatedAt": "2026-10-04T05:35:35.260Z",
+    "formData": {
+      "status": "جديد",
+      "orderDate": "2026-10-04",
+      "customerId": "JUtGsN7r6YoJkTLZDZCs",
+      "orderNumber": "ORD-0042",
+      "orderNotes": "كرتونة فوم الرقبه للمطار عدد100",
+      "items": [
+        {
+          "notes": "تشييك جيدا على المخدات ",
+          "quantity": "100",
+          "itemStatus": "جاهز",
+          "productName": "مخدة فوم الرقبة نخب اول"
+        }
+      ],
+      "customerName": "وكالة التوزيع الاردنية",
+      "deliveryDate": "2026-10-04"
+    },
+    "linkedProductionOrder": null,
+    "linkedPreparationOrder": null,
+    "userId": "EMP-0007"
+  },
+  {
+    "id": "draft_EMP-0007_d6f91c8c-1c61-4b30-8788-798ee60c262d",
+    "updatedAt": "2026-10-07T09:20:57.966Z",
+    "userName": "جهاد بركات فلاح المهيرات",
+    "formData": {
+      "status": "جديد",
+      "orderNotes": "تسليم فرع مرج الحمام ",
+      "orderNumber": "ORD-0055",
+      "customerId": "9MAV6jcQwXVVvonZVeSD",
+      "deliveryDate": "2026-10-11",
+      "orderDate": "2026-10-07",
+      "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+      "items": [
+        {
+          "itemStatus": "جاهز",
+          "quantity": "60",
+          "productName": "شرشف مطاط شتوي 120*200 سم",
+          "notes": "كيس سحاب كرت ابولو "
+        },
+        {
+          "notes": "كيس سحاب كرت ابولو ",
+          "itemStatus": "جاهز",
+          "productName": "شرشف مطاط شتوي 200*200 سم",
+          "quantity": "60"
+        }
+      ]
+    },
+    "linkedPreparationOrder": null,
+    "linkedProductionOrder": null,
+    "userId": "EMP-0007"
+  },
+  {
+    "id": "draft_EMP-0007_f91ad69c-046f-4449-9470-8a47b9d05aba",
+    "userName": "جهاد بركات فلاح المهيرات",
+    "userId": "EMP-0007",
+    "formData": {
+      "customerId": "Nvn7gSu2ILWo96qftqp4",
+      "orderNotes": "",
+      "orderDate": "2026-10-07",
+      "items": [
+        {
+          "itemStatus": "جاهز",
+          "quantity": "6",
+          "productName": "كفر كرسي - بيج",
+          "notes": ""
+        },
+        {
+          "notes": "",
+          "itemStatus": "جاهز",
+          "productName": "كفر كنب مفرد امريكي - اخضر",
+          "quantity": "2"
+        }
+      ],
+      "customerName": "البيت الكلاسيكي- عبد الله بني مصطفى",
+      "status": "جديد",
+      "orderNumber": "ORD-0056",
+      "deliveryDate": "2026-10-07"
+    },
+    "updatedAt": "2026-10-07T15:51:12.988Z",
+    "linkedPreparationOrder": null,
+    "linkedProductionOrder": null
+  },
+  {
+    "id": "draft_admin_0a114e75-120b-4009-bdbc-f7ca0e96f823",
+    "formData": {
+      "status": "جديد",
+      "deliveryDate": "2026-10-12",
+      "customerName": "محمد مراد محمد خميس الالفي - فرشة ومخدة",
+      "orderNumber": "ORD-0056",
+      "orderDate": "2026-10-07",
+      "orderNotes": "",
+      "items": [
+        {
+          "hasProductionDetails": true,
+          "quantity": "1",
+          "itemStatus": "قيد الإنتاج",
+          "productName": "وجه فرشة سحاب تواصي",
+          "notes": "سحاب حرف ال + تغليف كرتونة تركيا  + بدون وجوه مخدات"
+        }
+      ],
+      "customerId": "AXxkP01sUxVLKCXtQPHe"
+    },
+    "linkedPreparationOrder": null,
+    "linkedProductionOrder": {
+      "customerId": "AXxkP01sUxVLKCXtQPHe",
+      "salesOrderNumber": "ORD-0056",
+      "orderNotes": "مرتبط بطلبية رقم ORD-0056",
+      "orderDate": "2026-10-07",
+      "status": "لم يتم التنفيذ",
+      "customerName": "محمد مراد محمد خميس الالفي - فرشة ومخدة",
+      "id": null,
+      "deliveryDate": "2026-10-12",
+      "items": [
+        {
+          "notes": "سحاب حرف ال + تغليف كرتونة تركيا  + بدون وجوه مخدات",
+          "quantity": "1",
+          "thickness": "40",
+          "status": "لم يتم التنفيذ",
+          "productName": "وجه فرشة سحاب تواصي",
+          "colorModel": "موديل 1 أبيض سادة",
+          "sizeCm": "180*200"
+        }
+      ],
+      "orderNumber": "PRO-0024"
+    },
+    "userName": "المدير العام",
+    "updatedAt": "2026-10-07T15:47:39.330Z",
+    "userId": "admin"
+  },
+  {
+    "id": "draft_admin_6e24ceda-447b-4703-b3b8-3014a94523db",
+    "userId": "admin",
+    "userName": "المدير العام",
+    "linkedProductionOrder": {
+      "orderNumber": "PRO-0024",
+      "items": [
+        {
+          "colorModel": "مشكل ألوان",
+          "notes": "من كل لون 10 حبات بيطلعو 60 حبه",
+          "quantity": "60",
+          "productName": "شرشف مطاط شتوي 200*200 سم",
+          "status": "لم يتم التنفيذ",
+          "sizeCm": "200*200",
+          "thickness": "30"
+        },
+        {
+          "notes": "من كل لون 10 حبات بيطلعو 60 حبه",
+          "thickness": "30",
+          "quantity": "60",
+          "colorModel": "مشكل ألوان",
+          "status": "لم يتم التنفيذ",
+          "productName": "شرشف مطاط شتوي 120*200 سم",
+          "sizeCm": "120*200"
+        }
+      ],
+      "deliveryDate": "2026-10-12",
+      "id": null,
+      "orderDate": "2026-10-07",
+      "salesOrderNumber": "ORD-0056",
+      "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+      "status": "لم يتم التنفيذ",
+      "orderNotes": "مرتبط بطلبية رقم ORD-0056",
+      "customerId": "9MAV6jcQwXVVvonZVeSD"
+    },
+    "linkedPreparationOrder": null,
+    "updatedAt": "2026-10-07T15:43:30.615Z",
+    "formData": {
+      "customerId": "9MAV6jcQwXVVvonZVeSD",
+      "status": "جديد",
+      "orderNotes": "فرع مرج الحمام ",
+      "orderDate": "2026-10-07",
+      "items": [
+        {
+          "quantity": "60",
+          "hasProductionDetails": true,
+          "productName": "شرشف مطاط شتوي 200*200 سم",
+          "notes": "ابولو تغليف سحاب",
+          "itemStatus": "قيد الإنتاج"
+        },
+        {
+          "productName": "شرشف مطاط شتوي 120*200 سم",
+          "itemStatus": "قيد الإنتاج",
+          "notes": "ابولو تغليف سحاب",
+          "hasProductionDetails": true,
+          "quantity": "60"
+        },
+        {
+          "productName": "وجه مخدة شتوي عدد 1 - أسود (مستودع: مصنع البياضات)",
+          "quantity": 72,
+          "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+          "itemStatus": "جاهز"
+        },
+        {
+          "quantity": 72,
+          "itemStatus": "جاهز",
+          "productName": "وجه مخدة شتوي عدد 1 - اوفوايت (مستودع: مصنع البياضات)",
+          "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع"
+        },
+        {
+          "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+          "itemStatus": "جاهز",
+          "quantity": 1529,
+          "productName": "وجه مخدة شتوي عدد 1 - بيج (مستودع: مصنع البياضات)"
+        },
+        {
+          "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+          "itemStatus": "جاهز",
+          "productName": "وجه مخدة شتوي عدد 1 - سكني (مستودع: مصنع البياضات)",
+          "quantity": 580
+        },
+        {
+          "notes": "بيع رصيد كامل .. سولفان كل جوز كما هو مبكت حاليا -- مراجعة جهاد وانس بالموضوع",
+          "productName": "وجه مخدة شتوي عدد 1 - سومو (مستودع: مصنع البياضات)",
+          "quantity": 1,
+          "itemStatus": "جاهز"
+        }
+      ],
+      "deliveryDate": "2026-10-12",
+      "orderNumber": "ORD-0056",
+      "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث"
+    }
+  },
+  {
+    "id": "draft_admin_745ec075-6e5c-4acd-8d3a-c08cdf291bf3",
+    "updatedAt": "2026-10-07T15:44:53.890Z",
+    "linkedPreparationOrder": null,
+    "userId": "admin",
+    "linkedProductionOrder": {
+      "status": "لم يتم التنفيذ",
+      "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+      "items": [
+        {
+          "quantity": "36",
+          "productName": "شرشف مطاط شتوي 120*200 سم",
+          "notes": "كرت ابولو تغليف سحاب من كل لون 6 حبات",
+          "colorModel": "مشكل ألوان",
+          "thickness": "30",
+          "status": "لم يتم التنفيذ",
+          "sizeCm": "200*200"
+        },
+        {
+          "colorModel": "مشكل ألوان",
+          "notes": "كرت ابولو تغليف سحاب من كل لون 6 حبات",
+          "thickness": "30",
+          "status": "لم يتم التنفيذ",
+          "productName": "شرشف مطاط شتوي 200*200 سم",
+          "quantity": "36",
+          "sizeCm": "120*200"
+        }
+      ],
+      "orderNumber": "PRO-0024",
+      "id": null,
+      "orderNotes": "مرتبط بطلبية رقم ORD-0056",
+      "deliveryDate": "2026-10-12",
+      "salesOrderNumber": "ORD-0056",
+      "customerId": "9MAV6jcQwXVVvonZVeSD",
+      "orderDate": "2026-10-07"
+    },
+    "userName": "المدير العام",
+    "formData": {
+      "orderNumber": "ORD-0056",
+      "customerName": "الإبداع المنزلي للأدوات المنزلية - الجيل الحديث",
+      "orderDate": "2026-10-07",
+      "status": "جديد",
+      "items": [
+        {
+          "productName": "شرشف مطاط شتوي 120*200 سم",
+          "quantity": "36",
+          "hasProductionDetails": true,
+          "itemStatus": "قيد الإنتاج",
+          "notes": "كرت ابولو تغليف سحاب "
+        },
+        {
+          "hasProductionDetails": true,
+          "quantity": "36",
+          "productName": "شرشف مطاط شتوي 200*200 سم",
+          "itemStatus": "قيد الإنتاج",
+          "notes": "كرت ابولو تغليف سحاب "
+        }
+      ],
+      "orderNotes": "فرع حي نزال ",
+      "customerId": "9MAV6jcQwXVVvonZVeSD",
+      "deliveryDate": "2026-10-12"
+    }
+  },
+  {
+    "id": "draft_admin_7b9d28e0-1ffb-4f8a-a645-7e7c4859615c",
+    "formData": {
+      "status": "جديد",
+      "orderNumber": "ORD-0056",
+      "orderDate": "2026-10-07",
+      "customerName": "شركة الوعد للتسويق المباشر",
+      "items": [
+        {
+          "notes": "بريم واحد اي لون +باركود ميرانا 1300غ + شنته نايلون مسحوب هوا ",
+          "hasPreparationDetails": true,
+          "itemStatus": "قيد التحضير",
+          "productName": "مخدة مايكروفايبر بريم واحد 1300غ",
+          "quantity": "10"
+        },
+        {
+          "productName": "مخدة مايكروفايبر دبل بريم 1800غ",
+          "quantity": "10",
+          "hasPreparationDetails": true,
+          "notes": " سيلك قديم + باركود ميرانا 1800غ + شنته نايلون مسحوب هوا ",
+          "itemStatus": "قيد التحضير"
+        },
+        {
+          "itemStatus": "جاهز",
+          "notes": "ورقة دعاية بيت بيوت ",
+          "quantity": "2",
+          "productName": "لحاف داون بروف 240*260سم"
+        },
+        {
+          "notes": "ورقة دعاية بيت بيوت ",
+          "itemStatus": "جاهز",
+          "productName": "لحاف داون بروف 160*220سم",
+          "quantity": "3"
+        }
+      ],
+      "orderNotes": "",
+      "deliveryDate": "2026-10-08",
+      "customerId": "rpPPndldWkWRBWtPZKyk"
+    },
+    "userName": "المدير العام",
+    "updatedAt": "2026-10-07T15:42:55.638Z",
+    "linkedPreparationOrder": {
+      "salesOrderNumber": "ORD-0056",
+      "customerName": "شركة الوعد للتسويق المباشر",
+      "id": null,
+      "orderNumber": "PREP-0019",
+      "status": "لم يتم التنفيذ",
+      "orderDate": "2026-10-07",
+      "items": [
+        {
+          "thickness": "",
+          "quantity": "10",
+          "sizeCm": "",
+          "productName": "مخدة مايكروفايبر دبل بريم 1800غ",
+          "status": "لم يتم التنفيذ",
+          "notes": " سيلك قديم + باركود ميرانا 1800غ + شنته نايلون مسحوب هوا ",
+          "colorModel": ""
+        },
+        {
+          "colorModel": "",
+          "quantity": "10",
+          "notes": "بريم واحد اي لون +باركود ميرانا 1300غ + شنته نايلون مسحوب هوا ",
+          "sizeCm": "",
+          "thickness": "",
+          "productName": "مخدة مايكروفايبر بريم واحد 1300غ",
+          "status": "لم يتم التنفيذ"
+        }
+      ],
+      "deliveryDate": "2026-10-08",
+      "orderNotes": "مرتبط بطلبية رقم ORD-0056",
+      "customerId": "rpPPndldWkWRBWtPZKyk"
+    },
+    "userId": "admin",
+    "linkedProductionOrder": null
+  }
+]

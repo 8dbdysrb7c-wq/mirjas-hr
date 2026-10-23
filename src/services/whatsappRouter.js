@@ -1,3 +1,8 @@
+let cachedUsersMap = null;
+let cachedUsersMapTimestamp = 0;
+const USERS_CACHE_TTL = 3 * 60 * 1000;
+
+import { getEmployees } from './settings';
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { getGlobalSettings } from '../store';
@@ -108,15 +113,9 @@ export const triggerWhatsAppRouting = async (eventType, action, details = {}) =>
       return false;
     }
 
-    // Retrieve all active employees and merge with their user accounts to audit permissions and match targets
-    const empsSnapshot = await getDocs(collection(db, 'employees'));
-    const employees = empsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    const usersSnapshot = await getDocs(collection(db, 'users'));
-    const usersMap = {};
-    usersSnapshot.forEach(doc => {
-      usersMap[doc.id] = doc.data();
-    });
+    // Retrieve active employees from cache and merge with their user accounts
+    let employees = await getEmployees();
+    let usersMap = {};
 
     const allEmployees = employees.map(emp => {
       const userAccount = usersMap[emp.id] || {};

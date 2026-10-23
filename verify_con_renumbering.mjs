@@ -1,0 +1,93 @@
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, getDocs, doc, getDoc } from 'firebase/firestore';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDrTFkfeZr7F2UFhubaxt0s4_VNwYC5R8Q",
+  authDomain: "mirjaswork.firebaseapp.com",
+  projectId: "mirjaswork",
+  storageBucket: "mirjaswork.firebasestorage.app",
+  messagingSenderId: "742199978686",
+  appId: "1:742199978686:web:6fc97d192fa99d8dd60cef"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const isConCategory = (cat) => {
+  const c = String(cat || '').trim();
+  return c === 'مستهلكات الخياطة' || c === 'مستهلكات خياطة' || c === 'مستهلكات' || c.includes('مستهلك') || c.includes('خياطة');
+};
+
+async function main() {
+  console.log("=== التحقق النهائي من ترقيم مستهلكات الخياطة ===");
+
+  const seqSnap = await getDoc(doc(db, 'stock_sequences', 'CON'));
+  console.log("stock_sequences/CON doc:", seqSnap.exists() ? seqSnap.data() : "NOT FOUND!");
+
+  const stockSnap = await getDocs(collection(db, 'stock'));
+  const allStock = stockSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  const conStock = allStock.filter(i => isConCategory(i.category) || (i.itemNumber && String(i.itemNumber).startsWith('CON-')));
+
+  console.log(`إجمالي سجلات مستهلكات الخياطة: ${conStock.length}`);
+
+  const nameToSku = new Map();
+  const skuToNames = new Map();
+  const duplicateIssues = [];
+
+  for (const item of conStock) {
+    const cleanName = String(item.name || '').replace(/\s+/g, ' ').trim();
+    const sku = item.itemNumber;
+
+    if (!sku || !sku.startsWith('CON-')) {
+      duplicateIssues.push(`الصنف '${cleanName}' [${item.id}] ليس له رقم CON صالح: '${sku}'`);
+      continue;
+    }
+
+    if (nameToSku.has(cleanName) && nameToSku.get(cleanName) !== sku) {
+      duplicateIssues.push(`تعارض: الصنف '${cleanName}' له رقمان مختلفان: ${nameToSku.get(cleanName)} و ${sku}`);
+    }
+    nameToSku.set(cleanName, sku);
+
+    if (!skuToNames.has(sku)) skuToNames.set(sku, new Set());
+    skuToNames.get(sku).add(cleanName);
+  }
+
+  for (const [sku, names] of skuToNames.entries()) {
+    if (names.size > 1) {
+      duplicateIssues.push(`تعارض: الرقم ${sku} مشترك بين أسماء مختلفة: ${[...names].join(' | ')}`);
+    }
+  }
+
+  console.log(`عدد الأصناف الفريدة: ${nameToSku.size}`);
+  console.log(`عدد أرقام CON الفريدة المستخدمة: ${skuToNames.size}`);
+
+  if (duplicateIssues.length === 0) {
+    console.log("✔ نجاح تام: لا توجد أي تكرارات أو تعارضات في أرقام أصناف مستهلكات الخياطة!");
+  } else {
+    console.error("✖ تم العثور على مشاكل:", duplicateIssues);
+  }
+
+  // Check first and last 5 items
+  const sortedNames = [...nameToSku.keys()].sort((a, b) => {
+    const collator = new Intl.Collator('ar', { numeric: true, sensitivity: 'base' });
+    return collator.compare(a, b) || a.localeCompare(b, 'ar');
+  });
+
+  console.log("\nأول 5 أصناف حسب الترتيب الأبجدي:");
+  sortedNames.slice(0, 5).forEach((n, idx) => {
+    console.log(`  [${idx + 1}] ${nameToSku.get(n)} : ${n}`);
+  });
+
+  console.log("\nآخر 5 أصناف حسب الترتيب الأبجدي:");
+  sortedNames.slice(-5).forEach((n, idx) => {
+    console.log(`  [${sortedNames.length - 5 + idx + 1}] ${nameToSku.get(n)} : ${n}`);
+  });
+
+  process.exit(0);
+}
+
+main().catch(err => {
+  console.error("خطأ:", err);
+  process.exit(1);
+});

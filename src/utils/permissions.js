@@ -156,6 +156,9 @@ export const hasPermission = (user, module, action = 'view') => {
 
   if (targetModule === 'reports') {
     const isSupervisor = user.level === 'supervisor' || user.level === 'مشرف' || user.level === 'مشرف قسم';
+    if (user.permissions?.reports?.[action] !== undefined) {
+      return Boolean(user.permissions.reports[action]);
+    }
     if (isSupervisor && ['view', 'print', 'export'].includes(action)) {
       return true;
     }
@@ -163,12 +166,16 @@ export const hasPermission = (user, module, action = 'view') => {
       return true;
     }
 
-    const reportSubmods = [
-      'reports_employees', 'reports_sales', 'reports_quotes', 'reports_production',
-      'reports_delivery', 'reports_stock', 'reports_hr', 'reports_tasks',
-      'reports_supervisors', 'reports_customers', 'scoring', 'supervisor_reports'
-    ];
-    return reportSubmods.some(sm => hasPermission(user, sm, action));
+    if (user.permissions) {
+      const reportSubmods = [
+        'reports_employees', 'reports_sales', 'reports_quotes', 'reports_production',
+        'reports_delivery', 'reports_stock', 'reports_hr', 'reports_tasks',
+        'reports_supervisors', 'reports_customers', 'scoring', 'supervisor_reports'
+      ];
+      return reportSubmods.some(sm => user.permissions[sm]?.[action] === true);
+    }
+
+    return false;
   }
 
   if (targetModule.startsWith('reports_')) {
@@ -186,7 +193,7 @@ export const hasPermission = (user, module, action = 'view') => {
 
     if (targetModule === 'reports_production') {
       if (user.permissions?.production?.[action] !== undefined) return Boolean(user.permissions.production[action]);
-      if (user.hasProductionAccess || user.hasPreparationAccess || user.role === 'sewing') {
+      if (isSupervisor && (user.hasProductionAccess || user.hasPreparationAccess)) {
         if (['view', 'print', 'export'].includes(action)) return true;
       }
     }

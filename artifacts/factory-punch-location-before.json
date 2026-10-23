@@ -1,0 +1,181 @@
+{
+  "settings": {
+    "workLocations": [
+      {
+        "id": "1792226023673",
+        "lng": 35.92964,
+        "name": "مصنع البياضات",
+        "radius": 50,
+        "lat": 31.900949
+      }
+    ]
+  },
+  "employees": [
+    {
+      "id": "EMP-0001",
+      "name": "رائدة عيسى سعد العبود",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0002",
+      "name": "سحر صلاح الدين الملاح",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0003",
+      "name": "فاطمة حسونة علي حسين حليمة",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0004",
+      "name": "مها احمد محمود عبد النبي",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0005",
+      "name": "البراء محمد سمير علي لعبود",
+      "employmentStatus": "فعال",
+      "workLocationId": "anywhere"
+    },
+    {
+      "id": "EMP-0006",
+      "name": "عبد الله يعقوب ايوب غيث",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0007",
+      "name": "جهاد بركات فلاح المهيرات",
+      "employmentStatus": "فعال",
+      "workLocationId": "anywhere"
+    },
+    {
+      "id": "EMP-0008",
+      "name": "محمد سمير علي محمد العبود",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0009",
+      "name": "سلسبيل خالد سليم ابو مساعد",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0010",
+      "name": "نعمة خالد سالم ابو مساعد",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0011",
+      "name": "اسماعيل مصباح صبحي شرف",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0012",
+      "name": "ايهاب رامي محمد راغب الشرباتي",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0013",
+      "name": "أماني يونس صالح وادي",
+      "employmentStatus": "فعال",
+      "workLocationId": "anywhere"
+    },
+    {
+      "id": "EMP-0014",
+      "name": "هبة ربيع محفوظ ابو طالب",
+      "employmentStatus": "منتهي خدمات",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0017",
+      "name": "أنس",
+      "employmentStatus": "موقوف",
+      "workLocationId": "anywhere"
+    },
+    {
+      "id": "EMP-0018",
+      "name": "بهاء الدين اسامة ايوب غيث",
+      "employmentStatus": "فعال",
+      "workLocationId": "anywhere"
+    },
+    {
+      "id": "EMP-0019",
+      "name": "حمزة ماهر احمد الكردي",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0020",
+      "name": "عيسى فراس حسن سكر",
+      "employmentStatus": "منتهي خدمات",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0021",
+      "name": "ماجد يوسف عبد الجابر محمود",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0022",
+      "name": "زيد فريد عبد الله حميد الخوالدة",
+      "employmentStatus": "منتهي خدمات",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0023",
+      "name": "محمد فارس محمد مبارك",
+      "employmentStatus": "منتهي خدمات",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0024",
+      "name": "أحمد لطفي حسن حسين",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0025",
+      "name": "عماد فتحي زياد عزيز عوض",
+      "employmentStatus": "فعال",
+      "workLocationId": "anywhere"
+    },
+    {
+      "id": "EMP-0026",
+      "name": "سلطان محمد صبحي شرف ",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0027",
+      "name": "ملاك عليان سالم الجبور ",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0028",
+      "name": "هنادي موسى خليل العدرة",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "EMP-0029",
+      "name": "فاطمة سالم عبد السلام ابو عواد ",
+      "employmentStatus": "فعال",
+      "workLocationId": "1781177286778"
+    },
+    {
+      "id": "admin",
+      "name": "المدير العام"
+    }
+  ]
+}

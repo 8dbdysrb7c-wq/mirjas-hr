@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>WhatsApp Debugger</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #0f172a; color: #38bdf8; }
+    h2 { color: #f43f5e; }
+    .msg-block { border: 1px solid #334155; padding: 12px; margin-bottom: 10px; border-radius: 8px; background: #1e293b; }
+    .field { margin: 4px 0; }
+    .label { color: #94a3b8; font-weight: bold; }
+    .btn-action { background:#ef4444; color:white; border:none; padding:12px 24px; font-weight:bold; border-radius:6px; cursor:pointer; font-size:14px; margin-bottom: 20px; }
+    .btn-action:hover { background:#dc2626; }
+  </style>
+</head>
+<body>
+  <h2>WhatsApp Queue & Employees Debugger</h2>
+  
+  <button id="btn-delete-pending" class="btn-action">حذف جميع الرسائل المعلقة (Delete Pending Messages)</button>
+
+  <div id="status">Loading data from Firebase...</div>
+  <div id="employees"></div>
+  <div id="output"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js";
+    import { initializeFirestore, collection, getDocs, limit, query, orderBy, deleteDoc, where } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDrTFkfeZr7F2UFhubaxt0s4_VNwYC5R8Q",
+      authDomain: "mirjaswork.firebaseapp.com",
+      projectId: "mirjaswork",
+      storageBucket: "mirjaswork.firebasestorage.app",
+      messagingSenderId: "742199978686",
+      appId: "1:742199978686:web:6fc97d192fa99d8dd60cef"
+    };
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      const db = initializeFirestore(app, {});
+
+      // Set up click handler for delete button
+      document.getElementById("btn-delete-pending").addEventListener("click", async () => {
+        if (!confirm("هل أنت متأكد من رغبتك في حذف جميع الرسائل المعلقة بقائمة الانتظار؟")) return;
+        
+        document.getElementById("status").innerHTML = "<h3>جاري حذف الرسائل المعلقة...</h3>";
+        
+        try {
+          const qPending = query(collection(db, "whatsapp_queue_v2"), where("status", "==", "pending"));
+          const snapPending = await getDocs(qPending);
+          
+          if (snapPending.size === 0) {
+            alert("لا توجد رسائل معلقة لحذفها!");
+            location.reload();
+            return;
+          }
+          
+          const promises = snapPending.docs.map(doc => deleteDoc(doc.ref));
+          await Promise.all(promises);
+          
+          alert(`تم بنجاح حذف ${snapPending.size} رسالة معلقة.`);
+          location.reload();
+        } catch (err) {
+          alert("خطأ أثناء الحذف: " + err.message);
+          location.reload();
+        }
+      });
+
+      // 1. Fetch settings
+      const settingsSnap = await getDocs(query(collection(db, "settings")));
+      let settingsStr = "Settings not found";
+      settingsSnap.forEach(doc => {
+        if (doc.id === "globalSettings") {
+          const val = doc.data().value || {};
+          settingsStr = JSON.stringify(val.whatsappConfig, null, 2);
+        }
+      });
+
+      // 2. Fetch employees
+      const empSnap = await getDocs(collection(db, "employees"));
+      let empHtml = "<h3>Employees List:</h3><ul style='color: #fb923c;'>";
+      empSnap.forEach(doc => {
+        const data = doc.data();
+        empHtml += `<li>ID: ${doc.id} | Name: ${data.name} | Level: ${data.level} | Phone: ${data.phone}</li>`;
+      });
+      empHtml += "</ul>";
+      document.getElementById("employees").innerHTML = empHtml;
+
+      // 3. Fetch last 15 messages
+      const q = query(collection(db, "whatsapp_queue_v2"), orderBy("createdAt", "desc"), limit(15));
+      const snap = await getDocs(q);
+      
+      document.getElementById("status").innerHTML = `<h3>WhatsApp Config:</h3><pre style="color: #a7f3d0; background: #020617; padding: 10px; border-radius: 8px;">${settingsStr}</pre><h3>Queue Entries (Last 15):</h3>`;
+      
+      let html = "";
+      if (snap.size === 0) {
+        html = "No messages found in queue.";
+      } else {
+        snap.forEach(doc => {
+          const data = doc.data();
+          const created = data.createdAt ? new Date(data.createdAt.seconds * 1000).toISOString() : 'N/A';
+          html += `
+            <div class="msg-block">
+              <div class="field"><span class="label">ID:</span> ${doc.id}</div>
+              <div class="field"><span class="label">Phone:</span> ${data.phone}</div>
+              <div class="field"><span class="label">Status:</span> ${data.status}</div>
+              <div class="field"><span class="label">Event:</span> ${data.eventType}</div>
+              <div class="field"><span class="label">Message:</span> <pre style="margin:4px 0; color:#e2e8f0;">${data.message}</pre></div>
+              <div class="field"><span class="label">Created:</span> ${created}</div>
+            </div>
+          `;
+        });
+      }
+      document.getElementById("output").innerHTML = html;
+    } catch (e) {
+      document.getElementById("status").innerHTML = "Error: " + e.message;
+    }
+  </script>
+</body>
+</html>

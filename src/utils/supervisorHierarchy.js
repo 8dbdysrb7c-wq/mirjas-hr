@@ -5,7 +5,9 @@ export function getDirectReports(manager, employees) {
   return employees.filter(employee => {
     const ids = [key(employee.id), key(employee.employeeId)].filter(Boolean);
     if (ids.some(id => managerIds.includes(id))) return false;
-    if (employee.id === 'admin' || ['admin', 'إدارة'].includes(employee.level) || employee.role === 'admin' || employee.name === 'المدير العام') return false;
+    // Administrative access does not remove an employee's reporting relationship.
+    // The system owner remains outside supervisor assignments.
+    if (employee.id === 'admin' || employee.name === 'المدير العام') return false;
     const directManager = key(employee.directManager);
     return ids.some(id => assigned.has(id)) || (directManager && (
       managerIds.includes(directManager) || (key(manager?.name) && directManager === key(manager.name))

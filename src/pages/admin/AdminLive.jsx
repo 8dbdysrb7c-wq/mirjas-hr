@@ -1,7 +1,10 @@
+import { readSummary } from '../../utils/summaryCache';
+import { getLiveSmokingLogs, getLinkedLiveMissions } from '../../services/liveQueries';
+import { firestoreErrorMessage } from '../../utils/firestoreError';
 import { isActiveEmployee } from '../../utils/employeeStatus';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { startVisiblePolling } from '../../utils/visiblePolling';
-import { getActiveOrders, getActiveSalesOrders, getActiveMissions, getSmokingLogs, getGlobalSettings, saveSmokingLog, saveOrder, saveSalesOrder, saveMission, deleteMission, getEmployees, getTodayAttendanceLogs, saveAttendanceLog, getSupervisorReportsByDateRange } from '../../store';
+import { getActiveOrders, getActiveSalesOrders, getActiveMissions, getGlobalSettings, saveSmokingLog, saveOrder, saveSalesOrder, saveMission, deleteMission, getEmployees, getTodayAttendanceLogs, saveAttendanceLog } from '../../store';
 import { CheckCircle2, AlertTriangle, Truck, Package, MessageSquare, Save, Activity, Clock, PlusCircle, Check, X, ClipboardList, ChefHat, ShieldCheck, Eye, Users, UserMinus, UserCheck, User, Calendar, ArrowUpDown, ArrowRight, ChevronDown } from 'lucide-react';
 import SewingMachineIcon from '../../components/SewingMachineIcon';
 import Swal from 'sweetalert2';
@@ -28,25 +31,27 @@ const AdminLive = ({ user, onBack }) => {
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
+  const fetching = useRef(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [updatedAt, setUpdatedAt] = useState(null);
+  const fetchData = async (scope = 'all', force = false) => {
+    if (fetching.current) return;
+    fetching.current = true;
+    setRefreshing(true); setLoadError('');
     try {
       const todayKey = toLocalDateKey();
-      const [prodOrd, salesOrd, missions, sLogs, sysSettings, emps, aLogs, wReports] = await Promise.all([
-        getActiveOrders(),
-        getActiveSalesOrders(),
-        getActiveMissions(),
-        getSmokingLogs(),
-        getGlobalSettings(),
-        getEmployees(),
-        getTodayAttendanceLogs(),
-        getSupervisorReportsByDateRange(todayKey, todayKey)
+      const key = (part) => `live:${user?.id || 'unknown'}:${todayKey}:${part}`;
+      const [orderData, sLogs, base, aLogs] = await Promise.all([
+        scope === 'all' || scope === 'orders' ? readSummary(key('orders'), () => Promise.all([getActiveOrders(), getActiveSalesOrders(), getActiveMissions()]), { force }) : null,
+        scope === 'all' || scope === 'smoking' ? readSummary(key('smoking'), () => getLiveSmokingLogs(todayKey), { force }) : null,
+        scope === 'all' ? readSummary(key('base'), () => Promise.all([getGlobalSettings(), getEmployees()]), { ttl: 30 * 60 * 1000 }) : null,
+        scope === 'all' ? readSummary(key('attendance'), () => getTodayAttendanceLogs(todayKey), { force }) : null
       ]);
-      setSettings(sysSettings);
-      setEmployees(emps);
-      
-      const todayAttendance = aLogs;
-      setAttendanceLogs(todayAttendance);
-
+      if (base) { setSettings(base[0]); setEmployees(base[1]); }
+      if (aLogs) setAttendanceLogs(aLogs);
+      if (orderData) {
+      const [prodOrd, salesOrd, missions] = orderData;
       // Combine Active Orders
       const activeSalesOrders = salesOrd.filter(o => !['تم التوصيل', 'تم التسليم للتوصيل', 'تم تسليمها للتوصيل', 'ملغي', 'مرفوض', 'منتهي'].includes(o.status));
       const activeProductionOrders = prodOrd.filter(o => {
@@ -65,6 +70,8 @@ const AdminLive = ({ user, onBack }) => {
       
       setOrders([...activeSalesOrders, ...activeProductionOrders, ...activeMissions].sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
 
+      }
+      if (sLogs) {
       // Smoking Area Logs
       const todayLogs = sLogs.filter(log => toLocalDateKey(log.timestamp) === todayKey);
       todayLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)); // Newest first
@@ -87,15 +94,18 @@ const AdminLive = ({ user, onBack }) => {
       }
 
       setSmokingAreaStatus({ status, logs: todayLogs, lastLogTime, isOverdue });
+      }
+      setUpdatedAt(new Date());
       setLoading(false);
     } catch (error) {
       console.error("Error fetching live data", error);
       setLoading(false);
-    }
+      setLoadError(firestoreErrorMessage(error, 'تحديث شاشة التحكم'));
+    } finally { fetching.current = false; setRefreshing(false); }
   };
 
   useEffect(() => {
-    return startVisiblePolling(fetchData, 180000);
+    return startVisiblePolling(() => fetchData('all'), 7200000);
   }, []);
 
   const handleUpdateOrderField = async (orderId, field, value) => {
@@ -118,12 +128,12 @@ const AdminLive = ({ user, onBack }) => {
         if (field === 'status') {
            if ((order.status === 'تم التسليم للتوصيل' || order.status === 'تم تسليمها للتوصيل' || order.status === 'جاهز للتوصيل') && 
                (value !== 'تم التسليم للتوصيل' && value !== 'تم تسليمها للتوصيل' && value !== 'جاهز للتوصيل')) {
-             const allMissions = await getMissions();
+             const allMissions = await getLinkedLiveMissions(order.orderNumber);
              const linkedMission = allMissions.find(m => m.salesOrderNumber === order.orderNumber);
              if (linkedMission) {
                if (linkedMission.status !== 'بانتظار الاستلام') {
                  MySwal.fire('خطأ', 'لقد قام قسم التوصيل باستلام الطلبية والبدء بها، لا يمكنك التراجع.', 'error');
-                 fetchData();
+                 setOrders(previous => previous.map(row => row.id === orderId ? order : row));
                  return;
                } else {
                  await deleteMission(linkedMission.id);
@@ -134,8 +144,9 @@ const AdminLive = ({ user, onBack }) => {
         }
         await saveSalesOrder({ ...updatedOrder, lastActionBy: user?.name || 'المدير' });
       }
-      fetchData(); // Refresh screen automatically instead of showing notification
+      await fetchData('orders', true);
     } catch (e) {
+      setOrders(previous => previous.map(row => row.id === orderId ? order : row));
       MySwal.fire('خطأ', 'حدث خطأ أثناء الحفظ', 'error');
     }
   };
@@ -143,23 +154,12 @@ const AdminLive = ({ user, onBack }) => {
   const checkAndCreateMission = async (order, newStatus) => {
     if (newStatus === 'تم التسليم للتوصيل' || newStatus === 'تم تسليمها للتوصيل' || newStatus === 'جاهز للتوصيل') {
       try {
-        const allMissions = await getMissions();
+        const allMissions = await getLinkedLiveMissions(order.orderNumber);
         const existingMission = allMissions.find(m => m.salesOrderNumber === order.orderNumber);
         
         if (!existingMission) {
-          const maxNum = allMissions.reduce((max, o) => {
-            const str = String(o.missionNumber || '');
-            if (str.startsWith('DEL-')) {
-              const match = str.match(/DEL-(\d+)/);
-              return match ? Math.max(max, parseInt(match[1], 10)) : max;
-            }
-            return max;
-          }, 0);
-          const nextMissionNumber = `DEL-${String(maxNum + 1).padStart(4, '0')}`;
-          
           await saveMission({
             id: null,
-            missionNumber: nextMissionNumber,
             type: 'تسليم طلبية',
             customType: '',
             sourceEntity: 'مرجاس للتجارة - قسم البياضات',
@@ -173,7 +173,7 @@ const AdminLive = ({ user, onBack }) => {
           });
         }
       } catch (err) {
-        console.error("Error creating mission for sales order:", err);
+        throw err;
       }
     }
   };
@@ -188,9 +188,15 @@ const AdminLive = ({ user, onBack }) => {
       date: toLocalDateKey()
     };
     
-    await saveSmokingLog(log);
+    try {
+      const saved = await saveSmokingLog(log);
+      if (!saved) throw new Error('لم يتم تأكيد حفظ حالة التدخين');
+    } catch (error) {
+      await MySwal.fire('تعذر الحفظ', firestoreErrorMessage(error), 'error');
+      return;
+    }
     MySwal.fire({ title: 'تم الحفظ', text: 'تم تسجيل الحالة كـ مخالف بنجاح', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
-    fetchData(); // Refresh
+    await fetchData('smoking', true);
   };
 
   const handleQuickSave = async () => {
@@ -202,9 +208,15 @@ const AdminLive = ({ user, onBack }) => {
       notes: '',
       date: toLocalDateKey()
     };
-    await saveSmokingLog(log);
+    try {
+      const saved = await saveSmokingLog(log);
+      if (!saved) throw new Error('لم يتم تأكيد حفظ حالة التدخين');
+    } catch (error) {
+      await MySwal.fire('تعذر الحفظ', firestoreErrorMessage(error), 'error');
+      return;
+    }
     MySwal.fire({ title: 'تم الحفظ', text: 'تم تسجيل الحالة بنجاح', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
-    fetchData(); // Refresh
+    await fetchData('smoking', true);
   };
 
   const handleAttendanceChange = async (employee, clickedStatus) => {
@@ -300,6 +312,8 @@ const AdminLive = ({ user, onBack }) => {
   return (
     <div className="p-3 md:p-8 animate-fade-in" style={{ backgroundColor: '#fcfcfd', minHeight: '100vh', paddingBottom: '120px', direction: 'rtl', fontFamily: 'Tajawal, sans-serif' }}>
       
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}><button type="button" className="btn btn-outline" disabled={refreshing} onClick={() => fetchData('all', true)}>{refreshing ? 'جارٍ التحديث…' : 'تحديث البيانات'}</button><small>{updatedAt ? 'آخر تحديث: ' + updatedAt.toLocaleTimeString('ar-JO') : ''} · تحديث تلقائي كل 120 دقيقة</small></div>
+      {loadError && <p role="alert" style={{ color: '#b91c1c' }}>{loadError}</p>}
       {/* Header with Back button and overdue badge */}
       <div style={{
         display: 'flex',
@@ -926,3 +940,4 @@ const AdminLive = ({ user, onBack }) => {
 };
 
 export default AdminLive;
+

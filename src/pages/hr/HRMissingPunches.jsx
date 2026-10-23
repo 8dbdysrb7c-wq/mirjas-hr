@@ -460,6 +460,8 @@ const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
         const res = await Swal.fire({
           title: 'تأكيد',
           text: `هل أنت متأكد من ${newStatus === 'موافق عليه' ? 'اعتماد' : 'رفض'} هذه الختمة الناقصة؟`,
+          input: 'textarea',
+          inputPlaceholder: newStatus === 'مرفوض' ? 'سبب الرفض ليظهر للموظف...' : 'ملاحظة للموظف (اختياري)...',
           icon: 'warning',
           showCancelButton: true,
           confirmButtonText: 'تأكيد',
@@ -473,6 +475,7 @@ const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
           buttonsStyling: false
         });
         isConfirmed = res.isConfirmed;
+        adminNote = res.value || '';
       }
 
       if (isConfirmed) {
@@ -483,7 +486,8 @@ const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
           const adminName = user?.name || 'الإدارة';
           const adminId = user?.id || 'admin';
           const updatedPunchData = { ...punch, adminNote: adminNote || '' };
-          await updateMissingPunchStatus(punch.id, newStatus, adminName, updatedPunchData);
+          const result = await updateMissingPunchStatus(punch.id, newStatus, adminName, updatedPunchData);
+          if (!result.success) throw result.error || new Error('تعذر حفظ حالة الطلب');
           await saveHRAuditLog({
             user: adminName,
             action: newStatus === 'موافق عليه' ? 'اعتماد طلب ختمة ناقصة' : 'رفض طلب ختمة ناقصة',
@@ -759,7 +763,7 @@ const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
       // Update missing punch record so it appears in the approved/rejected list
       const finalStatus = action === 'violation' ? 'مرفوض' : 'موافق عليه';
       if (punch.isVirtual) {
-        await saveMissingPunch({
+        const result = await saveMissingPunch({
           employeeId: punch.employeeId,
           employeeName: punch.employeeName,
           date: punch.date,
@@ -770,8 +774,10 @@ const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
           adminNote: actionDesc,
           createdAt: new Date().toISOString()
         });
+        if (!result.success) throw result.error || new Error('تعذر حفظ طلب الختمة الناقصة');
       } else {
-        await updateMissingPunchStatus(punch.id, finalStatus, adminName, { ...punch, adminNote: actionDesc });
+        const result = await updateMissingPunchStatus(punch.id, finalStatus, adminName, { ...punch, adminNote: actionDesc }, { attendanceAlreadySaved: true });
+        if (!result.success) throw result.error || new Error('تعذر حفظ حالة الطلب');
       }
 
       await saveHRAuditLog({
@@ -794,7 +800,7 @@ const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
       Swal.fire('تم بنجاح', 'تم معالجة الختمة الناقصة بنجاح وانعكس ذلك على سجل الحضور', 'success');
     } catch (e) {
       console.error(e);
-      Swal.fire('خطأ', 'حدث خطأ أثناء الحفظ', 'error');
+      Swal.fire('خطأ', e.message || 'حدث خطأ أثناء الحفظ', 'error');
     }
     setLoading(false);
   };
@@ -943,6 +949,7 @@ const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
       return Swal.fire('خطأ', 'لا يمكن تقديم طلب ختمة ناقصة لتاريخ لاحق!', 'error');
     }
     const emp = employees.find(e => String(e.id || '').trim() === String(newPunch.employeeId || '').trim());
+    if (!emp) return Swal.fire('خطأ', 'لم يتم العثور على بيانات الموظف، يرجى إعادة تحميل الصفحة', 'error');
 
     const isDuplicate = punches.some(p => String(p.employeeId || '').trim() === String(newPunch.employeeId || '').trim() && p.date === newPunch.date && p.type === newPunch.type && p.status !== 'مرفوض');
     if (isDuplicate) {
@@ -975,13 +982,13 @@ const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
       createdAt: new Date().toISOString()
     });
 
-    if (success) {
+    if (success.success) {
       Swal.fire('نجاح', 'تمت إضافة الختمة الناقصة بنجاح', 'success');
       setShowAddModal(false);
       setNewPunch({ employeeId: '', date: '', time: '', type: 'دخول', reason: '' });
       fetchPunches();
     } else {
-      Swal.fire('خطأ', 'حدث خطأ أثناء الحفظ', 'error');
+      Swal.fire('خطأ', success.error?.message || 'حدث خطأ أثناء الحفظ', 'error');
     }
   };
 
@@ -1474,7 +1481,7 @@ const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
                     <td className="p-5">
                       <div className="flex justify-center items-center gap-3">
                         {(canEdit || canApprove) && (
-                          <button onClick={() => promptEmployeeAlert({ employeeId: p.employeeId, employeeName: emp?.name || p.employeeName, source: 'الختمات الناقصة', sourceReference: `${p.type || 'ختمة'} ${p.date || ''}`, suggestedMessage: `يوجد لديك سجل ختمة ناقصة (${p.type || 'دخول/خروج'}) بتاريخ ${p.date || 'غير محدد'}. يرجى مراجعة الختمات والالتزام بتسجيل الدوام.`, user })} className="shrink-0" style={{ background: '#fff7ed', border: '1px solid #fdba74', color: '#c2410c', padding: '7px 10px', borderRadius: 8, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}><Bell size={15}/> إرسال تنبيه</button>
+                          <button onClick={() => promptEmployeeAlert({ employeeId: p.employeeId, employeeName: emp?.name || p.employeeName, source: 'الختمات الناقصة', sourceReference: `${p.type || 'ختمة'} ${p.date || ''}`, suggestedMessage: `يوجد لديك سجل ختمة ناقصة (${p.type || 'دخول/خروج'}) بتاريخ ${p.date || 'غير محدد'}. يرجى مراجعة الختمات والالتزام بتسجيل الدوام.`, user })} className="shrink-0" style={{ background: '#fff7ed', border: '1px solid #fdba74', color: '#c2410c', padding: '7px 10px', borderRadius: 8, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}><Bell size={15}/> إرسال ملاحظة</button>
                         )}
                         {p.status === 'معلق' || p.status === 'قيد المراجعة' ? (
                           p.isVirtual ? (

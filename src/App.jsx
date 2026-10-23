@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Smartphone, Tablet, RotateCcw, X, Monitor } from 'lucide-react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
-import EmployeeDashboard from './pages/EmployeeDashboard';
 import { usesAdminDashboard } from './utils/dashboardRouting';
-import AdminDashboard from './pages/AdminDashboard';
 import ErrorBoundary from './components/ErrorBoundary';
+import AbdullahReportGate from './components/AbdullahReportGate';
+
+const EmployeeDashboard = React.lazy(() => import('./pages/EmployeeDashboard'));
+const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard'));
 import Swal from 'sweetalert2';
 import { FREE_AUTH_ENABLED, observeEmployeeSession, logoutEmployee } from './services/freeAuth';
 import { getGlobalSettings, isAdmin, getEmployees, getAttendanceLogs, saveAttendanceLog, getHRAttendance, saveHRAttendance, getMissingPunches, updateMissingPunchStatus } from './store';
@@ -39,14 +41,14 @@ function App() {
   }, [previewDevice, previewOrientation]);
 
   const applyTheme = (primaryColor) => {
-    if (!primaryColor) return;
-    setTheme({ primaryColor });
+    const activeColor = (!primaryColor || primaryColor === '#0f172a') ? '#1a8d9b' : primaryColor;
+    setTheme({ primaryColor: activeColor });
 
     const root = document.documentElement;
-    root.style.setProperty('--primary', primaryColor);
+    root.style.setProperty('--primary', activeColor);
 
     // Generate light version (using 15% opacity of the color)
-    const lightColor = `${primaryColor}26`; // 26 is hex for ~15% opacity
+    const lightColor = `${activeColor}26`; // 26 is hex for ~15% opacity
     root.style.setProperty('--primary-light', lightColor);
 
     // Generate dark version (simple darken - this is a bit crude but works for most hex)
@@ -64,7 +66,7 @@ function App() {
       return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
     };
 
-    root.style.setProperty('--primary-dark', darkenColor(primaryColor, 0.2));
+    root.style.setProperty('--primary-dark', darkenColor(activeColor, 0.2));
   };
 
   useEffect(() => {
@@ -166,24 +168,26 @@ function App() {
   const renderAppContent = () => (
     <div className={`app-content-wrapper ${isPreviewMode ? 'preview-active preview-' + previewDevice + ' preview-' + previewOrientation : ''}`}>
       {!authReady ? <div role="status" className="p-8 text-center">جاري التحقق من تسجيل الدخول…</div> : <Router>
-        <Routes>
-          <Route path="/" element={
-            !currentUser ? <Login onLogin={handleLogin} /> :
-              <Navigate to={usesAdminDashboard(currentUser, isAdmin) ? '/admin' : '/employee'} />
-          } />
+        <React.Suspense fallback={<div role="status" className="p-8 text-center" style={{ minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontWeight: 'bold' }}>جاري التحميل…</div>}>
+          <Routes>
+            <Route path="/" element={
+              !currentUser ? <Login onLogin={handleLogin} /> :
+                <Navigate to={usesAdminDashboard(currentUser, isAdmin) ? '/admin' : '/employee'} />
+            } />
 
-          <Route path="/employee" element={
-            currentUser && !usesAdminDashboard(currentUser, isAdmin) ?
-              <EmployeeDashboard user={currentUser} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /> :
-              <Navigate to="/" />
-          } />
+            <Route path="/employee" element={
+              currentUser && !usesAdminDashboard(currentUser, isAdmin) ?
+                <AbdullahReportGate user={currentUser} onLogout={handleLogout}><EmployeeDashboard user={currentUser} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /></AbdullahReportGate> :
+                <Navigate to="/" />
+            } />
 
-          <Route path="/admin" element={
-            currentUser && usesAdminDashboard(currentUser, isAdmin) ?
-              <AdminDashboard user={currentUser} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /> :
-              <Navigate to="/" />
-          } />
-        </Routes>
+            <Route path="/admin" element={
+              currentUser && usesAdminDashboard(currentUser, isAdmin) ?
+                <AbdullahReportGate user={currentUser} onLogout={handleLogout}><AdminDashboard user={currentUser} onLogout={handleLogout} onUpdateUser={handleUpdateUser} /></AbdullahReportGate> :
+                <Navigate to="/" />
+            } />
+          </Routes>
+        </React.Suspense>
       </Router>}
     </div>
   );

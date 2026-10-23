@@ -13,6 +13,20 @@ export class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
+
+    const isChunkLoadError =
+      error?.name === 'ChunkLoadError' ||
+      /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/i.test(error?.message || '');
+
+    if (isChunkLoadError) {
+      const retryKey = 'chunk_reload_retry';
+      const lastRetry = sessionStorage.getItem(retryKey);
+      const now = Date.now();
+      if (!lastRetry || now - parseInt(lastRetry, 10) > 15000) {
+        sessionStorage.setItem(retryKey, now.toString());
+        window.location.reload();
+      }
+    }
   }
 
   handleReload = async () => {
@@ -36,6 +50,10 @@ export class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      const isChunkLoadError =
+        this.state.error?.name === 'ChunkLoadError' ||
+        /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/i.test(this.state.error?.message || '');
+
       return (
         <div style={{
           minHeight: '100vh',
@@ -56,27 +74,29 @@ export class ErrorBoundary extends React.Component {
             maxWidth: '520px',
             width: '100%',
             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04)',
-            border: '1px solid #fee2e2'
+            border: isChunkLoadError ? '1px solid #bae6fd' : '1px solid #fee2e2'
           }}>
             <div style={{
               width: '64px',
               height: '64px',
               borderRadius: '20px',
-              backgroundColor: '#fee2e2',
-              color: '#ef4444',
+              backgroundColor: isChunkLoadError ? '#e0f2fe' : '#fee2e2',
+              color: isChunkLoadError ? '#0284c7' : '#ef4444',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               margin: '0 auto 20px auto'
             }}>
-              <AlertTriangle size={36} />
+              {isChunkLoadError ? <RotateCcw size={36} /> : <AlertTriangle size={36} />}
             </div>
 
             <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#1e293b', marginBottom: '10px' }}>
-              حدث خطأ أثناء عرض الصفحة
+              {isChunkLoadError ? 'تم إصدار تحديث جديد للنظام' : 'حدث خطأ أثناء عرض الصفحة'}
             </h2>
             <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '24px', lineHeight: '1.6' }}>
-              تم رصد مشكلة غير متوقعة. يمكنك إعادة تحميل الصفحة، أو العودة لشاشة تسجيل الدخول.
+              {isChunkLoadError
+                ? 'تم رفع تحديثات برمجية جديدة للنظام. يُرجى إعادة تحميل الصفحة لتطبيق التحديث الأخير ومتابعة العمل.'
+                : 'تم رصد مشكلة غير متوقعة. يمكنك إعادة تحميل الصفحة، أو العودة لشاشة تسجيل الدخول.'}
             </p>
 
             {this.state.error && (

@@ -44,6 +44,7 @@ import { isSewingConsumablesCategory, sewingConsumablesNumber, sewingConsumables
 export const saveStockItem = async (item, options = {}) => {
   invalidateStockCache();
   try {
+    if (!item.id && !String(item.category || '').trim()) throw new Error('يرجى اختيار تصنيف المخزون قبل حفظ الصنف');
     let oldName = null;
     const docRef = item.id ? doc(db, 'stock', item.id) : doc(collection(db, 'stock'));
 
@@ -59,7 +60,8 @@ export const saveStockItem = async (item, options = {}) => {
         ...existingData,
         ...item,
         id: docRef.id,
-        itemNumber: item.itemNumber || existingData.itemNumber,
+        itemNumber: isFinishedGoodsCategory(existingData.category) && /^FG-\d+$/.test(existingData.itemNumber)
+          ? existingData.itemNumber : (item.itemNumber || existingData.itemNumber),
         updatedAt: new Date().toISOString()
       };
       await setDoc(docRef, fullItem);
@@ -94,31 +96,21 @@ export const saveStockItem = async (item, options = {}) => {
         }
       }
 
-      let number;
       if (existingSameNameNumber) {
-        number = existingSameNameNumber;
-      } else {
-        let initialLast = 0;
-        try {
-          const counterSnapshot = await getDoc(counterRef);
-          if (!counterSnapshot.exists()) {
-            const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'FG-'), where('itemNumber', '<', 'FG.')));
-            initialLast = Math.max(0, ...existing.docs.map(row => finishedGoodsSequence(row.data().itemNumber)));
-          }
-          let last = Math.max(initialLast, Number(counterSnapshot.data()?.lastNumber) || 0);
-          number = finishedGoodsNumber(++last);
-          await setDoc(counterRef, { lastNumber: last }, { merge: true });
-        } catch (seqErr) {
-          console.warn('Sequence counter write failed, falling back to stock collection scan:', seqErr);
-          const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'FG-'), where('itemNumber', '<', 'FG.')));
-          const maxNum = Math.max(0, ...existing.docs.map(row => finishedGoodsSequence(row.data().itemNumber)));
-          number = finishedGoodsNumber(maxNum + 1);
-        }
+        const saved = { ...item, id: docRef.id, itemNumber: existingSameNameNumber, updatedAt: new Date().toISOString() };
+        await setDoc(docRef, saved);
+        return saved;
       }
-
-      const saved = { ...item, id: docRef.id, itemNumber: number, updatedAt: new Date().toISOString() };
-      await setDoc(docRef, saved);
-      return saved;
+      const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'FG-'), where('itemNumber', '<', 'FG.')));
+      const initialLast = Math.max(0, ...existing.docs.map(row => finishedGoodsSequence(row.data().itemNumber)));
+      return await runTransaction(db, async transaction => {
+        const counterSnapshot = await transaction.get(counterRef);
+        const last = Math.max(initialLast, Number(counterSnapshot.data()?.lastNumber) || 0) + 1;
+        const saved = { ...item, id: docRef.id, itemNumber: finishedGoodsNumber(last), updatedAt: new Date().toISOString() };
+        transaction.set(counterRef, { lastNumber: last }, { merge: true });
+        transaction.set(docRef, saved);
+        return saved;
+      });
     }
 
     if (isPackagingCategory(item.category)) {
@@ -249,17 +241,33 @@ export const deleteMultipleStockItems = async (ids) => {
   }
 };
 
-export const getStockVouchers = async () => {
+let cachedStockVouchers = null;
+let cachedStockVouchersTimestamp = 0;
+const STOCK_VOUCHERS_CACHE_TTL = 45 * 1000;
+
+export const invalidateStockVouchersCache = () => {
+  cachedStockVouchers = null;
+  cachedStockVouchersTimestamp = 0;
+};
+
+export const getStockVouchers = async (forceRefresh = false) => {
   try {
+    if (!forceRefresh && cachedStockVouchers && (Date.now() - cachedStockVouchersTimestamp < STOCK_VOUCHERS_CACHE_TTL)) {
+      return cachedStockVouchers;
+    }
     const querySnapshot = await getDocs(collection(db, 'stock_vouchers'));
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    const result = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    cachedStockVouchers = result;
+    cachedStockVouchersTimestamp = Date.now();
+    return result;
   } catch (error) {
     console.error("Error in getStockVouchers:", error);
-    return [];
+    return cachedStockVouchers || [];
   }
 };
 
 export const saveStockVoucher = async (voucher) => {
+  invalidateStockVouchersCache();
   invalidateStockCache();
   try {
     let voucherToSave = { ...voucher };
@@ -544,17 +552,33 @@ export const deleteDraftVouchers = async (orderNumber) => {
   }
 };
 
-export const getStocktakes = async () => {
+let cachedStocktakes = null;
+let cachedStocktakesTimestamp = 0;
+const STOCKTAKES_CACHE_TTL = 45 * 1000;
+
+export const invalidateStocktakesCache = () => {
+  cachedStocktakes = null;
+  cachedStocktakesTimestamp = 0;
+};
+
+export const getStocktakes = async (forceRefresh = false) => {
   try {
+    if (!forceRefresh && cachedStocktakes && (Date.now() - cachedStocktakesTimestamp < STOCKTAKES_CACHE_TTL)) {
+      return cachedStocktakes;
+    }
     const querySnapshot = await getDocs(collection(db, 'stocktakes'));
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    const result = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    cachedStocktakes = result;
+    cachedStocktakesTimestamp = Date.now();
+    return result;
   } catch (error) {
     console.error("Error in getStocktakes:", error);
-    return [];
+    return cachedStocktakes || [];
   }
 };
 
 export const saveStocktake = async (report) => {
+  invalidateStocktakesCache();
   try {
     const docRef = report.id ? doc(db, 'stocktakes', report.id) : doc(collection(db, 'stocktakes'));
     const id = docRef.id;
@@ -568,6 +592,7 @@ export const saveStocktake = async (report) => {
 };
 
 export const deleteStockVoucher = async (id) => {
+  invalidateStockVouchersCache();
   try {
     const docRef = doc(db, 'stock_vouchers', id);
     const docSnap = await getDoc(docRef);

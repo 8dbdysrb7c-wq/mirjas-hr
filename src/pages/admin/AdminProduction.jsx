@@ -1,3 +1,4 @@
+import { deleteCardItem } from '../../services/cardItemDeletion';
 import { canSafelyDeleteProduction } from '../../utils/productionSafety.js';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal, flushSync } from 'react-dom';
@@ -1103,9 +1104,29 @@ const AdminProduction = ({ user, notificationTarget, initialSection = 'sewing' }
     }
   };
 
+  const handleDeleteItem = async (order, index) => {
+    if (!isAdmin(user)) return;
+    const item = order.items?.[index];
+    if (!item) return;
+    const answer = await Swal.fire({
+      title: 'حذف هذا الصنف؟',
+      text: 'سيتم حذف الصنف رقم ' + (index + 1) + ' (' + (item.productName || '') + ') فقط مع حفظ نسخة مؤرشفة. سيبقى الكرت وبقية الأصناف.',
+      icon: 'warning', showCancelButton: true, confirmButtonText: 'حذف الصنف', cancelButtonText: 'إلغاء', confirmButtonColor: '#dc2626'
+    });
+    if (!answer.isConfirmed) return;
+    try {
+      const updated = await deleteCardItem(order, index, user, false);
+      setSelectedOrder(updated);
+      await fetchData();
+      Swal.fire({ icon: 'success', title: 'تم حذف الصنف', timer: 1500, showConfirmButton: false });
+    } catch (error) {
+      Swal.fire('تعذر حذف الصنف', error.message || 'حدث خطأ؛ حاول مجددًا.', 'error');
+    }
+  };
+
   const handleDelete = async (id) => {
     if (!isAdmin(user) && !canSafelyDeleteProduction(user)) {
-      Swal.fire('غير مصرح', 'صلاحية الحذف مخصصة لحساب المدير العام فقط.', 'warning');
+      Swal.fire('غير مصرح', 'صلاحية الحذف الآمن مخصصة للإدارة فقط.', 'warning');
       return;
     }
     const orderToDelete = orders.find(o => o.id === id);
@@ -1139,11 +1160,12 @@ const AdminProduction = ({ user, notificationTarget, initialSection = 'sewing' }
     try {
       // 1. Revert stock vouchers if any exist
       try {
-        await revertAuditVouchers(orderToDelete.orderNumber);
-        await revertReceiptVouchers(orderToDelete.orderNumber);
+        const deductionReverted = await revertAuditVouchers(orderToDelete.orderNumber);
+        const receiptReverted = await revertReceiptVouchers(orderToDelete.orderNumber);
+        if (!deductionReverted || !receiptReverted) throw new Error('تعذر عكس جميع حركات المخزون؛ لم يُحذف الكرت.');
         await deleteDraftVouchers(orderToDelete.orderNumber);
       } catch (stockErr) {
-        console.warn("Could not revert all stock vouchers, continuing safe delete:", stockErr);
+        throw stockErr;
       }
 
       // 2. Unlink from Sales Order safely
@@ -1169,11 +1191,14 @@ const AdminProduction = ({ user, notificationTarget, initialSection = 'sewing' }
           await saveSalesOrder(updatedSalesOrder);
         }
       } catch (salesErr) {
-        console.warn("Error unlinking sales order:", salesErr);
+        throw salesErr;
       }
 
       // 3. Delete the order (with automatic archiving)
       await deleteOrder(id, user);
+      setShowOperationsModal(false);
+      setShowPreview(false);
+      setSelectedOrder(null);
 
       // 4. Add audit log
       try {
@@ -2119,7 +2144,8 @@ const AdminProduction = ({ user, notificationTarget, initialSection = 'sewing' }
           onOpenPreview={handleOpenPreview}
           onSend={handleSendQuantityToPackaging}
           onSendAll={handleSendAllToPackaging}
-          onAdvance={handleAdvanceProductionItem}
+          onDeleteItem={isAdmin(user) ? handleDeleteItem : undefined}
+              onAdvance={handleAdvanceProductionItem}
           onReceive={handleReceivePackagingQuantity}
           onFinish={handleFinishPackagingQuantity}
           onReturn={handleReturnQuantityToSewing}
@@ -2727,6 +2753,7 @@ const AdminProduction = ({ user, notificationTarget, initialSection = 'sewing' }
               onOpenPreview={handleOpenPreview}
               onSend={handleSendQuantityToPackaging}
               onSendAll={handleSendAllToPackaging}
+              onDeleteItem={isAdmin(user) ? handleDeleteItem : undefined}
               onAdvance={handleAdvanceProductionItem}
               onReceive={handleReceivePackagingQuantity}
               onFinish={handleFinishPackagingQuantity}

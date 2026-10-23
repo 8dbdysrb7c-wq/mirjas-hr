@@ -1,0 +1,87 @@
+{
+  "result": [
+    {
+      "id": "EMP-0005",
+      "name": "البراء محمد سمير علي لعبود",
+      "previousWorkLocationId": "1792226023673",
+      "previousAllowedWorkLocations": [
+        "1792226023673"
+      ],
+      "newWorkLocationId": "anywhere",
+      "newAllowedWorkLocations": [
+        "anywhere"
+      ]
+    },
+    {
+      "id": "EMP-0007",
+      "name": "جهاد بركات فلاح المهيرات",
+      "previousWorkLocationId": "1792226023673",
+      "previousAllowedWorkLocations": [
+        "1792226023673"
+      ],
+      "newWorkLocationId": "anywhere",
+      "newAllowedWorkLocations": [
+        "anywhere"
+      ]
+    },
+    {
+      "id": "EMP-0013",
+      "name": "أماني يونس صالح وادي",
+      "previousWorkLocationId": "1792226023673",
+      "previousAllowedWorkLocations": [
+        "1792226023673"
+      ],
+      "newWorkLocationId": "anywhere",
+      "newAllowedWorkLocations": [
+        "anywhere"
+      ]
+    },
+    {
+      "id": "EMP-0025",
+      "name": "عماد فتحي زياد عزيز عوض",
+      "previousWorkLocationId": "1792226023673",
+      "previousAllowedWorkLocations": [
+        "1792226023673"
+      ],
+      "newWorkLocationId": "anywhere",
+      "newAllowedWorkLocations": [
+        "anywhere"
+      ]
+    }
+  ],
+  "verifyDocs": [
+    {
+      "id": "EMP-0005",
+      "name": "البراء محمد سمير علي لعبود",
+      "workLocationId": "anywhere",
+      "allowedWorkLocations": [
+        "anywhere"
+      ]
+    },
+    {
+      "id": "EMP-0007",
+      "name": "جهاد بركات فلاح المهيرات",
+      "workLocationId": "anywhere",
+      "allowedWorkLocations": [
+        "anywhere"
+      ]
+    },
+    {
+      "id": "EMP-0013",
+      "name": "أماني يونس صالح وادي",
+      "workLocationId": "anywhere",
+      "allowedWorkLocations": [
+        "anywhere"
+      ]
+    },
+    {
+      "id": "EMP-0025",
+      "name": "عماد فتحي زياد عزيز عوض",
+      "workLocationId": "anywhere",
+      "allowedWorkLocations": [
+        "anywhere"
+      ]
+    }
+  ],
+  "timestamp": "2026-10-17T08:45:11.556Z"
+}

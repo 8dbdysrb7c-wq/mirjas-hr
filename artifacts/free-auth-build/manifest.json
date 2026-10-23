@@ -1,0 +1,29 @@
+{
+  "name": "Mr Sleep",
+  "short_name": "Mr Sleep",
+  "description": "Mr Sleep HR Management System",
+  "start_url": "/?v=2",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a8d9b",
+  "icons": [
+    {
+      "src": "/icon-mrsleep.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-mrsleep.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-mrsleep.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

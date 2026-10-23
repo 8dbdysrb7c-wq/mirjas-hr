@@ -246,6 +246,9 @@ const HROvertime = ({ user, refreshCounts }) => {
       ...leave,
       notes: finalNotes,
       status: 'موافق',
+      adminNote: smartModal.approvalNote || '',
+      approvalReason: smartModal.approvalNote || '',
+      rejectionReason: '',
        rateDetails: {
           compMins,
           extraMins,
@@ -769,7 +772,9 @@ const HROvertime = ({ user, refreshCounts }) => {
         ...leave,
         status: newStatus,
         notes: updatedNotes,
-        ...(newStatus === 'مرفوض' ? { rejectionReason: actionReason } : {})
+        adminNote: actionReason,
+        rejectionReason: newStatus === 'مرفوض' ? actionReason : '',
+        approvalReason: newStatus === 'موافق' ? actionReason : ''
       });
 
       if (newStatus === 'موافق' || newStatus === 'مرفوض') {
@@ -1186,9 +1191,9 @@ const HROvertime = ({ user, refreshCounts }) => {
                         <Edit2 size={16} />
                       </button>
                     )}
-                    <button onClick={() => promptEmployeeAlert({ employeeId: leave.employeeId, employeeName: leave.employeeName, source: 'العمل الإضافي', sourceReference: `${leave.date || leave.startDate || ''}`, suggestedMessage: `طلب العمل الإضافي الخاص بك بتاريخ ${leave.date || leave.startDate || 'غير محدد'} حالته: ${leave.status || 'معلق'}.\nالمدة المستحقة: ${getOvertimeDuration(leave)}.${getOvertimeReason(leave) ? `\nالسبب: ${getOvertimeReason(leave)}` : ''}`, user })} className="icon-btn" style={{ color: '#c2410c', background: '#fff7ed', borderColor: '#fdba74' }} title="إرسال تنبيه للموظف">
+                    {(canEdit || canApprove) && <button onClick={() => promptEmployeeAlert({ employeeId: leave.employeeId, employeeName: leave.employeeName, source: 'العمل الإضافي', sourceReference: `${leave.date || leave.startDate || ''}`, suggestedMessage: `طلب العمل الإضافي الخاص بك بتاريخ ${leave.date || leave.startDate || 'غير محدد'} حالته: ${leave.status || 'معلق'}.\nالمدة المستحقة: ${getOvertimeDuration(leave)}.${getOvertimeReason(leave) ? `\nالسبب: ${getOvertimeReason(leave)}` : ''}`, user })} className="icon-btn" style={{ color: '#c2410c', background: '#fff7ed', borderColor: '#fdba74' }} title="إرسال ملاحظة للموظف">
                       <Bell size={17} />
-                    </button>
+                    </button>}
                     {canApprove && (
                       leave.status === 'معلق' ? (
                         <>
@@ -1402,6 +1407,7 @@ const HROvertime = ({ user, refreshCounts }) => {
             
             <div style={{ padding: '20px', borderTop: '1px solid #e2e8f0', background: '#ffffff', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                <button type="button" onClick={() => setSmartModal({ show: false, leave: null })} className="btn btn-outline">إلغاء</button>
+               <label className="block text-sm">ملاحظة للموظف (اختياري)<textarea className="input-field" value={smartModal.approvalNote || ''} onChange={e => setSmartModal(previous => ({ ...previous, approvalNote: e.target.value }))} /></label>
                <button type="button" onClick={confirmSmartApproval} disabled={smartModal.loading} className="btn btn-primary" style={{ background: '#10b981', borderColor: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
                  <CheckCircle size={18} /> تأكيد التقسيم والموافقة
                </button>

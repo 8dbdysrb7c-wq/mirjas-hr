@@ -2405,8 +2405,8 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
         };
 
         data.name = data.name.trim();
-        if (!data.itemNumber || !data.name || !data.warehouse) {
-          Swal.showValidationMessage('يرجى ملء الاسم ورقم الصنف والمخزن');
+        if (!data.itemNumber || !data.name || !data.warehouse || !data.category.trim()) {
+          Swal.showValidationMessage('يرجى ملء الاسم ورقم الصنف والمخزن واختيار تصنيف المخزون');
           return false;
         }
 

@@ -1,0 +1,434 @@
+{
+  "settings": {
+    "value": {
+      "customerSectors": [
+        "اثاث مكتبي",
+        "اثاث منزلي ومفروشات",
+        "أطفال وبيبي",
+        "الأدوات المنزلية",
+        "الجامعات والمدارس",
+        "الحرامات",
+        "الشقق الفندقية",
+        "الفرشات",
+        "الفنادق",
+        "المستشفيات",
+        "بياضات",
+        "جمعيات ومنظمات",
+        "جهة عسكرية",
+        "حكومي",
+        "ستائر",
+        "شخصي",
+        "شركات خاصة",
+        "مستلزمات طبية",
+        "مول"
+      ],
+      "salesCommissionTiers": {},
+      "workLocations": [
+        {
+          "name": "مصنع البياضات",
+          "lng": 35.92964,
+          "id": "1792226023673",
+          "radius": 50,
+          "lat": 31.900949
+        }
+      ],
+      "productionStatuses": [
+        "لم يتم التنفيذ",
+        "تم استلام كرت الإنتاج",
+        "مرحلة القص",
+        "مرحلة المستودع",
+        "مرحلة الخياطة",
+        "بانتظار استلام التغليف",
+        "مرحلة التغليف",
+        "إنتاج مختلط",
+        "منتهي",
+        "ملغي"
+      ],
+      "quoteTerms": [
+        "الأسعار أعلاه لا تشمل ضريبة المبيعات",
+        "الأسعار أعلاه تشمل ضريبة المبيعات",
+        "التسليم في موقع العميل",
+        "التوصيل مجاني داخل عمان",
+        "الدفع نقداً عند الاستلام",
+        "تخضع هذه الأسعار للتغيير دون إشعار مسبق"
+      ],
+      "itemStatuses": [
+        "مخزون",
+        "قيد التشغيل",
+        "مباع",
+        "تالف",
+        "مفقود",
+        "مرتجع"
+      ],
+      "quotePriorities": [
+        "منخفضة",
+        "متوسطة",
+        "عالية",
+        "عاجلة جداً"
+      ],
+      "primaryColor": "#0f172a",
+      "salesItemStatuses": [
+        "جديد",
+        "قيد التجهيز",
+        "إنتاج قيد الخياطة",
+        "إنتاج قيد التغليف",
+        "جاهز للتسليم",
+        "تم التسليم",
+        "مرتجع",
+        "قيد التحضير"
+      ],
+      "warehouses": [
+        "مصنع البياضات"
+      ],
+      "quoteValidities": [
+        "أسبوع",
+        "أسبوعين",
+        "شهر",
+        "شهرين",
+        "حتى إشعار آخر"
+      ],
+      "quoteTaxRates": [
+        0,
+        4,
+        16
+      ],
+      "hrSettings": {
+        "latenessHandling": "deduct_from_balance",
+        "fullDayAbsenceDeduction": true,
+        "standardWorkHours": 8,
+        "latenessViolationThreshold": 15,
+        "gracePeriodMinutes": 15,
+        "absenceHandling": "full_day",
+        "overtimeMultiplier": 1.5,
+        "overtimeRequiresApproval": true,
+        "overtimeFixedAmount": 10,
+        "workDaysPerMonth": 30,
+        "monthlyMissionBalanceMinutes": 120,
+        "overtimeCalculationMethod": "hourly_rate",
+        "timeRounding": "minute"
+      },
+      "userTypes": [
+        {
+          "name": "إدارة",
+          "permissions": {
+            "canAdd": true,
+            "canDelete": true,
+            "canEdit": true,
+            "isFullAdmin": true
+          },
+          "color": "#6366f1"
+        },
+        {
+          "name": "مشرف قسم",
+          "color": "#f59e0b",
+          "permissions": {
+            "canEdit": true,
+            "canAdd": true,
+            "isFullAdmin": false,
+            "canDelete": false
+          }
+        },
+        {
+          "name": "موظف عادي",
+          "permissions": {
+            "canEdit": false,
+            "canDelete": false,
+            "canAdd": true,
+            "isFullAdmin": false
+          },
+          "color": "#10b981"
+        }
+      ],
+      "quoteStatuses": [
+        "مسودة",
+        "مرسل",
+        "مقبول",
+        "مرفوض",
+        "ملغي"
+      ],
+      "ammanAreas": [
+        "أبو علندا",
+        "أبو نصير",
+        "الأشرفية",
+        "البنيات",
+        "البيادر",
+        "الجبيهة",
+        "الجندويل",
+        "الجويدة",
+        "الرابية",
+        "الشميساني",
+        "الصويفية",
+        "القويسمة",
+        "المقابلين",
+        "الموقر",
+        "النصر",
+        "الهاشمي الجنوبي",
+        "الهاشمي الشمالي",
+        "الوحدات",
+        "اليادودة",
+        "أم أذينة",
+        "أم السماق",
+        "بسمان",
+        "تلاع العلي",
+        "جبل الحسين",
+        "جبل اللويبدة",
+        "جبل عمان",
+        "حسبان",
+        "خريبة السوق",
+        "خلدا",
+        "دير غبار",
+        "رأس العين",
+        "سحاب",
+        "شفا بدران",
+        "ضاحية الحسين",
+        "ضاحية الرشيد",
+        "طارق",
+        "طبربور",
+        "عبدون",
+        "ماركا الجنوبية",
+        "ماركا الشمالية",
+        "مرج الحمام",
+        "وادي السير",
+        "وسط البلد"
+      ],
+      "stockLocations": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "A6",
+        "A7",
+        "A8",
+        "A9",
+        "A10",
+        "A11",
+        "A12",
+        "A13",
+        "A14",
+        "A15",
+        "A16",
+        "A17",
+        "A18",
+        "A19",
+        "A20",
+        "A21",
+        "A22",
+        "A23",
+        "A24",
+        "A25",
+        "A26",
+        "A27",
+        "A28",
+        "A29",
+        "A30",
+        "A31",
+        "A32",
+        "A33",
+        "A34",
+        "A35",
+        "A36",
+        "A37",
+        "A38",
+        "A39",
+        "A40",
+        "A41",
+        "A42",
+        "A43",
+        "A44",
+        "A45",
+        "0001",
+        "K20",
+        "K4",
+        "K6",
+        "K24",
+        "K51",
+        "K11",
+        "K28",
+        "K29",
+        "K12",
+        "مواد",
+        "خام",
+        "K10",
+        "K3",
+        "K14",
+        "K18",
+        "K19",
+        "K2",
+        "K44",
+        "K45",
+        "K46",
+        "K47",
+        "K5",
+        "K21",
+        "K22",
+        "K7",
+        "K52",
+        "PREP",
+        "0019",
+        "K37",
+        "K38",
+        "K39",
+        "K15",
+        "K27",
+        "K32",
+        "K16",
+        "K41",
+        "K26",
+        "K25",
+        "K31",
+        "K40",
+        "K17",
+        "K42",
+        "K43"
+      ],
+      "preparationStatuses": [
+        "لم يتم التنفيذ",
+        "تم استلام كرت الانتاج",
+        "مرحلة المستودع",
+        "مرحلة الحشوة",
+        "مرحلة التطريز",
+        "مرحلة التشطيب",
+        "منتهي",
+        "ملغي"
+      ],
+      "notificationSettings": {
+        "hideReadNotifications": true,
+        "moduleRules": [
+          {
+            "moduleLabel": "الموظفين",
+            "visibleUserIds": [],
+            "moduleKey": "employees",
+            "visibleRoles": [
+              "management"
+            ],
+            "enabled": true
+          },
+          {
+            "moduleKey": "customers",
+            "visibleRoles": [
+              "management",
+              "supervisor"
+            ],
+            "enabled": true,
+            "moduleLabel": "العملاء والموردين",
+            "visibleUserIds": []
+          },
+          {
+            "visibleRoles": [
+              "management",
+              "supervisor"
+            ],
+            "moduleLabel": "طلبات العملاء",
+            "visibleUserIds": [],
+            "moduleKey": "sales",
+            "enabled": true
+          },
+          {
+            "moduleLabel": "طلبات الإنتاج",
+            "visibleRoles": [
+              "management",
+              "supervisor"
+            ],
+            "visibleUserIds": [],
+            "enabled": true,
+            "moduleKey": "production"
+          },
+          {
+            "moduleLabel": "المخزون",
+            "visibleUserIds": [],
+            "visibleRoles": [
+              "management",
+              "supervisor"
+            ],
+            "enabled": true,
+            "moduleKey": "stock"
+          },
+          {
+            "visibleUserIds": [],
+            "moduleKey": "delivery",
+            "moduleLabel": "التوصيل",
+            "enabled": true,
+            "visibleRoles": [
+              "management",
+              "supervisor"
+            ]
+          },
+          {
+            "moduleLabel": "التقارير",
+            "enabled": true,
+            "visibleRoles": [
+              "management",
+              "supervisor"
+            ],
+            "visibleUserIds": [],
+            "moduleKey": "reports"
+          },
+          {
+            "moduleKey": "tasks",
+            "moduleLabel": "المهام والإعدادات",
+            "enabled": true,
+            "visibleUserIds": [],
+            "visibleRoles": [
+              "management",
+              "supervisor"
+            ]
+          },
+          {
+            "enabled": true,
+            "moduleKey": "announcements",
+            "visibleRoles": [
+              "management",
+              "supervisor",
+              "production"
+            ],
+            "moduleLabel": "الإشعارات الخاصة",
+            "visibleUserIds": []
+          }
+        ],
+        "specialSenderUserIds": [],
+        "specialSenders": [
+          "management"
+        ],
+        "soundEnabled": true
+      },
+      "logoUrl": "/logo-mrsleep.png",
+      "siteName": "Mirjas HR",
+      "jordanianCities": [
+        "عمان",
+        "إربد",
+        "الزرقاء",
+        "السلط",
+        "الطفيلة",
+        "العقبة",
+        "الكرك",
+        "المفرق",
+        "جرش",
+        "عجلون",
+        "مادبا",
+        "معان"
+      ],
+      "salesStatuses": [
+        "جديد",
+        "قيد التجهيز",
+        "جاهز للتوصيل",
+        "تم تسليمها للتوصيل",
+        "تم التوصيل",
+        "ملغي",
+        "مرفوض"
+      ]
+    }
+  },
+  "warehouses": {
+    "مصنع المخدة": 43,
+    "مصنع البياضات": 581
+  },
+  "categories": {
+    "بضاعة جاهزة": 355,
+    "مستهلكات خياطة": 125,
+    "أصول": 37,
+    "تغليف": 85,
+    "مواد خام": 3,
+    "أقمشة": 14
+  }
+}

@@ -1,3 +1,4 @@
+import { calculateSocialSecurityShares } from './socialSecurityShares.js';
 import { isActiveEmployee } from './employeeStatus.js';
 import {
   getOfficialAbsenceMinutes,
@@ -492,19 +493,9 @@ export const calculateSalaries = ({
     let socialSecurityEmployeeDeduction = 0;
     let socialSecurityCompanyContribution = 0;
     
-    if (emp.hasSocialSecurity) {
-      const ssSalary = Number(emp.socialSecuritySalary) || basic;
-      const employeePercentage = hrSettings.socialSecurityEmployeePercentage ?? 7.5;
-      let companyPercentage = hrSettings.socialSecurityCompanyPercentage ?? 14.25;
-      
-      if (emp.isHazardousProfession) {
-        companyPercentage += hrSettings.socialSecurityHazardousPercentage ?? 1;
-      }
-      
-      socialSecurityEmployeeDeduction = ssSalary * (employeePercentage / 100);
-      socialSecurityCompanyContribution = ssSalary * (companyPercentage / 100);
-    }
-
+    const socialSecurityShares = calculateSocialSecurityShares(emp, basic, hrSettings);
+    socialSecurityEmployeeDeduction = socialSecurityShares.employeeDeduction;
+    socialSecurityCompanyContribution = socialSecurityShares.companyContribution;
     let advanceDeduction = 0;
     let advanceAddition = 0;
 

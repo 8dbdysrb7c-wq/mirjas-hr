@@ -2316,6 +2316,11 @@ const AdminSales = ({ user }) => {
   };
 
   const handleSaveVariants = async () => {
+    if (!formData.deliveryDate) {
+      Swal.fire('تاريخ التسليم مطلوب', 'يرجى إدخال تاريخ التسليم قبل الحفظ', 'warning');
+      return;
+    }
+
     const item = formData.items[variantModalIndex];
     const targetQty = Number(item.quantity) || 0;
     const sumQty = productionVariants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0);
@@ -2468,6 +2473,11 @@ const AdminSales = ({ user }) => {
   };
 
   const handleSavePreparationVariants = async () => {
+    if (!formData.deliveryDate) {
+      Swal.fire('تاريخ التسليم مطلوب', 'يرجى إدخال تاريخ التسليم قبل الحفظ', 'warning');
+      return;
+    }
+
     const item = formData.items[preparationVariantModalIndex];
     const targetQty = Number(item.quantity) || 0;
     const sumQty = preparationVariants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0);
@@ -2575,6 +2585,11 @@ const AdminSales = ({ user }) => {
   };
 
   const handleSavePrepAndProdVariants = async ({ prepVariants, prodVariants }) => {
+    if (!formData.deliveryDate) {
+      Swal.fire('تاريخ التسليم مطلوب', 'يرجى إدخال تاريخ التسليم قبل الحفظ', 'warning');
+      return;
+    }
+
     const item = formData.items[prepAndProdModalIndex];
 
     let prodNum = linkedProductionOrder?.orderNumber;
@@ -3174,6 +3189,11 @@ const AdminSales = ({ user }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.deliveryDate) {
+      Swal.fire('تاريخ التسليم مطلوب', 'يرجى إدخال تاريخ التسليم قبل الحفظ', 'warning');
+      return;
+    }
+
     try {
       if (!formData.customerName || formData.items.some(item => !item.productName || !item.quantity)) {
         Swal.fire('خطأ', 'يرجى ملء جميع الحقول المطلوبة (العميل والأصناف)', 'error');
@@ -5043,13 +5063,15 @@ const AdminSales = ({ user }) => {
 
                     <div className="col-span-1 md:col-span-4 input-group mb-0">
                       <label className="font-bold text-slate-700 mb-2 block flex items-center gap-1 text-xs md:text-sm">
-                        <Calendar size={14} className="text-orange-500" /> تاريخ التسليم
+                        <Calendar size={14} className="text-orange-500" /> تاريخ التسليم <span className="text-red-500">* (مطلوب)</span>
                       </label>
                       <Flatpickr
                         className="input-field text-xs md:text-sm px-3 text-center"
                         style={{ height: '42px', backgroundColor: 'white' }}
                         value={formData.deliveryDate || ''}
-                        onChange={([d]) => setFormData({ ...formData, deliveryDate: getLocalDateStr(d) })}
+                        required
+                        aria-required="true"
+                        onChange={([d]) => setFormData({ ...formData, deliveryDate: d ? getLocalDateStr(d) : '' })}
                         options={{
                           dateFormat: 'Y-m-d',
                           disableMobile: true,
