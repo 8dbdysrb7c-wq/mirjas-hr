@@ -232,6 +232,20 @@ const AdminSettings = ({ user }) => {
         jobTitles: [...new Set([...(data.jobTitles || []), ...(employeeList || []).map(e => String(e.jobTitle || '').trim()).filter(Boolean)])],
         departmentsList: [...new Set([...(data.departmentsList || []), ...(employeeList || []).map(e => String(e.department || '').trim()).filter(Boolean)])],
         salesReps: [...new Set(['زبائن الشركة', ...(data.salesReps || []), ...(employeeList || []).filter(e => e.role === 'sales' || e.department === 'المبيعات' || (e.jobTitle || '').includes('مبيعات') || e.roles?.includes('المبيعات')).map(e => String(e.name || '').trim()).filter(Boolean)])],
+        stockUnits: (Array.isArray(data.stockUnits) && data.stockUnits.length > 0)
+          ? data.stockUnits
+          : ['عدد', 'كغم', 'متر', 'كيس', 'طرد', 'رول'],
+        stockColors: (Array.isArray(data.stockColors) && data.stockColors.length > 0)
+          ? data.stockColors
+          : [
+              'أبيض', 'سكري', 'بيج', 'سكني', 'سكني فاتح', 'سكني غامق', 'أسود', 'كحلي', 'أزرق', 'بترولي', 
+              'زيتي', 'خمري', 'بني', 'سومو', 'كبتشينو', 'جنزاري', 'اوفوايت', 'اخضر',
+              'موديل 1 أبيض سادة', 'موديل 2 أبيض سترايب', 'موديل 3 سكري سادة', 'موديل 5 بيج سادة', 
+              'موديل 7 بيج سترايب', 'موديل 14 سومو سادة', 'موديل 18 سكني سادة', 
+              'موديل 25 قطن باكستاني ابيض سادة', 'موديل 26 قطن باكستاني ابيض سترايب عريض', 'موديل 27 واقي تنسل',
+              'قطن صيني أبيض', 'قطن صيني سكني', 'قطن صيني بصلي',
+              'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12', 'B13', 'B14', 'B15', 'B16', 'B17'
+            ],
         ammanAreas: data.ammanAreas || [
           'عبدون', 'دير غبار', 'أم أذينة', 'الرابية', 'الشميساني', 'الصويفية', 'الجندويل', 
           'خلدا', 'تلاع العلي', 'أم السماق', 'ضاحية الرشيد', 'ضاحية الحسين', 'مرج الحمام', 
@@ -1214,6 +1228,9 @@ return (
         <div className={`premium-tab ${activeTab === 'sectors' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('sectors')}>
           <Briefcase size={18} /> <span>قطاعات العملاء</span>
         </div>
+        <div className={`premium-tab ${activeTab === 'jobtitles' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('jobtitles')}>
+          <Briefcase size={18} /> <span>المسميات والأقسام الوظيفية</span>
+        </div>
         <div className={`premium-tab ${activeTab === 'stock' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('stock')}>
           <Package size={18} /> <span>إعدادات المخزون</span>
         </div>
@@ -1224,7 +1241,7 @@ return (
           <FileText size={18} /> <span>إعدادات عروض الأسعار</span>
         </div>
         
-        <div className={`premium-tab ${['hr', 'jobtitles', 'workshifts', 'holidays'].includes(activeTab) ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('hr')}>
+        <div className={`premium-tab ${['hr', 'workshifts', 'holidays'].includes(activeTab) ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('hr')}>
           <Users size={18} /> <span>الموارد البشرية والرواتب</span>
         </div>
               <div className={`premium-tab ${activeTab === 'whatsapp' ? 'premium-tab-active' : 'premium-tab-inactive'}`} onClick={() => setActiveTab('whatsapp')}>

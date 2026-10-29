@@ -65,6 +65,18 @@ export const defaultGlobalSettings = {
   salesCommissionTiers: {},
   customerSectors: ["المستشفيات", "شركات خاصة", "شخصي", "مول", "اثاث مكتبي", "اثاث منزلي ومفروشات", "أطفال وبيبي", "ستائر", "مستلزمات طبية", "الحرامات", "الأدوات المنزلية", "الفنادق", "الشقق الفندقية", "بياضات", "الفرشات", "جمعيات ومنظمات", "حكومي", "جهة عسكرية", "الجامعات والمدارس"],
   stockLocations: Array.from({ length: 45 }, (_, i) => `A${i + 1}`),
+  stockUnits: ['عدد', 'كغم', 'متر', 'كيس', 'طرد', 'رول'],
+  stockColors: [
+    'أبيض', 'سكري', 'بيج', 'سكني', 'سكني فاتح', 'سكني غامق', 'أسود', 'كحلي', 'أزرق', 'بترولي', 
+    'زيتي', 'خمري', 'بني', 'سومو', 'كبتشينو', 'جنزاري', 'اوفوايت', 'اخضر',
+    'موديل 1 أبيض سادة', 'موديل 2 أبيض سترايب', 'موديل 3 سكري سادة', 'موديل 5 بيج سادة', 
+    'موديل 7 بيج سترايب', 'موديل 14 سومو سادة', 'موديل 18 سكني سادة', 
+    'موديل 25 قطن باكستاني ابيض سادة', 'موديل 26 قطن باكستاني ابيض سترايب عريض', 'موديل 27 واقي تنسل',
+    'قطن صيني أبيض', 'قطن صيني سكني', 'قطن صيني بصلي',
+    'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12', 'B13', 'B14', 'B15', 'B16', 'B17'
+  ],
+  stockCategories: ['بضاعة جاهزة', 'مواد خام', 'تغليف', 'مستهلكات خياطة', 'أصول', 'أقمشة'],
+  warehouses: ['مصنع البياضات', 'مصنع المخدة'],
   userTypes: [
     { name: "إدارة", color: "#6366f1", permissions: { canAdd: true, canEdit: true, canDelete: true, isFullAdmin: true } },
     { name: "مشرف قسم", color: "#f59e0b", permissions: { canAdd: true, canEdit: true, canDelete: false, isFullAdmin: false } },
@@ -859,6 +871,18 @@ export const getGlobalSettings = async (forceRefresh = false) => {
   const result = {
     ...defaultGlobalSettings,
     ...data,
+    stockUnits: (Array.isArray(data?.stockUnits) && data.stockUnits.length > 0)
+      ? data.stockUnits
+      : defaultGlobalSettings.stockUnits,
+    stockColors: (Array.isArray(data?.stockColors) && data.stockColors.length > 0)
+      ? data.stockColors
+      : defaultGlobalSettings.stockColors,
+    stockCategories: (Array.isArray(data?.stockCategories) && data.stockCategories.length > 0)
+      ? data.stockCategories
+      : defaultGlobalSettings.stockCategories,
+    warehouses: (Array.isArray(data?.warehouses) && data.warehouses.length > 0)
+      ? data.warehouses
+      : defaultGlobalSettings.warehouses,
     workShifts: (Array.isArray(data?.workShifts) && data.workShifts.length > 0)
       ? data.workShifts
       : defaultGlobalSettings.workShifts,
