@@ -190,6 +190,7 @@ const AdminSettings = ({ user }) => {
     userTypes: [],
     jobTitles: [],
     departmentsList: [],
+    salesReps: [],
     workShifts: [],
     primaryColor: '#1a8d9b',
     hrSettings: {
@@ -228,6 +229,9 @@ const AdminSettings = ({ user }) => {
       
       setSettings({
         ...data,
+        jobTitles: [...new Set([...(data.jobTitles || []), ...(employeeList || []).map(e => String(e.jobTitle || '').trim()).filter(Boolean)])],
+        departmentsList: [...new Set([...(data.departmentsList || []), ...(employeeList || []).map(e => String(e.department || '').trim()).filter(Boolean)])],
+        salesReps: [...new Set(['زبائن الشركة', ...(data.salesReps || []), ...(employeeList || []).filter(e => e.role === 'sales' || e.department === 'المبيعات' || (e.jobTitle || '').includes('مبيعات') || e.roles?.includes('المبيعات')).map(e => String(e.name || '').trim()).filter(Boolean)])],
         ammanAreas: data.ammanAreas || [
           'عبدون', 'دير غبار', 'أم أذينة', 'الرابية', 'الشميساني', 'الصويفية', 'الجندويل', 
           'خلدا', 'تلاع العلي', 'أم السماق', 'ضاحية الرشيد', 'ضاحية الحسين', 'مرج الحمام', 

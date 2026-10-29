@@ -1,9 +1,11 @@
-import { isActiveEmployee } from '../../utils/employeeStatus';
+import { belongsToHREmployees } from '../../utils/employeeStatus';
+import { isActiveHREmployee as isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, Clock, XCircle, FileText, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Undo2, Trash2, DollarSign, Eye, ChevronDown, ChevronUp, User, Pencil, Bell } from 'lucide-react';
 import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import Select from '../../components/SearchSelect';
-import { getEmployees, getHRAdvances, saveHRAdvance, deleteHRAdvance, createNotification, getGlobalSettings, isDateLocked } from '../../store';
+import { getHRAdvances, saveHRAdvance, deleteHRAdvance, createNotification, getGlobalSettings, isDateLocked } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
 import Flatpickr from 'react-flatpickr';
@@ -438,6 +440,7 @@ const HRAdvances = ({ user, refreshCounts }) => {
     .map(emp => ({ value: emp.id, label: String(emp.id) }));
 
   const baseAdvances = [...advances].filter(a => {
+    if (!belongsToHREmployees(a, employees)) return false;
     if (searchTerm && String(a.employeeId) !== String(searchTerm)) return false;
     const reqDate = new Date(a.createdAt).toISOString().split('T')[0];
     const reqMonth = reqDate.slice(0, 7);

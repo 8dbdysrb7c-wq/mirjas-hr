@@ -1,8 +1,9 @@
-import { isActiveEmployee } from '../../utils/employeeStatus';
+import { isActiveHREmployee as isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import { DollarSign, Printer, Search, ArrowUpDown, ArrowUp, ArrowDown, Calendar, ChevronDown, ChevronUp, User } from 'lucide-react';
 import Select from '../../components/SearchSelect';
-import { getEmployees, getHRViolations, getHRAttendance, getHRLeaves, getGlobalSettings, getHRSalaryPeriods, saveHRSalaryPeriod, getHRAdvances, getHRBonuses, archiveHRSalaryPeriod, unarchiveHRSalaryPeriod, getHRSalaryArchive, getHRAttendanceByDateRange, getHRLeavesByDateRange, getHRViolationsByDateRange } from '../../store';
+import { getHRViolations, getHRAttendance, getHRLeaves, getGlobalSettings, getHRSalaryPeriods, saveHRSalaryPeriod, getHRAdvances, getHRBonuses, archiveHRSalaryPeriod, unarchiveHRSalaryPeriod, getHRSalaryArchive, getHRAttendanceByDateRange, getHRLeavesByDateRange, getHRViolationsByDateRange } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import { calculateSalaries as calculateSalariesLogic, getCycleDates } from '../../utils/salaryCalculator';
 import Swal from 'sweetalert2';
 import { updateDoc, doc } from 'firebase/firestore';

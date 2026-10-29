@@ -1929,18 +1929,9 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
 
       const diffMins = reqEndMins - reqStartMins;
 
-      if (leaveFormData.type === 'مغادرة الدخان') {
-        const maxEndMins = shiftEndMins + 180; // 3 hours
-        if (reqStartMins < shiftStartMins || reqEndMins > maxEndMins) {
-          const maxEndH = Math.floor(maxEndMins / 60);
-          const maxEndM = maxEndMins % 60;
-          const maxEndTimeStr = `${String(maxEndH).padStart(2, '0')}:${String(maxEndM).padStart(2, '0')}`;
-          MySwal.fire('مرفوض', `مغادرة الدخان يجب أن تكون ضمن أوقات العمل الرسمية بالإضافة لـ 3 ساعات بحد أقصى (${shiftStart} إلى ${maxEndTimeStr}).`, 'error');
-          return;
-        }
-      } else if (leaveFormData.type !== 'بدل عمل إضافي') {
+      if (leaveFormData.type !== 'بدل عمل إضافي') {
         if (reqStartMins < shiftStartMins || reqEndMins > shiftEndMins) {
-          MySwal.fire('مرفوض', 'الطلب مرفوض بسبب عدم تقديم المغادرة أثناء أوقات الدوام الرسمي المعتمدة لك (' + shiftStart + ' إلى ' + shiftEnd + ')', 'error');
+          MySwal.fire('خارج أوقات الدوام', 'يجب أن تقع بداية المغادرة ونهايتها ضمن دوامك الرسمي (' + shiftStart + ' إلى ' + shiftEnd + '). لا يوجد حد ٣ ساعات لمدة المغادرة.', 'error');
           return;
         }
 
@@ -2016,6 +2007,7 @@ const EmployeeDashboard = ({ user, onLogout, onUpdateUser }) => {
 
       await saveHRLeave({
         ...leaveFormData,
+        ...(['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(leaveFormData.type) ? { keepAsDepartureOnly: !isDeductFromVacation, calculationMode: isDeductFromVacation ? 'deduct_vacation' : 'departure_only' } : {}),
         deductFromVacationBalance: isDeductFromVacation,
         vacationDaysDeducted: isDeductFromVacation ? calculatedDeductedDays : 0,
         employeeId: empId,

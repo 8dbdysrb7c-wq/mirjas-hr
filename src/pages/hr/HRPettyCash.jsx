@@ -1,10 +1,11 @@
+import { belongsToHREmployees } from '../../utils/employeeStatus';
 import React, { useEffect, useState } from 'react';
 import { Plus, Receipt, Trash2, Pencil, Image as ImageIcon, Wallet, TrendingDown, Coins, FileText } from 'lucide-react';
 import Swal from 'sweetalert2';
 import Flatpickr from 'react-flatpickr';
 import { Arabic } from 'flatpickr/dist/l10n/ar.js';
 import 'flatpickr/dist/themes/light.css';
-import { getEmployees } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import { hasPermission } from '../../utils/permissions';
 import { createPettyCash, deletePettyCashExpense, listPettyCash, listPettyCashExpenses, savePettyCashExpense } from '../../services/pettyCash';
 import './HRPettyCash.css';
@@ -29,15 +30,15 @@ export default function HRPettyCash({ user }) {
   const selected = advances.find(item => item.id === selectedId);
   const refresh = async (preferredId) => {
     const rows = await listPettyCash();
-    setAdvances(rows);
+    setAdvances(rows.filter(row => belongsToHREmployees(row, employees)));
     setSelectedId(preferredId || selectedId || rows[0]?.id || '');
   };
 
   useEffect(() => {
     Promise.all([listPettyCash(), getEmployees()]).then(([rows, people]) => {
-      setAdvances(rows);
+      setAdvances(rows.filter(row => belongsToHREmployees(row, people)));
       setEmployees(people);
-      setSelectedId(rows[0]?.id || '');
+      setSelectedId(rows.find(row => belongsToHREmployees(row, people))?.id || '');
     }).catch(error => Swal.fire('خطأ', error.message, 'error')).finally(() => setLoading(false));
   }, []);
 

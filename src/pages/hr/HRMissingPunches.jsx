@@ -1,8 +1,9 @@
-import { isActiveEmployee } from '../../utils/employeeStatus';
+import { isActiveHREmployee as isActiveEmployee } from '../../utils/employeeStatus';
 import { getMissingPunches as detectMissingPunches } from '../../utils/missingPunches';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Bell, Clock, Check, X, Search, Filter, Fingerprint, Undo2, Trash2, User, ArrowUpDown, ArrowUp, ArrowDown, MessageCircle, Plus, Eye, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
-import { getMissingPunches, updateMissingPunchStatus, deleteMissingPunch, saveHRAuditLog, getEmployees, saveHRViolation, saveMissingPunch, getHRAttendance, saveHRAttendance, saveEmployee, getHRLeaves, saveHRLeave } from '../../store';
+import { getMissingPunches, updateMissingPunchStatus, deleteMissingPunch, saveHRAuditLog, saveHRViolation, saveMissingPunch, getHRAttendance, saveHRAttendance, saveEmployee, getHRLeaves, saveHRLeave } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification, sendTemplatedWhatsAppNotification } from '../../utils/whatsappService';
 import Select from '../../components/SearchSelect';
@@ -358,9 +359,10 @@ const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
     // 2. Detect Missing Check-out
     attendance.forEach(rec => {
       if (rec.isLeave) return;
-      const emp = emps.find(e => String(e.id) === String(rec.employeeId));
-      if (emp?.joinDate && rec.date < emp.joinDate) return;
-      if (emp?.terminationDate && rec.date > emp.terminationDate) return;
+      const emp = emps.find(e => String(e.id || '').trim() === String(rec.employeeId || '').trim());
+      if (!emp) return;
+      if (emp.joinDate && rec.date < emp.joinDate) return;
+      if (emp.terminationDate && rec.date > emp.terminationDate) return;
 
       const hasManual = data.some(p => String(p.employeeId) === String(rec.employeeId) && p.date === rec.date && p.type === 'خروج');
       if (hasManual) return;
@@ -399,9 +401,12 @@ const HRMissingPunches = ({ user, refreshCounts, onCountsCalculated }) => {
     const combined = [...data, ...virtualPunches]
       .filter(p => p.employeeName !== 'المدير العام' && p.employeeId !== 'admin')
       .filter(p => {
-        const emp = allEmps.find(e => String(e.id) === String(p.employeeId));
-        if (emp?.joinDate && p.date < emp.joinDate) return false;
-        if (emp?.terminationDate && p.date > emp.terminationDate) return false;
+        const punchEmpId = String(p.employeeId || '').trim();
+        const punchEmpName = String(p.employeeName || '').trim();
+        const emp = emps.find(e => (punchEmpId && String(e.id || '').trim() === punchEmpId) || (punchEmpName && String(e.name || '').trim() === punchEmpName));
+        if (!emp) return false;
+        if (emp.joinDate && p.date < emp.joinDate) return false;
+        if (emp.terminationDate && p.date > emp.terminationDate) return false;
         return true;
       });
 

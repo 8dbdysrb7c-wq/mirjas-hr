@@ -1,11 +1,13 @@
-import { isActiveEmployee } from '../../utils/employeeStatus';
+import { belongsToHREmployees } from '../../utils/employeeStatus';
+import { isActiveHREmployee as isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, User, Bell, Check } from 'lucide-react';
 import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
-import { getEmployees, getHRViolations, getHRViolationsByDateRange, saveHRViolation, deleteHRViolation, syncEvaluatedDailyReportViolations } from '../../store';
+import { getHRViolations, getHRViolationsByDateRange, saveHRViolation, deleteHRViolation, createEmployeeAlert, syncEvaluatedDailyReportViolations } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import Swal from 'sweetalert2';
 import HRDateFilter from '../../components/ui/HRDateFilter';
 import { hasPermission } from '../../utils/permissions';
@@ -22,6 +24,9 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
   const canDelete = hasPermission(user, 'hr_bonuses_violations', 'delete');
 
   const [violations, setViolations] = useState([]);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('pending');
   const [employees, setEmployees] = useState([]);
@@ -41,6 +46,7 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
     deductionAmount: '',
     notes: ''
   });
+  useEffect(() => { setSelectedIds(new Set()); }, [searchTerm, statusFilter, dateMode, selectedMonth, selectedDate, startDate, endDate]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
   const handleSort = (key) => {
@@ -129,7 +135,9 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
     }
     const res = await Swal.fire({ title: 'تأكيد الحذف', icon: 'warning', showCancelButton: true });
     if (res.isConfirmed) {
-      await deleteHRViolation(id);
+      const violation = violations.find(v => v.id === id);
+      if (!violation || violation.processedInPeriod) return Swal.fire('تعذر الحذف', 'هذه المخالفة مرتبطة بفترة مالية', 'warning');
+      await deleteHRViolation(id, user, violation.date);
       fetchData();
       refreshCounts?.();
     }
@@ -221,6 +229,7 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
     .map(emp => ({ value: emp.id, label: String(emp.id) }));
 
   const filteredViolations = [...violations].filter(v => v.status !== 'محذوف').filter(v => {
+    if (!belongsToHREmployees(v, employees)) return false;
     if (searchTerm && String(v.employeeId) !== String(searchTerm)) return false;
     if (!v.date) return false;
     const reqDate = new Date(v.date).toISOString().split('T')[0];
@@ -259,6 +268,47 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
     if (strA > strB) return sortConfig.direction === 'asc' ? 1 : -1;
     return 0;
   });
+
+  const selectedRows = sortedViolations.filter(v => selectedIds.has(v.id));
+  const allSelected = sortedViolations.length > 0 && selectedRows.length === sortedViolations.length;
+  const toggleSelection = id => setSelectedIds(previous => { const next = new Set(previous); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const handleBulk = async action => {
+    if (bulkBusy || !selectedRows.length) return;
+    if (action === 'delete' ? !canDelete : action === 'note' ? !(canEdit || canApprove) : !canApprove) return;
+    const targets = selectedRows.map(row => ({ ...row }));
+    const names = { delete: 'حذف', approve: 'اعتماد', reject: 'رفض', note: 'إرسال ملاحظة' };
+    const confirmation = await Swal.fire({ title: names[action] + ' للمحدد (' + targets.length + ')', text: action === 'note' ? 'تُرسل ملاحظة واحدة لكل موظف محدد، وتتضمن المخالفات التي حددتها له.' : 'سيطبق الإجراء على المخالفات المحددة فقط. تُستثنى الحالات غير المؤهلة والفترات المالية المغلقة.', input: action === 'note' ? 'textarea' : undefined, inputPlaceholder: 'اكتب الملاحظة...', inputValidator: action === 'note' ? value => !value?.trim() ? 'يرجى كتابة الملاحظة' : undefined : undefined, showCancelButton: true, confirmButtonText: 'تأكيد', cancelButtonText: 'إلغاء' });
+    if (!confirmation.isConfirmed) return;
+    setBulkBusy(true);
+    const completed = new Set();
+    const failures = [];
+    let skipped = 0;
+    try {
+      if (action === 'note') {
+        const groups = new Map();
+        targets.forEach(row => { const id = String(row.employeeId || '').trim(); if (!id) { failures.push('بيانات موظف غير مكتملة'); return; } if (!groups.has(id)) groups.set(id, []); groups.get(id).push(row); });
+        for (const [employeeId, rows] of groups) {
+          try {
+            await createEmployeeAlert({ employeeId, employeeName: rows[0].employeeName || '', message: confirmation.value.trim() + '\n\nالمخالفات المحددة:\n' + rows.map(row => (row.type || 'مخالفة') + ' — ' + row.date).join('\n'), source: 'المخالفات والخصومات', sourceReference: rows.map(row => row.id).join(', '), sentById: user?.id || '', sentByName: user?.name || 'الإدارة' });
+            rows.forEach(row => completed.add(row.id));
+          } catch (error) { failures.push((rows[0].employeeName || employeeId) + ': ' + error.message); }
+        }
+      } else {
+        for (const row of targets) {
+          if ((action === 'delete' && row.processedInPeriod) || (action !== 'delete' && row.status !== 'معلق')) { skipped++; continue; }
+          try {
+            if (action === 'delete') await deleteHRViolation(row.id, user, row.date);
+            else await saveHRViolation({ ...row, status: action === 'approve' ? 'موافق' : 'مرفوض', approvedBy: user?.name || 'المدير', approvedAt: new Date().toISOString() }, user);
+            completed.add(row.id);
+          } catch (error) { failures.push(row.employeeName + ' (' + row.date + '): ' + error.message); }
+        }
+      }
+      setSelectedIds(previous => new Set([...previous].filter(id => !completed.has(id))));
+      if (action !== 'note') { await refreshVisibleData(); refreshCounts?.(); }
+      await Swal.fire({ icon: failures.length || skipped ? 'warning' : 'success', title: 'نتيجة الإجراء', text: 'تمت معالجة ' + completed.size + ' من ' + targets.length + ' مخالفة. تم تجاوز ' + skipped + ' حالة غير مؤهلة.' + (failures.length ? '\nتعذر تنفيذ ' + failures.length + ':\n' + failures.slice(0, 8).join('\n') : '') });
+    } catch (error) { await Swal.fire('تعذر إكمال الإجراء', error.message, 'error'); }
+    finally { setBulkBusy(false); }
+  };
 
   const totalDeductions = sortedViolations.reduce((sum, v) => sum + (Number(v.deductionAmount) || 0), 0);
 
@@ -361,10 +411,21 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
         </div>
       </div>
 
+      <fieldset disabled={bulkBusy} className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <label className="flex items-center gap-2"><input type="checkbox" aria-label="تحديد كل المخالفات المعروضة" checked={allSelected} ref={el => { if (el) el.indeterminate = selectedRows.length > 0 && !allSelected; }} onChange={event => setSelectedIds(event.target.checked ? new Set(sortedViolations.map(v => v.id)) : new Set())} /> تحديد الكل (المعروض)</label>
+        <span>المحدد: {selectedRows.length}</span>
+        {canApprove && <><button type="button" className="btn btn-outline" disabled={!selectedRows.length} onClick={() => handleBulk('approve')}>اعتماد المحدد</button><button type="button" className="btn btn-outline" disabled={!selectedRows.length} onClick={() => handleBulk('reject')}>رفض المحدد</button></>}
+        {canDelete && <button type="button" className="btn btn-outline text-red-600" disabled={!selectedRows.length} onClick={() => handleBulk('delete')}>حذف المحدد</button>}
+        {(canEdit || canApprove) && <button type="button" className="btn btn-outline" disabled={!selectedRows.length} onClick={() => handleBulk('note')}>إرسال ملاحظة للمحدد</button>}
+        <button type="button" className="btn btn-outline" disabled={!selectedRows.length} onClick={() => setSelectedIds(new Set())}>إلغاء التحديد</button>
+        {bulkBusy && <span role="status">جارٍ تنفيذ الإجراء…</span>}
+      </fieldset>
+      <fieldset disabled={bulkBusy}>
       <div className="table-responsive">
         <table className="table">
           <thead>
             <tr>
+              <th>تحديد</th>
               <th className="cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('date')}>
                 <div className="flex items-center gap-2">التاريخ {renderSortIcon('date')}</div>
               </th>
@@ -386,6 +447,7 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
           <tbody className="divide-y divide-gray-50">
             {sortedViolations.map((v) => (
               <tr key={v.id} className="hover:bg-gray-50/50 transition-colors">
+                <td><input type="checkbox" aria-label={"تحديد مخالفة " + v.employeeName + " بتاريخ " + v.date} checked={selectedIds.has(v.id)} onChange={() => toggleSelection(v.id)} /></td>
                 <td className="text-muted text-sm">{v.date}</td>
                 <td className="font-semibold">{v.employeeName}</td>
                 <td className="text-muted text-sm">{v.department}</td>
@@ -420,11 +482,12 @@ const HRViolations = ({ user, refreshCounts, onFiltersChange }) => {
               </tr>
             ))}
             {sortedViolations.length === 0 && (
-              <tr><td colSpan="9" className="py-10 text-center text-muted">لا توجد مخالفات مسجلة</td></tr>
+              <tr><td colSpan="10" className="py-10 text-center text-muted">لا توجد مخالفات مسجلة</td></tr>
             )}
           </tbody>
         </table>
       </div>
+      </fieldset>
       </div>
 
       {showModal && (

@@ -1,11 +1,12 @@
-import { isActiveEmployee } from '../../utils/employeeStatus';
+import { isActiveHREmployee as isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Calendar, Search, LogOut, AlertTriangle, ChevronDown, Upload, FileMinus, X, User, Trash2, Clock, Check } from 'lucide-react';
 import Select from '../../components/SearchSelect';
 import HRDateFilter from '../../components/ui/HRDateFilter';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
-import { getEmployees, getGlobalSettings, saveHRViolation, getHRViolationsByDateRange, getHRLeavesByDateRange, getHRAttendanceByDateRange, getAttendanceLogsByDateRange, getReportsByDateRange, getSupervisorReportsByDateRange } from '../../store';
+import { getGlobalSettings, saveHRViolation, resetAttendancePenalty, getHRViolationsByDateRange, getHRLeavesByDateRange, getHRAttendanceByDateRange, getAttendanceLogsByDateRange, getReportsByDateRange, getSupervisorReportsByDateRange } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import Swal from 'sweetalert2';
 import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import { hasPermission } from '../../utils/permissions';
@@ -64,6 +65,11 @@ const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
   const [earlyDepartures, setEarlyDepartures] = useState([]);
   const [repeatedLates, setRepeatedLates] = useState([]);
   const [openDropdownId, setOpenDropdownId] = useState(null);
+  const [selectedAlerts, setSelectedAlerts] = useState({ early: new Set(), late: new Set() });
+
+  useEffect(() => {
+    setSelectedAlerts({ early: new Set(), late: new Set() });
+  }, [dateMode, selectedMonth, selectedDate, startDate, endDate, search, filterStatus]);
   const [penaltyModal, setPenaltyModal] = useState({
     isOpen: false,
     employeeName: '',
@@ -455,6 +461,22 @@ const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
     setRepeatedLates(lateList.filter(a => filterStatus === 'الكل' || a.status === filterStatus));
   }, [dateMode, selectedDate, selectedMonth, startDate, endDate, attendanceRecords, rawLogs, employeeReports, supervisorReports, employees, settings, loading, violations, leaves, filterStatus]);
 
+  const [resettingPenalty, setResettingPenalty] = useState(false);
+  const handleResetPenalty = async (emp, type) => {
+    if (!canApprove || resettingPenalty) return;
+    const result = await Swal.fire({ title: 'إعادة الحالة إلى معلّق؟', text: 'سيُلغى الإجراء والخصم المالي المرتبط بهذه الحالة فقط. تبقى بصمات الدوام واحتساب وقت التأخير حسب سياسة الرواتب كما هي.', icon: 'question', showCancelButton: true, confirmButtonText: 'نعم، إعادة', cancelButtonText: 'إلغاء' });
+    if (!result.isConfirmed) return;
+    setResettingPenalty(true);
+    try {
+      const updated = await resetAttendancePenalty({ employeeId: emp.id, employeeName: emp.name, date: emp.date, type }, user);
+      const byId = new Map(updated.map(v => [v.id, v]));
+      setViolations(prev => prev.map(v => byId.get(v.id) || v));
+      refreshCounts?.();
+      await Swal.fire('تم', 'أعيدت الحالة إلى معلّق وأُلغي الخصم المرتبط بها.', 'success');
+    } catch (error) { await Swal.fire('تعذر إعادة الحالة', error.message, 'error'); }
+    finally { setResettingPenalty(false); }
+  };
+
   const handleIgnoreAlert = async (empData, type) => {
       setOpenDropdownId(null);
       if (!canApprove) {
@@ -474,6 +496,7 @@ const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
       if (result.isConfirmed) {
           try {
               const savedViol = await saveHRViolation({
+          id: violations.find(v => String(v.employeeId) === String(empData.id) && v.date === empData.date && v.type === (type === 'early' ? 'مغادرة مبكرة' : 'تأخير') && !['محذوف','deleted'].includes(v.status))?.id,
                   employeeId: empData.id,
                   employeeName: empData.name,
                   department: empData.department || 'غير محدد',
@@ -484,7 +507,7 @@ const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
                   action: 'تجاهل',
               }, { name: user?.name || 'النظام' });
               
-              setViolations(prev => [savedViol, ...prev]);
+              setViolations(prev => [savedViol, ...prev.filter(v => v.id !== savedViol.id)]);
               refreshCounts?.();
               Swal.fire('تم', 'تم حذف التنبيه بنجاح ولن يؤثر على راتب الموظف.', 'success');
           } catch(e) {
@@ -596,6 +619,7 @@ const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
     if (amount) {
       try {
         const savedViol = await saveHRViolation({
+          id: violations.find(v => String(v.employeeId) === String(empData.id) && v.date === empData.date && v.type === (type === 'early' ? 'مغادرة مبكرة' : 'تأخير') && !['محذوف','deleted'].includes(v.status))?.id,
           employeeId: empData.id,
           employeeName: empData.name,
           department: empData.department || 'غير محدد',
@@ -608,7 +632,7 @@ const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
           action: 'خصم مالي',
         }, { name: user?.name || 'النظام' });
         
-        setViolations(prev => [savedViol, ...prev]);
+        setViolations(prev => [savedViol, ...prev.filter(v => v.id !== savedViol.id)]);
               refreshCounts?.();
         Swal.fire('تم بنجاح!', 'تم إدراج الخصم المالي في السجل وتطبيقه على الراتب.', 'success');
       } catch (e) {
@@ -764,6 +788,39 @@ const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
 
   const filteredEarlyDepartures = search ? earlyDepartures.filter(a => String(a.id) === String(search)) : earlyDepartures;
   const filteredRepeatedLates = search ? repeatedLates.filter(a => String(a.id) === String(search)) : repeatedLates;
+
+  const alertKey = (emp) => JSON.stringify([String(emp.id), emp.date]);
+  const toggleAlert = (section, emp) => {
+    setSelectedAlerts(previous => {
+      const next = new Set(previous[section]);
+      const key = alertKey(emp);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return { ...previous, [section]: next };
+    });
+  };
+  const renderSelectAll = (section, rows, title) => {
+    const selectedCount = rows.filter(emp => selectedAlerts[section].has(alertKey(emp))).length;
+    const allSelected = rows.length > 0 && selectedCount === rows.length;
+    return (
+      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', cursor: rows.length ? 'pointer' : 'default', color: '#475569', fontSize: 13 }}>
+        <input
+          type="checkbox"
+          aria-label={`تحديد الكل في ${title}`}
+          checked={allSelected}
+          disabled={loading || rows.length === 0}
+          ref={node => { if (node) node.indeterminate = selectedCount > 0 && !allSelected; }}
+          onChange={() => setSelectedAlerts(previous => ({
+            ...previous,
+            [section]: allSelected ? new Set() : new Set(rows.map(alertKey))
+          }))}
+          style={{ width: 17, height: 17, accentColor: '#1a8d9b' }}
+        />
+        تحديد الكل
+        {selectedCount > 0 && <span aria-live="polite">({selectedCount} محدد)</span>}
+      </label>
+    );
+  };
 
   return (
     <div style={{ padding: '20px', fontFamily: 'inherit', direction: 'rtl' }}>
@@ -970,6 +1027,7 @@ const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right' }}>
               <thead style={{ background: '#f8fafc', color: '#475569', fontSize: '0.9rem' }}>
                 <tr>
+                  <th style={{ padding: '16px', width: 150 }}>{renderSelectAll('early', filteredEarlyDepartures, 'المغادرة المبكرة')}</th>
                   <th style={{ padding: '16px 24px', fontWeight: '600' }}>الموظف</th>
                   <th style={{ padding: '16px 24px', fontWeight: '600' }}>القسم</th>
                   <th style={{ padding: '16px 24px', fontWeight: '600', textAlign: 'center' }}>التاريخ</th>
@@ -982,9 +1040,12 @@ const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
               </thead>
               <tbody>
                 {filteredEarlyDepartures.length === 0 ? (
-                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>لا توجد حالات مغادرة مبكرة</td></tr>
-                ) : filteredEarlyDepartures.map((emp, index) => (
-                  <tr key={index} style={{ borderTop: '1px solid #f1f5f9', transition: 'all 0.2s' }}>
+                  <tr><td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>لا توجد حالات مغادرة مبكرة</td></tr>
+                ) : filteredEarlyDepartures.map((emp) => (
+                  <tr key={alertKey(emp)} style={{ background: selectedAlerts.early.has(alertKey(emp)) ? '#f0fdfa' : undefined, borderTop: '1px solid #f1f5f9', transition: 'all 0.2s' }}>
+                    <td style={{ padding: '16px', textAlign: 'center' }}>
+                      <input type="checkbox" aria-label={`تحديد ${emp.name} بتاريخ ${emp.date} في المغادرة المبكرة`} checked={selectedAlerts.early.has(alertKey(emp))} onChange={() => toggleAlert('early', emp)} style={{ width: 17, height: 17, accentColor: '#1a8d9b', cursor: 'pointer' }} />
+                    </td>
                     <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#1e293b' }}>{emp.name}</td>
                     <td style={{ padding: '16px 24px', color: '#64748b' }}>{emp.department}</td>
                     <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#1e293b', textAlign: 'center' }}>{emp.date}</td>
@@ -1009,6 +1070,7 @@ const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
                             fontSize: '0.8rem' 
                           }}>
                             {emp.status === 'مرفوض' ? 'تم التجاهل' : 'تم اعتماد العقوبة'}
+                            {canApprove && <button type="button" className="btn btn-outline" disabled={resettingPenalty} onClick={() => handleResetPenalty(emp, 'مغادرة مبكرة')} style={{ marginInlineStart: 8 }}>إعادة</button>}
                           </span>
                           {emp.actionTaken && (
                             <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>
@@ -1069,6 +1131,7 @@ const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right' }}>
               <thead style={{ background: '#f8fafc', color: '#475569', fontSize: '0.9rem' }}>
                 <tr>
+                  <th style={{ padding: '16px', width: 150 }}>{renderSelectAll('late', filteredRepeatedLates, 'تنبيهات التأخير')}</th>
                   <th style={{ padding: '16px 24px', fontWeight: '600' }}>الموظف</th>
                   <th style={{ padding: '16px 24px', fontWeight: '600' }}>القسم</th>
                   <th style={{ padding: '16px 24px', fontWeight: '600', textAlign: 'center' }}>التاريخ</th>
@@ -1080,9 +1143,12 @@ const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
               </thead>
               <tbody>
                 {filteredRepeatedLates.length === 0 ? (
-                  <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>لا توجد حالات تأخير</td></tr>
-                ) : filteredRepeatedLates.map((emp, index) => (
-                  <tr key={index} style={{ borderTop: '1px solid #f1f5f9', transition: 'all 0.2s' }}>
+                  <tr><td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>لا توجد حالات تأخير</td></tr>
+                ) : filteredRepeatedLates.map((emp) => (
+                  <tr key={alertKey(emp)} style={{ background: selectedAlerts.late.has(alertKey(emp)) ? '#f0fdfa' : undefined, borderTop: '1px solid #f1f5f9', transition: 'all 0.2s' }}>
+                    <td style={{ padding: '16px', textAlign: 'center' }}>
+                      <input type="checkbox" aria-label={`تحديد ${emp.name} بتاريخ ${emp.date} في تنبيهات التأخير`} checked={selectedAlerts.late.has(alertKey(emp))} onChange={() => toggleAlert('late', emp)} style={{ width: 17, height: 17, accentColor: '#1a8d9b', cursor: 'pointer' }} />
+                    </td>
                     <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#1e293b' }}>{emp.name}</td>
                     <td style={{ padding: '16px 24px', color: '#64748b' }}>{emp.department}</td>
                     <td style={{ padding: '16px 24px', fontWeight: 'bold', color: '#1e293b', textAlign: 'center' }}>{emp.date}</td>
@@ -1106,6 +1172,7 @@ const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
                             fontSize: '0.8rem' 
                           }}>
                             {emp.status === 'مرفوض' ? 'تم التجاهل' : 'تم اعتماد العقوبة'}
+                            {canApprove && <button type="button" className="btn btn-outline" disabled={resettingPenalty} onClick={() => handleResetPenalty(emp, 'تأخير')} style={{ marginInlineStart: 8 }}>إعادة</button>}
                           </span>
                           {emp.actionTaken && (
                             <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>
@@ -1214,6 +1281,7 @@ const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
                     const emp = employees.find(e => e.name === penaltyModal.employeeName);
                     if (emp) {
                       const savedViol = await saveHRViolation({
+                        id: violations.find(v => String(v.employeeId) === String(emp.id) && v.date === (penaltyModal.date || selectedDate) && v.type === penaltyModal.type && !['محذوف','deleted'].includes(v.status))?.id,
                         employeeId: emp.id,
                         employeeName: emp.name,
                         department: emp.department || 'غير محدد',
@@ -1223,7 +1291,7 @@ const HRAttendanceAlerts = ({ user, refreshCounts, onCountsCalculated }) => {
                         reason: penaltyModal.notes || 'لا يوجد ملاحظات',
                         action: penaltyModal.action,
                       }, { name: user?.name || 'النظام' });
-                      setViolations(prev => [savedViol, ...prev]);
+                      setViolations(prev => [savedViol, ...prev.filter(v => v.id !== savedViol.id)]);
               refreshCounts?.();
                       Swal.fire('تم بنجاح!', 'تم تسجيل المخالفة وحفظها في السجل.', 'success');
                     } else {

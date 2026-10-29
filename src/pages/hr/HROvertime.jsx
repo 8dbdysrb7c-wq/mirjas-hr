@@ -1,6 +1,10 @@
+import { belongsToHREmployees } from '../../utils/employeeStatus';
+import { dailyDepartureSettlement } from '../../utils/dailyDepartureSettlement';
+import { collection, getDocsFromServer, query, where } from 'firebase/firestore';
+import { db } from '../../firebase';
 import { getOvertimeAttendanceForDate } from '../../services/hr';
 import { resolveOvertimeAttendance } from '../../utils/overtimeAttendance';
-import { isActiveEmployee } from '../../utils/employeeStatus';
+import { isActiveHREmployee as isActiveEmployee } from '../../utils/employeeStatus';
 import { isAdmin } from '../../services/settings';
 import React, { useState, useEffect, useRef } from 'react';
 import { CheckCircle, Clock, XCircle, Calendar, Plus, X, ArrowUpDown, ArrowUp, ArrowDown, Check, Undo2, Trash2, Eye, ChevronDown, ChevronUp, User, Bell, Edit2 } from 'lucide-react';
@@ -8,7 +12,8 @@ import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
-import { getEmployees, getHRLeaves, getHRLeavesByDateRange, saveHRLeave, deleteHRLeave, getGlobalSettings, subscribeToHRAttendanceForDate, saveHRAttendance } from '../../store';
+import { getHRLeaves, getHRLeavesByDateRange, saveHRLeave, deleteHRLeave, getGlobalSettings, subscribeToHRAttendanceForDate, saveHRAttendance } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
 import HRDateFilter from '../../components/ui/HRDateFilter';
@@ -52,7 +57,7 @@ const HROvertime = ({ user, refreshCounts }) => {
   const [endDate, setEndDate] = useState(getLocalDateStr(new Date()));
   const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false);
 
-  const [smartModal, setSmartModal] = useState({ show: false, leave: null, attendance: null, deficitMins: 0, lateMins: 0, earlyMins: 0, requestedMins: 0, loading: false });
+  const [smartModal, setSmartModal] = useState({ show: false, leave: null, attendance: null, deficitMins: 0, lateMins: 0, earlyMins: 0, requestedMins: 0, loading: false, calculationMode: 'split', waiveDeficit: false, approvalNote: '' });
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
 
@@ -61,7 +66,7 @@ const HROvertime = ({ user, refreshCounts }) => {
       Swal.fire('غير مصرح', 'حسابك في وضع المعاينة فقط، ليس لديك صلاحية لاعتماد العمل الإضافي.', 'warning');
       return;
     }
-    setSmartModal({ show: true, leave, attendance: null, deficitMins: 0, requestedMins: 0, loading: true });
+    setSmartModal({ show: true, leave, attendance: null, deficitMins: 0, lateMins: 0, earlyMins: 0, requestedMins: 0, loading: true, calculationMode: 'split', waiveDeficit: false, approvalNote: '' });
     
     // Calculate requested minutes
     let reqMins = 0;
@@ -78,6 +83,7 @@ const HROvertime = ({ user, refreshCounts }) => {
     let defMins = 0;
     let lateMins = 0;
     let earlyMins = 0;
+    let departureMins = 0;
     try {
       const targetDate = leave.date || leave.startDate;
       const emp = displayedEmployee || employees.find(e => String(e.id) === String(leave.employeeId) || String(e.employeeId) === String(leave.employeeId));
@@ -190,6 +196,9 @@ const HROvertime = ({ user, refreshCounts }) => {
           earlyMins = defMins - lateMins;
         }
       }
+      const dayLeaves = await getDocsFromServer(query(collection(db, 'hr_leaves'), where('date', '==', targetDate)));
+      const settlement = dailyDepartureSettlement({ attendance: attendanceData, leaves: dayLeaves.docs.map(d => d.data()), date: targetDate, employeeId: leave.employeeId, shiftStart, shiftEnd });
+      lateMins = settlement.lateMins; earlyMins = settlement.earlyMins; departureMins = settlement.departureMins; defMins = settlement.deficitMins;
     } catch (err) {
       console.error(err);
       setSmartModal(previous => ({ ...previous, show: false, loading: false }));
@@ -204,41 +213,81 @@ const HROvertime = ({ user, refreshCounts }) => {
       deficitMins: defMins,
       lateMins,
       earlyMins,
+      departureMins,
       requestedMins: reqMins,
-      loading: false
+      loading: false,
+      calculationMode: 'split',
+      waiveDeficit: false,
+      approvalNote: ''
     });
   };
 
   const confirmSmartApproval = async () => {
-    const { leave, deficitMins, requestedMins } = smartModal;
+    const { leave, deficitMins, requestedMins, calculationMode, waiveDeficit } = smartModal;
     
     // Check if it's weekend
     const lDate = new Date(leave.date);
     const isHoliday = lDate.getDay() === 5; // simplified holiday check (Friday)
     
     let baseRate = isHoliday ? '1:1.5' : '1:1.25';
-    if(leave.rate) baseRate = leave.rate; // Respect original if set explicitly
+    if (leave.rate) baseRate = leave.rate; // Respect original if set explicitly
     
+    const isFullMode = calculationMode === 'full';
     let compMins = 0; // Compensating (not payable)
     let extraMins = 0; // Pure payable overtime
+    let lateCoveredMins = 0;
+    let earlyCoveredMins = 0;
+    let departureCoveredMins = 0;
     
-    if (deficitMins > 0) {
-      if (requestedMins <= deficitMins) {
-        compMins = requestedMins;
+    if (isFullMode) {
+      // اعتبار كامل دوام الطلب كعمل إضافي فعلي
+      extraMins = requestedMins;
+      compMins = 0;
+      if (waiveDeficit) {
+        // إعفاء الموظف من خصم العجز استثنائياً بقرار إدارة
+        lateCoveredMins = Number(smartModal.lateMins) || 0;
+        earlyCoveredMins = Number(smartModal.earlyMins) || 0;
       } else {
-        compMins = deficitMins;
-        extraMins = requestedMins - deficitMins;
+        // يبقى عجز الدوام مسجلاً ليخضع للخصم وفق سياسة الحضور
+        lateCoveredMins = 0;
+        earlyCoveredMins = 0;
       }
     } else {
-      extraMins = requestedMins;
+      // الاحتساب بالتقسيم الذكي وتسوية عجز الدوام (الطريقة المرفقة)
+      if (deficitMins > 0) {
+        if (requestedMins <= deficitMins) {
+          compMins = requestedMins;
+          extraMins = 0;
+        } else {
+          compMins = deficitMins;
+          extraMins = requestedMins - deficitMins;
+        }
+      } else {
+        extraMins = requestedMins;
+      }
+      lateCoveredMins = Math.min(Number(smartModal.lateMins) || 0, compMins);
+      earlyCoveredMins = Math.min(Number(smartModal.earlyMins) || 0, Math.max(0, compMins - (Number(smartModal.lateMins) || 0)));
     }
     
+    departureCoveredMins = isFullMode ? (waiveDeficit ? (Number(smartModal.departureMins) || 0) : 0) : Math.min(Number(smartModal.departureMins) || 0, Math.max(0, compMins - lateCoveredMins - earlyCoveredMins));
     const compHoursStr = compMins > 0 ? `${Math.floor(compMins/60)} ساعة و ${compMins%60} دقيقة (بمعدل 1:1 لتغطية العجز)` : '';
     const extraHoursStr = extraMins > 0 ? `${Math.floor(extraMins/60)} ساعة و ${extraMins%60} دقيقة (بمعدل ${baseRate})` : '';
     
-    let splitNotes = `\n\n-- تفاصيل الاحتساب الذكي --\n`;
-    if(compMins > 0) splitNotes += `* تم اقتطاع ${compHoursStr}\n`;
-    if(extraMins > 0) splitNotes += `* الصافي الفعلي للإضافي: ${extraHoursStr}\n`;
+    let splitNotes = `\n\n-- تفاصيل الاحتساب والاعتماد --\n`;
+    if (isFullMode) {
+      splitNotes += `* نوع الاعتماد: اعتبار دوامه فعلاً كعمل إضافي كامل (${extraHoursStr})\n`;
+      if (deficitMins > 0) {
+        if (waiveDeficit) {
+          splitNotes += `* عجز الدوام (${deficitMins} دقيقة): تم إعفاء الموظف منه استثنائياً بقرار الإدارة دون خصم.\n`;
+        } else {
+          splitNotes += `* عجز الدوام (${deficitMins} دقيقة): يبقى مسجلاً في الحضور والانصراف ويخضع لسياسة الخصم في الراتب.\n`;
+        }
+      }
+    } else {
+      splitNotes += `* نوع الاعتماد: الاحتساب بالتقسيم الذكي وتسوية عجز الدوام\n`;
+      if (compMins > 0) splitNotes += `* تم اقتطاع لتغطية العجز: ${compHoursStr}\n`;
+      if (extraMins > 0) splitNotes += `* الصافي الفعلي للإضافي المستحق: ${extraHoursStr}\n`;
+    }
     
     const finalNotes = (leave.notes || '') + splitNotes;
     
@@ -249,15 +298,16 @@ const HROvertime = ({ user, refreshCounts }) => {
       adminNote: smartModal.approvalNote || '',
       approvalReason: smartModal.approvalNote || '',
       rejectionReason: '',
-       rateDetails: {
-          compMins,
-          extraMins,
-          baseRate,
-          // Keep the attendance settlement auditable and prevent payroll from
-          // deducting the same covered lateness for a second time.
-          lateCoveredMins: Math.min(Number(smartModal.lateMins) || 0, compMins),
-          earlyCoveredMins: Math.min(Number(smartModal.earlyMins) || 0, Math.max(0, compMins - (Number(smartModal.lateMins) || 0)))
-       }
+      rateDetails: {
+        calculationMode: isFullMode ? 'full' : 'split',
+        waiveDeficit: isFullMode ? Boolean(waiveDeficit) : false,
+        compMins,
+        extraMins,
+        baseRate,
+        lateCoveredMins,
+        departureCoveredMins,
+        earlyCoveredMins
+      }
     };
     
     Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false });
@@ -268,7 +318,14 @@ const HROvertime = ({ user, refreshCounts }) => {
       try {
         const emp = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim() || String(e.name || '').trim() === String(leave.employeeName || '').trim());
         if (emp && emp.phone) {
-          let msg = `مرحباً ${emp.name}،\nتم الموافقة على طلب العمل الإضافي الخاص بك.`;
+          let msg = `مرحباً ${emp.name}،\nتمت الموافقة على طلب العمل الإضافي الخاص بك بتاريخ ${leave.date || leave.startDate || ''}.`;
+          if (isFullMode) {
+            msg += `\nتم اعتماد كامل المدة (${extraHoursStr}) كعمل إضافي فعلي.`;
+          } else {
+            if (compMins > 0) msg += `\nتمت تغطية عجز الدوام (${compHoursStr}).`;
+            if (extraMins > 0) msg += `\nالصافي المعتمد للإضافي: ${extraHoursStr}.`;
+          }
+          if (smartModal.approvalNote) msg += `\nملاحظة الإدارة: ${smartModal.approvalNote}`;
           msg += `\n-- الإدارة`;
           await sendWhatsAppNotification(emp.phone, msg, 'overtime');
         }
@@ -279,9 +336,9 @@ const HROvertime = ({ user, refreshCounts }) => {
       setLeaves(prev => prev.map(l => l.id === leave.id ? updatedLeave : l));
       setSmartModal({ show: false, leave: null, attendance: null, deficitMins: 0, requestedMins: 0, loading: false });
       if(refreshCounts) refreshCounts();
-      Swal.fire('نجاح', 'تم احتساب الإضافي والموافقة عليه بإنصاف', 'success');
+      Swal.fire('نجاح', isFullMode ? 'تم اعتماد كامل المدة كعمل إضافي فعلي بنجاح' : 'تم احتساب الإضافي بالتقسيم الذكي والموافقة عليه بإنصاف', 'success');
     } catch(e) {
-       Swal.fire('خطأ', 'حدث خطأ', 'error');
+       Swal.fire('خطأ', 'حدث خطأ أثناء الحفظ', 'error');
     }
   };
 
@@ -338,6 +395,17 @@ const HROvertime = ({ user, refreshCounts }) => {
         htmlContent += `<tr><th>معدل الاحتساب</th><td dir="ltr"><span style="background:#e0e7ff; color:#4f46e5; padding:3px 8px; border-radius:12px; font-weight:bold; font-size:0.85rem;">${leave.rate}</span></td></tr>`;
       }
     }
+    if (leave.rateDetails) {
+      const isFull = leave.rateDetails.calculationMode === 'full';
+      const modeLabel = isFull ? 'اعتبار كامل المدة كإضافي فعلي' : 'احتساب بالتقسيم الذكي (تسوية العجز)';
+      htmlContent += `<tr><th>طريقة الاحتساب</th><td><span style="font-weight:bold; color:${isFull ? '#0284c7' : '#0f766e'};">${modeLabel}</span></td></tr>`;
+      if (leave.rateDetails.extraMins != null) {
+        htmlContent += `<tr><th>الصافي المعتمد للإضافي</th><td><strong>${leave.rateDetails.extraMins} دقيقة</strong></td></tr>`;
+      }
+      if (leave.rateDetails.compMins > 0) {
+        htmlContent += `<tr><th>المستقطع لتغطية العجز</th><td><strong>${leave.rateDetails.compMins} دقيقة</strong></td></tr>`;
+      }
+    }
     htmlContent += `</table>`;
     htmlContent += `<div class="swal-notes-box"><strong>السبب / الملاحظات:</strong><br><div style="margin-top: 8px;">${leave.notes ? leave.notes.replace(/\n/g, '<br>') : '<span style="color:#94a3b8; font-style:italic;">لا يوجد ملاحظات</span>'}</div></div>`;
 
@@ -370,24 +438,14 @@ const HROvertime = ({ user, refreshCounts }) => {
     return sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-primary" /> : <ArrowDown size={14} className="text-primary" />;
   };
 
-  const getOvertimeAmount = (leave) => {
-    if (leave.status === 'مرفوض') return 0;
-
-    const requestDate = leave.date || leave.startDate || getLocalDateStr(new Date());
-    const hasUnpaidDay = leaves.some(item => {
-      const approved = ['موافق', 'موافق عليه', 'مقبول', 'تمت الموافقة', 'تم التسليم'].includes(item.status);
-      const sameEmployee = String(item.employeeId || '').trim() === String(leave.employeeId || '').trim();
-      const coversDate = item.date === requestDate || (item.startDate && item.endDate && item.startDate <= requestDate && item.endDate >= requestDate);
-      return approved && sameEmployee && item.type === 'إجازة غير مدفوعة' && coversDate;
-    });
-    if (hasUnpaidDay) return 0;
-    
-    const emp = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim() || String(e.name || '').trim() === String(leave.employeeName || '').trim());
+  const getEmpHourlyRate = (leave) => {
+    const emp = employees.find(e => String(e.id || '').trim() === String(leave?.employeeId || '').trim() || String(e.name || '').trim() === String(leave?.employeeName || '').trim());
     if (!emp) return 0;
     
     const basic = Number(emp.basicSalary) || 0;
     if (basic <= 0) return 0;
     
+    const requestDate = leave?.date || leave?.startDate || getLocalDateStr(new Date());
     const [yStr, mStr] = requestDate.split('-');
     const daysInMonth = new Date(parseInt(yStr, 10), parseInt(mStr, 10), 0).getDate();
     
@@ -415,32 +473,48 @@ const HROvertime = ({ user, refreshCounts }) => {
       }
     }
     
-    const hourlyRate = dailyRate / empStandardWorkHours;
+    return dailyRate / empStandardWorkHours;
+  };
+
+  const getOvertimeMultiplier = (leave) => {
+    const requestDate = leave?.date || leave?.startDate || getLocalDateStr(new Date());
+    const storedRate = leave?.rate || leave?.rateDetails?.baseRate;
+    if (storedRate) {
+      const parts = String(storedRate).split(':');
+      if (parts.length === 2) {
+        return Number(parts[1]) || 1.25;
+      }
+      return Number(storedRate) || 1.25;
+    }
+    const d = new Date(requestDate);
+    const arabicDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    const weekends = hrSettings?.weekendDays || ['الجمعة'];
+    const dayName = arabicDays[d.getDay()];
+    if (weekends.includes(dayName)) {
+      return hrSettings?.overtimeWeekendMultiplier || 1.50;
+    }
+    return hrSettings?.overtimeMultiplier || 1.25;
+  };
+
+  const getOvertimeAmount = (leave) => {
+    if (leave.status === 'مرفوض') return 0;
+
+    const requestDate = leave.date || leave.startDate || getLocalDateStr(new Date());
+    const hasUnpaidDay = leaves.some(item => {
+      const approved = ['موافق', 'موافق عليه', 'مقبول', 'تمت الموافقة', 'تم التسليم'].includes(item.status);
+      const sameEmployee = String(item.employeeId || '').trim() === String(leave.employeeId || '').trim();
+      const coversDate = item.date === requestDate || (item.startDate && item.endDate && item.startDate <= requestDate && item.endDate >= requestDate);
+      return approved && sameEmployee && item.type === 'إجازة غير مدفوعة' && coversDate;
+    });
+    if (hasUnpaidDay) return 0;
     
     if (hrSettings?.overtimeCalculationMethod === 'fixed_amount') {
        return hrSettings.overtimeFixedAmount || 10;
     }
     
-    let multiplier = 1.25;
-    const storedRate = leave.rate || leave?.rateDetails?.baseRate;
-    if (storedRate) {
-      const parts = String(storedRate).split(':');
-      if (parts.length === 2) {
-        multiplier = Number(parts[1]) || 1.25;
-      } else {
-        multiplier = Number(storedRate) || 1.25;
-      }
-    } else {
-      const d = new Date(requestDate);
-      const arabicDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-      const weekends = hrSettings?.weekendDays || ['الجمعة'];
-      const dayName = arabicDays[d.getDay()];
-      if (weekends.includes(dayName)) {
-        multiplier = hrSettings?.overtimeWeekendMultiplier || 1.50;
-      } else {
-        multiplier = hrSettings?.overtimeMultiplier || 1.25;
-      }
-    }
+    const hourlyRate = getEmpHourlyRate(leave);
+    if (hourlyRate <= 0) return 0;
+    const multiplier = getOvertimeMultiplier(leave);
     
     let mins = getPayableOvertimeMinutes(leave);
     if (!Number.isFinite(mins) && leave.startTime && leave.endTime) {
@@ -582,6 +656,8 @@ const HROvertime = ({ user, refreshCounts }) => {
     if (leave.status !== 'معلق') {
       const saved = Number(leave.rateDetails?.extraMins);
       if (Number.isFinite(saved)) return saved;
+      const requested = getTimedLeaveMinutes(leave);
+      return hrSettings?.maxDailyOvertimeHours ? Math.min(requested, hrSettings.maxDailyOvertimeHours * 60) : requested;
     }
     const requested = getTimedLeaveMinutes(leave);
     const emp = employees.find(employee => [employee.id, employee.employeeId].some(id =>
@@ -927,6 +1003,7 @@ const HROvertime = ({ user, refreshCounts }) => {
     .map(emp => ({ value: emp.id, label: String(emp.id) }));
 
   const baseOvertime = sortedLeaves.filter(l => {
+    if (!belongsToHREmployees(l, employees)) return false;
     if (searchTerm && String(l.employeeId) !== String(searchTerm)) return false;
     if (l.type !== 'بدل عمل إضافي' && l.type !== 'عمل إضافي') return false;
     
@@ -1160,7 +1237,13 @@ const HROvertime = ({ user, refreshCounts }) => {
                 <td className="text-center">{renderRequestAttendance(leave, emp)}</td>
                 <td className="max-w-[200px] whitespace-normal text-sm text-center">{getOvertimeReason(leave)}</td>
                 <td className="text-center font-semibold text-slate-600 font-mono">
-                  {getOvertimeDuration(leave)}
+                  <div>{getOvertimeDuration(leave)}</div>
+                  {leave.rateDetails?.calculationMode === 'full' && (
+                    <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] bg-sky-50 text-sky-700 border border-sky-200 font-sans">دوام إضافي كامل</span>
+                  )}
+                  {leave.rateDetails?.calculationMode === 'split' && (
+                    <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 font-sans">تقسيم ذكي</span>
+                  )}
                 </td>
                 <td className="text-center font-bold text-slate-700 font-mono" style={{ direction: 'ltr' }}>
                   {leave.status === 'مرفوض' ? (
@@ -1306,14 +1389,27 @@ const HROvertime = ({ user, refreshCounts }) => {
       )}
     
       {/* Smart Approval Modal */}
-      {smartModal.show && smartModal.leave && (
+      {smartModal.show && smartModal.leave && (() => {
+        const modalEmp = employees.find(e => String(e.id || '').trim() === String(smartModal.leave.employeeId || '').trim() || String(e.name || '').trim() === String(smartModal.leave.employeeName || '').trim());
+        const modalEmpRate = getEmpHourlyRate(smartModal.leave);
+        const modalMultiplier = getOvertimeMultiplier(smartModal.leave);
+        const modalBaseRateText = smartModal.leave.rate || (new Date(smartModal.leave.date).getDay() === 5 ? '1:1.5' : '1:1.25');
+        const modalDeficit = smartModal.deficitMins || 0;
+        const modalReqMins = smartModal.requestedMins || 0;
+        const modalCompMins = Math.min(modalDeficit, modalReqMins);
+        const modalSplitExtraMins = Math.max(0, modalReqMins - modalDeficit);
+        const modalSplitAmount = (modalSplitExtraMins / 60) * modalEmpRate * modalMultiplier;
+        const modalFullAmount = (modalReqMins / 60) * modalEmpRate * modalMultiplier;
+        const modalDeficitCost = (modalDeficit / 60) * modalEmpRate;
+
+        return (
         <div className="modal-overlay" style={{ zIndex: 10600 }}>
-          <div className="modal-content" style={{ maxWidth: '650px', background: '#f8fafc', padding: 0, overflow: 'hidden' }}>
+          <div className="modal-content" style={{ maxWidth: '680px', background: '#f8fafc', padding: 0, overflow: 'hidden' }}>
             
             <div style={{ padding: '20px', borderBottom: '1px solid #e2e8f0', background: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                <CheckCircle style={{ color: '#10b981' }} size={24} />
-                شاشة الاحتساب الذكي للإضافي
+                <CheckCircle style={{ color: smartModal.calculationMode === 'full' ? '#0284c7' : '#10b981' }} size={24} />
+                شاشة الاحتساب والاعتماد الذكي للإضافي
               </h3>
               <button type="button" onClick={() => setSmartModal({ show: false, leave: null })} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '5px', color: '#64748b' }}>
                 <X size={24} />
@@ -1326,6 +1422,7 @@ const HROvertime = ({ user, refreshCounts }) => {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                    
+                   {smartModal.departureMins > 0 && <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm">المغادرات المعتمدة داخل الوردية: {smartModal.departureMins} دقيقة. الدقائق المتداخلة مع تأخير الدخول أو الخروج محسوبة مرة واحدة فقط. التسوية بالإضافي أو الإعفاء تلغي خصم الدقائق المغطاة في الراتب.</div>}
                    {/* الطلب الأصلي */}
                    <div style={{ background: '#ffffff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                      <h4 style={{ fontSize: '1rem', fontWeight: 'bold', color: '#334155', margin: '0 0 12px 0', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>بيانات الطلب الأصلي</h4>
@@ -1339,8 +1436,17 @@ const HROvertime = ({ user, refreshCounts }) => {
                        </div>
                        <div>
                           <span style={{ color: '#64748b' }}>معدل الطلب:</span> 
-                          <span style={{ fontWeight: 'bold', background: '#e0e7ff', color: '#4f46e5', padding: '2px 8px', borderRadius: '12px', fontSize: '0.85rem', marginRight: '6px' }} dir="ltr">{smartModal.leave.rate || '1:1.25'}</span>
+                          <span style={{ fontWeight: 'bold', background: '#e0e7ff', color: '#4f46e5', padding: '2px 8px', borderRadius: '12px', fontSize: '0.85rem', marginRight: '6px' }} dir="ltr">{modalBaseRateText}</span>
                        </div>
+                       {modalEmpRate > 0 && (
+                         <div style={{ gridColumn: 'span 2', fontSize: '0.85rem', color: '#64748b', background: '#f8fafc', padding: '6px 12px', borderRadius: '6px' }}>
+                           <span>أجر الساعة الأساسي: </span>
+                           <strong style={{ color: '#1e293b' }}>{modalEmpRate.toFixed(3)} د.أ / ساعة</strong>
+                           <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>
+                           <span>معدل احتساب الإضافي ({modalBaseRateText}): </span>
+                           <strong style={{ color: '#1e293b' }}>{(modalEmpRate * modalMultiplier).toFixed(3)} د.أ / ساعة</strong>
+                         </div>
+                       )}
                      </div>
                    </div>
 
@@ -1359,7 +1465,14 @@ const HROvertime = ({ user, refreshCounts }) => {
                        <div>
                          <span style={{ color: '#9a3412', opacity: 0.8 }}>عجز الدوام (تأخير/مغادرة):</span> 
                          {smartModal.deficitMins > 0 ? (
-                           <span style={{ fontWeight: 'bold', color: '#b91c1c', marginRight: '6px' }}>{smartModal.deficitMins} دقيقة</span>
+                           <span style={{ fontWeight: 'bold', color: '#b91c1c', marginRight: '6px' }}>
+                             {smartModal.deficitMins} دقيقة
+                             {(smartModal.lateMins > 0 || smartModal.earlyMins > 0) && (
+                               <span style={{ fontSize: '0.8rem', fontWeight: 'normal', color: '#7c2d12', marginRight: '4px' }}>
+                                 ({smartModal.lateMins > 0 ? `تأخير: ${smartModal.lateMins} د` : ''}{smartModal.lateMins > 0 && smartModal.earlyMins > 0 ? ' + ' : ''}{smartModal.earlyMins > 0 ? `مغادرة: ${smartModal.earlyMins} د` : ''})
+                               </span>
+                             )}
+                           </span>
                          ) : (
                            <span style={{ fontWeight: 'bold', color: '#15803d', marginRight: '6px' }}>لا يوجد عجز (0)</span>
                          )}
@@ -1367,54 +1480,212 @@ const HROvertime = ({ user, refreshCounts }) => {
                      </div>
                    </div>
 
-                   {/* الاقتراح */}
-                   <div style={{ background: '#f0fdf4', borderRadius: '12px', padding: '16px', border: '1px solid #dcfce3', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                     <h4 style={{ fontSize: '1rem', fontWeight: 'bold', color: '#166534', margin: '0 0 12px 0', borderBottom: '1px solid #dcfce3', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                       <CheckCircle size={18} /> نتيجة الاحتساب والتقسيم
-                     </h4>
-                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                       
-                       {smartModal.deficitMins > 0 ? (
-                         <>
-                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                             <span style={{ fontWeight: '600', color: '#334155' }}>مدة لتعويض العجز (بمعدل 1:1)</span>
-                             <span style={{ fontWeight: 'bold', color: '#d97706', fontSize: '1.1rem' }}>{Math.min(smartModal.deficitMins, smartModal.requestedMins)} دقيقة</span>
-                           </div>
-                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                             <span style={{ fontWeight: '600', color: '#334155' }}>الصافي الفعلي للإضافي (بمعدل {new Date(smartModal.leave.date).getDay() === 5 ? '1:1.5' : (smartModal.leave.rate || '1:1.25')})</span>
-                             <span style={{ fontWeight: 'bold', color: '#059669', fontSize: '1.1rem' }}>
-                               {smartModal.requestedMins > smartModal.deficitMins 
-                                 ? (smartModal.requestedMins - smartModal.deficitMins) + ' دقيقة'
-                                 : '0 دقيقة'}
-                             </span>
-                           </div>
-                         </>
-                       ) : (
-                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                           <span style={{ fontWeight: '600', color: '#334155' }}>جميع الدقائق مستحقة بمعدل ({new Date(smartModal.leave.date).getDay() === 5 ? '1:1.5' : (smartModal.leave.rate || '1:1.25')})</span>
-                           <span style={{ fontWeight: 'bold', color: '#059669', fontSize: '1.1rem' }}>{smartModal.requestedMins} دقيقة</span>
+                   {/* خيارات الاحتساب والاعتماد للإدارة */}
+                   {smartModal.deficitMins > 0 ? (
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                       <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                         <span>اختر طريقة الاعتماد والاحتساب للإدارة:</span>
+                       </div>
+
+                       {/* الخيار 1: الاحتساب بالتقسيم الذكي (الطريقة المرفقة) */}
+                       <div 
+                         onClick={() => setSmartModal(prev => ({ ...prev, calculationMode: 'split' }))}
+                         style={{
+                           cursor: 'pointer',
+                           borderRadius: '12px',
+                           padding: '16px',
+                           border: smartModal.calculationMode === 'split' ? '2px solid #10b981' : '1px solid #e2e8f0',
+                           backgroundColor: smartModal.calculationMode === 'split' ? '#f0fdf4' : '#ffffff',
+                           boxShadow: smartModal.calculationMode === 'split' ? '0 4px 12px rgba(16,185,129,0.12)' : '0 1px 3px rgba(0,0,0,0.03)',
+                           transition: 'all 0.2s ease',
+                           display: 'flex',
+                           flexDirection: 'column',
+                           gap: '10px'
+                         }}
+                       >
+                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                           <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontWeight: 'bold', color: '#166534', fontSize: '1rem', margin: 0 }}>
+                             <input 
+                               type="radio" 
+                               name="overtimeMode" 
+                               checked={smartModal.calculationMode === 'split'} 
+                               onChange={() => setSmartModal(prev => ({ ...prev, calculationMode: 'split' }))}
+                               style={{ width: '18px', height: '18px', accentColor: '#10b981', cursor: 'pointer' }}
+                             />
+                             الخيار الأول: الاحتساب بالتقسيم الذكي (الطريقة المرفقة)
+                           </label>
+                           <span style={{ fontSize: '0.78rem', background: '#dcfce7', color: '#15803d', padding: '3px 10px', borderRadius: '12px', fontWeight: '700' }}>
+                             تسوية العجز (1:1)
+                           </span>
                          </div>
-                       )}
-                       <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', marginTop: '10px' }}>
-                         * سيتم حفظ هذا التقسيم كمرجع في الطلب لحسابات الرواتب بدقة.
+
+                         <p style={{ margin: 0, fontSize: '0.85rem', color: '#475569', lineHeight: 1.5 }}>
+                           يقوم النظام بتعويض عجز الدوام (1:1) أولاً لمنع خصم التأخير من الراتب، واحتساب الفارق فقط كعمل إضافي صافي.
+                         </p>
+
+                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '4px' }}>
+                           <div style={{ background: '#ffffff', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                             <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '2px' }}>تعويض العجز (بمعدل 1:1)</div>
+                             <div style={{ fontWeight: 'bold', color: '#d97706', fontSize: '1.05rem' }}>{modalCompMins} دقيقة</div>
+                             <div style={{ fontSize: '0.75rem', color: '#10b981', marginTop: '2px' }}>✓ يُعفى من خصم الدقائق المسوّاة (~{modalDeficitCost.toFixed(2)} د.أ)</div>
+                           </div>
+
+                           <div style={{ background: '#ffffff', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                             <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '2px' }}>الصافي الفعلي للإضافي ({modalBaseRateText})</div>
+                             <div style={{ fontWeight: 'bold', color: '#059669', fontSize: '1.05rem' }}>{modalSplitExtraMins} دقيقة</div>
+                             <div style={{ fontSize: '0.75rem', color: '#047857', marginTop: '2px', fontWeight: '600' }}>= {modalSplitAmount.toFixed(2)} د.أ مستحق صرف</div>
+                           </div>
+                         </div>
+                       </div>
+
+                       {/* الخيار 2: اعتبار دوامه فعلاً كـ عمل إضافي (المدة كاملة) */}
+                       <div 
+                         onClick={() => setSmartModal(prev => ({ ...prev, calculationMode: 'full' }))}
+                         style={{
+                           cursor: 'pointer',
+                           borderRadius: '12px',
+                           padding: '16px',
+                           border: smartModal.calculationMode === 'full' ? '2px solid #0284c7' : '1px solid #e2e8f0',
+                           backgroundColor: smartModal.calculationMode === 'full' ? '#f0f9ff' : '#ffffff',
+                           boxShadow: smartModal.calculationMode === 'full' ? '0 4px 12px rgba(2,132,199,0.12)' : '0 1px 3px rgba(0,0,0,0.03)',
+                           transition: 'all 0.2s ease',
+                           display: 'flex',
+                           flexDirection: 'column',
+                           gap: '10px'
+                         }}
+                       >
+                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                           <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontWeight: 'bold', color: '#0369a1', fontSize: '1rem', margin: 0 }}>
+                             <input 
+                               type="radio" 
+                               name="overtimeMode" 
+                               checked={smartModal.calculationMode === 'full'} 
+                               onChange={() => setSmartModal(prev => ({ ...prev, calculationMode: 'full' }))}
+                               style={{ width: '18px', height: '18px', accentColor: '#0284c7', cursor: 'pointer' }}
+                             />
+                             الخيار الثاني: اعتبار دوامه فعلاً كـ عمل إضافي (المدة كاملة)
+                           </label>
+                           <span style={{ fontSize: '0.78rem', background: '#e0f2fe', color: '#0369a1', padding: '3px 10px', borderRadius: '12px', fontWeight: '700' }}>
+                             دوام إضافي كامل
+                           </span>
+                         </div>
+
+                         <p style={{ margin: 0, fontSize: '0.85rem', color: '#475569', lineHeight: 1.5 }}>
+                           يُعتمد كامل وقت الطلب عملاً إضافياً مستحقاً للموظف بمعدل ({modalBaseRateText}) دون اقتطاعها لتعويض العجز.
+                         </p>
+
+                         <div style={{ background: '#ffffff', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                           <div>
+                             <div style={{ fontSize: '0.82rem', color: '#64748b' }}>إجمالي العمل الإضافي المستحق ({modalBaseRateText})</div>
+                             <div style={{ fontWeight: 'bold', color: '#0284c7', fontSize: '1.15rem' }}>{modalReqMins} دقيقة ({Math.floor(modalReqMins/60)} س و {modalReqMins%60} د)</div>
+                           </div>
+                           <div style={{ textAlign: 'left' }}>
+                             <span style={{ fontSize: '0.82rem', color: '#64748b', display: 'block' }}>القيمة المالية المستحقة</span>
+                             <span style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0369a1', direction: 'ltr' }}>{modalFullAmount.toFixed(2)} د.أ</span>
+                           </div>
+                         </div>
+
+                         {/* الخيار الفرعي لمعاملة عجز الدوام عند اختيار الإضافي الكامل */}
+                         {smartModal.calculationMode === 'full' && (
+                           <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px dashed #cbd5e1', marginTop: '4px' }} onClick={e => e.stopPropagation()}>
+                             <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#334155', marginBottom: '8px' }}>
+                               المعاملة المالية لعجز الدوام ({modalDeficit} دقيقة):
+                             </div>
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.85rem' }}>
+                               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#334155' }}>
+                                 <input 
+                                   type="radio" 
+                                   name="waiveDeficitRadio" 
+                                   checked={!smartModal.waiveDeficit} 
+                                   onChange={() => setSmartModal(prev => ({ ...prev, waiveDeficit: false }))} 
+                                   style={{ accentColor: '#0284c7', cursor: 'pointer' }}
+                                 />
+                                 <span>
+                                   <strong>إبقاء عجز الدوام مسجلاً ليخضع للخصم وفق سياسة الحضور</strong> 
+                                   <span style={{ color: '#64748b', display: 'block', fontSize: '0.78rem' }}>
+                                     (يحصل الموظف على {modalFullAmount.toFixed(2)} د.أ إضافي، ويخضع عجز {modalDeficit} د للخصم في الراتب بقيمة ~{modalDeficitCost.toFixed(2)} د.أ)
+                                   </span>
+                                 </span>
+                               </label>
+                               
+                               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#334155' }}>
+                                 <input 
+                                   type="radio" 
+                                   name="waiveDeficitRadio" 
+                                   checked={smartModal.waiveDeficit} 
+                                   onChange={() => setSmartModal(prev => ({ ...prev, waiveDeficit: true }))} 
+                                   style={{ accentColor: '#0284c7', cursor: 'pointer' }}
+                                 />
+                                 <span>
+                                   <strong>إعفاء الموظف من خصم عجز الدوام والمغادرات استثنائياً بقرار إدارة</strong>
+                                   <span style={{ color: '#15803d', display: 'block', fontSize: '0.78rem' }}>
+                                     (يحصل الموظف على {modalFullAmount.toFixed(2)} د.أ إضافي كامل، ولا تُخصم دقائق العجز والمغادرة المعفاة لهذا اليوم)
+                                   </span>
+                                 </span>
+                               </label>
+                             </div>
+                           </div>
+                         )}
                        </div>
                      </div>
-                   </div>
+                   ) : (
+                     <div style={{ background: '#f0fdf4', borderRadius: '12px', padding: '16px', border: '1px solid #dcfce3', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                       <h4 style={{ fontSize: '1rem', fontWeight: 'bold', color: '#166534', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                         <CheckCircle size={18} /> جميع الدقائق مستحقة كعمل إضافي
+                       </h4>
+                       <p style={{ margin: 0, fontSize: '0.9rem', color: '#15803d' }}>
+                         لا يوجد عجز دوام في هذا اليوم. كامل المدة المطلوبة مستحقة بمعدل ({modalBaseRateText}):
+                       </p>
+                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '10px' }}>
+                         <span style={{ fontWeight: '600', color: '#334155' }}>{modalReqMins} دقيقة ({Math.floor(modalReqMins/60)} س و {modalReqMins%60} د)</span>
+                         <span style={{ fontWeight: '800', color: '#059669', fontSize: '1.25rem', direction: 'ltr' }}>{modalFullAmount.toFixed(2)} د.أ</span>
+                       </div>
+                     </div>
+                   )}
 
                 </div>
               )}
             </div>
             
-            <div style={{ padding: '20px', borderTop: '1px solid #e2e8f0', background: '#ffffff', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+            <div style={{ padding: '20px', borderTop: '1px solid #e2e8f0', background: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                <button type="button" onClick={() => setSmartModal({ show: false, leave: null })} className="btn btn-outline">إلغاء</button>
-               <label className="block text-sm">ملاحظة للموظف (اختياري)<textarea className="input-field" value={smartModal.approvalNote || ''} onChange={e => setSmartModal(previous => ({ ...previous, approvalNote: e.target.value }))} /></label>
-               <button type="button" onClick={confirmSmartApproval} disabled={smartModal.loading} className="btn btn-primary" style={{ background: '#10b981', borderColor: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                 <CheckCircle size={18} /> تأكيد التقسيم والموافقة
+               <div style={{ flex: 1, margin: '0 10px' }}>
+                 <input 
+                   type="text" 
+                   placeholder="ملاحظة للموظف (اختياري)..." 
+                   className="input-field" 
+                   value={smartModal.approvalNote || ''} 
+                   onChange={e => setSmartModal(previous => ({ ...previous, approvalNote: e.target.value }))}
+                   style={{ margin: 0 }}
+                 />
+               </div>
+               <button 
+                 type="button" 
+                 onClick={confirmSmartApproval} 
+                 disabled={smartModal.loading} 
+                 className="btn btn-primary" 
+                 style={{ 
+                   background: smartModal.calculationMode === 'full' ? '#0284c7' : '#10b981', 
+                   borderColor: smartModal.calculationMode === 'full' ? '#0284c7' : '#10b981', 
+                   display: 'flex', 
+                   alignItems: 'center', 
+                   gap: '6px',
+                   padding: '10px 18px',
+                   fontSize: '0.95rem',
+                   fontWeight: 'bold',
+                   boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+                 }}
+               >
+                 <CheckCircle size={18} />
+                 {smartModal.calculationMode === 'full' 
+                   ? `اعتماد كامل المدة كإضافي (${modalFullAmount.toFixed(2)} د.أ)` 
+                   : `تأكيد التقسيم والموافقة (${modalSplitAmount.toFixed(2)} د.أ)`}
                </button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
     </>
   );

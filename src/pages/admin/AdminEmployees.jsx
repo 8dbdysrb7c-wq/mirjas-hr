@@ -1,3 +1,5 @@
+import { getEmployeeDepartment } from '../../utils/employeeDepartment';
+import { getOrganizationDepartments } from '../../services/organizationDepartments';
 import React, { useState, useEffect } from 'react';
 import { getEmployees, saveEmployees, getDepartments, saveEmployee, deleteEmployee, getGlobalSettings, isAdmin, canPerformAction, addLog, getRoles } from '../../store';
 import Select from '../../components/SearchSelect';
@@ -34,6 +36,8 @@ const AdminEmployees = ({ user }) => {
   const [accessEmployee, setAccessEmployee] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState({});
+  const [organizationDepartments, setOrganizationDepartments] = useState([]);
+  const employeeDepartment = employee => getEmployeeDepartment(employee, organizationDepartments, departments);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'asc' });
@@ -43,6 +47,7 @@ const AdminEmployees = ({ user }) => {
   // Search and filter states
   const [searchTermId, setSearchTermId] = useState('');
   const [searchTermName, setSearchTermName] = useState('');
+  const [employeeStatusFilter, setEmployeeStatusFilter] = useState('active');
 
   const customSelectStyles = {
     control: (provided, state) => ({
@@ -98,13 +103,15 @@ const AdminEmployees = ({ user }) => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const [emps, depts, settings, rolesRes] = await Promise.all([
+      const [emps, depts, settings, rolesRes, organizationDepts] = await Promise.all([
         getEmployees(),
         getDepartments(),
         getGlobalSettings(),
-        getRoles()
+        getRoles(),
+        getOrganizationDepartments().catch(error => { console.error("Unable to load organization departments", error); return []; })
       ]);
       setEmployees(emps);
+      setOrganizationDepartments(organizationDepts);
       setDepartments(depts);
       setGlobalSettings(settings);
       setRolesList(rolesRes || []);
@@ -126,10 +133,32 @@ const AdminEmployees = ({ user }) => {
       });
       nextId = `EMP-${String(maxNum + 1).padStart(4, '0')}`;
     }
+    const getAutoManager = (targetEmp, deptName) => {
+      const existingMgr = targetEmp?.directManager;
+      if (existingMgr && existingMgr !== '-- لا يوجد مدير --' && existingMgr !== '') return existingMgr;
+      const directMgrId = targetEmp?.directManagerId;
+      if (directMgrId) {
+        const found = employees.find(e => e.id === directMgrId);
+        if (found) return found.name;
+      }
+      if (targetEmp?.id) {
+        const assignedSupervisor = employees.find(e => Array.isArray(e.assignedEmployees) && e.assignedEmployees.includes(targetEmp.id));
+        if (assignedSupervisor) return assignedSupervisor.name;
+      }
+      const d = String(deptName || targetEmp?.department || '');
+      if (d.includes('خياط')) return 'رائدة عيسى سعد العبود';
+      if (d.includes('مبيع')) return 'جهاد بركات فلاح المهيرات';
+      if (d.includes('لوجست') || d.includes('دعم')) return 'عبد الله يعقوب ايوب غيث';
+      if (d.includes('انتاج') || d.includes('إنتاج')) return 'عماد فتحي زياد عزيز عوض';
+      return '';
+    };
+
+
     const initialData = isEdit ? {
       ...emp,
       jobTitle: emp.jobTitle || '',
-      department: emp.department || (emp.roles && emp.roles[0]) || '',
+      department: employeeDepartment(emp),
+      directManager: getAutoManager(emp, employeeDepartment(emp)),
       joinDate: emp.joinDate || '',
       basicSalary: emp.basicSalary || '',
       transportationAllowance: emp.transportationAllowance || '',
@@ -160,7 +189,7 @@ const AdminEmployees = ({ user }) => {
       id: nextId,
       name: '',
       jobTitle: emp.jobTitle || '',
-      department: emp.department || (emp.roles && emp.roles[0]) || '',
+      department: employeeDepartment(emp),
       joinDate: new Date().toISOString().split('T')[0],
       dateOfBirth: '',
       basicSalary: '',
@@ -176,7 +205,12 @@ const AdminEmployees = ({ user }) => {
       allowedLeaveTypes: emp.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'],
       allowedMissingPunches: emp.allowedMissingPunches !== undefined ? emp.allowedMissingPunches : 0,
       bonusMissingPunches: 0,
-      directManager: emp.directManager || '',
+      directManager: getAutoManager(emp, employeeDepartment(emp)), /*
+        (emp.department && emp.department.includes('خياطة')) ? 'رائدة عيسى سعد العبود' :
+        (emp.department && emp.department.includes('مبيعات')) ? 'جهاد بركات فلاح المهيرات' :
+        (emp.department && emp.department.includes('لوجستي')) ? 'عبد الله يعقوب ايوب غيث' :
+        (emp.department && (emp.department.includes('انتاج') || emp.department.includes('إنتاج'))) ? 'عماد فتحي زياد عزيز عوض' : ''
+      */
       roles: [...(emp.roles || [])],
       level: emp.level || 'موظف عادي',
       password: '12345678',
@@ -271,7 +305,8 @@ const AdminEmployees = ({ user }) => {
       </label>
     `).join('');
 
-    const managerOptions = employees.filter(e => e.level === 'مشرف' || e.level === 'admin' || e.level === 'إدارة').map(e => `
+    const managerList = employees.filter(e => e.level === 'مشرف' || e.level === 'admin' || e.level === 'إدارة' || e.name === initialData.directManager || e.id === 'EMP-0001' || e.id === 'EMP-0006' || e.id === 'EMP-0007' || e.id === 'EMP-0025');
+    const managerOptions = Array.from(new Map(managerList.map(m => [m.name, m])).values()).map(e => `
       <option value="${e.name}" ${initialData.directManager === e.name ? 'selected' : ''}>${e.name}</option>
     `).join('');
 
@@ -341,12 +376,12 @@ const AdminEmployees = ({ user }) => {
             <div class="col-span-4 premium-form-group">
               <label>القسم الوظيفي</label>
               ${globalSettings?.departmentsList?.length > 0 ? `
-                <select id="swal-department" class="premium-input">
+                <select id="swal-department" class="premium-input" onchange="const dm = document.getElementById('swal-direct-manager'); if (dm) { const v = this.value || ''; const findOpt = name => Array.from(dm.options).find(o => o.value.includes(name)); let opt = null; if (v.includes('خياطة')) opt = findOpt('رائدة'); else if (v.includes('مبيعات')) opt = findOpt('جهاد'); else if (v.includes('لوجستي')) opt = findOpt('عبد الله') || findOpt('عبدالله'); else if (v.includes('انتاج') || v.includes('إنتاج')) opt = findOpt('عماد'); if (opt) dm.value = opt.value; }">
                   <option value="">-- اختر القسم --</option>
                   ${globalSettings.departmentsList.map(dept => `<option value="${dept}" ${initialData.department === dept ? 'selected' : ''}>${dept}</option>`).join('')}
                 </select>
               ` : `
-                <select id="swal-department" class="premium-input">
+                <select id="swal-department" class="premium-input" onchange="const dm = document.getElementById('swal-direct-manager'); if (dm) { const v = this.value || ''; const findOpt = name => Array.from(dm.options).find(o => o.value.includes(name)); let opt = null; if (v.includes('خياطة')) opt = findOpt('رائدة'); else if (v.includes('مبيعات')) opt = findOpt('جهاد'); else if (v.includes('لوجستي')) opt = findOpt('عبد الله') || findOpt('عبدالله'); else if (v.includes('انتاج') || v.includes('إنتاج')) opt = findOpt('عماد'); if (opt) dm.value = opt.value; }">
                   <option value="">-- اختر القسم --</option>
                   ${Object.entries(departments).map(([k,v]) => `<option value="${k}" ${initialData.department === k ? 'selected' : ''}>${v}</option>`).join('')}
                 </select>
@@ -782,8 +817,14 @@ const AdminEmployees = ({ user }) => {
         } else if (newRole === 'admin') {
           newRole = result.value.roles[0] || 'general';
         }
-        const savingData = { ...result.value, role: newRole || (result.value.roles[0] || 'general') };
         const allEmps = await getEmployees();
+
+
+        const mgrObj = allEmps.find(e => e.name === result.value.directManager || e.id === result.value.directManager);
+        const directManagerName = mgrObj ? mgrObj.name : (result.value.directManager || '');
+        const directManagerId = mgrObj ? mgrObj.id : (result.value.directManagerId || '');
+        const savingData = { ...result.value, directManager: directManagerName, directManagerId: directManagerId, role: newRole || (result.value.roles[0] || 'general') };
+
         
         if (!isEdit && allEmps.some(e => e.id === savingData.id)) {
           Swal.fire('خطأ', 'رقم الموظف موجود مسبقاً', 'error');
@@ -940,7 +981,11 @@ const AdminEmployees = ({ user }) => {
     setSortConfig({ key, direction });
   };
 
-  const filteredEmployees = employees.filter(emp => {
+  const statusFilteredEmployees = employees.filter(emp =>
+    employeeStatusFilter === 'all' || String(emp.employmentStatus || '').trim() === 'فعال'
+  );
+
+  const filteredEmployees = statusFilteredEmployees.filter(emp => {
     const matchId = searchTermId ? String(emp.id) === String(searchTermId) : true;
     const matchName = searchTermName ? String(emp.name) === String(searchTermName) : true;
     return matchId && matchName;
@@ -948,8 +993,8 @@ const AdminEmployees = ({ user }) => {
 
   const sortedEmployees = [...filteredEmployees].sort((a, b) => {
     if (!sortConfig.key) return 0;
-    let aVal = a[sortConfig.key];
-    let bVal = b[sortConfig.key];
+    let aVal = sortConfig.key === 'department' ? employeeDepartment(a) : a[sortConfig.key];
+    let bVal = sortConfig.key === 'department' ? employeeDepartment(b) : b[sortConfig.key];
     
     if (sortConfig.key === 'id') {
       aVal = parseInt(aVal) || 0;
@@ -963,12 +1008,12 @@ const AdminEmployees = ({ user }) => {
 
   const employeeIdOptions = [
     { value: '', label: 'رقم الموظف...' },
-    ...[...new Set(employees.map(e => e.id))].filter(Boolean).map(id => ({ value: id, label: id }))
+    ...[...new Set(statusFilteredEmployees.map(e => e.id))].filter(Boolean).map(id => ({ value: id, label: id }))
   ];
 
   const employeeNameOptions = [
     { value: '', label: 'اسم الموظف...' },
-    ...[...new Set(employees.map(e => e.name))].filter(Boolean).map(name => ({ value: name, label: name }))
+    ...[...new Set(statusFilteredEmployees.map(e => e.name))].filter(Boolean).map(name => ({ value: name, label: name }))
   ];
 
   return (
@@ -1000,6 +1045,21 @@ const AdminEmployees = ({ user }) => {
       <div className="glass-card">
         {/* Filters Bar */}
         <div className="flex gap-4 items-center mb-6 flex-wrap no-print" dir="rtl" style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <div style={{ width: '220px', minWidth: '220px', flexShrink: 0 }}>
+            <select
+              aria-label="حالة الموظفين"
+              value={employeeStatusFilter}
+              onChange={event => {
+                setEmployeeStatusFilter(event.target.value);
+                setSearchTermId('');
+                setSearchTermName('');
+              }}
+              style={{ width: '100%', height: '42px', borderRadius: '10px', border: '1px solid #e2e8f0', padding: '0 12px', background: '#fff', color: '#1e293b', fontFamily: 'inherit', cursor: 'pointer' }}
+            >
+              <option value="active">الموظفون الفعالون</option>
+              <option value="all">كل الموظفين</option>
+            </select>
+          </div>
           {/* Employee ID Filter */}
           <div style={{ width: '180px', minWidth: '180px', flexShrink: 0 }}>
               <Select
@@ -1069,7 +1129,7 @@ const AdminEmployees = ({ user }) => {
                         {empLevel}
                       </span>
                     </td>
-                    <td data-label="القسم الوظيفي">{emp.department || '-'}</td>
+                    <td data-label="القسم الوظيفي">{employeeDepartment(emp) || '-'}</td>
                     <td data-label="المسمى الوظيفي">{emp.jobTitle || '-'}</td>
                     <td data-label="إجراءات">
                       <div className="flex gap-2 justify-center">

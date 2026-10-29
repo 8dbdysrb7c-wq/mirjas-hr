@@ -1,29 +1,21 @@
+import test from 'node:test';
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
-import { isActiveEmployee } from './employeeStatus.js';
-import { calculateSalaries } from './salaryCalculator.js';
+import { isActiveHREmployee, isActiveEmployee, belongsToHREmployees } from './employeeStatus.js';
 
-test('stopped employment overrides active values in other fields', () => {
-  for (const field of ['employmentStatus', 'status', 'employeeStatus']) {
-    for (const status of ['غير فعال', 'مستقيل', 'منتهي خدمات', 'موقوف', 'مفصول', 'terminated']) {
-      assert.equal(isActiveEmployee({ employmentStatus: 'فعال', [field]: status }), false);
-    }
+test('HR requires explicit active status and respects stop flags', () => {
+  assert.equal(isActiveHREmployee({ employmentStatus: 'فعال' }), true);
+  assert.equal(isActiveHREmployee({ employmentStatus: 'فعّال' }), true);
+  for (const employmentStatus of [undefined, '', 'موقوف', 'مستقيل', 'منتهي خدمات', 'غير فعال']) {
+    assert.equal(isActiveHREmployee({ employmentStatus }), false);
   }
-  assert.equal(isActiveEmployee({ employmentStatus: 'فعال', isActive: false }), false);
-  assert.equal(isActiveEmployee({ employmentStatus: 'فعال', active: 'false' }), false);
-  assert.equal(isActiveEmployee({ employmentStatus: '  غير   فعال ' }), false);
-  assert.equal(isActiveEmployee({ employmentStatus: 'فعال' }), true);
-  assert.equal(isActiveEmployee({ id: 'legacy' }), true);
+  assert.equal(isActiveHREmployee({ employmentStatus: 'فعال', isActive: false }), false);
+  assert.equal(isActiveEmployee({}), true);
 });
 
-test('new payroll calculations exclude stopped employees', () => {
-  const employees = ['فعال', 'مستقيل', 'منتهي خدمات', 'غير فعال', 'موقوف'].map((employmentStatus, id) => ({
-    id: String(id), employmentStatus, basicSalary: 300
-  }));
-  const salaries = calculateSalaries({
-    employees, hrSettings: {}, holidays: [], violations: [], bonuses: [],
-    attendance: [], leaves: [], advances: [], selectedMonth: '2026-09'
-  });
-  assert.deepEqual(salaries.map(employee => employee.id), ['0']);
-  assert.equal(employees.length, 5);
+test('HR rows exclude inactive employees and never match a conflicting ID by name', () => {
+  const employees = [{ id: '1', name: 'مشترك', employmentStatus: 'فعال' }, { id: '2', name: 'مشترك', employmentStatus: 'مستقيل' }].filter(isActiveHREmployee);
+  assert.equal(belongsToHREmployees({ employeeId: 1 }, employees), true);
+  assert.equal(belongsToHREmployees({ employeeId: 2, employeeName: 'مشترك' }, employees), false);
+  assert.equal(belongsToHREmployees({ employeeName: 'مشترك' }, employees), true);
+  assert.equal(belongsToHREmployees({}, employees), false);
 });

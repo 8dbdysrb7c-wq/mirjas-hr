@@ -1,11 +1,14 @@
+import { belongsToHREmployees } from '../../utils/employeeStatus';
+import { dailyDepartureSettlement } from '../../utils/dailyDepartureSettlement';
 import { promptEmployeeAlert } from '../../utils/employeeAlerts';
-import { isActiveEmployee } from '../../utils/employeeStatus';
+import { isActiveHREmployee as isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, Clock, XCircle, FileText, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Undo2, Trash2, Eye, ChevronDown, ChevronUp, User, Edit2 } from 'lucide-react';
 import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
-import { getEmployees, getHRLeaves, getHRLeavesByDateRange, saveHRLeave, deleteHRLeave, getMissingPunches, getMissingPunchesByDateRange, updateMissingPunchStatus, deleteMissingPunch, saveHRAttendance, createNotification, getGlobalSettings, saveEmployee } from '../../store';
+import { getHRLeaves, getHRLeavesByDateRange, saveHRLeave, deleteHRLeave, getMissingPunches, getMissingPunchesByDateRange, updateMissingPunchStatus, deleteMissingPunch, saveHRAttendance, createNotification, getGlobalSettings, saveEmployee } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
 import HRDateFilter from '../../components/ui/HRDateFilter';
@@ -113,7 +116,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
       status: 'معلق',
       deductFromVacationBalance: false,
       vacationDaysDeducted: 0,
-      calculationMode: 'unpaid_leave',
+      calculationMode: 'departure_only',
       keepAsDepartureOnly: false
     });
     setShowModal(true);
@@ -138,7 +141,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
       status: leave.status || 'معلق',
       deductFromVacationBalance: !!leave.deductFromVacationBalance,
       vacationDaysDeducted: leave.vacationDaysDeducted || 0,
-      calculationMode: leave.calculationMode || (leave.keepAsDepartureOnly ? 'departure_only' : 'unpaid_leave'),
+      calculationMode: leave.calculationMode || 'departure_only',
       keepAsDepartureOnly: !!leave.keepAsDepartureOnly
     });
     setShowModal(true);
@@ -156,7 +159,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
     }
     const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(formData.type);
     let keepAsDepartureOnly = !!formData.keepAsDepartureOnly;
-    let calculationMode = formData.calculationMode || (keepAsDepartureOnly ? 'departure_only' : 'unpaid_leave');
+    let calculationMode = formData.calculationMode || 'departure_only';
 
     if (isDept) {
       if (!formData.date || !formData.startTime || !formData.endTime) {
@@ -173,10 +176,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
       let diffMins = (eHours * 60 + eMins) - (sHours * 60 + sMins);
       if (diffMins < 0) diffMins += 1440;
 
-      if (diffMins > 720) {
-        Swal.fire('خطأ', 'مدة المغادرة لا يمكن أن تتجاوز 12 ساعة في اليوم الواحد', 'error');
-        return;
-      }
+
 
       if (calculationMode === 'departure_only') {
         keepAsDepartureOnly = true;
@@ -244,7 +244,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
       return;
     }
     let actionReason = '';
-    let selectedCalculationMode = leave.calculationMode || (leave.deductFromVacationBalance ? 'deduct_vacation' : (leave.keepAsDepartureOnly ? 'departure_only' : 'unpaid_leave'));
+    let selectedCalculationMode = leave.calculationMode || (leave.deductFromVacationBalance ? 'deduct_vacation' : (leave.keepAsDepartureOnly ? 'departure_only' : 'departure_only'));
 
     const emp = employees.find(e => String(e.id || '').trim() === String(leave.employeeId || '').trim());
     const isDept = ['مغادرة خاصة', 'مغادرة عمل', 'مغادرة الدخان'].includes(leave.type);
@@ -275,12 +275,12 @@ const HRLeaves = ({ user, refreshCounts }) => {
         if (isDept && deptMins > 180) {
           extraHtml += `<div style="background: #fffbeb; border: 1px solid #fde68a; padding: 10px; border-radius: 8px; margin-bottom: 10px; color: #92400e; font-size: 13px;">
             ⚠️ <b>تنبيه مدة المغادرة (${deptMins} دقيقة / ${Math.floor(deptMins / 60)} ساعة و ${deptMins % 60} دقيقة):</b><br/>
-            تتجاوز المغادرة 3 ساعات، يرجى اختيار آلية الاحتساب:
+            مدة المغادرة ضمن الوردية، يرجى اختيار آلية الاحتساب:
           </div>`;
           extraHtml += `<div style="background: #ffffff; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; margin-bottom: 10px; text-align: right; display: flex; flex-direction: column; gap: 8px;">
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: bold; color: #1e293b;">
               <input type="radio" name="swalCalcMode" value="unpaid_leave" ${(!leave.keepAsDepartureOnly && leave.calculationMode !== 'departure_only' && !leave.deductFromVacationBalance && leave.calculationMode !== 'deduct_vacation') ? 'checked' : ''} />
-              احتساب كإجازة غير مدفوعة (سياسة النظام للمغادرة أكثر من 3 ساعات)
+              احتساب كإجازة غير مدفوعة (بقرار الإدارة)
             </label>
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: bold; color: #0284c7;">
               <input type="radio" name="swalCalcMode" value="departure_only" ${(leave.keepAsDepartureOnly || leave.calculationMode === 'departure_only') ? 'checked' : ''} />
@@ -681,6 +681,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
     .map(emp => ({ value: emp.id, label: String(emp.id) }));
 
   const baseLeaves = [...leaves].filter(l => {
+    if (!belongsToHREmployees(l, employees)) return false;
     if (searchTerm && String(l.employeeId) !== String(searchTerm)) return false;
     if (l.type === 'بدل عمل إضافي' || l.type === 'عمل إضافي') return false;
 
@@ -796,13 +797,15 @@ const HRLeaves = ({ user, refreshCounts }) => {
         if (l.startTime && l.endTime) {
           const [sh, sm] = l.startTime.split(':').map(Number);
           const [eh, em] = l.endTime.split(':').map(Number);
-          const mins = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+          const shift = settings?.workShifts?.find(shift => shift.name === emp?.workShiftName);
+          const mins = dailyDepartureSettlement({ leaves: [{ ...l, status: 'موافق', deductFromVacationBalance: false, calculationMode: 'departure_only' }], date: l.date || l.startDate, employeeId: l.employeeId, shiftStart: shift?.startTime || emp?.shiftStart || '08:00', shiftEnd: shift?.endTime || emp?.shiftEnd || '16:00' }).departureMins;
           durationStr = `${Math.floor(mins / 60)}س ${mins % 60}د (خصم ${l.vacationDaysDeducted || 0} يوم إجازة)`;
         }
       } else if (l.startTime && l.endTime) {
         const [sh, sm] = l.startTime.split(':').map(Number);
         const [eh, em] = l.endTime.split(':').map(Number);
-        const mins = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+        const shift = settings?.workShifts?.find(shift => shift.name === emp?.workShiftName);
+          const mins = dailyDepartureSettlement({ leaves: [{ ...l, status: 'موافق', deductFromVacationBalance: false, calculationMode: 'departure_only' }], date: l.date || l.startDate, employeeId: l.employeeId, shiftStart: shift?.startTime || emp?.shiftStart || '08:00', shiftEnd: shift?.endTime || emp?.shiftEnd || '16:00' }).departureMins;
         cost = mins * minuteRate;
         durationStr = `${Math.floor(mins / 60)}س ${mins % 60}د`;
       }
@@ -1277,7 +1280,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
                               </span>
                               {isOverThreeHours && (
                                 <span style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fcd34d', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', padding: '2px 8px' }}>
-                                  تجاوزت 3 ساعات
+                                  يمكن أن تمتد المغادرة حتى كامل الوردية
                                 </span>
                               )}
                             </div>
@@ -1296,7 +1299,7 @@ const HRLeaves = ({ user, refreshCounts }) => {
                                       checked={formData.calculationMode !== 'departure_only' && !formData.keepAsDepartureOnly && formData.calculationMode !== 'deduct_vacation' && !formData.deductFromVacationBalance}
                                       onChange={() => setFormData({ ...formData, calculationMode: 'unpaid_leave', keepAsDepartureOnly: false, deductFromVacationBalance: false, vacationDaysDeducted: 0 })}
                                     />
-                                    <span>احتساب كإجازة غير مدفوعة (تطبيق سياسة النظام للمغادرة أكثر من 3 ساعات)</span>
+                                    <span>احتساب كإجازة غير مدفوعة (بقرار الإدارة)</span>
                                   </label>
                                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700', color: '#0369a1' }}>
                                     <input

@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {isLongApprovedDeparture} from './attendancePolicy.js';
+const source=readFileSync(new URL('../pages/EmployeeDashboard.jsx',import.meta.url),'utf8');
+const branch=source.slice(source.indexOf("      if (leaveFormData.type !== 'بدل عمل إضافي') {",source.indexOf('const handleSaveLeaveRequest')));
+const expression=branch.match(/if \((reqStartMins < shiftStartMins \|\| reqEndMins > shiftEndMins)\)/)[1];
+const invalid=new Function('reqStartMins','reqEndMins','shiftStartMins','shiftEndMins','return '+expression);
+test('one, four and full eight-hour departures fit official shift',()=>{for(const [start,end] of [[480,540],[480,720],[480,960]])assert.equal(invalid(start,end,480,960),false)});
+test('any time beyond assigned shift is rejected including smoking',()=>{assert.equal(invalid(479,960,480,960),true);assert.equal(invalid(480,961,480,960),true);assert.ok(!branch.includes('const maxEndMins = shiftEndMins + 180'))});
+test('long departure-only request never converts to an unpaid day',()=>{assert.equal(isLongApprovedDeparture({type:'مغادرة خاصة',status:'موافق',date:'2026-10-25',startTime:'08:00',endTime:'16:00',keepAsDepartureOnly:true,calculationMode:'departure_only'}),false)});

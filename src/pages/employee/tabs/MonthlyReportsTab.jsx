@@ -216,24 +216,27 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
           }
         });
         setSources(newSources);
-        monthlyRecordsCache.set(cacheKey, { sources: newSources, supervisorReports: loadedSupReports, timestamp: Date.now() });
         let loadedSupReports = [];
 
-        if (isImad) {
+        {
           try {
-            const supSnap = await getDocs(query(
+            const supQueries = isImad ? [query(
               collection(db, 'supervisor_reports'),
               where('date', '>=', `${selectedMonth}-01`),
               where('date', '<=', `${selectedMonth}-31`)
-            ));
-            loadedSupReports = supSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+            )] : ids.map(id => query(collection(db, 'supervisor_reports'), where('supervisorId', '==', id)));
+            const snapshots = await Promise.all(supQueries.map(q => getDocs(q)));
+            loadedSupReports = [...new Map(snapshots.flatMap(snapshot => snapshot.docs.map(d => [d.id, { ...d.data(), id: d.id }]))).values()]
+              .filter(report => report.date?.startsWith(selectedMonth) && !['محذوف', 'deleted', 'مسودة'].includes(report.status));
             if (live) {
               setSupervisorReports(loadedSupReports);
             }
           } catch (supErr) {
             console.error('Failed to load supervisor_reports for employee month:', supErr);
+            throw supErr;
           }
         }
+        if (live) monthlyRecordsCache.set(cacheKey, { sources: newSources, supervisorReports: loadedSupReports, timestamp: Date.now() });
       } catch (err) {
         if (!live) return;
         console.error('Failed to fetch monthly report records:', err);
@@ -320,6 +323,7 @@ export const MonthlyReportsTab = ({ user, handleViewReportDetails, isMobile = fa
       rawType === 'مشرف قسم' ||
       rawType === 'مشرف' ||
       Boolean(user?.permissions?.isSupervisor) ||
+      user?.isSupervisor === true || user?.hasSupervisorReportsAccess === true ||
       Boolean(user?.permissions?.supervisor_reports) ||
       Boolean(user?.permissions?.reports_supervisors) ||
       name.includes('مشرف')

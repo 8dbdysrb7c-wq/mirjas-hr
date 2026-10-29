@@ -1,8 +1,10 @@
-import { isActiveEmployee } from '../../utils/employeeStatus';
+import { belongsToHREmployees } from '../../utils/employeeStatus';
+import { isActiveHREmployee as isActiveEmployee } from '../../utils/employeeStatus';
 import { useEffect, useMemo, useState } from 'react';
 import { Archive, BellRing, CheckCircle2, ChevronDown, Clock3, RefreshCw, Send, Trash2, User } from 'lucide-react';
 import Swal from 'sweetalert2';
-import { archiveEmployeeAlert, createEmployeeAlerts, deleteEmployeeAlert, getEmployeeAlerts, getEmployees } from '../../store';
+import { archiveEmployeeAlert, createEmployeeAlerts, deleteEmployeeAlert, getEmployeeAlerts } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import Select from '../../components/SearchSelect';
 import HRDateFilter from '../../components/ui/HRDateFilter';
 import { hasPermission } from '../../utils/permissions';
@@ -57,6 +59,7 @@ export default function HREmployeeAlerts({ user, refreshCounts }) {
   }, []);
 
   const filtered = useMemo(() => alerts.filter(alert => {
+    if (!belongsToHREmployees(alert, employees)) return false;
     if (!showArchived && alert.archived) return false;
     if (employeeId !== 'all' && String(alert.employeeId) !== employeeId) return false;
     if (status !== 'all' && alert.status !== status) return false;
@@ -65,7 +68,7 @@ export default function HREmployeeAlerts({ user, refreshCounts }) {
     if (dateMode === 'month' && !sentDate.startsWith(selectedMonth)) return false;
     if (dateMode === 'range' && (sentDate < dateFrom || sentDate > dateTo)) return false;
     return true;
-  }), [alerts, showArchived, employeeId, status, dateMode, selectedDate, selectedMonth, dateFrom, dateTo]);
+  }), [alerts, employees, showArchived, employeeId, status, dateMode, selectedDate, selectedMonth, dateFrom, dateTo]);
 
   const archive = async alert => {
     if (!canEdit) {

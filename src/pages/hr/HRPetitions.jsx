@@ -1,3 +1,4 @@
+import { belongsToHREmployees } from '../../utils/employeeStatus';
 import PetitionConversation from '../../components/PetitionConversation';
 import { petitionStatus, awaitsPetitionAdmin } from '../../utils/petitionConversation';
 import { watchPetitions } from '../../services/petitionConversation';
@@ -11,7 +12,8 @@ import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import { TableContainer, TableHead, TableRow, TableHeader, TableBody, TableCell, Badge } from '../../components/ui';
 import HRDateFilter from '../../components/ui/HRDateFilter';
-import { getEmployees, deleteHRPetition, isAdmin } from '../../store';
+import { deleteHRPetition, isAdmin } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import { hasPermission } from '../../utils/permissions';
 import { firestoreErrorMessage } from '../../utils/firestoreError';
 import { triggerWhatsAppRouting } from '../../services/whatsappRouter';
@@ -128,6 +130,7 @@ export default function HRPetitions({ user }) {
     .map(emp => ({ value: emp.id, label: String(emp.id) }));
 
   const filteredPetitions = petitions.filter(p => {
+    if (!belongsToHREmployees(p, employees)) return false;
     const matchesSearch = !searchTerm || String(p.employeeId) === String(searchTerm) || String(p.employeeName) === String(searchTerm);
     const matchesStatus = statusFilter === 'الكل' || (statusFilter === 'بانتظار الإدارة' ? awaitsPetitionAdmin(p) : petitionStatus(p) === statusFilter);
     

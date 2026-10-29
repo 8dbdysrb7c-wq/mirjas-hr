@@ -1,7 +1,9 @@
-import { isActiveEmployee } from '../../utils/employeeStatus';
+import { belongsToHREmployees } from '../../utils/employeeStatus';
+import { isActiveHREmployee as isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import { Users, UserCheck, UserX, Clock, FileText, AlertTriangle } from 'lucide-react';
-import { getEmployees, getHRLeavesByDateRange, getHRAttendance, getHRViolationsByDateRange } from '../../store';
+import { getHRLeavesByDateRange, getHRAttendance, getHRViolationsByDateRange } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import './hr.css';
 
 const HRDashboard = ({ user, onNavigate }) => {
@@ -36,13 +38,13 @@ const HRDashboard = ({ user, onNavigate }) => {
 
   // Calculate Stats
   const totalEmployees = employees.length;
-  const todayAttendance = attendance.filter(a => a.date === todayStr);
+  const todayAttendance = attendance.filter(a => belongsToHREmployees(a, employees) && a.date === todayStr);
   const presentToday = todayAttendance.filter(a => a.status === 'مداوم' || a.status === 'متأخر').length;
   const lateToday = todayAttendance.filter(a => a.status === 'متأخر').length;
   const absentToday = totalEmployees - presentToday;
-  const pendingLeaves = (leaves || []).filter(l => l.status === 'معلق').length;
+  const pendingLeaves = (leaves || []).filter(l => belongsToHREmployees(l, employees) && l.status === 'معلق').length;
   
-  const thisMonthViolations = (violations || []).filter(v => v.date?.startsWith(thisMonthStr));
+  const thisMonthViolations = (violations || []).filter(v => belongsToHREmployees(v, employees) && v.date?.startsWith(thisMonthStr));
   const totalDeductions = thisMonthViolations.reduce((sum, v) => sum + (Number(v.deductionAmount) || 0), 0);
   const totalOvertime = todayAttendance.reduce((sum, a) => sum + (Number(a.overtimeHours) || 0), 0);
 

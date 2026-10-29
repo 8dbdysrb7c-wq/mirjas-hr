@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getEmployees, getHRAdvances, getGlobalSettings } from '../../store';
+import { getHRAdvances, getGlobalSettings } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import { FileText, User, DollarSign, Calendar, Package } from 'lucide-react';
 import Select from '../../components/SearchSelect';
 

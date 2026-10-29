@@ -90,7 +90,43 @@ export const defaultGlobalSettings = {
   quoteValidities: ["أسبوع", "أسبوعين", "شهر", "شهرين", "حتى إشعار آخر"],
   quoteTerms: ["الأسعار أعلاه لا تشمل ضريبة المبيعات", "الأسعار أعلاه تشمل ضريبة المبيعات", "التسليم في موقع العميل", "التوصيل مجاني داخل عمان", "الدفع نقداً عند الاستلام", "تخضع هذه الأسعار للتغيير دون إشعار مسبق"],
   quoteStatuses: ["مسودة", "مرسل", "مقبول", "مرفوض", "ملغي"],
-  quotePriorities: ["منخفضة", "متوسطة", "عالية", "عاجلة جداً"]
+  quotePriorities: ["منخفضة", "متوسطة", "عالية", "عاجلة جداً"],
+  workShifts: [
+    { id: 'shift_1', name: 'فترة الدوام الاولى', startTime: '07:30', endTime: '16:30', gracePeriodMinutes: 15 },
+    { id: 'shift_2', name: 'فترة الدوام الثانية', startTime: '08:00', endTime: '17:00', gracePeriodMinutes: 15 },
+    { id: 'shift_3', name: 'فترة الدوام الثالثة', startTime: '08:00', endTime: '16:30', gracePeriodMinutes: 15 },
+    { id: 'shift_6', name: 'فترة الدوام السادسة', startTime: '07:30', endTime: '17:30', gracePeriodMinutes: 15 },
+    { id: 'shift_5', name: 'فترة الدوام الخامسة', startTime: '08:00', endTime: '18:00', gracePeriodMinutes: 15 },
+    { id: 'shift_4', name: 'فترة الدوام الرابعة', startTime: '09:00', endTime: '15:00', gracePeriodMinutes: 15 }
+  ],
+  jobTitles: [
+    "المدير العام",
+    "المدير التنفيذي",
+    "مدير إداري",
+    "مدير قسم الخياطة",
+    "مدير المبيعات",
+    "فني قص وخياطة",
+    "فني خياطة",
+    "فني تغليف وتشطيب",
+    "فني دعم لوجستي",
+    "دعم فني ومبيعات",
+    "محاسب",
+    "أمين مستودع",
+    "سائق"
+  ],
+  departmentsList: [
+    "الخياطة",
+    "اللوجستي",
+    "المبيعات",
+    "الإدارة العامة",
+    "التغليف",
+    "المستودع"
+  ],
+  salesReps: [
+    "زبائن الشركة",
+    "أنس",
+    "عماد"
+  ]
 };
 
 export const NOTIFICATION_ROLE_OPTIONS = [
@@ -823,6 +859,18 @@ export const getGlobalSettings = async (forceRefresh = false) => {
   const result = {
     ...defaultGlobalSettings,
     ...data,
+    workShifts: (Array.isArray(data?.workShifts) && data.workShifts.length > 0)
+      ? data.workShifts
+      : defaultGlobalSettings.workShifts,
+    jobTitles: (Array.isArray(data?.jobTitles) && data.jobTitles.length > 0)
+      ? data.jobTitles
+      : defaultGlobalSettings.jobTitles,
+    departmentsList: (Array.isArray(data?.departmentsList) && data.departmentsList.length > 0)
+      ? data.departmentsList
+      : defaultGlobalSettings.departmentsList,
+    salesReps: (Array.isArray(data?.salesReps) && data.salesReps.length > 0)
+      ? data.salesReps
+      : defaultGlobalSettings.salesReps,
     notificationSettings: normalizeNotificationSettings(data)
   };
   cachedGlobalSettings = result;
@@ -840,6 +888,12 @@ export const saveGlobalSettings = async (settings) => {
   let cleanedSettings = { ...settings };
   if (Array.isArray(cleanedSettings.warehouses)) {
     cleanedSettings.warehouses = cleanedSettings.warehouses.filter(w => !isVirtualWarehouse(w));
+  }
+  if (!Array.isArray(cleanedSettings.workShifts) || cleanedSettings.workShifts.length === 0) {
+    const current = await getGlobalSettings();
+    cleanedSettings.workShifts = (current.workShifts && current.workShifts.length > 0)
+      ? current.workShifts
+      : defaultGlobalSettings.workShifts;
   }
 
   await setDocData('settings', 'globalSettings', {

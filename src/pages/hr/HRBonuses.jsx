@@ -1,11 +1,13 @@
-import { isActiveEmployee } from '../../utils/employeeStatus';
+import { belongsToHREmployees } from '../../utils/employeeStatus';
+import { isActiveHREmployee as isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import { Gift, Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, User, Bell } from 'lucide-react';
 import { promptEmployeeAlert } from '../../utils/employeeAlerts';
 import Select from '../../components/SearchSelect';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
-import { getEmployees, getHRBonuses, saveHRBonus, deleteHRBonus } from '../../store';
+import { getHRBonuses, saveHRBonus, deleteHRBonus } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import Swal from 'sweetalert2';
 import HRDateFilter from '../../components/ui/HRDateFilter';
 import { hasPermission } from '../../utils/permissions';
@@ -165,6 +167,7 @@ const HRBonuses = ({ user, refreshCounts }) => {
     .map(emp => ({ value: emp.id, label: String(emp.id) }));
 
   const sortedBonuses = [...bonuses].filter(b => b.status !== 'محذوف').filter(b => {
+    if (!belongsToHREmployees(b, employees)) return false;
     if (searchTerm && String(b.employeeId) !== String(searchTerm)) return false;
     if (!b.date) return false;
     const reqDate = new Date(b.date).toISOString().split('T')[0];

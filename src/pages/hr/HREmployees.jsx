@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Users, Plus, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, Phone, Search, Edit2, UserCircle, Briefcase, Calendar, DollarSign, FileText } from 'lucide-react';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/airbnb.css';
-import { getEmployees, saveEmployee, deleteEmployee, getDepartments, getGlobalSettings, getHRAssets } from '../../store';
+import { saveEmployee, deleteEmployee, getDepartments, getGlobalSettings, getHRAssets } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import Swal from 'sweetalert2';
 import { matchesSearch, useDebounce } from '../../utils/searchEngine';
 import { hasPermission } from '../../utils/permissions';
@@ -118,7 +119,12 @@ const HREmployees = ({ user, onViewProfile }) => {
         healthInsurancePayer: emp.healthInsurancePayer || 'employee',
         phone: emp.phone || '',
         employmentStatus: emp.employmentStatus || 'فعال',
-        directManager: emp.directManager || emp.directManagerId || '',
+        directManager: emp.directManager || emp.directManagerId || (
+          (emp.department && emp.department.includes('خياطة')) ? 'رائدة عيسى سعد العبود' :
+          (emp.department && emp.department.includes('مبيعات')) ? 'جهاد بركات فلاح المهيرات' :
+          (emp.department && emp.department.includes('لوجستي')) ? 'عبد الله يعقوب ايوب غيث' :
+          (emp.department && (emp.department.includes('انتاج') || emp.department.includes('إنتاج'))) ? 'عماد فتحي زياد عزيز عوض' : ''
+        ),
         hrNotes: emp.hrNotes || '',
         vacationBalance: emp.vacationBalance !== undefined && emp.vacationBalance !== null && emp.vacationBalance !== '' ? emp.vacationBalance : 14, sickLeaveBalance: emp.sickLeaveBalance !== undefined && emp.sickLeaveBalance !== null && emp.sickLeaveBalance !== '' ? emp.sickLeaveBalance : 14, allowedLeaveTypes: emp.allowedLeaveTypes || ['إجازة سنوية', 'إجازة مرضية', 'إجازة غير مدفوعة'],
         shiftStart: emp.shiftStart || '08:00',
@@ -143,6 +149,17 @@ const HREmployees = ({ user, onViewProfile }) => {
       });
     }
     setShowModal(true);
+  };
+
+  const handleDepartmentChange = (newDept) => {
+    let newMgr = formData.directManager;
+    if (!newMgr || newMgr === 'رائدة عيسى سعد العبود' || newMgr === 'جهاد بركات فلاح المهيرات' || newMgr === 'عبد الله يعقوب ايوب غيث' || newMgr === 'عماد فتحي زياد عزيز عوض') {
+      if (newDept.includes('خياطة')) newMgr = 'رائدة عيسى سعد العبود';
+      else if (newDept.includes('مبيعات')) newMgr = 'جهاد بركات فلاح المهيرات';
+      else if (newDept.includes('لوجستي')) newMgr = 'عبد الله يعقوب ايوب غيث';
+      else if (newDept.includes('انتاج') || newDept.includes('إنتاج')) newMgr = 'عماد فتحي زياد عزيز عوض';
+    }
+    setFormData(prev => ({ ...prev, department: newDept, directManager: newMgr }));
   };
 
   const handleWorkShiftChange = (e) => {
@@ -202,6 +219,9 @@ const HREmployees = ({ user, onViewProfile }) => {
 
     empToSave.vacationBalance = formData.vacationBalance !== '' ? parseInt(formData.vacationBalance) : 0;
     empToSave.sickLeaveBalance = formData.sickLeaveBalance !== '' ? parseInt(formData.sickLeaveBalance) : 0;
+    const mgrObj = employees.find(e => e.name === formData.directManager || e.id === formData.directManager);
+    empToSave.directManager = mgrObj ? mgrObj.name : (formData.directManager || '');
+    empToSave.directManagerId = mgrObj ? mgrObj.id : (formData.directManagerId || '');
 
     await saveEmployee(empToSave);
     Swal.fire('نجاح', 'تم حفظ بيانات الموظف', 'success');
@@ -374,12 +394,12 @@ const HREmployees = ({ user, onViewProfile }) => {
                 <div className="input-group">
                   <label>القسم</label>
                   {globalSettings?.departmentsList?.length > 0 ? (
-                    <select value={formData.department} onChange={e=>setFormData({...formData, department: e.target.value})} className="input-field">
+                    <select value={formData.department} onChange={e=>handleDepartmentChange(e.target.value)} className="input-field">
                       <option value="">-- اختر القسم --</option>
                       {globalSettings.departmentsList.map((dept, idx) => <option key={idx} value={dept}>{dept}</option>)}
                     </select>
                   ) : (
-                    <select value={formData.department} onChange={e=>setFormData({...formData, department: e.target.value})} className="input-field">
+                    <select value={formData.department} onChange={e=>handleDepartmentChange(e.target.value)} className="input-field">
                       <option value="">-- اختر القسم --</option>
                       {Object.entries(departments).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
                     </select>

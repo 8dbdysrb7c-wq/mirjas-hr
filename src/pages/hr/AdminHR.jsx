@@ -1,10 +1,12 @@
+import { belongsToHREmployees } from '../../utils/employeeStatus';
 import { awaitsPetitionAdmin } from '../../utils/petitionConversation';
 import { watchPetitions } from '../../services/petitionConversation';
 import { getHRBadgeData } from '../../services/hrBadgeData';
 import { getMissingPunches as detectMissingPunches } from '../../utils/missingPunches';
-import { isActiveEmployee } from '../../utils/employeeStatus';
+import { isActiveHREmployee as isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { getEmployees, getHRAttendanceByDateRange, getGlobalSettings, getAttendanceLogsByDateRange, getReportsByDateRange, getSupervisorReportsByDateRange } from '../../store';
+import { getHRAttendanceByDateRange, getGlobalSettings, getAttendanceLogsByDateRange, getReportsByDateRange, getSupervisorReportsByDateRange } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import { Users, Clock, Calendar, AlertTriangle, FileText, Settings, Shield, Menu, X, Fingerprint, History, DollarSign, Gift, Bell, BarChart2, ArrowUpDown, Package } from 'lucide-react';
 import HRDashboard from './HRDashboard';
 import HRAttendance from './HRAttendance';
@@ -73,7 +75,7 @@ const AdminHR = ({ user, notificationTarget }) => {
 
   useEffect(() => {
     if (!hasPermission(user, 'hr_petitions', 'view')) return;
-    return watchPetitions(user, true, rows => setPendingCounts(counts => ({ ...counts, petitions: rows.filter(awaitsPetitionAdmin).length })), console.error);
+    return watchPetitions(user, true, async rows => { const employees = await getEmployees(); setPendingCounts(counts => ({ ...counts, petitions: rows.filter(row => belongsToHREmployees(row, employees)).filter(awaitsPetitionAdmin).length })); }, console.error);
   }, [user.id]);
 
   const countsLoadingRef = useRef(false);
@@ -90,7 +92,8 @@ const AdminHR = ({ user, notificationTarget }) => {
       const currentMonthStr = todayStr.substring(0, 7);
       const monthStart = `${currentMonthStr}-01`;
 
-      const badgeData = await getHRBadgeData(monthStart, todayStr, false);
+      const activeEmployees = await getEmployees();
+      const badgeData = await getHRBadgeData(monthStart, todayStr, false, activeEmployees);
       const { leaves = [], mps = [], violations = [], employeeAlerts = [], bonuses = [], advances = 0, assets = 0 } = badgeData || {};
 
       const pendingLeaves = leaves.filter(l => l.type !== 'بدل عمل إضافي' && (l.status === 'معلق' || l.status === 'قيد المراجعة')).length;

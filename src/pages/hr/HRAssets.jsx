@@ -1,6 +1,8 @@
-import { isActiveEmployee } from '../../utils/employeeStatus';
+import { belongsToHREmployees } from '../../utils/employeeStatus';
+import { isActiveHREmployee as isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
-import { getHRAssets, saveHRAsset, deleteHRAsset, getEmployees, getGlobalSettings, saveGlobalSettings, getStock, saveStockItem } from '../../store';
+import { getHRAssets, saveHRAsset, deleteHRAsset, getGlobalSettings, saveGlobalSettings, getStock, saveStockItem } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import { Package, Plus, Search, Filter, AlertTriangle, CheckCircle, XCircle, ArrowRightLeft, Edit2, Trash2, Calendar, FileText, User, RefreshCw, BarChart2, Eye, X, Activity, ArrowUp, ArrowDown, Printer, FileDown, Layers, ArrowUpDown, ChevronDown } from 'lucide-react';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
@@ -1455,6 +1457,7 @@ const HRAssets = ({ user, refreshCounts }) => {
 
   // Filter logic
   const filteredAssets = assets.filter(a => {
+    if (!belongsToHREmployees(a, employees)) return false;
     const matchSearch = matchesSearch(
       [a.name, a.assetNumber, a.code, a.employeeName, a.employeeId, a.location],
       debouncedSearchTerm

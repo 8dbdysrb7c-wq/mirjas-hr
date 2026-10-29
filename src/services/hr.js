@@ -1,3 +1,4 @@
+import { hasPermission } from '../utils/permissions';
 import { reportAttendanceFields } from '../utils/reportAttendance';
 import { acknowledgePetitionDecision } from './petitionConversation';
 import { db } from '../firebase';
@@ -16,7 +17,8 @@ import {
   limit,
   orderBy,
   updateDoc,
-  writeBatch
+  writeBatch,
+  runTransaction
 } from 'firebase/firestore';
 import { getGlobalSettings, createNotification, isAdmin, getEmployees } from './settings';
 import { triggerWhatsAppRouting } from './whatsappRouter';
@@ -1059,6 +1061,53 @@ export const getHRViolations = async () => {
   }
 };
 
+export const resetAttendancePenalty = async ({ employeeId, employeeName, date, type }, user) => {
+  if (!hasPermission(user, 'hr_attendance_alerts', 'approve')) throw new Error('ليس لديك صلاحية إعادة الإجراء');
+  if (!employeeId || !date || !['تأخير', 'مغادرة مبكرة'].includes(type)) throw new Error('بيانات الحالة غير مكتملة');
+  const settingsSnapshot = await getDocsFromServer(collection(db, 'hr_salary_periods'));
+  const closedPeriods = new Set(settingsSnapshot.docs.filter(d => ['locked', 'archived'].includes(d.data().status)).map(d => d.id));
+  const settings = await getGlobalSettings();
+  const cycleStart = Number(settings.hrSettings?.salaryCycleStartDay) || 1;
+  const cycleDate = new Date(date + 'T12:00:00Z');
+  if (cycleStart > 1 && Number(date.slice(8,10)) >= cycleStart) cycleDate.setUTCMonth(cycleDate.getUTCMonth() + 1, 1);
+  const cyclePeriod = cycleDate.toISOString().slice(0,7);
+  if (closedPeriods.has(cyclePeriod)) throw new Error('لا يمكن التعديل: تم إغلاق رواتب هذه الفترة');
+  const snapshot = await getDocsFromServer(query(collection(db, 'hr_violations'), where('date', '==', date), where('type', '==', type)));
+  const matches = snapshot.docs.filter(d => {
+    const v = d.data();
+    return String(v.employeeId || '').trim() === String(employeeId).trim() || (!v.employeeId && v.employeeName === employeeName);
+  });
+  if (!matches.length) throw new Error('لم يتم العثور على إجراء مرتبط بهذه الحالة');
+  for (const record of matches) {
+    const period = record.data().processedInPeriod;
+    if (period && closedPeriods.has(period)) throw new Error('لا يمكن التعديل: فترة معالجة الخصم مغلقة');
+  }
+  return runTransaction(db, async transaction => {
+    const current = await Promise.all(matches.map(record => transaction.get(record.ref)));
+    const periods = [...new Set([cyclePeriod, ...current.filter(r => r.exists()).map(r => r.data().processedInPeriod).filter(Boolean)])];
+    const periodSnapshots = await Promise.all(periods.map(period => transaction.get(doc(db, 'hr_salary_periods', period))));
+    if (periodSnapshots.some(r => r.exists() && ['locked','archived'].includes(r.data().status))) throw new Error('لا يمكن التعديل: تم إغلاق رواتب هذه الفترة');
+    const updated = [];
+    for (const record of current) {
+      if (!record.exists()) throw new Error('تغيرت الحالة، يرجى تحديث الصفحة');
+      const previous = record.data();
+      if (previous.processedInPeriod !== matches.find(m => m.id === record.id).data().processedInPeriod) throw new Error('تغيرت فترة الخصم، يرجى إعادة المحاولة');
+      if (['محذوف', 'deleted'].includes(previous.status)) continue;
+      if (previous.action === 'معلق' && Number(previous.deductionAmount || 0) === 0) { updated.push({ ...previous, id: record.id }); continue; }
+      const patch = { action: 'معلق', status: 'معلق', deductionAmount: 0, updatedAt: new Date().toISOString(), resetBy: user.name || user.id, resetAt: new Date().toISOString() };
+      transaction.update(record.ref, patch);
+      transaction.set(doc(collection(db, 'operations_log')), {
+        action: 'إعادة تنبيه حضور وإلغاء أثر العقوبة', module: 'الخصومات والمخالفات', user: user.name || user.id,
+        violationId: record.id, employeeId, date, type,
+        previousAction: previous.action || '', previousDeductionAmount: Number(previous.deductionAmount) || 0,
+        timestamp: patch.resetAt
+      });
+      updated.push({ ...previous, ...patch, id: record.id });
+    }
+    return updated;
+  });
+};
+
 export const saveHRViolation = async (violation, userContext = null) => {
   try {
     if (violation.date) {
@@ -1068,6 +1117,7 @@ export const saveHRViolation = async (violation, userContext = null) => {
 
     const docRef = violation.id ? doc(db, 'hr_violations', violation.id) : doc(collection(db, 'hr_violations'));
     const data = { ...violation, updatedAt: new Date().toISOString() };
+    if (!violation.id) delete data.id;
     if (!violation.id) data.createdAt = new Date().toISOString();
     await setDoc(docRef, data, { merge: true });
     

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, User, Phone, Briefcase, Calendar, Clock, MapPin, DollarSign, AlertTriangle, FileText, CheckCircle2, X , ArrowUpDown, Package } from 'lucide-react';
-import { getEmployees, getHRAttendanceForUser, getHRLeavesForUser, getHRViolationsForUser, saveHRAdvance, getGlobalSettings, getHRAssetsForUser } from '../../store';
+import { getHRAttendanceForUser, getHRLeavesForUser, getHRViolationsForUser, saveHRAdvance, getGlobalSettings, getHRAssetsForUser } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import Flatpickr from 'react-flatpickr';
 import Swal from 'sweetalert2';
 
@@ -11,6 +12,7 @@ const EmployeeProfile = ({ user, employeeId, onBack }) => {
   const [violations, setViolations] = useState([]);
   const [globalSettings, setGlobalSettings] = useState({});
   const [employeeAssets, setEmployeeAssets] = useState([]);
+  const [allEmployees, setAllEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('info');
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
@@ -31,6 +33,7 @@ const EmployeeProfile = ({ user, employeeId, onBack }) => {
       ]);
       const emp = emps.find(e => e.id === employeeId);
       setEmployee(emp);
+      setAllEmployees(emps || []);
       setGlobalSettings(settings || {});
       
       if (emp) {
@@ -161,7 +164,7 @@ const EmployeeProfile = ({ user, employeeId, onBack }) => {
                     </tr>
                     <tr style={{ backgroundColor: '#f8fafc' }}>
                       <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: '#64748b', fontWeight: '500', width: '33%', borderLeft: '1px solid #e2e8f0' }}>المدير المباشر</td>
-                      <td style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#1e293b', fontSize: '1.125rem' }}>{employee.directManagerId || 'غير محدد'}</td>
+                      <td style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#1e293b', fontSize: '1.125rem' }}>{employee.directManager || (employee.directManagerId ? (allEmployees.find(e => e.id === employee.directManagerId)?.name || employee.directManagerId) : 'غير محدد')}</td>
                     </tr>
                   </tbody>
                 </table>

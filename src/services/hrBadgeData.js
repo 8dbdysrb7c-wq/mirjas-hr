@@ -1,3 +1,4 @@
+import { belongsToHREmployees } from '../utils/employeeStatus';
 import { collection, getDocs, getCountFromServer, query, where, or, and } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -22,17 +23,23 @@ const getCount = async (name, filter) => {
 };
 
 // Keep historical records only when needed to resolve this month's attendance.
-export async function getHRBadgeData(from, to, includeAttendance) {
+export async function getHRBadgeData(from, to, includeAttendance, employees = null) {
   const inMonth = and(where('date', '>=', from), where('date', '<=', to));
   const pending = where('status', '==', 'معلق');
   const [leaves, mps, advances, assets, violations, employeeAlerts, bonuses] = await Promise.all([
     rows('hr_leaves', includeAttendance ? or(pending, inMonth, where('endDate', '>=', from), and(where('startDate', '>=', from), where('startDate', '<=', to))) : pending),
     rows('missing_punches', includeAttendance ? or(where('status', 'in', ['معلق', 'قيد المراجعة']), inMonth) : where('status', 'in', ['معلق', 'قيد المراجعة'])),
-    getCount('hr_advances', pending),
-    getCount('hr_assets', where('status', '==', 'نشطة')),
+    employees ? rows('hr_advances', pending) : getCount('hr_advances', pending),
+    employees ? rows('hr_assets', where('status', '==', 'نشطة')) : getCount('hr_assets', where('status', '==', 'نشطة')),
     rows('hr_violations', includeAttendance ? or(pending, inMonth) : pending),
     rows('employee_alerts', where('status', '==', 'pending')),
     rows('hr_bonuses', pending),
   ]);
+  const visible = records => records.filter(record => belongsToHREmployees(record, employees));
+  if (employees) return {
+    leaves: visible(leaves), mps: visible(mps), advances: visible(advances).length,
+    assets: visible(assets).length, violations: visible(violations),
+    employeeAlerts: visible(employeeAlerts), bonuses: visible(bonuses)
+  };
   return { leaves, mps, advances, assets, violations, employeeAlerts, bonuses };
 }

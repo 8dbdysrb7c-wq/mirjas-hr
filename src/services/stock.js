@@ -103,14 +103,20 @@ export const saveStockItem = async (item, options = {}) => {
       }
       const existing = await getDocs(query(collection(db, 'stock'), where('itemNumber', '>=', 'FG-'), where('itemNumber', '<', 'FG.')));
       const initialLast = Math.max(0, ...existing.docs.map(row => finishedGoodsSequence(row.data().itemNumber)));
-      return await runTransaction(db, async transaction => {
-        const counterSnapshot = await transaction.get(counterRef);
-        const last = Math.max(initialLast, Number(counterSnapshot.data()?.lastNumber) || 0) + 1;
-        const saved = { ...item, id: docRef.id, itemNumber: finishedGoodsNumber(last), updatedAt: new Date().toISOString() };
-        transaction.set(counterRef, { lastNumber: last }, { merge: true });
-        transaction.set(docRef, saved);
-        return saved;
-      });
+      let number;
+      try {
+        const counterSnapshot = await getDoc(counterRef);
+        let last = Math.max(initialLast, Number(counterSnapshot.data()?.lastNumber) || 0);
+        number = finishedGoodsNumber(++last);
+        await setDoc(counterRef, { lastNumber: last }, { merge: true });
+      } catch (seqErr) {
+        console.warn('Sequence counter write failed for FG, falling back to stock collection scan:', seqErr);
+        number = finishedGoodsNumber(initialLast + 1);
+      }
+
+      const saved = { ...item, id: docRef.id, itemNumber: number, updatedAt: new Date().toISOString() };
+      await setDoc(docRef, saved);
+      return saved;
     }
 
     if (isPackagingCategory(item.category)) {

@@ -1,4 +1,4 @@
-import { isActiveEmployee } from '../../utils/employeeStatus';
+import { isActiveHREmployee as isActiveEmployee } from '../../utils/employeeStatus';
 import React, { useState, useEffect } from 'react';
 import {
   Clock, Save, Search, ArrowUpDown, ArrowUp, ArrowDown,
@@ -6,11 +6,8 @@ import {
   LogIn, LogOut, Sun, ChevronDown, Calendar, User
 } from 'lucide-react';
 import Select from '../../components/SearchSelect';
-import {
-  getEmployees, getHRAttendance, saveHRAttendance,
-  getReportsByDateRange, getSupervisorReportsByDateRange, getHRLeavesByDateRange,
-  getTodayAttendanceLogs, processDailyAbsences, saveEmployee
-} from '../../store';
+import { getHRAttendance, saveHRAttendance, getReportsByDateRange, getSupervisorReportsByDateRange, getHRLeavesByDateRange, getTodayAttendanceLogs, processDailyAbsences, saveEmployee } from '../../store';
+import { getActiveHREmployees as getEmployees } from '../../services/hrEmployees';
 import Swal from 'sweetalert2';
 import { sendWhatsAppNotification } from '../../utils/whatsappService';
 import HRDateFilter from '../../components/ui/HRDateFilter';
