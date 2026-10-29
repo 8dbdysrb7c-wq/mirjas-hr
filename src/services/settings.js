@@ -1,3 +1,4 @@
+import { DEFAULT_STOCK_COLORS, compareStockColors } from '../utils/stockColors';
 import { db } from '../firebase';
 import { FREE_AUTH_ENABLED, getTrustedProfile, provisionEmployeeAccount } from './freeAuth';
 import { directoryProfile, removePasswordFields } from '../utils/freeAuthIdentity';
@@ -66,109 +67,7 @@ export const defaultGlobalSettings = {
   customerSectors: ["المستشفيات", "شركات خاصة", "شخصي", "مول", "اثاث مكتبي", "اثاث منزلي ومفروشات", "أطفال وبيبي", "ستائر", "مستلزمات طبية", "الحرامات", "الأدوات المنزلية", "الفنادق", "الشقق الفندقية", "بياضات", "الفرشات", "جمعيات ومنظمات", "حكومي", "جهة عسكرية", "الجامعات والمدارس"],
   stockLocations: Array.from({ length: 45 }, (_, i) => `A${i + 1}`),
   stockUnits: ['عدد', 'كغم', 'متر', 'كيس', 'طرد', 'رول'],
-  stockColors: [
-    "موديل 1 أبيض سادة",
-    "موديل 2 أبيض سترايب",
-    "موديل 3 سكري سادة",
-    "موديل 4",
-    "موديل 5 بيج سادة",
-    "موديل 6",
-    "موديل 7 بيج سترايب",
-    "موديل 8",
-    "موديل 9",
-    "موديل 10",
-    "موديل 11",
-    "موديل 12",
-    "موديل 13",
-    "موديل 14 سومو سادة",
-    "موديل 15",
-    "موديل 16",
-    "موديل 17",
-    "موديل 18 سكني سادة",
-    "موديل 19 سكني سترايب",
-    "موديل 20",
-    "موديل 21",
-    "موديل 22",
-    "موديل 23",
-    "موديل 24",
-    "موديل 25 قطن باكستاني ابيض سادة",
-    "موديل 26 قطن باكستاني ابيض سترايب عريض",
-    "موديل 27 واقي تنسل",
-    "موديل 28",
-    "موديل 29",
-    "موديل 30",
-    "أبيض",
-    "أبيض سادة",
-    "أبيض سترايب",
-    "أخضر",
-    "أزرق",
-    "أسود",
-    "أسود سادة",
-    "أصفر",
-    "أوف وايت",
-    "اوفوايت سادة",
-    "اوفوايت سترايب",
-    "بترولي",
-    "برتقالي",
-    "بنفسجي",
-    "بني",
-    "بني سادة",
-    "بني سترايب",
-    "بيج",
-    "بيج سادة",
-    "بيج سترايب",
-    "تركواز",
-    "جنزاري",
-    "خردلي",
-    "خمري",
-    "رمادي",
-    "رمادي غامق",
-    "رمادي فاتح",
-    "زهري",
-    "زيتي",
-    "سكري",
-    "سكني",
-    "سكني سادة",
-    "سكني سترايب",
-    "سكني غامق",
-    "سكني فاتح",
-    "سومو",
-    "سومو سادة",
-    "سومو سترايب",
-    "شتوي ببلي ثرو",
-    "شتوي سترايب عريض",
-    "عسلي",
-    "عنابي",
-    "فوشي",
-    "قطن صيني أبيض",
-    "قطن صيني بصلي",
-    "قطن صيني سكري",
-    "قطن صيني سكني",
-    "كبتشينو",
-    "كحلي",
-    "ليلكي",
-    "مشكل ألوان",
-    "مورد",
-    "موف",
-    "واقي تنسل",
-    "B1",
-    "B2",
-    "B3",
-    "B4",
-    "B5",
-    "B6",
-    "B7",
-    "B8",
-    "B9",
-    "B10",
-    "B11",
-    "B12",
-    "B13",
-    "B14",
-    "B15",
-    "B16",
-    "B17"
-],
+  stockColors: [...DEFAULT_STOCK_COLORS],
   stockCategories: ['بضاعة جاهزة', 'مواد خام', 'تغليف', 'مستهلكات خياطة', 'أصول', 'أقمشة'],
   warehouses: ['مصنع البياضات', 'مصنع المخدة'],
   userTypes: [
@@ -933,17 +832,7 @@ export const getGlobalSettings = async (forceRefresh = false) => {
   }
 
   if (data && Array.isArray(data.stockColors)) {
-    data.stockColors.sort((a, b) => {
-      const isModelA = String(a).trim().startsWith('موديل');
-      const isModelB = String(b).trim().startsWith('موديل');
-      const isLightCodeA = /^B(?:[1-9]|1[0-7])$/i.test(String(a).trim());
-      const isLightCodeB = /^B(?:[1-9]|1[0-7])$/i.test(String(b).trim());
-      if (isModelA && !isModelB) return -1;
-      if (!isModelA && isModelB) return 1;
-      if (isLightCodeA && !isLightCodeB) return 1;
-      if (!isLightCodeA && isLightCodeB) return -1;
-      return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
-    });
+    data.stockColors.sort(compareStockColors);
   }
 
   if (data && Array.isArray(data.customerSectors)) {

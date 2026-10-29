@@ -1,3 +1,4 @@
+import { stockColorOptions } from '../../utils/stockColors';
 import React, { useState, useEffect, useRef } from 'react';
 import Flatpickr from 'react-flatpickr';
 import Select from '../../components/SearchSelect';
@@ -2317,7 +2318,7 @@ const AdminStock = ({ user, notificationTarget, auditRequest, onAuditClose }) =>
               <label>اللون / المواصفة</label>
               <select id="swal-spec" class="premium-input">
                 <option value="">اختر اللون/المواصفة</option>
-                ${globalSettings.stockColors?.map(c => `<option value="${c}" ${initialData.spec === c ? 'selected' : ''}>${c}</option>`).join('')}
+                ${stockColorOptions(globalSettings.stockColors, initialData.spec).map(c => `<option value="${c}" ${initialData.spec === c ? 'selected' : ''}>${c}</option>`).join('')}
               </select>
             </div>
             <div class="premium-form-group col-span-12 md:col-span-4">

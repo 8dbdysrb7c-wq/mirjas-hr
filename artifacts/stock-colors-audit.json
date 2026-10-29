@@ -1,0 +1,784 @@
+{
+  "capturedAt": "2026-10-29T23:31:52.866Z",
+  "configuredColors": [
+    "موديل 1 أبيض سادة",
+    "موديل 2 أبيض سترايب",
+    "موديل 3 سكري سادة",
+    "موديل 4",
+    "موديل 5 بيج سادة",
+    "موديل 6",
+    "موديل 7 بيج سترايب",
+    "موديل 8",
+    "موديل 9",
+    "موديل 10",
+    "موديل 11",
+    "موديل 12",
+    "موديل 13",
+    "موديل 14 سومو سادة",
+    "موديل 15",
+    "موديل 16",
+    "موديل 17",
+    "موديل 18 سكني سادة",
+    "موديل 19 سكني سترايب",
+    "موديل 20",
+    "موديل 21",
+    "موديل 22",
+    "موديل 23",
+    "موديل 24",
+    "موديل 25 قطن باكستاني ابيض سادة",
+    "موديل 26 قطن باكستاني ابيض سترايب عريض",
+    "موديل 27 واقي تنسل",
+    "موديل 28",
+    "موديل 29",
+    "موديل 30",
+    "أبيض",
+    "أبيض سادة",
+    "أبيض سترايب",
+    "أخضر",
+    "أزرق",
+    "أسود",
+    "أسود سادة",
+    "أصفر",
+    "أوف وايت",
+    "اوفوايت سادة",
+    "اوفوايت سترايب",
+    "بترولي",
+    "برتقالي",
+    "بنفسجي",
+    "بني",
+    "بني سادة",
+    "بني سترايب",
+    "بيج",
+    "بيج سادة",
+    "بيج سترايب",
+    "تركواز",
+    "جنزاري",
+    "خردلي",
+    "خمري",
+    "رمادي",
+    "رمادي غامق",
+    "رمادي فاتح",
+    "زهري",
+    "زيتي",
+    "سكري",
+    "سكني",
+    "سكني سادة",
+    "سكني سترايب",
+    "سكني غامق",
+    "سكني فاتح",
+    "سومو",
+    "سومو سادة",
+    "سومو سترايب",
+    "شتوي ببلي ثرو",
+    "شتوي سترايب عريض",
+    "عسلي",
+    "عنابي",
+    "فوشي",
+    "قطن صيني أبيض",
+    "قطن صيني بصلي",
+    "قطن صيني سكري",
+    "قطن صيني سكني",
+    "كبتشينو",
+    "كحلي",
+    "ليلكي",
+    "مشكل ألوان",
+    "مورد",
+    "موف",
+    "واقي تنسل",
+    "B1",
+    "B2",
+    "B3",
+    "B4",
+    "B5",
+    "B6",
+    "B7",
+    "B8",
+    "B9",
+    "B10",
+    "B11",
+    "B12",
+    "B13",
+    "B14",
+    "B15",
+    "B16",
+    "B17"
+  ],
+  "specs": {
+    "": {
+      "count": 499,
+      "categories": [
+        "بضاعة جاهزة",
+        "مستهلكات خياطة",
+        "أصول",
+        "تغليف",
+        "مواد خام",
+        "أقمشة"
+      ],
+      "examples": [
+        {
+          "id": "0058rvYKvVqX27DtBxW7",
+          "name": "أرضية حمام تركي 60*100سم"
+        },
+        {
+          "id": "00dn6GRdTMuD4YLXzjsB",
+          "name": "رجل سحاب مخفي"
+        }
+      ]
+    },
+    "قطن صيني أبيض": {
+      "count": 6,
+      "categories": [
+        "بضاعة جاهزة",
+        "أقمشة"
+      ],
+      "examples": [
+        {
+          "id": "16mZ9kcCu5GOJaP2jWxM",
+          "name": "شرشف مطاط قطن 400خيط 200*200سم"
+        },
+        {
+          "id": "3fuSzUWvtNK8H78GerrQ",
+          "name": "شرشف مطاط قطن 400 خيط 80*180سم"
+        }
+      ]
+    },
+    "موديل 5 بيج سادة": {
+      "count": 3,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "1C2nbex3NSPgSr7FQJf8",
+          "name": "شرشف مطاط مايكروفايبر 100*200سم"
+        },
+        {
+          "id": "8eMqabKoCkJZrFNcqwU3",
+          "name": "شرشف مطاط مايكروفايبر 180*200سم"
+        }
+      ]
+    },
+    "بيج": {
+      "count": 10,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "21XQTANtM5A8YtCm3k6M",
+          "name": "سليبر فندقي"
+        },
+        {
+          "id": "5w865vCDMZDXn6ugxMwf",
+          "name": "قرن مخمل سادة"
+        }
+      ]
+    },
+    "اوفوايت": {
+      "count": 7,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "2mUpr3Yp7TrMI0phahGe",
+          "name": "قرن مخمل سادة"
+        },
+        {
+          "id": "QYjhNU29xEBhkJJAHVPd",
+          "name": "وجه مخدة حرير عدد 2"
+        }
+      ]
+    },
+    "أسود": {
+      "count": 3,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "410JTrZXjSvjoQqz9tp6",
+          "name": "وجه كوشينز شتوي عدد 1"
+        },
+        {
+          "id": "GsY35XWN1OzMBXAnFV5b",
+          "name": "وجه مخدة شتوي عدد 1"
+        }
+      ]
+    },
+    "موديل 3 سكري سادة": {
+      "count": 4,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "51mrtOq8lgoufeyFiEPG",
+          "name": "شرشف مطاط مايكروفايبر 100*200سم"
+        },
+        {
+          "id": "NjY7dQUxVufuUUfMNDFf",
+          "name": "لحاف صيفي 160*220سم"
+        }
+      ]
+    },
+    "سكني فاتح": {
+      "count": 5,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "5IG2XM499ppto8dWeMu3",
+          "name": "قرن مخمل سادة"
+        },
+        {
+          "id": "FwjfqHNgCfSTg9XZnO88",
+          "name": "كفر كنب ثلاثي"
+        }
+      ]
+    },
+    "B16": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "6vI7Hc4p0IJmGpyFY8BO",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "B1": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "7wRHDoroIO6P6vB2pv3o",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "B5": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "8CPJ98ZolkGwylQpgZ9e",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "موديل 2 أبيض سترايب": {
+      "count": 2,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "9w3KdW5FJGOoe359hY1F",
+          "name": "بيت لحاف بريم واحد 220*240سم"
+        },
+        {
+          "id": "Zx3Pz5aqdh2Nm13dgwqc",
+          "name": "لحاف صيفي 220*240سم"
+        }
+      ]
+    },
+    "سكري": {
+      "count": 2,
+      "categories": [
+        "بضاعة جاهزة",
+        "أقمشة"
+      ],
+      "examples": [
+        {
+          "id": "AA2J59X0whNFcgFllooD",
+          "name": "سليبر فندقي"
+        },
+        {
+          "id": "eud7md5g15PMrq6D4zXt",
+          "name": "قماش قطن باكستاني عرض 280 سم"
+        }
+      ]
+    },
+    "سكني": {
+      "count": 12,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "AWsguYvHUgaGx7fo7tZO",
+          "name": "وجه مخدة دبل بريم رفيع"
+        },
+        {
+          "id": "Fohjs1B06q6vNIXeEVau",
+          "name": "وجه مخدة دبل بريم عريض"
+        }
+      ]
+    },
+    "B15": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "AbTmf9ciomtqoxTN7r4D",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "موديل 18 سكني سادة": {
+      "count": 6,
+      "categories": [
+        "بضاعة جاهزة",
+        "أقمشة"
+      ],
+      "examples": [
+        {
+          "id": "CGaaBB5kbeWuzA8qvYgn",
+          "name": "شرشف مطاط مايكروفايبر 120*200سم"
+        },
+        {
+          "id": "Hf5rupxnCjsE3NYisxRN",
+          "name": "شرشف مطاط مايكروفايبر 100*200سم"
+        }
+      ]
+    },
+    "سكني غامق": {
+      "count": 5,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "DXjMJ7njj3FnZhecbGcS",
+          "name": "وجه مخدة حرير عدد 2"
+        },
+        {
+          "id": "IPBhShgPLQ3hiYzMgtAt",
+          "name": "قرن مخمل سادة"
+        }
+      ]
+    },
+    "موديل 1 أبيض سادة": {
+      "count": 7,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "EDP3gPzLwTP4zdNkW1Uz",
+          "name": "شرشف مطاط مايكروفايبر 120*200سم"
+        },
+        {
+          "id": "OGoAGaap3793rhlROifw",
+          "name": "شرشف مطاط مايكروفايبر 160*200سم"
+        }
+      ]
+    },
+    "خمري": {
+      "count": 2,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "EGQeoJypQZpOMeO1Dzz4",
+          "name": "كفر كنب ثلاثي"
+        },
+        {
+          "id": "cTsxMlJbQ1j5IpWqMWs4",
+          "name": "كفر كنب مفرد"
+        }
+      ]
+    },
+    "موديل 14 سومو سادة": {
+      "count": 3,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "EM0yoP570Gyorn94vItP",
+          "name": "شرشف مطاط مايكروفايبر 180*200سم"
+        },
+        {
+          "id": "jEr1vibifSvQsCvymFnu",
+          "name": "لحاف صيفي240*260سم"
+        }
+      ]
+    },
+    "أبيض": {
+      "count": 7,
+      "categories": [
+        "بضاعة جاهزة",
+        "أقمشة"
+      ],
+      "examples": [
+        {
+          "id": "EaVWyULnSyynGkCJ46gL",
+          "name": "قرن مخمل سادة"
+        },
+        {
+          "id": "G2jv7eV8VV9quoPjlcu9",
+          "name": "قماش قطن داون بروف عرض 260 سم"
+        }
+      ]
+    },
+    "موديل 26 قطن باكستاني ابيض سترايب عريض": {
+      "count": 2,
+      "categories": [
+        "بضاعة جاهزة",
+        "أقمشة"
+      ],
+      "examples": [
+        {
+          "id": "FbudFd63kkemvgEMvnCA",
+          "name": "شرشف مطاط قطن300 خيط 150*200سم"
+        },
+        {
+          "id": "uFwCEakDkvxTKvDjQ92D",
+          "name": "قماش قطن باكستاني عرض 300 سم"
+        }
+      ]
+    },
+    "قطن صيني سكني": {
+      "count": 2,
+      "categories": [
+        "بضاعة جاهزة",
+        "أقمشة"
+      ],
+      "examples": [
+        {
+          "id": "GsIBzSu2YBs10RRICGra",
+          "name": "وجه مخدة قطن 400 خيط عدد 2"
+        },
+        {
+          "id": "Y8XQGZMo5Ro2WPmfJB2J",
+          "name": "قماش قطن الصين 400 خيط عرض 255 سم"
+        }
+      ]
+    },
+    "B14": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "HbPrWP9QqOolNBOzHcYR",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "كحلي": {
+      "count": 6,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "LSP0ESrwkiGEWqOjr5SY",
+          "name": "قرن مخمل سادة"
+        },
+        {
+          "id": "TiahWoHlp8U42MBuRAbc",
+          "name": "وجه مخدة دبل بريم رفيع"
+        }
+      ]
+    },
+    "سومو": {
+      "count": 4,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "LagIf6V8LOkE7px3BWto",
+          "name": "قرن مخمل سادة"
+        },
+        {
+          "id": "TJeUhXrIRiEZUOv5hCXp",
+          "name": "وجه كوشينز شتوي عدد 1"
+        }
+      ]
+    },
+    "كبتشينو": {
+      "count": 5,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "MORpn6Ux57SHvplF6kE7",
+          "name": "كفر كنب مفرد امريكي"
+        },
+        {
+          "id": "TJj8xUMMMkj5iD9CXT7v",
+          "name": "كفر كرسي"
+        }
+      ]
+    },
+    "B4": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "NpZlGJXqoD8fTrYiVpvQ",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "موديل 25 قطن باكستاني ابيض سادة": {
+      "count": 1,
+      "categories": [
+        "أقمشة"
+      ],
+      "examples": [
+        {
+          "id": "OpRUlpM0yHcPCwA4w6L3",
+          "name": "قماش قطن باكستاني عرض 300 سم"
+        }
+      ]
+    },
+    "اخضر": {
+      "count": 3,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "R40JPRJAkqbKk8z69wqK",
+          "name": "كفر كنب مفرد امريكي"
+        },
+        {
+          "id": "dvlj9nhCPiIW1AGwHE74",
+          "name": "كفر كنب مفرد"
+        }
+      ]
+    },
+    "بني": {
+      "count": 2,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "RKYaiXf33jwJOUWaclOI",
+          "name": "سليبر فندقي"
+        },
+        {
+          "id": "sBxf1hJhf3JZ6cSMH7iM",
+          "name": "كفر كنب مفرد"
+        }
+      ]
+    },
+    "B3": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "UB2DV8pULeo8kaOnWuxC",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "جنزاري": {
+      "count": 1,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "Z79EY0nXp2q6GN3lgX6Z",
+          "name": "كفر كنب مفرد امريكي"
+        }
+      ]
+    },
+    "موديل 27 واقي تنسل": {
+      "count": 1,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "a3SaHeEBWZ5KKA412HwK",
+          "name": "واقي فرشة تنسل 80*180 سم"
+        }
+      ]
+    },
+    "B6": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "icZaLr7sjsWPF7ama11W",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "B13": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "jF9IPJbmwlWXkF6NZngR",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "B17": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "jxHeZArgmY2WPXtl0QjC",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "ازرق": {
+      "count": 1,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "kfnWNB314jycRO4KUmSc",
+          "name": "وجه مخدة همر"
+        }
+      ]
+    },
+    "موديل 7 بيج سترايب": {
+      "count": 1,
+      "categories": [
+        "بضاعة جاهزة"
+      ],
+      "examples": [
+        {
+          "id": "lxP51p0kkd3bNETDzAVG",
+          "name": "شرشف مطاط مايكروفايبر 100*200سم"
+        }
+      ]
+    },
+    "B9": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "rlKqNJmBD8eeqZWFFLvB",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "قطن صيني بصلي": {
+      "count": 2,
+      "categories": [
+        "بضاعة جاهزة",
+        "أقمشة"
+      ],
+      "examples": [
+        {
+          "id": "wG1FKKcmqwyPbpg6LsOP",
+          "name": "وجه مخدة قطن 400 خيط عدد 2"
+        },
+        {
+          "id": "xIZkHraa4MbriGrPuet9",
+          "name": "قماش قطن الصين 400 خيط عرض 255 سم"
+        }
+      ]
+    },
+    "B10": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "wXXV3y70lGUVvRmarVhY",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "B12": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "wqvewIfgbp8q5F83GoOk",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "B11": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "x4JTiJYfIkw9oVzFlAh6",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "B7": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "xt6QKfO92LyPGDd7DzXF",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "B8": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "xuc0FCLdiYFH0vHPFQI7",
+          "name": "شنتة مخدات"
+        }
+      ]
+    },
+    "B2": {
+      "count": 1,
+      "categories": [
+        "تغليف"
+      ],
+      "examples": [
+        {
+          "id": "zXejU1NQboYDeC57DtCE",
+          "name": "شنتة مخدات"
+        }
+      ]
+    }
+  }
+}

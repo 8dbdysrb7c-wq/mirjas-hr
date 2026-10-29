@@ -1,3 +1,4 @@
+import { DEFAULT_STOCK_COLORS, compareStockColors, stockColorKey } from '../../utils/stockColors';
 import React, { useState, useEffect } from 'react';
 import { canPerformAction, getGlobalSettings, saveGlobalSettings, getEmployees, saveEmployee, getNotificationRoleOptions, normalizeNotificationSettings } from '../../store';
 import { MapContainer, TileLayer, Marker, Circle, useMapEvents, useMap } from 'react-leaflet';
@@ -214,17 +215,7 @@ const AdminSettings = ({ user }) => {
         getEmployees()
       ]);
       if (data.stockColors && Array.isArray(data.stockColors)) {
-        data.stockColors.sort((a, b) => {
-          const isModelA = String(a).trim().startsWith('موديل');
-          const isModelB = String(b).trim().startsWith('موديل');
-          const isLightCodeA = /^B(?:[1-9]|1[0-7])$/i.test(String(a).trim());
-          const isLightCodeB = /^B(?:[1-9]|1[0-7])$/i.test(String(b).trim());
-          if (isModelA && !isModelB) return -1;
-          if (!isModelA && isModelB) return 1;
-          if (isLightCodeA && !isLightCodeB) return 1;
-          if (!isLightCodeA && isLightCodeB) return -1;
-          return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
-        });
+        data.stockColors.sort(compareStockColors);
       }
       
       setSettings({
@@ -237,109 +228,7 @@ const AdminSettings = ({ user }) => {
           : ['عدد', 'كغم', 'متر', 'كيس', 'طرد', 'رول'],
         stockColors: (Array.isArray(data.stockColors) && data.stockColors.length > 0)
           ? data.stockColors
-          : [
-    "موديل 1 أبيض سادة",
-    "موديل 2 أبيض سترايب",
-    "موديل 3 سكري سادة",
-    "موديل 4",
-    "موديل 5 بيج سادة",
-    "موديل 6",
-    "موديل 7 بيج سترايب",
-    "موديل 8",
-    "موديل 9",
-    "موديل 10",
-    "موديل 11",
-    "موديل 12",
-    "موديل 13",
-    "موديل 14 سومو سادة",
-    "موديل 15",
-    "موديل 16",
-    "موديل 17",
-    "موديل 18 سكني سادة",
-    "موديل 19 سكني سترايب",
-    "موديل 20",
-    "موديل 21",
-    "موديل 22",
-    "موديل 23",
-    "موديل 24",
-    "موديل 25 قطن باكستاني ابيض سادة",
-    "موديل 26 قطن باكستاني ابيض سترايب عريض",
-    "موديل 27 واقي تنسل",
-    "موديل 28",
-    "موديل 29",
-    "موديل 30",
-    "أبيض",
-    "أبيض سادة",
-    "أبيض سترايب",
-    "أخضر",
-    "أزرق",
-    "أسود",
-    "أسود سادة",
-    "أصفر",
-    "أوف وايت",
-    "اوفوايت سادة",
-    "اوفوايت سترايب",
-    "بترولي",
-    "برتقالي",
-    "بنفسجي",
-    "بني",
-    "بني سادة",
-    "بني سترايب",
-    "بيج",
-    "بيج سادة",
-    "بيج سترايب",
-    "تركواز",
-    "جنزاري",
-    "خردلي",
-    "خمري",
-    "رمادي",
-    "رمادي غامق",
-    "رمادي فاتح",
-    "زهري",
-    "زيتي",
-    "سكري",
-    "سكني",
-    "سكني سادة",
-    "سكني سترايب",
-    "سكني غامق",
-    "سكني فاتح",
-    "سومو",
-    "سومو سادة",
-    "سومو سترايب",
-    "شتوي ببلي ثرو",
-    "شتوي سترايب عريض",
-    "عسلي",
-    "عنابي",
-    "فوشي",
-    "قطن صيني أبيض",
-    "قطن صيني بصلي",
-    "قطن صيني سكري",
-    "قطن صيني سكني",
-    "كبتشينو",
-    "كحلي",
-    "ليلكي",
-    "مشكل ألوان",
-    "مورد",
-    "موف",
-    "واقي تنسل",
-    "B1",
-    "B2",
-    "B3",
-    "B4",
-    "B5",
-    "B6",
-    "B7",
-    "B8",
-    "B9",
-    "B10",
-    "B11",
-    "B12",
-    "B13",
-    "B14",
-    "B15",
-    "B16",
-    "B17"
-],
+          : [...DEFAULT_STOCK_COLORS],
         ammanAreas: data.ammanAreas || [
           'عبدون', 'دير غبار', 'أم أذينة', 'الرابية', 'الشميساني', 'الصويفية', 'الجندويل', 
           'خلدا', 'تلاع العلي', 'أم السماق', 'ضاحية الرشيد', 'ضاحية الحسين', 'مرج الحمام', 
@@ -628,7 +517,7 @@ const AdminSettings = ({ user }) => {
         if (!value || !value.trim()) {
           return 'يرجى إدخال قيمة!';
         }
-        if ((settings[field] || []).includes(value.trim())) {
+        if ((settings[field] || []).some(item => field === 'stockColors' ? stockColorKey(item) === stockColorKey(value) : item === value.trim())) {
           return 'هذا البند موجود مسبقاً!';
         }
       }
@@ -636,17 +525,7 @@ const AdminSettings = ({ user }) => {
       if (result.isConfirmed && result.value) {
         let newArray = [...(settings[field] || []), result.value.trim()];
         if (field === 'stockColors') {
-          newArray.sort((a, b) => {
-            const isModelA = String(a).trim().startsWith('موديل');
-            const isModelB = String(b).trim().startsWith('موديل');
-            const isLightCodeA = /^B(?:[1-9]|1[0-7])$/i.test(String(a).trim());
-            const isLightCodeB = /^B(?:[1-9]|1[0-7])$/i.test(String(b).trim());
-            if (isModelA && !isModelB) return -1;
-            if (!isModelA && isModelB) return 1;
-            if (isLightCodeA && !isLightCodeB) return 1;
-            if (!isLightCodeA && isLightCodeB) return -1;
-            return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
-          });
+          newArray.sort(compareStockColors);
         }
         if (['customerSectors', 'ammanAreas'].includes(field)) {
           newArray.sort((a, b) => String(a).localeCompare(String(b), 'ar', { sensitivity: 'base', numeric: true }));
@@ -690,7 +569,7 @@ const AdminSettings = ({ user }) => {
         if (!value || !value.trim()) {
           return 'يرجى إدخال قيمة!';
         }
-        const existingIndex = (settings[field] || []).indexOf(value.trim());
+        const existingIndex = (settings[field] || []).findIndex((item, itemIndex) => itemIndex !== index && (field === 'stockColors' ? stockColorKey(item) === stockColorKey(value) : item === value.trim()));
         if (existingIndex !== -1 && existingIndex !== index) {
           return 'هذا البند موجود مسبقاً!';
         }
@@ -700,13 +579,7 @@ const AdminSettings = ({ user }) => {
         const newList = [...settings[field]];
         newList[index] = result.value.trim();
         if (field === 'stockColors') {
-          newList.sort((a, b) => {
-            const isModelA = String(a).trim().startsWith('موديل');
-            const isModelB = String(b).trim().startsWith('موديل');
-            if (isModelA && !isModelB) return -1;
-            if (!isModelA && isModelB) return 1;
-            return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
-          });
+          newList.sort(compareStockColors);
         }
         if (['customerSectors', 'ammanAreas'].includes(field)) {
           newList.sort((a, b) => String(a).localeCompare(String(b), 'ar', { sensitivity: 'base', numeric: true }));
@@ -2822,9 +2695,59 @@ return (
                 pointer-events: none;
                 transition: opacity 0.15s ease;
               }
-              .shelf-card:hover .shelf-actions, .general-card:hover .general-actions {
+              .shelf-card:hover .shelf-actions, .shelf-card:hover .general-actions, .general-card:hover .general-actions {
                 opacity: 1;
                 pointer-events: auto;
+              }
+              .stock-editable-card {
+                cursor: pointer;
+              }
+              .stock-editable-card .general-actions {
+                position: absolute;
+                inset: 0;
+                margin: auto;
+                width: fit-content;
+                height: fit-content;
+                opacity: 0;
+                visibility: hidden;
+                pointer-events: none;
+                background: #fff;
+                border: 1px solid #168bff;
+                border-radius: 8px;
+                padding: 3px 8px;
+                gap: 2px;
+                direction: rtl;
+                flex-wrap: nowrap;
+                transform: scale(0.95);
+                transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+              }
+              .stock-editable-card:hover .general-actions,
+              .stock-editable-card:focus-within .general-actions {
+                opacity: 1;
+                visibility: visible;
+                pointer-events: auto;
+                transform: scale(1);
+              }
+              .stock-editable-card:focus-visible {
+                outline: 2px solid #168bff;
+                outline-offset: 2px;
+              }
+              @media (prefers-reduced-motion: reduce) {
+                .stock-editable-card .general-actions {
+                  transition: none;
+                  transform: none;
+                }
+              }
+              .stock-editable-card .shelf-btn {
+                width: 28px;
+                height: 32px;
+                padding: 6px;
+                background: transparent;
+                border: none;
+              }
+              .stock-editable-card .shelf-btn:focus-visible {
+                outline: 2px solid #168bff;
+                outline-offset: 1px;
               }
               .shelf-btn {
                 padding: 4px;
@@ -2919,13 +2842,13 @@ return (
                 {(settings.stockUnits || []).length > 0 ? (
                   <div className="general-grid-container">
                     {(settings.stockUnits || []).map((item, idx) => (
-                      <div key={idx} className="shelf-card unit-card">
+                      <div key={idx} className="shelf-card unit-card stock-editable-card" tabIndex={0} role="group" aria-label={item} onClick={event => event.currentTarget.focus()}>
                         <span>{item}</span>
                         <div className="general-actions">
-                          <button className="shelf-btn shelf-btn-edit" onClick={(e) => { e.stopPropagation(); editItem('stockUnits', idx); }} title="تعديل">
+                          <button className="shelf-btn shelf-btn-edit" onClick={(e) => { e.stopPropagation(); editItem('stockUnits', idx); }} type="button" aria-label={`تعديل الوحدة: ${item}`} title="تعديل">
                             <Edit2 size={14} />
                           </button>
-                          <button className="shelf-btn shelf-btn-delete" onClick={(e) => { e.stopPropagation(); removeItem('stockUnits', idx); }} title="حذف">
+                          <button className="shelf-btn shelf-btn-delete" onClick={(e) => { e.stopPropagation(); removeItem('stockUnits', idx); }} type="button" aria-label={`حذف الوحدة: ${item}`} title="حذف">
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -2948,13 +2871,13 @@ return (
                 {(settings.stockColors || []).length > 0 ? (
                   <div className="colors-grid-container">
                     {(settings.stockColors || []).map((item, idx) => (
-                      <div key={idx} className="shelf-card color-card">
+                      <div key={idx} className="shelf-card color-card stock-editable-card" tabIndex={0} role="group" aria-label={item} onClick={event => event.currentTarget.focus()}>
                         <span>{item}</span>
                         <div className="general-actions">
-                          <button className="shelf-btn shelf-btn-edit" onClick={(e) => { e.stopPropagation(); editItem('stockColors', idx); }} title="تعديل">
+                          <button className="shelf-btn shelf-btn-edit" onClick={(e) => { e.stopPropagation(); editItem('stockColors', idx); }} type="button" aria-label={`تعديل اللون: ${item}`} title="تعديل">
                             <Edit2 size={14} />
                           </button>
-                          <button className="shelf-btn shelf-btn-delete" onClick={(e) => { e.stopPropagation(); removeItem('stockColors', idx); }} title="حذف">
+                          <button className="shelf-btn shelf-btn-delete" onClick={(e) => { e.stopPropagation(); removeItem('stockColors', idx); }} type="button" aria-label={`حذف اللون: ${item}`} title="حذف">
                             <Trash2 size={14} />
                           </button>
                         </div>
